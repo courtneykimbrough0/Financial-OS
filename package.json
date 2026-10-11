@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Mobile-first cash-flow forecasting PWA",
+  "description": "Financial OS: mobile-first cash-flow forecasting PWA",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

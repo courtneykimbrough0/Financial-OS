@@ -31,7 +31,7 @@ export function App() {
     onboarding: 'Get started',
   };
   useEffect(() => {
-    document.title = `${titles[route]} · Cash Flow Forecast`;
+    document.title = `${titles[route]} · Financial OS`;
   });
 
   const showNav = route !== 'onboarding';
@@ -44,7 +44,7 @@ export function App() {
       <header className="topbar">
         <span className="brand">
           <span className="brand-mark" aria-hidden="true" />
-          Cash Flow Forecast
+          Financial OS
         </span>
         {showNav && (
           <nav className="top-nav" aria-label="Main">

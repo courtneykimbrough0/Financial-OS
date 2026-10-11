@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Cash Flow Forecast',
-        short_name: 'Cash Flow',
+        name: 'Financial OS',
+        short_name: 'Financial OS',
         description: 'See when money comes in, when it goes out, and spot shortfalls before they happen.',
         theme_color: '#1f4e79',
         background_color: '#f7f8fa',
