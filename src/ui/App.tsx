@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { CreditCard, HandCoins, LayoutGrid, Receipt, type LucideIcon } from 'lucide-react';
+import { useAccount } from '../state/account';
 import { useDataMode } from '../state/mode';
 import { useStore } from '../state/store';
+import { AccountActions, DeviceDataOffer, RecoveredChangesNotice } from './components/account';
 import { DownloadBackupButton, RestoreBackupButton, SaveStatusBar } from './components/backup';
 import { Icon, Modal } from './components/common';
 import { navigate, useRoute, type Route } from './router';
@@ -72,6 +74,8 @@ export function App() {
         {route === 'savings' && <ExpensesScreen key="savings" initial="savings" />}
         {route === 'liabilities' && <SourcesScreen key="liability" kind="liability" />}
         {showNav && <DataNotice />}
+        <RecoveredChangesNotice />
+        <DeviceDataOffer />
       </main>
       {showNav && (
         <nav className="bottom-nav" aria-label="Main">
@@ -112,11 +116,16 @@ function SampleBanner() {
 /** States plainly where data lives, and offers sample data in its own separate space. */
 function DataNotice() {
   const { data } = useStore();
+  const account = useAccount();
   const { enterSample } = useDataMode();
   const [confirming, setConfirming] = useState(false);
   return (
     <footer className="data-notice">
-      <p>Your data is saved in this browser on this device only. It isn’t synced to other devices, and clearing your browser’s site data removes it. Download a backup to keep a copy or move it to another device.</p>
+      {account ? (
+        <p>Your data is saved to your Financial OS account, with a copy on this device so it opens offline. Changes made offline are saved to your account when you reconnect.</p>
+      ) : (
+        <p>Your data is saved in this browser on this device only. It isn’t synced to other devices, and clearing your browser’s site data removes it. Download a backup to keep a copy or move it to another device.</p>
+      )}
       {!data.isSample && (
         <div className="data-actions">
           <DownloadBackupButton />
@@ -126,6 +135,7 @@ function DataNotice() {
           </button>
         </div>
       )}
+      <AccountActions />
       {confirming && (
         <Modal title="Explore with sample data?" onClose={() => setConfirming(false)}>
           <div className="stack">

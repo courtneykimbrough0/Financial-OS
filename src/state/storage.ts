@@ -27,6 +27,11 @@ export interface StorageAdapter {
   save(data: AppData, baseRevision: number): Promise<SaveResult>;
   /** Removes all stored data for this adapter. */
   clear(): Promise<void>;
+  /** True when the data just loaded includes changes that haven't been saved yet (e.g. made offline). */
+  hasUnsavedChanges?(): boolean;
+  /** Changes that couldn't be combined with newer data from elsewhere, kept so the user can download them. */
+  recoveredCopy?(): { data: AppData; savedAt: string } | null;
+  discardRecoveredCopy?(): void;
 }
 
 export const STORAGE_KEY = 'financial-os:data';

@@ -30,6 +30,9 @@ interface Store {
   retrySave: () => void;
   /** Discard unsaved changes and load the latest saved data. */
   reload: () => void;
+  /** Unsaved changes that were set aside because newer data was saved elsewhere. */
+  recoveredCopy: { data: AppData; savedAt: string } | null;
+  dismissRecoveredCopy: () => void;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -57,6 +60,7 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [loadCount, setLoadCount] = useState(0);
+  const [recoveredCopy, setRecoveredCopy] = useState<Store['recoveredCopy']>(null);
   const today = useToday(todayOverride);
   const todayRef = useRef(today);
   todayRef.current = today;
@@ -82,7 +86,12 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
         blocked.current = null;
         setSaveStatus('idle');
         setSaveMessage(null);
+        setRecoveredCopy(adapter.recoveredCopy?.() ?? null);
         setData(loaded);
+        if (adapter.hasUnsavedChanges?.()) {
+          dirty.current = true;
+          void flushRef.current();
+        }
       },
       (err: unknown) => {
         if (cancelled) return;
@@ -119,6 +128,8 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
       setSaveMessage(null);
     }
   }, [adapter]);
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
 
   const run = useCallback<Store['run']>(
     (op) => {
@@ -143,6 +154,17 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
 
   const reload = useCallback(() => setLoadCount((n) => n + 1), []);
 
+  const dismissRecoveredCopy = useCallback(() => {
+    adapter.discardRecoveredCopy?.();
+    setRecoveredCopy(null);
+  }, [adapter]);
+
+  // Try a failed save again as soon as the connection returns.
+  useEffect(() => {
+    window.addEventListener('online', retrySave);
+    return () => window.removeEventListener('online', retrySave);
+  }, [retrySave]);
+
   // Warn before closing the page while a change is unsaved.
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -156,8 +178,8 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
   }, []);
 
   const value = useMemo(
-    () => (data ? { data, today, run, saveStatus, saveMessage, retrySave, reload } : null),
-    [data, today, run, saveStatus, saveMessage, retrySave, reload],
+    () => (data ? { data, today, run, saveStatus, saveMessage, retrySave, reload, recoveredCopy, dismissRecoveredCopy } : null),
+    [data, today, run, saveStatus, saveMessage, retrySave, reload, recoveredCopy, dismissRecoveredCopy],
   );
 
   if (loadError) {

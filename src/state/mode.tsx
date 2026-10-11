@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { todayLocal } from '../domain/dates';
 import { buildSampleData } from '../domain/sample';
-import { LocalStorageAdapter, SAMPLE_STORAGE_KEY, STORAGE_KEY } from './storage';
+import { LocalStorageAdapter, SAMPLE_STORAGE_KEY, STORAGE_KEY, type StorageAdapter } from './storage';
 import { StoreProvider } from './store';
 
 export type DataMode = 'real' | 'sample';
@@ -25,14 +25,24 @@ function readMode(storage: Storage): DataMode {
   }
 }
 
+/** Leaves sample mode and removes the sample data (e.g. when signing out). */
+export function forgetSampleData(storage: Storage = window.localStorage) {
+  storage.removeItem(SAMPLE_STORAGE_KEY);
+  storage.removeItem(MODE_KEY);
+}
+
 /**
- * Chooses which storage slot the app reads and writes. Sample data lives under
- * its own key, so exploring it can never mix synthetic transactions into the
- * user's real data.
+ * Chooses which storage the app reads and writes: the user's own (`adapter`,
+ * their account when signed in, otherwise this device) or the sample data.
+ * Sample data always lives on the device under its own key, so exploring it can
+ * never mix synthetic transactions into the user's real data.
  */
-export function DataModeProvider({ children, storage = window.localStorage }: { children: ReactNode; storage?: Storage }) {
+export function DataModeProvider({ children, storage = window.localStorage, adapter: realAdapter }: { children: ReactNode; storage?: Storage; adapter?: StorageAdapter }) {
   const [mode, setMode] = useState<DataMode>(() => readMode(storage));
-  const adapter = useMemo(() => new LocalStorageAdapter(storage, mode === 'sample' ? SAMPLE_STORAGE_KEY : STORAGE_KEY), [storage, mode]);
+  const adapter = useMemo(
+    () => (mode === 'sample' ? new LocalStorageAdapter(storage, SAMPLE_STORAGE_KEY) : (realAdapter ?? new LocalStorageAdapter(storage, STORAGE_KEY))),
+    [storage, mode, realAdapter],
+  );
 
   const enterSample = useCallback(async () => {
     const sample = new LocalStorageAdapter(storage, SAMPLE_STORAGE_KEY);

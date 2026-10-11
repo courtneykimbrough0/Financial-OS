@@ -418,6 +418,7 @@ legend {
   color: #e5e5ea;
 }
 input[type='text'],
+input[type='email'],
 input[type='date'],
 input[type='number'],
 select,
@@ -2252,4 +2253,30 @@ li.negative .tl-tally {
 .data-notice .data-actions .button {
   padding-left: 0;
   gap: 4px;
+}
+
+/* ---------- Accounts ---------- */
+
+.sign-in {
+  max-width: 440px;
+  margin: 0 auto;
+  padding-top: var(--space-6);
+}
+.code-input {
+  font-size: 1.5rem;
+  letter-spacing: 0.3em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.center-actions {
+  justify-content: center;
+}
+.account-line {
+  margin-top: var(--space-4);
+}
+.button.inline-link {
+  display: inline-flex;
+  padding: 0 4px;
+  font-size: inherit;
+  vertical-align: middle;
 }

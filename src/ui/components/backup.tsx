@@ -6,7 +6,7 @@ import { useStore } from '../../state/store';
 import { navigate } from '../router';
 import { Icon, Modal, useToast } from './common';
 
-function downloadFile(filename: string, text: string) {
+export function downloadFile(filename: string, text: string) {
   const blob = new Blob([text], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

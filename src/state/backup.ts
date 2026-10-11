@@ -22,6 +22,11 @@ export function createBackup(data: AppData, now: Date = new Date()): { filename:
   return { filename: `financial-os-backup-${todayLocal(now)}.json`, text: JSON.stringify(file, null, 2) };
 }
 
+/** What the user entered: recurring items plus one-time items. */
+export function countItems(data: AppData): number {
+  return data.sources.length + data.records.filter((r) => r.sourceId === null).length;
+}
+
 export interface ParsedBackup {
   data: AppData;
   exportedAt: string | null;
@@ -50,6 +55,6 @@ export function readBackup(text: string): ParsedBackup {
   return {
     data: rest,
     exportedAt: typeof file.exportedAt === 'string' ? file.exportedAt : null,
-    itemCount: data.sources.length + data.records.filter((r) => r.sourceId === null).length,
+    itemCount: countItems(data),
   };
 }

@@ -2,7 +2,7 @@
 
 A mobile-first Progressive Web App for planning cash flow. You enter the income, expenses, and liability payments you expect, and the app shows when money comes in, when it goes out, and when timing gaps are likely. When something actually happens (a late paycheck, a bigger bill), you record it. The forecast then recalculates, and the original prediction is kept for comparison.
 
-You enter everything by hand, and the data stays on your device. The app has no bank connections, no account balances, and no budgeting.
+You enter everything by hand. Data is saved to the user's Financial OS account (Supabase) when accounts are turned on, or on the device otherwise. The app has no bank connections, no account balances, and no budgeting.
 
 ## Quick start
 
@@ -56,8 +56,14 @@ src/
     sample.ts      Synthetic demonstration data
   state/
     storage.ts     StorageAdapter interface; localStorage implementation with validation
+    cloud.ts       Account storage (Supabase) with an on-device copy for offline use
+    account.tsx    Sign-in with an emailed code; account gate; sign out; delete account
+    backup.ts      Backup files: create and validate
     store.tsx      React context; applies operations and saves
     mode.tsx       Switches between real data and sample data (separate storage keys)
+supabase/
+  migrations/      Database setup: table, row level security, revision-checked save, account deletion
+  tests/           A check script to run after applying the migration
   ui/              React screens and components
 ```
 
@@ -80,6 +86,24 @@ Data is one versioned JSON document per user (`schemaVersion: 2`), stored on the
 - **Background saving.** Changes appear on screen immediately and save in the background, one save at a time. Changes made while a save is running are folded into the next save. A failed save keeps the change on screen and shows **Try again**. The page warns before closing if a change is still unsaved. The app shows a loading state until data has loaded.
 - **Backups.** **Download backup** (at the bottom of every main screen) saves a dated JSON file. **Restore from backup** (there and on the setup welcome screen) validates the file the same way saved data is validated, then replaces the current data after the user confirms.
 - If saved data can't be read, a copy is set aside under a separate key instead of being discarded.
+
+### Accounts (Supabase)
+
+Accounts turn on when the build has `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set (see `.env.example`). Without them the app runs on device storage only, which is how the tests and the e2e script run.
+
+- **Sign-in** uses a code emailed to the user; the first sign-in creates the account. A code keeps sign-in inside the installed app (on iPhone, a sign-in link would open Safari, which has separate storage).
+- **Storage.** One row per user in `public.financial_data` holds the same JSON document plus its revision. Row level security limits each user to their own row. Saves go through `save_financial_data(data, base_revision)`, which applies the revision check in the database, so racing saves can't both succeed.
+- **Offline.** Every change is written to an on-device copy first and marked pending, then sent to the account. The app opens from the device copy when offline, and pending changes are sent when the connection returns or the app next opens. If newer data reached the account from elsewhere in the meantime, the newer data is loaded and this device's unsent changes are offered as a file download, so neither version is lost.
+- **First sign-in.** If the account is empty and the device already has a forecast, the app offers to move it into the account. The device copy is kept under another key afterwards.
+- **Sign out** removes the account's data from the device (and warns first if changes haven't been sent yet). **Delete account** permanently removes the account and its data, after offering a backup download.
+- The app also asks the browser for persistent storage, so the browser is less likely to clear the device copy when space runs low.
+
+**Setting up a Supabase project**
+
+1. Apply `supabase/migrations/20261011000000_financial_data.sql` (SQL editor or `supabase db push`). Then run `supabase/tests/financial_data_check.sql`; it ends with "All checks passed" and rolls back everything it created.
+2. Authentication → Emails: in both the **Magic link** and **Confirm signup** templates, include `{{ .Token }}` so the email contains the code.
+3. Authentication → Emails → SMTP: set up a custom email provider before inviting testers. Supabase's built-in sender is for development only and is heavily rate limited.
+4. Set the two `VITE_` variables in the hosting environment. Never put a `service_role` or secret key in a `VITE_` variable; those are shipped to browsers.
 
 ## Forecast rules
 
@@ -130,7 +154,8 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 - `src/domain/__tests__/spec-scenarios.test.ts`: the specification's scenarios A–M (basic projection, timing gap, actual income and expenses that differ from expectations, late liability payment, schedule change, one-time transaction, rescheduling, cancellation, dashboard consistency, view changes, date boundaries, persistence).
 - `forecast.test.ts`, `recurrence.test.ts`, `dates-money.test.ts`: engine edge cases, including time-zone independence checked across five zones.
 - `sample.test.ts`: checks that the sample data shows each behavior it is meant to demonstrate, with the sample built on several different "today" dates.
-- `src/state/__tests__`: storage round-trips, damaged data handling, and the separation between sample and real data.
+- `src/state/__tests__`: storage round-trips, damaged data handling, the separation between sample and real data, background saving, backups, and account storage (offline changes, sending them later, conflicts that set changes aside).
+- `src/ui/__tests__/accounts.test.tsx`: sign-in with a code, moving device data into a new account, offline saving, recovered changes, and account deletion.
 - `src/ui/__tests__`: recording an actual, the double-tap guard, future-date validation, and cancellation, all through the real UI.
 - `scripts/e2e-smoke.mjs`: drives the production build in Chromium with a pinned clock (onboarding → all four views → late paycheck → reload → sample data).
 
@@ -148,7 +173,8 @@ The visual language (color, type, spacing, and components) is documented in [DES
 
 ## Known limitations
 
-- Data lives in this browser on one device and isn't synced; clearing site data erases it. Users can download a backup and restore it on any device. The app says so at the bottom of every main screen.
+- Without accounts turned on, data lives in this browser on one device and isn't synced; clearing site data erases it. Users can download a backup and restore it on any device. The app says so at the bottom of every main screen.
+- With accounts, two devices editing at the same time don't merge changes: the first save wins and the other device's changes are offered as a download.
 - USD only.
 - Recurring sources can be turned off but not deleted once they have recorded history. This is intentional, so the history is preserved.
 - Because the anchor moves to the next payday once a paycheck is in the past, items between today and the next payday appear on the calendar and in the KPIs but are outside the running tally until they become overdue.

@@ -7,12 +7,14 @@ import * as ops from '../../domain/operations';
 import { periodPlan } from '../../domain/plan';
 import { describeRule } from '../../domain/recurrence';
 import { liabilityPrefix, type OccurrenceRecord, type RecurringSource, type TransactionKind } from '../../domain/types';
+import { useAccount } from '../../state/account';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
 import { FlowAmount, Icon, KindAvatar, Modal, SectionLabel, TagList, useToast } from '../components/common';
 import { KIND_COPY, OneTimeForm, SourceForm } from '../components/forms';
 import { TimingGapsBanner } from '../components/gaps';
 import { LeftToSpend, PeriodBreakdown, TagBreakdown } from '../components/plan';
+import { SignedInLine } from '../components/account';
 import { RestoreBackupButton } from '../components/backup';
 import { navigate } from '../router';
 
@@ -381,6 +383,7 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
 export function Onboarding() {
   const { data, run, today } = useStore();
   const { enterSample } = useDataMode();
+  const account = useAccount();
   const [step, setStep] = useState(0);
   const [needIncome, setNeedIncome] = useState(false);
   const [sheet, setSheet] = useState<SetupSheet | null>(null);
@@ -450,7 +453,9 @@ export function Onboarding() {
             <li>See what’s left to spend and your projected cash flow</li>
             <li>Record what actually happens, and the forecast updates</li>
           </ul>
-          <p className="hint center">Takes about 3 minutes. You enter everything yourself, and it is saved only on this device.</p>
+          <p className="hint center">
+            Takes about 3 minutes. You enter everything yourself, and it’s saved {account ? 'to your account' : 'only on this device'}.
+          </p>
           <button
             type="button"
             className="button link full"
@@ -463,6 +468,7 @@ export function Onboarding() {
           <div className="center">
             <RestoreBackupButton label="Have a backup? Restore it" />
           </div>
+          <SignedInLine />
         </div>
       )}
       {def.kinds.length > 0 && <KindStep key={step} kinds={def.kinds} onSheet={setSheet} />}

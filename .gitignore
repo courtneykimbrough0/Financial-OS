@@ -5,3 +5,6 @@ dev-dist
 coverage
 .DS_Store
 e2e-screenshots
+
+.env.local
+.env.*.local
