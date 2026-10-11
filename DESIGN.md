@@ -94,6 +94,11 @@ The dashboard shows only summaries. Detail opens in a bottom sheet:
   - A week shows its totals, then its days.
   - A transaction opened from a day or week sheet returns to that sheet when closed.
 
+The guided setup follows the same pattern:
+
+- **Each step:** the step's items as a list card, with an "Add" button that opens the form in a sheet. Tapping an item opens it in a sheet to edit or remove it.
+- **Review step:** a hero card showing the next expected payday and the lowest point before the following payday, then uppercase-labeled list cards with an "Add" link for each type.
+
 Shortfall and overdue warnings always stay on the page and are never hidden behind a tap.
 
 ## Accessibility rules

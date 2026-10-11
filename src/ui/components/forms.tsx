@@ -152,10 +152,12 @@ export function SourceForm({
   onDone: () => void;
   submitLabel?: string;
 }) {
-  const { run, today } = useStore();
+  const { run, today, data } = useStore();
   const toast = useToast();
   const copy = KIND_COPY[kind];
   const current = source?.versions[source.versions.length - 1];
+  // Nothing has happened yet for this item, so it can simply be redefined.
+  const fresh = !!source && source.active && ops.sourceHasNoHistory(data, source.id, today);
   const defaultStart = source ? (nextScheduledDate(source, today) ?? today) : '';
 
   const [description, setDescription] = useState(source?.description ?? '');
@@ -182,6 +184,13 @@ export function SourceForm({
       const result = run((d, clock) => ops.addSource(d, { kind, description, category, amountCents: cents!, startDate, rule: r }, clock));
       if (!result.ok) return setError(result.error);
       toast(`Added ${description.trim()}.`);
+      return onDone();
+    }
+
+    if (fresh) {
+      const result = run((d, clock) => ops.redefineSource(d, source.id, { description, category, amountCents: cents!, startDate, rule: r }, clock));
+      if (!result.ok) return setError(result.error);
+      toast(`Saved ${description.trim()}.`);
       return onDone();
     }
 
@@ -214,7 +223,7 @@ export function SourceForm({
         )}
       </Field>
       {source && !source.active && <p className="callout callout-info">This item is turned off. Turn it back on to change its amount or schedule.</p>}
-      {source && source.active && (
+      {source && source.active && !fresh && (
         <p className="callout callout-info">
           Changes to the amount or schedule apply starting on the date below. Earlier transactions and anything you have already recorded keep their original values.
         </p>
@@ -225,9 +234,9 @@ export function SourceForm({
         {(p) => <MoneyInput {...p} value={amount} onChange={setAmount} />}
       </Field>
       <Field
-        label={source ? 'Changes start with the payment on' : copy.dateLabel}
+        label={source && !fresh ? 'Changes start with the payment on' : copy.dateLabel}
         error={fieldErrors.startDate}
-        hint={source ? `Currently: ${describeRule(current!.rule, current!.startDate)}, ${formatMoney(current!.amountCents)}.` : undefined}
+        hint={source && !fresh ? `Currently: ${describeRule(current!.rule, current!.startDate)}, ${formatMoney(current!.amountCents)}.` : undefined}
       >
         {(p) => <input {...p} type="date" min={today} value={startDate} onChange={(e) => setStartDate(e.target.value)} />}
       </Field>

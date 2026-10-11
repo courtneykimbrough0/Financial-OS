@@ -141,6 +141,39 @@ export function changeSourceSchedule(data: AppData, id: string, change: Schedule
 }
 
 /**
+ * True when a source has no recorded outcomes and no occurrences before today,
+ * so nothing about it has happened yet (e.g. it was just added during setup).
+ */
+export function sourceHasNoHistory(data: AppData, id: string, today: DateStr): boolean {
+  const source = data.sources.find((s) => s.id === id);
+  if (!source) return false;
+  return source.versions[0]!.startDate >= today && !data.records.some((r) => r.sourceId === id);
+}
+
+/**
+ * Replaces the whole definition of a source that has no history yet. Unlike
+ * `changeSourceSchedule`, nothing from the old schedule is kept, because no
+ * occurrence of it has happened or been recorded.
+ */
+export function redefineSource(data: AppData, id: string, input: Omit<SourceInput, 'kind'>, clock: Clock): Result {
+  if (!sourceHasNoHistory(data, id, clock.today)) return fail('This item already has history. Change its schedule from a future date instead.');
+  const err =
+    validateDescription(input.description) ??
+    validateAmount(input.amountCents) ??
+    (!isValidDateStr(input.startDate) ? 'Enter a valid date.' : null) ??
+    (input.startDate < clock.today ? 'The next expected date must be today or later.' : null) ??
+    validateRule(input.rule, input.startDate);
+  if (err) return fail(err);
+  return withSource(data, id, (s) => ({
+    ...s,
+    description: input.description.trim(),
+    category: (input.category ?? '').trim(),
+    versions: [{ id: newId('ver'), startDate: input.startDate, amountCents: input.amountCents, rule: input.rule }],
+    updatedAt: clock.now,
+  }));
+}
+
+/**
  * Permanently removes a recurring source that has no recorded outcomes (e.g.
  * one added by mistake during setup). Sources with history must be turned off
  * instead so that history is preserved.

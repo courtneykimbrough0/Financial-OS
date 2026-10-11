@@ -488,3 +488,25 @@ describe('time zone independence', () => {
     for (const s of snapshots) expect(s).toBe(snapshots[0]);
   });
 });
+
+describe('redefining a source with no history', () => {
+  it('replaces the schedule entirely, leaving no occurrence on the old date', () => {
+    const d = unwrap(ops.redefineSource(baseline(), PAY, { description: 'Paycheck', amountCents: usd(1900), startDate: '2026-10-20', rule: { type: 'biweekly' } }, clockAt(TODAY)));
+    const f = buildForecast(d, TODAY);
+    const pays = f.entries.filter((e) => e.occurrence.sourceId === PAY && e.date <= '2026-11-30');
+    expect(pays.map((e) => [e.date, e.amountCents / 100])).toEqual([
+      ['2026-10-20', 1900],
+      ['2026-11-03', 1900],
+      ['2026-11-17', 1900],
+    ]);
+    expect(f.anchor).toBe('2026-10-19');
+  });
+
+  it('refuses once the source has history', () => {
+    const recorded = unwrap(ops.recordActual(baseline(), id(PAY, '2026-10-15'), { amountCents: usd(1800), date: '2026-10-15' }, clockAt('2026-10-15')));
+    expect(ops.sourceHasNoHistory(recorded, PAY, '2026-10-15')).toBe(false);
+    expectError(ops.redefineSource(recorded, PAY, { description: 'Paycheck', amountCents: usd(1900), startDate: '2026-10-20', rule: { type: 'biweekly' } }, clockAt('2026-10-15')), /already has history/);
+    // A past start date also counts as history.
+    expect(ops.sourceHasNoHistory(baseline(), PAY, '2026-10-16')).toBe(false);
+  });
+});
