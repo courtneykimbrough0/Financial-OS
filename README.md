@@ -15,7 +15,17 @@ npm run build        # production build + service worker in dist/
 npm run e2e          # end-to-end smoke test in Chromium (run after build)
 ```
 
-Node 20+ is required. The e2e script uses Playwright with a pinned clock. It saves screenshots to `e2e-screenshots/`, which git ignores.
+Node 20+ is required.
+
+### Sample data
+
+To explore without entering anything, choose **Explore with sample data**. The button is on the onboarding welcome screen and at the bottom of every main screen. Sample data is fictional, dated relative to today, and stored under its own key (`cashflow-forecast:sample-data`). It never mixes with your real data, and a banner stays on screen the whole time. **Leave sample data** discards the sample and returns you to your own data unchanged.
+
+The sample (`src/domain/sample.ts`) covers recurring income, rent, utilities, a car-loan liability, and a one-time car repair. It also includes:
+- a paycheck that came a day late and was smaller than expected ($1,650 instead of $1,800);
+- an electric bill that cost more than expected ($128 instead of $90);
+- an unpaid phone bill that shows as overdue;
+- a stretch where projected cash flow drops below $0 before the next payday. The e2e script uses Playwright with a pinned clock. It saves screenshots to `e2e-screenshots/`, which git ignores.
 
 ## Screens
 
@@ -41,9 +51,11 @@ src/
     occurrences.ts Merges generated occurrences with stored records
     forecast.ts    Anchor, running tally, daily rows, KPIs, week summaries, paycheck cycles
     operations.ts  Every state change (pure functions returning a new state or an error)
+    sample.ts      Synthetic demonstration data
   state/
     storage.ts     StorageAdapter interface; localStorage implementation with validation
     store.tsx      React context; applies operations and saves
+    mode.tsx       Switches between real data and sample data (separate storage keys)
   ui/              React screens and components
 ```
 
@@ -94,6 +106,15 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 - Rescheduling replaces the scheduled date, so the item is never counted on both dates.
 - Turning a source off stops future occurrences. Turning it back on starts at a new next date and leaves the turned-off stretch empty, so no backlog of overdue items appears.
 
+## Tests
+
+- `src/domain/__tests__/spec-scenarios.test.ts`: the specification's scenarios A–M (basic projection, timing gap, actual income and expenses that differ from expectations, late liability payment, schedule change, one-time transaction, rescheduling, cancellation, dashboard consistency, view changes, date boundaries, persistence).
+- `forecast.test.ts`, `recurrence.test.ts`, `dates-money.test.ts`: engine edge cases, including time-zone independence checked across five zones.
+- `sample.test.ts`: checks that the sample data shows each behavior it is meant to demonstrate, with the sample built on several different "today" dates.
+- `src/state/__tests__`: storage round-trips, damaged data handling, and the separation between sample and real data.
+- `src/ui/__tests__`: recording an actual, the double-tap guard, future-date validation, and cancellation, all through the real UI.
+- `scripts/e2e-smoke.mjs`: drives the production build in Chromium with a pinned clock (onboarding → all four views → late paycheck → reload → sample data).
+
 ## Accessibility
 
 - Every status pairs color with a symbol or word: ✓ Done, ! Overdue, ▼ Below $0, +/− signs on amounts.
@@ -105,7 +126,7 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 
 ## Known limitations
 
-- Data lives on one device with no sync or export yet. Clearing site data erases it.
+- Data lives in this browser on one device. It is not backed up, synced, or exportable yet, and clearing site data erases it. The app says so at the bottom of every main screen.
 - USD only.
 - Recurring sources can be turned off but not deleted once they have recorded history. This is intentional, so the history is preserved.
 - Because the anchor moves to the next payday once a paycheck is in the past, items between today and the next payday appear on the calendar and in the KPIs but are outside the running tally until they become overdue.

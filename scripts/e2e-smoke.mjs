@@ -167,6 +167,33 @@ try {
   await page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
   await shot('10-desktop');
 
+  // The clock still reads Oct 16 here, so sample dates are relative to Oct 16.
+  step('sample data: separate from real data, shows the three checkpoint behaviors');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Explore with sample data' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Show sample data' }).click();
+  await page.getByText('You’re exploring sample data.').waitFor();
+  // Unpaid bill: stays visible as overdue.
+  await page.getByRole('heading', { name: '1 transaction needs an update' }).waitFor();
+  assert.match(await page.locator('.panel-warn').innerText(), /Phone/);
+  // Negative tally before a later payday (look ahead with a custom range).
+  await page.getByRole('tab', { name: 'Custom' }).click();
+  await page.getByLabel('End date').fill('2026-11-30');
+  await page.getByText('Timing gap ahead').waitFor();
+  assert.match(await page.locator('.callout-danger').innerText(), /Nov 5 – 9, by up to \$600\.00/);
+  await shot('11-sample-data');
+  // Late paycheck: actual recorded, next one still scheduled.
+  await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Income' }).click();
+  await page.getByRole('button', { name: 'See dates' }).click();
+  const sampleDates = await page.locator('.source-occurrences').innerText();
+  assert.match(sampleDates, /Oct 14, 2026[\s\S]*Expected \$1,800\.00 on Oct 13, 2026[\s\S]*Received/);
+  assert.match(sampleDates, /Oct 27, 2026[\s\S]*Expected/);
+  await page.getByRole('button', { name: 'Leave sample data' }).click();
+  await page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
+  assert.equal(await page.getByText('You’re exploring sample data.').count(), 0);
+  await page.goto(`${BASE}#/income`);
+  assert.match(await page.locator('.source-card').innerText(), /Paycheck[\s\S]*Next: Oct 29, 2026/);
+
   assert.deepEqual(errors, [], `Console errors: ${errors.join('\n')}`);
   console.log('\nE2E smoke test passed.');
 } catch (err) {

@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { useDataMode } from '../state/mode';
 import { useStore } from '../state/store';
+import { Modal } from './components/common';
 import { navigate, useRoute, type Route } from './router';
 import { Dashboard } from './screens/Dashboard';
 import { Onboarding } from './screens/Onboarding';
@@ -55,11 +57,13 @@ export function App() {
         )}
       </header>
       <main id="main" className={showNav ? 'with-nav' : ''}>
+        {data.isSample && <SampleBanner />}
         {route === 'onboarding' && <Onboarding />}
         {route === 'dashboard' && <Dashboard />}
         {route === 'income' && <SourcesScreen key="income" kind="income" />}
         {route === 'expenses' && <SourcesScreen key="expense" kind="expense" />}
         {route === 'liabilities' && <SourcesScreen key="liability" kind="liability" />}
+        {showNav && <DataNotice />}
       </main>
       {showNav && (
         <nav className="bottom-nav" aria-label="Main">
@@ -74,5 +78,68 @@ export function App() {
         </nav>
       )}
     </div>
+  );
+}
+
+function SampleBanner() {
+  const { exitSample } = useDataMode();
+  return (
+    <div className="sample-banner" role="note">
+      <p>
+        <strong>You’re exploring sample data.</strong> These transactions are made up. Your own data is kept separately and stays unchanged.
+      </p>
+      <button
+        type="button"
+        className="button small secondary"
+        onClick={() => {
+          exitSample();
+          window.location.hash = '';
+        }}
+      >
+        Leave sample data
+      </button>
+    </div>
+  );
+}
+
+/** States plainly where data lives, and offers sample data in its own separate space. */
+function DataNotice() {
+  const { data } = useStore();
+  const { enterSample } = useDataMode();
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <footer className="data-notice">
+      <p>Your data is saved in this browser on this device only. It is not backed up or synced to other devices, and clearing your browser’s site data removes it.</p>
+      {!data.isSample && (
+        <button type="button" className="button small link" onClick={() => setConfirming(true)}>
+          Explore with sample data
+        </button>
+      )}
+      {confirming && (
+        <Modal title="Explore with sample data?" onClose={() => setConfirming(false)}>
+          <div className="stack">
+            <p>
+              You’ll see a made-up example with a late paycheck, a bill that cost more than expected, an overdue bill, and a stretch where projected cash flow dips below $0.
+            </p>
+            <p>Sample data is kept separate from yours. Your own entries stay exactly as they are, and you can return to them anytime with “Leave sample data”.</p>
+            <div className="form-actions">
+              <button type="button" className="button secondary" onClick={() => setConfirming(false)} data-autofocus>
+                Not now
+              </button>
+              <button
+                type="button"
+                className="button primary"
+                onClick={() => {
+                  enterSample();
+                  navigate('dashboard');
+                }}
+              >
+                Show sample data
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </footer>
   );
 }

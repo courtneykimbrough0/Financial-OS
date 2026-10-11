@@ -97,6 +97,8 @@ export interface Occurrence extends OccurrenceRecord {
 export interface AppData {
   schemaVersion: 1;
   onboardingComplete: boolean;
+  /** True for synthetic demonstration data, which is stored apart from real data. */
+  isSample?: boolean;
   sources: RecurringSource[];
   records: OccurrenceRecord[];
 }

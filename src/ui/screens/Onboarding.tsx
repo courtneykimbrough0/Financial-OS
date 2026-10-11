@@ -5,6 +5,7 @@ import { formatMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { describeRule } from '../../domain/recurrence';
 import type { RecurringSource, TransactionKind } from '../../domain/types';
+import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
 import { FlowAmount, useToast } from '../components/common';
 import { SourceForm } from '../components/forms';
@@ -147,6 +148,7 @@ function Review() {
 
 export function Onboarding() {
   const { data, run } = useStore();
+  const { enterSample } = useDataMode();
   const [step, setStep] = useState(0);
   const [needIncome, setNeedIncome] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -203,7 +205,20 @@ export function Onboarding() {
             <li>See your projected cash flow day by day</li>
             <li>Record what actually happens, and the forecast updates</li>
           </ul>
-          <p className="hint">Takes about 3 minutes. You enter everything yourself, and it stays on this device.</p>
+          <p className="hint">Takes about 3 minutes. You enter everything yourself, and it is saved only on this device.</p>
+          <div className="callout callout-info stack-sm">
+            <p>Want to look around first? Sample data shows a made-up example, kept separate from anything you enter.</p>
+            <button
+              type="button"
+              className="button secondary small"
+              onClick={() => {
+                enterSample();
+                navigate('dashboard');
+              }}
+            >
+              Explore with sample data
+            </button>
+          </div>
         </div>
       )}
       {step === 1 && <KindStep kind="income" />}

@@ -14,6 +14,8 @@ export interface StorageAdapter {
 }
 
 export const STORAGE_KEY = 'cashflow-forecast:data';
+/** Synthetic demonstration data lives under its own key and never touches real data. */
+export const SAMPLE_STORAGE_KEY = 'cashflow-forecast:sample-data';
 
 function isSource(s: unknown): s is RecurringSource {
   if (!s || typeof s !== 'object') return false;
@@ -53,6 +55,7 @@ export function migrate(raw: unknown): AppData {
   return {
     schemaVersion: 1,
     onboardingComplete: Boolean(doc.onboardingComplete),
+    ...(doc.isSample ? { isSample: true } : {}),
     sources: sources.map((s) => ({ ...s, category: s.category ?? '', pausedRanges: s.pausedRanges ?? [], endDate: s.endDate ?? null })),
     records,
   };

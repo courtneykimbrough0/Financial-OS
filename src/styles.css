@@ -1275,3 +1275,32 @@ li.negative .tl-tally {
     transition: background-color 120ms ease, box-shadow 120ms ease;
   }
 }
+
+/* ---------- Sample data & data notice ---------- */
+
+.sample-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 2px dashed var(--primary);
+  background: var(--primary-soft);
+}
+.sample-banner p {
+  flex: 1 1 240px;
+}
+.data-notice {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.data-notice .button {
+  margin-top: 4px;
+  padding-left: 0;
+}
