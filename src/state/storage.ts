@@ -17,11 +17,11 @@ export const STORAGE_KEY = 'financial-os:data';
 /** Synthetic demonstration data lives under its own key and never touches real data. */
 export const SAMPLE_STORAGE_KEY = 'financial-os:sample-data';
 
-const KNOWN_KINDS = ['income', 'bill', 'subscription', 'liability', 'savings', 'spending', 'expense'];
+const KNOWN_KINDS = ['income', 'bill', 'subscription', 'liability', 'savings', 'expense', 'spending'];
 
-/** Early builds used a single "expense" kind; those are bills now. */
+/** Earlier builds had "expense" and "spending" kinds; both are bills now. */
 function upgradeKind(kind: string): TransactionKind {
-  return (kind === 'expense' ? 'bill' : kind) as TransactionKind;
+  return (kind === 'expense' || kind === 'spending' ? 'bill' : kind) as TransactionKind;
 }
 
 function isSource(s: unknown): s is RecurringSource {

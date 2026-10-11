@@ -389,16 +389,16 @@ function PeriodBody({
             <dd className="amount-in">{formatMoney(kpis.incomeCents)}</dd>
           </div>
           <div>
-            <dt>Projected money out</dt>
+            <dt>Projected expenses</dt>
             <dd className="amount-out">{formatMoney(kpis.outflowCents)}</dd>
           </div>
           <div>
-            <dt>Projected cash flow</dt>
+            <dt>Left to spend</dt>
             <dd className={kpis.netCents < 0 ? 'negative' : ''}>{formatSignedMoney(kpis.netCents)}</dd>
           </div>
         </dl>
         <div className="calendar-actions">
-          <p className="hint">Money out includes expenses, savings, and spending. Tap a day for details.</p>
+          <p className="hint">Expenses include savings. Left to spend is income minus expenses for this period. Tap a day for details.</p>
           <button type="button" className="button small link" onClick={() => onInfo('calendar-key')}>
             <Icon icon={Info} size={16} /> Calendar key
           </button>
@@ -568,7 +568,7 @@ function Calendar({
 function CalendarKey() {
   const items: [ReactNode, string][] = [
     [<span className="chip chip-in chip-expected legend-chip">+$1.8k</span>, 'Money in (green)'],
-    [<span className="chip chip-out chip-expected legend-chip">−$350</span>, 'Money out: expenses, savings, and spending (indigo)'],
+    [<span className="chip chip-out chip-expected legend-chip">−$350</span>, 'Money out: expenses, including savings (indigo)'],
     [<span className="chip chip-out chip-done legend-chip">−$350</span>, 'Filled chip: everything that day is done (received or paid)'],
     [<span className="chip chip-out chip-expected legend-chip">−$350</span>, 'Outlined chip: still expected'],
     [<Icon icon={AlertCircle} size={18} className="flag-overdue" />, 'Overdue: the date passed and it hasn’t been recorded'],
@@ -829,11 +829,11 @@ function WeekSheet({ forecast, start, end, onClose, onOpen }: { forecast: Foreca
           <dd className="amount-in">+{formatMoney(k.incomeCents)}</dd>
         </div>
         <div>
-          <dt>Projected money out</dt>
+          <dt>Projected expenses</dt>
           <dd className="amount-out">−{formatMoney(k.outflowCents)}</dd>
         </div>
         <div>
-          <dt>Net</dt>
+          <dt>Left to spend</dt>
           <dd className={k.netCents < 0 ? 'negative' : ''}>{formatSignedMoney(k.netCents)}</dd>
         </div>
       </dl>

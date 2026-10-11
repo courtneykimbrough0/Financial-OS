@@ -2,15 +2,14 @@ import type { DateStr } from './dates';
 import type { Cents } from './money';
 
 /**
- * What a transaction is. Kinds roll up into four groups:
+ * What a transaction is. Two groups:
  *   Income
- *   Expenses: bills, subscriptions, liability payments
- *   Savings
- *   Spending
- * Every kind except income is money going out in the forecast.
+ *   Expenses: bills, subscriptions, liability payments, savings
+ * Every kind except income is an expense (money going out in the forecast).
+ * Whatever is left after expenses is "left to spend".
  */
-export type TransactionKind = 'income' | 'bill' | 'subscription' | 'liability' | 'savings' | 'spending';
-export type KindGroup = 'income' | 'expenses' | 'savings' | 'spending';
+export type TransactionKind = 'income' | 'bill' | 'subscription' | 'liability' | 'savings';
+export type KindGroup = 'income' | 'expenses';
 
 /** Every liability payment is exactly one of these. */
 export type LiabilityType = 'card' | 'loan' | 'lineOfCredit';
@@ -21,17 +20,16 @@ export const LIABILITY_TYPE_LABEL: Record<LiabilityType, string> = {
   lineOfCredit: 'Line of credit',
 };
 
-export const KINDS: TransactionKind[] = ['income', 'bill', 'subscription', 'liability', 'savings', 'spending'];
-export const EXPENSE_KINDS: TransactionKind[] = ['bill', 'subscription', 'liability'];
+export const KINDS: TransactionKind[] = ['income', 'bill', 'subscription', 'liability', 'savings'];
+export const EXPENSE_KINDS: TransactionKind[] = ['bill', 'subscription', 'liability', 'savings'];
 
 export function groupOf(kind: TransactionKind): KindGroup {
-  if (kind === 'income' || kind === 'savings' || kind === 'spending') return kind;
-  return 'expenses';
+  return kind === 'income' ? 'income' : 'expenses';
 }
 
-/** Past-tense verb for a completed occurrence: received, paid, saved, spent. */
+/** Past-tense verb for a completed occurrence: received, paid, saved. */
 export function doneVerb(kind: TransactionKind): string {
-  return kind === 'income' ? 'received' : kind === 'savings' ? 'saved' : kind === 'spending' ? 'spent' : 'paid';
+  return kind === 'income' ? 'received' : kind === 'savings' ? 'saved' : 'paid';
 }
 
 /**
@@ -145,14 +143,11 @@ export const KIND_LABEL: Record<TransactionKind, string> = {
   subscription: 'Subscription',
   liability: 'Liability payment',
   savings: 'Savings',
-  spending: 'Spending',
 };
 
 export const GROUP_LABEL: Record<KindGroup, string> = {
   income: 'Income',
   expenses: 'Expenses',
-  savings: 'Savings',
-  spending: 'Spending',
 };
 
 /** Sign convention: income raises the tally; expenses and liability payments lower it. */

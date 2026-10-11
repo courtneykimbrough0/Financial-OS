@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { AlertCircle, Ban, Banknote, Check, CircleDashed, CreditCard, PiggyBank, Receipt, Repeat, ShoppingBag, Tag, X, type LucideIcon } from 'lucide-react';
+import { AlertCircle, Ban, Banknote, Check, CircleDashed, CreditCard, PiggyBank, Receipt, Repeat, Tag, X, type LucideIcon } from 'lucide-react';
 import { formatMoney } from '../../domain/money';
 import { doneVerb, KIND_LABEL, type OccurrenceStatus, type TransactionKind } from '../../domain/types';
 
@@ -19,7 +19,6 @@ export const KIND_ICON: Record<TransactionKind, LucideIcon> = {
   subscription: Repeat,
   liability: CreditCard,
   savings: PiggyBank,
-  spending: ShoppingBag,
 };
 
 /** Round leading avatar for a transaction, colored and shaped by kind. */

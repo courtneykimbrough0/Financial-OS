@@ -75,13 +75,13 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
   - Danger is a red pill.
   - Link buttons are underlined text.
 - **Bottom sheet:** a grab handle, a sticky title row with a close button, and stacked full-width pill actions. It becomes a centered dialog on wide screens. The page behind it is inert.
-- **Left to spend bar:** a pill-shaped card pinned under the header during setup, labeled "Left to spend / each month". The value is green, or red with a trend-down icon when negative, and changes are announced to screen readers.
+- **Left to spend bar:** a pill-shaped card pinned under the header during setup, labeled "Left to spend" with the period it covers (in setup, "First pay period · Oct 15 – 28"). The value is green, or red with a trend-down icon when negative, and changes are announced to screen readers.
 - **Breakdown list:** label/value rows with sub-rows indented in secondary text and the key total on a heavier divider (used for the monthly breakdown and totals by tag).
 - **Tags:** small outlined pills with a tag icon. In forms they become removable chips, entered through a text field with an Add button. The only suggestions are tags the user has already created.
-- **Kind avatars:** income (banknote, green), bill (receipt, indigo), subscription (repeat, blue), liability (card, violet), savings (piggy bank, teal), spending (bag, rose).
+- **Kind avatars:** income (banknote, green), bill (receipt, indigo), subscription (repeat, blue), liability (card, violet), savings (piggy bank, teal).
 - **Timing-gap banner:** a red-outlined card with a warning triangle ("2 timing gaps ahead · Next 90 days"), shown only when the tally goes below $0. It opens a sheet listing each gap's dates, length, and lowest amount. Its wording describes the gap and gives no advice.
 - **Choice pills:** a required single choice (e.g. liability type: Card, Loan, Line of credit) shown as equal-width pills backed by native radio buttons. The selected pill is light, and all pills get a red outline if nothing is chosen on save.
-- **Navigation:** four tabs: Dashboard, Income, Expenses (Bills, Subscriptions, Savings, Spending), and Liabilities.
+- **Navigation:** four tabs: Dashboard, Income, Expenses (Bills, Subscriptions, Savings), and Liabilities.
 - **Pill tabs:** two options inside a raised pill track, used within cards. The active option is light.
 - **Totals strip / sheet stats:** three centered label-over-value columns, with values aligned on one baseline.
 - **Callouts:** soft-tinted rounded blocks (info, warn, danger, ok) that always lead with an icon or a bold phrase.

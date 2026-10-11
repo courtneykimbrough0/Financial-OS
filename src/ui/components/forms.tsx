@@ -44,13 +44,6 @@ export const KIND_COPY: Record<TransactionKind, { noun: string; nameLabel: strin
     amountLabel: 'Amount you plan to set aside',
     dateLabel: 'Next date you’ll set it aside',
   },
-  spending: {
-    noun: 'spending',
-    nameLabel: 'What is this spending?',
-    placeholder: 'e.g. Weekly groceries',
-    amountLabel: 'Amount you expect to spend',
-    dateLabel: 'Next date you’ll spend it',
-  },
 };
 
 /**

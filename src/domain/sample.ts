@@ -10,7 +10,7 @@
  *   T+11  Next paycheck $1,800 (forecast anchor is T+10).
  *   T+12  Rent $1,200.
  *   T+15  Car loan $350 (liability).
- *   T+20  One-time car repair $700 (spending) — pushes projected cash flow below $0.
+ *   T+20  One-time car repair $700 (bill) — pushes projected cash flow below $0.
  *   T+25  Paycheck $1,800 — projected cash flow recovers.
  *   T+26  Emergency fund $100 every 2 weeks (savings).
  *   T+27  Streaming service $15 monthly (subscription).
@@ -49,7 +49,7 @@ export function buildSampleData(today: DateStr): AppData {
   // Added after the T+25 payday so they show the categories without changing the timing gap.
   d = must(ops.addSource(d, { kind: 'subscription', description: 'Streaming service', amountCents: 1500, startDate: T(27), rule: { type: 'monthly' } }, setup, SAMPLE_IDS.streaming));
   d = must(ops.addSource(d, { kind: 'savings', description: 'Emergency fund', amountCents: 10000, startDate: T(26), rule: { type: 'biweekly' } }, setup, SAMPLE_IDS.savings));
-  d = must(ops.addOneTime(d, { kind: 'spending', description: 'Car repair', amountCents: 70000, date: T(20) }, now, SAMPLE_IDS.carRepair));
+  d = must(ops.addOneTime(d, { kind: 'bill', description: 'Car repair', amountCents: 70000, date: T(20) }, now, SAMPLE_IDS.carRepair));
 
   d = must(ops.recordActual(d, `${SAMPLE_IDS.paycheck}@${T(-17)}`, { amountCents: 180000, date: T(-17) }, now));
   d = must(ops.recordActual(d, `${SAMPLE_IDS.paycheck}@${T(-3)}`, { amountCents: 165000, date: T(-2) }, now));

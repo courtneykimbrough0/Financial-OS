@@ -48,6 +48,19 @@ describe('migrating data saved by earlier builds', () => {
     expect(data.records[0]).toMatchObject({ kind: 'bill', tags: [] });
   });
 
+  it('turns the removed "spending" kind into bills', () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        schemaVersion: 1,
+        onboardingComplete: true,
+        sources: [{ id: 's', kind: 'spending', description: 'Groceries', tags: [], versions: [{ id: 'v', startDate: '2026-11-01', amountCents: 5000, rule: { type: 'weekly' } }], active: true, endDate: null, createdAt: 'x', updatedAt: 'x' }],
+        records: [],
+      }),
+    );
+    expect(new LocalStorageAdapter().load().sources[0]!.kind).toBe('bill');
+  });
+
   it('keeps valid liability types and drops anything else so the user is asked again', () => {
     const v = [{ id: 'v', startDate: '2026-11-01', amountCents: 5000, rule: { type: 'monthly' } }];
     const base = { active: true, endDate: null, createdAt: 'x', updatedAt: 'x', versions: v, tags: [] };

@@ -15,8 +15,8 @@ const NAV: { route: Route; label: string; icon: LucideIcon }[] = [
   { route: 'liabilities', label: 'Liabilities', icon: CreditCard },
 ];
 
-/** Savings and spending are tabs inside Expenses; their routes highlight the Expenses tab. */
-const navRoute = (r: Route): Route => (r === 'savings' || r === 'spending' ? 'expenses' : r);
+/** Savings is a tab inside Expenses; its route highlights the Expenses tab. */
+const navRoute = (r: Route): Route => (r === 'savings' ? 'expenses' : r);
 
 export function App() {
   const { data } = useStore();
@@ -33,7 +33,6 @@ export function App() {
     expenses: 'Expenses',
     liabilities: 'Liabilities',
     savings: 'Savings',
-    spending: 'Spending',
     onboarding: 'Get started',
   };
   useEffect(() => {
@@ -69,7 +68,6 @@ export function App() {
         {route === 'income' && <SourcesScreen key="income" kind="income" />}
         {route === 'expenses' && <ExpensesScreen key="expenses" />}
         {route === 'savings' && <ExpensesScreen key="savings" initial="savings" />}
-        {route === 'spending' && <ExpensesScreen key="spending" initial="spending" />}
         {route === 'liabilities' && <SourcesScreen key="liability" kind="liability" />}
         {showNav && <DataNotice />}
       </main>

@@ -4,15 +4,15 @@ import { diffDays, formatMedium, formatShort } from '../../domain/dates';
 import { buildForecast, dailyTimeline, lowestPoint, paycheckCycles, timingGapsAhead } from '../../domain/forecast';
 import { formatMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
-import { monthlyPlan } from '../../domain/plan';
+import { periodPlan } from '../../domain/plan';
 import { describeRule } from '../../domain/recurrence';
-import { liabilityPrefix, type RecurringSource, type TransactionKind } from '../../domain/types';
+import { liabilityPrefix, type OccurrenceRecord, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
 import { FlowAmount, Icon, KindAvatar, Modal, SectionLabel, TagList, useToast } from '../components/common';
-import { KIND_COPY, SourceForm } from '../components/forms';
+import { KIND_COPY, OneTimeForm, SourceForm } from '../components/forms';
 import { TimingGapsBanner } from '../components/gaps';
-import { LeftToSpend, MonthlyBreakdown, TagBreakdown } from '../components/plan';
+import { LeftToSpend, PeriodBreakdown, TagBreakdown } from '../components/plan';
 import { navigate } from '../router';
 
 interface StepDef {
@@ -30,13 +30,16 @@ const STEPS: StepDef[] = [
     title: 'When does money come in?',
     body: 'Add your regular income, like a paycheck or benefits. Your forecast is built around your next expected payday.',
   },
-  { name: 'Expenses', kinds: ['bill', 'subscription', 'liability'], title: 'What do you pay regularly?', body: 'Bills, subscriptions, and loan or card payments. You can add more later.' },
-  { name: 'Savings', kinds: ['savings'], title: 'Do you set money aside?', body: 'Regular amounts you move to savings. This step is optional.' },
-  { name: 'Spending', kinds: ['spending'], title: 'What do you spend regularly?', body: 'Everyday spending on a schedule, like groceries or gas. This step is optional.' },
+  {
+    name: 'Expenses',
+    kinds: ['bill', 'subscription', 'liability', 'savings'],
+    title: 'What goes out?',
+    body: 'Bills, subscriptions, loan or card payments, and money you set aside in savings. Add one-time expenses too.',
+  },
   { name: 'Review', kinds: [], title: 'Check everything over', body: 'Tap anything to change it before you start.' },
 ];
 const REVIEW = STEPS.length - 1;
-const STEP_OF: Record<TransactionKind, number> = { income: 1, bill: 2, subscription: 2, liability: 2, savings: 3, spending: 4 };
+const STEP_OF: Record<TransactionKind, number> = { income: 1, bill: 2, subscription: 2, liability: 2, savings: 2 };
 
 const KIND_SECTION: Record<TransactionKind, { label: string; add: string; addAnother: string; empty: string }> = {
   income: { label: 'Income', add: 'Add income', addAnother: 'Add another income', empty: 'No income added yet' },
@@ -44,11 +47,38 @@ const KIND_SECTION: Record<TransactionKind, { label: string; add: string; addAno
   subscription: { label: 'Subscriptions', add: 'Add a subscription', addAnother: 'Add another subscription', empty: 'No subscriptions added yet' },
   liability: { label: 'Liability payments', add: 'Add a payment', addAnother: 'Add another payment', empty: 'No liability payments added yet' },
   savings: { label: 'Savings', add: 'Add savings', addAnother: 'Add more savings', empty: 'No savings added yet' },
-  spending: { label: 'Spending', add: 'Add spending', addAnother: 'Add more spending', empty: 'No spending added yet' },
 };
 
 /** Sheet state shared by the setup steps: add a new item, or edit one already added. */
-type SetupSheet = { mode: 'add'; kind: TransactionKind } | { mode: 'edit'; source: RecurringSource };
+type OneTimeKind = 'income' | 'bill';
+type SetupSheet =
+  | { mode: 'add'; kind: TransactionKind }
+  | { mode: 'edit'; source: RecurringSource }
+  | { mode: 'add-once'; kind: OneTimeKind }
+  | { mode: 'once'; record: OccurrenceRecord };
+
+/** One-time items of a group (income, or any expense). */
+const oneTimes = (records: OccurrenceRecord[], income: boolean) =>
+  records.filter((r) => r.sourceId === null && (r.kind === 'income') === income).sort((a, b) => (a.scheduledDate < b.scheduledDate ? -1 : 1));
+
+function OneTimeRow({ r, onOpen }: { r: OccurrenceRecord; onOpen: () => void }) {
+  return (
+    <li>
+      <button type="button" className="entry" onClick={onOpen} aria-haspopup="dialog">
+        <KindAvatar kind={r.kind} />
+        <span className="entry-main">
+          <span className="entry-title">{r.description}</span>
+          <span className="entry-sub">One time · {formatMedium(r.scheduledDate)}</span>
+          <TagList tags={r.tags} />
+        </span>
+        <span className="entry-side">
+          <FlowAmount kind={r.kind} cents={r.scheduledAmountCents} />
+          <Icon icon={ChevronRight} size={18} className="chevron" />
+        </span>
+      </button>
+    </li>
+  );
+}
 
 /** One tappable row per added item; tapping opens it in a sheet. */
 function SourceRow({ s, onOpen }: { s: RecurringSource; onOpen: () => void }) {
@@ -81,6 +111,38 @@ function SetupSheetView({ sheet, onClose }: { sheet: SetupSheet; onClose: () => 
     return (
       <Modal title={KIND_SECTION[sheet.kind].add} onClose={onClose}>
         <SourceForm kind={sheet.kind} onDone={onClose} submitLabel="Save" />
+      </Modal>
+    );
+  }
+  if (sheet.mode === 'add-once') {
+    return (
+      <Modal title={sheet.kind === 'income' ? 'Add one-time income' : 'Add one-time expense'} onClose={onClose}>
+        <OneTimeForm kind={sheet.kind} onDone={onClose} />
+      </Modal>
+    );
+  }
+  if (sheet.mode === 'once') {
+    const r = sheet.record;
+    return (
+      <Modal title={r.description} onClose={onClose}>
+        <div className="stack">
+          <p>
+            One-time {r.kind === 'income' ? 'income' : 'expense'} of <strong>{formatMoney(r.scheduledAmountCents)}</strong> on {formatMedium(r.scheduledDate)}. It counts once, in the period it falls in.
+          </p>
+          <p className="hint">To change it, remove it and add it again.</p>
+          <button
+            type="button"
+            className="button danger-link"
+            onClick={() => {
+              const res = run((d) => ops.deleteOneTime(d, r.id));
+              if (res.ok) toast(`Removed ${r.description}.`);
+              else toast(res.error, 'error');
+              onClose();
+            }}
+          >
+            Remove {r.description}
+          </button>
+        </div>
       </Modal>
     );
   }
@@ -161,13 +223,45 @@ function KindSection({ kind, labelled, onSheet }: { kind: TransactionKind; label
   );
 }
 
+function OneTimeSection({ income, onSheet }: { income: boolean; onSheet: (s: SetupSheet) => void }) {
+  const { data } = useStore();
+  const items = oneTimes(data.records, income);
+  const kind: OneTimeKind = income ? 'income' : 'bill';
+  const label = income ? 'One-time income' : 'One-time expenses';
+  return (
+    <section className="stack-sm" aria-labelledby={`setup-once-${kind}`}>
+      <SectionLabel
+        id={`setup-once-${kind}`}
+        action={
+          <button type="button" className="button small link" onClick={() => onSheet({ mode: 'add-once', kind })} aria-haspopup="dialog">
+            <Icon icon={Plus} size={16} /> {income ? 'Add one-time income' : 'Add one-time expense'}
+          </button>
+        }
+      >
+        {label}
+      </SectionLabel>
+      {items.length === 0 ? (
+        <p className="card review-empty muted">{income ? 'Like a tax refund or a bonus. Optional.' : 'Like a car repair or a medical bill. Optional.'}</p>
+      ) : (
+        <ul className="entry-list card list-card">
+          {items.map((r) => (
+            <OneTimeRow key={r.id} r={r} onOpen={() => onSheet({ mode: 'once', record: r })} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function KindStep({ kinds, onSheet }: { kinds: TransactionKind[]; onSheet: (s: SetupSheet) => void }) {
   const labelled = kinds.length > 1;
+  const income = kinds.includes('income');
   return (
     <div className="stack-lg">
       {kinds.map((k) => (
         <KindSection key={k} kind={k} labelled={labelled} onSheet={onSheet} />
       ))}
+      <OneTimeSection income={income} onSheet={onSheet} />
       <p className="hint center">Tap an item to change or remove it.</p>
     </div>
   );
@@ -177,16 +271,14 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
   const { data } = useStore();
   const [about, setAbout] = useState(false);
   const forecast = buildForecast(data, today);
-  const plan = monthlyPlan(data, today);
   const cycle = paycheckCycles(forecast, 1)[0];
+  const plan = cycle ? periodPlan(forecast, cycle.start, cycle.end) : null;
   const low = cycle ? lowestPoint(dailyTimeline(forecast, cycle.start, cycle.end)) : null;
   const payday = forecast.forecastStart;
   const days = payday ? diffDays(today, payday) : 0;
   const groups: [string, TransactionKind[]][] = [
     ['Income', ['income']],
-    ['Expenses', ['bill', 'subscription', 'liability']],
-    ['Savings', ['savings']],
-    ['Spending', ['spending']],
+    ['Expenses', ['bill', 'subscription', 'liability', 'savings']],
   ];
 
   return (
@@ -232,11 +324,12 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
 
       {payday && <TimingGapsBanner gaps={timingGapsAhead(forecast)} from={payday} />}
 
-      <MonthlyBreakdown plan={plan} />
-      <TagBreakdown plan={plan} />
+      {plan && <PeriodBreakdown plan={plan} title="First pay period" />}
+      {plan && <TagBreakdown plan={plan} />}
 
       {groups.map(([label, kinds]) => {
         const items = data.sources.filter((s) => kinds.includes(s.kind));
+        const once = oneTimes(data.records, label === 'Income');
         return (
           <section key={label} className="stack-sm" aria-labelledby={`review-${label}`}>
             <SectionLabel
@@ -250,12 +343,15 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
             >
               {label}
             </SectionLabel>
-            {items.length === 0 ? (
+            {items.length + once.length === 0 ? (
               <p className="card review-empty muted">None added.</p>
             ) : (
               <ul className="entry-list card list-card">
                 {items.map((s) => (
                   <SourceRow key={s.id} s={s} onOpen={() => onSheet({ mode: 'edit', source: s })} />
+                ))}
+                {once.map((r) => (
+                  <OneTimeRow key={r.id} r={r} onOpen={() => onSheet({ mode: 'once', record: r })} />
                 ))}
               </ul>
             )}
@@ -289,7 +385,11 @@ export function Onboarding() {
   const [sheet, setSheet] = useState<SetupSheet | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const hasIncome = data.sources.some((s) => s.kind === 'income' && s.active);
-  const plan = useMemo(() => monthlyPlan(data, today), [data, today]);
+  const plan = useMemo(() => {
+    const forecast = buildForecast(data, today);
+    const cycle = paycheckCycles(forecast, 1)[0];
+    return cycle ? periodPlan(forecast, cycle.start, cycle.end) : null;
+  }, [data, today]);
   const def = STEPS[step]!;
 
   useEffect(() => {
@@ -345,7 +445,7 @@ export function Onboarding() {
         <div className="stack">
           <ul className="card list-card checklist">
             <li>Add when you expect to get paid</li>
-            <li>Add your bills, subscriptions, and loan payments</li>
+            <li>Add your bills, subscriptions, loan payments, and savings</li>
             <li>See what’s left to spend and your projected cash flow</li>
             <li>Record what actually happens, and the forecast updates</li>
           </ul>

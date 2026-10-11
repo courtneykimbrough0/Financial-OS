@@ -49,19 +49,11 @@ const SCREEN_COPY: Record<
   },
   savings: {
     title: 'Savings',
-    intro: 'Money you plan to set aside on a schedule. It comes out of what’s left to spend.',
+    intro: 'Money you plan to set aside on a schedule. It counts as an expense.',
     recurringHeading: 'Recurring savings',
     addRecurring: 'Add savings',
     empty: 'Add regular amounts you set aside, like an emergency fund.',
     oneTime: { heading: 'One-time savings', empty: 'Add a single deposit you plan to make. It counts once.' },
-  },
-  spending: {
-    title: 'Spending',
-    intro: 'Everyday money you expect to spend on a schedule, like groceries or gas. It comes out of what’s left to spend.',
-    recurringHeading: 'Recurring spending',
-    addRecurring: 'Add spending',
-    empty: 'Add regular spending, like weekly groceries or gas.',
-    oneTime: { heading: 'One-time spending', empty: 'Add something you’ll pay for once, like a car repair or a trip.' },
   },
 };
 
@@ -360,10 +352,9 @@ const EXPENSE_TABS: { kind: TransactionKind; label: string }[] = [
   { kind: 'bill', label: 'Bills' },
   { kind: 'subscription', label: 'Subscriptions' },
   { kind: 'savings', label: 'Savings' },
-  { kind: 'spending', label: 'Spending' },
 ];
 
-/** Expenses screen: bills, subscriptions, savings, and spending, one pill tab each. Liabilities have their own screen. */
+/** Expenses screen: bills, subscriptions, and savings, one pill tab each. Liabilities have their own screen. */
 export function ExpensesScreen({ initial = 'bill' }: { initial?: TransactionKind }) {
   const [tab, setTab] = useState<TransactionKind>(initial);
   return (
@@ -371,7 +362,7 @@ export function ExpensesScreen({ initial = 'bill' }: { initial?: TransactionKind
       <header className="screen-header">
         <h1>Expenses</h1>
       </header>
-      <div className="pill-tabs pill-tabs-4" role="tablist" aria-label="Expense type">
+      <div className="pill-tabs pill-tabs-3" role="tablist" aria-label="Expense type">
         {EXPENSE_TABS.map((t) => (
           <button key={t.kind} type="button" role="tab" id={`expense-tab-${t.kind}`} aria-selected={tab === t.kind} aria-controls="expense-panel" className={tab === t.kind ? 'active' : ''} onClick={() => setTab(t.kind)}>
             {t.label}

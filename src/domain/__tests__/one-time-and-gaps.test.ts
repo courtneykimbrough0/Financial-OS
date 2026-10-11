@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildForecast, dailyTimeline, entriesInRange, monthWeekSummaries, paycheckCycles, periodKpis, tallyOn, timingGapsAhead } from '../forecast';
 import * as ops from '../operations';
-import { monthlyPlan } from '../plan';
+import { periodPlan } from '../plan';
 import { clockAt, source, unwrap, usd } from './helpers';
 
 const TODAY = '2026-10-11';
@@ -15,7 +15,7 @@ describe('one-time income and expenses across every view', () => {
     let d = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1800, '2026-10-15', { type: 'biweekly' }, 'pay');
     d = source(d, TODAY, 'bill', 'Phone', 60, '2026-10-25', { type: 'monthly' }, 'phone');
     d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Gift', amountCents: usd(500), date: '2026-10-22' }, clockAt(TODAY), 'gift'));
-    d = unwrap(ops.addOneTime(d, { kind: 'spending', description: 'Repair', amountCents: usd(300), date: '2026-10-27' }, clockAt(TODAY), 'repair'));
+    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(300), date: '2026-10-27' }, clockAt(TODAY), 'repair'));
     return d;
   }
 
@@ -69,8 +69,10 @@ describe('one-time income and expenses across every view', () => {
     expect(entriesInRange(f, '2026-10-27', '2026-10-27')).toHaveLength(0);
   });
 
-  it('is left out of the monthly "left to spend" average, which covers recurring items only', () => {
-    expect(monthlyPlan(data(), TODAY).incomeCents).toBe(usd(3900));
+  it('counts in left to spend for the period it falls in', () => {
+    const f = buildForecast(data(), TODAY);
+    expect(periodPlan(f, '2026-10-15', '2026-10-28')).toMatchObject({ incomeCents: usd(2300), expensesCents: usd(360), leftToSpendCents: usd(1940) });
+    expect(periodPlan(f, '2026-10-29', '2026-11-11')).toMatchObject({ incomeCents: usd(1800), expensesCents: 0, leftToSpendCents: usd(1800) });
   });
 
   it('can create a timing gap', () => {

@@ -1,20 +1,21 @@
 import { Tag, TrendingDown } from 'lucide-react';
+import { formatRange } from '../../domain/dates';
 import { formatMoney, formatSignedMoney } from '../../domain/money';
-import type { MonthlyPlan } from '../../domain/plan';
+import type { PeriodPlan } from '../../domain/plan';
 import { Icon, SectionLabel } from './common';
 
-/** The single headline number: monthly income minus monthly expenses. */
-export function LeftToSpend({ plan }: { plan: MonthlyPlan }) {
-  const negative = plan.leftToSpendCents < 0;
+/** The single headline number for a period: income minus expenses. */
+export function LeftToSpend({ plan }: { plan: PeriodPlan | null }) {
+  const negative = plan !== null && plan.leftToSpendCents < 0;
   return (
     <div className={`left-to-spend${negative ? ' negative' : ''}`} role="status" aria-live="polite">
       <span className="lts-label">
         Left to spend
-        <span className="lts-sub">each month</span>
+        <span className="lts-sub">{plan ? `First pay period · ${formatRange(plan.start, plan.end)}` : 'Add income to see this'}</span>
       </span>
       <span className="lts-value">
         {negative && <Icon icon={TrendingDown} size={20} />}
-        {formatMoney(plan.leftToSpendCents)}
+        {plan ? formatMoney(plan.leftToSpendCents) : '—'}
       </span>
     </div>
   );
@@ -29,34 +30,30 @@ function Row({ label, value, tone, level = 0, strong = false }: { label: string;
   );
 }
 
-/** Income, Expenses (bills, subscriptions, liabilities), Left to spend, Savings, Spending, per month. */
-export function MonthlyBreakdown({ plan }: { plan: MonthlyPlan }) {
-  const out = (c: number) => (c === 0 ? formatMoney(0) : `−${formatMoney(c)}`);
+/** Income, Expenses (bills, subscriptions, liability payments, savings), and Left to spend for a period. */
+export function PeriodBreakdown({ plan, title }: { plan: PeriodPlan; title: string }) {
   return (
-    <section className="stack-sm" aria-labelledby="breakdown-month">
-      <SectionLabel id="breakdown-month">Monthly breakdown</SectionLabel>
+    <section className="stack-sm" aria-labelledby="breakdown-period">
+      <SectionLabel id="breakdown-period">{title}</SectionLabel>
       <div className="card">
+        <p className="hint">{formatRange(plan.start, plan.end)}</p>
         <dl className="breakdown">
           <Row label="Income" value={formatSignedMoney(plan.incomeCents)} tone="in" />
-          <Row label="Expenses" value={out(plan.expensesCents)} tone="out" />
+          <Row label="Expenses" value={plan.expensesCents ? `−${formatMoney(plan.expensesCents)}` : formatMoney(0)} tone="out" />
           <Row label="Bills" value={formatMoney(plan.byKind.bill)} level={1} />
           <Row label="Subscriptions" value={formatMoney(plan.byKind.subscription)} level={1} />
           <Row label="Liability payments" value={formatMoney(plan.byKind.liability)} level={1} />
+          <Row label="Savings" value={formatMoney(plan.byKind.savings)} level={1} />
           <Row label="Left to spend" value={formatMoney(plan.leftToSpendCents)} tone={plan.leftToSpendCents < 0 ? 'neg' : undefined} strong />
-          <Row label="Savings" value={formatMoney(plan.savingsCents)} />
-          <Row label="Spending" value={formatMoney(plan.spendingCents)} />
         </dl>
-        <p className="hint">Left to spend is income minus expenses. Savings and spending come out of what’s left to spend.</p>
-        <p className="hint">
-          Amounts are monthly averages, so items on different schedules add up. For example, a paycheck every 2 weeks counts as 26 paychecks over 12 months.
-        </p>
+        <p className="hint">Left to spend is income minus expenses. Includes repeating and one-time items dated in this period.</p>
       </div>
     </section>
   );
 }
 
-/** Monthly totals per tag the user created. Hidden when there are no tags. */
-export function TagBreakdown({ plan }: { plan: MonthlyPlan }) {
+/** Totals per tag the user created, for the same period. Hidden when no tagged items fall in it. */
+export function TagBreakdown({ plan }: { plan: PeriodPlan }) {
   if (plan.byTag.length === 0) return null;
   return (
     <section className="stack-sm" aria-labelledby="breakdown-tags">
@@ -80,7 +77,7 @@ export function TagBreakdown({ plan }: { plan: MonthlyPlan }) {
             </div>
           ))}
         </dl>
-        <p className="hint">Per month. An item with more than one tag counts toward each of its tags.</p>
+        <p className="hint">An item with more than one tag counts toward each of its tags.</p>
       </div>
     </section>
   );

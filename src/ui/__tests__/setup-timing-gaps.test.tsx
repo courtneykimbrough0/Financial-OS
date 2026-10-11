@@ -22,7 +22,7 @@ async function reachReview(data: AppData) {
     </DataModeProvider>,
   );
   await user.click(screen.getByRole('button', { name: 'Get started' }));
-  for (let i = 0; i < 4; i++) await user.click(screen.getByRole('button', { name: 'Continue' }));
+  for (let i = 0; i < 2; i++) await user.click(screen.getByRole('button', { name: 'Continue' }));
   await screen.findByRole('heading', { name: 'Check everything over' });
   return user;
 }

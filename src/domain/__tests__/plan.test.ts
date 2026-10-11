@@ -1,95 +1,79 @@
 import { describe, expect, it } from 'vitest';
-import { buildForecast, tallyOn } from '../forecast';
+import { buildForecast, paycheckCycles, periodKpis } from '../forecast';
 import * as ops from '../operations';
-import { monthlyFactor, monthlyPlan } from '../plan';
+import { periodPlan } from '../plan';
 import { buildSampleData } from '../sample';
 import { groupOf } from '../types';
 import { clockAt, source, unwrap, usd } from './helpers';
 
 const TODAY = '2026-10-11';
 
-describe('monthly equivalents', () => {
-  it('converts each schedule to an average month', () => {
-    expect(monthlyFactor({ type: 'weekly' })).toBeCloseTo(52 / 12);
-    expect(monthlyFactor({ type: 'biweekly' })).toBeCloseTo(26 / 12);
-    expect(monthlyFactor({ type: 'twiceMonthly', days: [1, 15] })).toBe(2);
-    expect(monthlyFactor({ type: 'monthly' })).toBe(1);
-    expect(monthlyFactor({ type: 'custom', interval: 3, unit: 'month' })).toBeCloseTo(1 / 3);
-    expect(monthlyFactor({ type: 'custom', interval: 2, unit: 'week' })).toBeCloseTo(26 / 12);
-    expect(monthlyFactor({ type: 'custom', interval: 10, unit: 'day' })).toBeCloseTo(365 / 120);
-  });
-});
+/*
+ * Paycheck $1,800 every 2 weeks from Oct 15. Rent $1,200 on the 1st (from Nov 1),
+ * phone $60 on the 25th, music $10.99 on the 20th (subscription), car loan $350
+ * on the 20th (liability), savings $100 every 2 weeks from Oct 16.
+ * One-time: bonus +$500 on Oct 22, repair −$300 on Oct 27.
+ */
+function data() {
+  let d = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1800, '2026-10-15', { type: 'biweekly' }, 'pay');
+  d = source(d, TODAY, 'bill', 'Rent', 1200, '2026-11-01', { type: 'monthly' }, 'rent');
+  d = source(d, TODAY, 'bill', 'Phone', 60, '2026-10-25', { type: 'monthly' }, 'phone');
+  d = source(d, TODAY, 'subscription', 'Music', 10.99, '2026-10-20', { type: 'monthly' }, 'music');
+  d = source(d, TODAY, 'liability', 'Car loan', 350, '2026-10-20', { type: 'monthly' }, 'car');
+  d = source(d, TODAY, 'savings', 'Emergency fund', 100, '2026-10-16', { type: 'biweekly' }, 'save');
+  d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Bonus', amountCents: usd(500), date: '2026-10-22' }, clockAt(TODAY), 'bonus'));
+  d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(300), date: '2026-10-27' }, clockAt(TODAY), 'repair'));
+  return d;
+}
 
-describe('left to spend', () => {
-  function data() {
-    let d = ops.emptyData();
-    d = source(d, TODAY, 'income', 'Paycheck', 1800, '2026-10-15', { type: 'biweekly' }, 'pay'); // 3,900.00 / mo
-    d = source(d, TODAY, 'bill', 'Rent', 1200, '2026-11-01', { type: 'monthly' }, 'rent'); // 1,200.00
-    d = source(d, TODAY, 'bill', 'Phone', 60, '2026-10-25', { type: 'monthly' }, 'phone'); // 60.00
-    d = source(d, TODAY, 'subscription', 'Music', 10.99, '2026-10-20', { type: 'monthly' }, 'music'); // 10.99
-    d = source(d, TODAY, 'liability', 'Car loan', 350, '2026-10-20', { type: 'monthly' }, 'car'); // 350.00
-    d = source(d, TODAY, 'savings', 'Emergency fund', 50, '2026-10-16', { type: 'weekly' }, 'save'); // 216.67
-    d = source(d, TODAY, 'spending', 'Groceries', 120, '2026-10-12', { type: 'weekly' }, 'food'); // 520.00
-    return d;
-  }
-
-  it('is income minus expenses, with savings and spending reported separately', () => {
-    const plan = monthlyPlan(data(), TODAY);
-    expect(plan.incomeCents).toBe(usd(3900));
-    expect(plan.byKind.bill).toBe(usd(1260));
-    expect(plan.byKind.subscription).toBe(usd(10.99));
-    expect(plan.byKind.liability).toBe(usd(350));
-    expect(plan.expensesCents).toBe(usd(1620.99));
-    expect(plan.leftToSpendCents).toBe(usd(3900 - 1620.99));
-    expect(plan.savingsCents).toBe(usd(216.67));
-    expect(plan.spendingCents).toBe(usd(520));
+describe('left to spend for a period', () => {
+  it('is income minus expenses (bills, subscriptions, liabilities, savings), repeating and one-time', () => {
+    const f = buildForecast(data(), TODAY);
+    const cycle = paycheckCycles(f, 1)[0]!;
+    expect([cycle.start, cycle.end]).toEqual(['2026-10-15', '2026-10-28']);
+    const p = periodPlan(f, cycle.start, cycle.end);
+    expect(p.incomeCents).toBe(usd(2300));
+    expect(p.byKind).toEqual({ income: usd(2300), bill: usd(360), subscription: usd(10.99), liability: usd(350), savings: usd(100) });
+    expect(p.expensesCents).toBe(usd(820.99));
+    expect(p.leftToSpendCents).toBe(usd(1479.01));
   });
 
-  it('every total is the exact sum of the items under it', () => {
-    const plan = monthlyPlan(data(), TODAY);
-    for (const [kind, items] of Object.entries(plan.items)) {
-      expect(items.reduce((s, i) => s + i.monthlyCents, 0)).toBe(plan.byKind[kind as keyof typeof plan.byKind]);
+  it('changes with the period and matches the dashboard totals for it', () => {
+    const f = buildForecast(data(), TODAY);
+    const periods: [string, string][] = [
+      ['2026-10-01', '2026-10-31'], // month
+      ['2026-10-18', '2026-10-24'], // week
+      ['2026-10-29', '2026-11-11'], // second pay period
+      ['2026-10-20', '2026-11-05'], // custom
+    ];
+    for (const [start, end] of periods) {
+      const p = periodPlan(f, start, end);
+      const k = periodKpis(f, start, end);
+      expect([p.incomeCents, p.expensesCents, p.leftToSpendCents]).toEqual([k.incomeCents, k.outflowCents, k.netCents]);
     }
-    expect(plan.incomeCents - plan.expensesCents).toBe(plan.leftToSpendCents);
+    expect(periodPlan(f, '2026-10-01', '2026-10-31').leftToSpendCents).toBe(usd(4100 - 920.99));
+    expect(periodPlan(f, '2026-10-18', '2026-10-24').leftToSpendCents).toBe(usd(500 - 360.99));
   });
 
-  it('updates as items are added, and goes negative when expenses exceed income', () => {
+  it('uses actual amounts once recorded and leaves out canceled items', () => {
+    let d = unwrap(ops.recordActual(data(), 'pay@2026-10-15', { amountCents: usd(1650), date: '2026-10-15' }, clockAt('2026-10-15')));
+    d = unwrap(ops.cancelOccurrence(d, 'phone@2026-10-25', '', clockAt('2026-10-15')));
+    const p = periodPlan(buildForecast(d, '2026-10-15'), '2026-10-01', '2026-10-31');
+    expect(p.incomeCents).toBe(usd(1650 + 1800 + 500));
+    expect(p.byKind.bill).toBe(usd(300));
+  });
+
+  it('goes negative when expenses exceed income in the period', () => {
     let d = source(ops.emptyData(), TODAY, 'income', 'Pay', 1000, '2026-10-15', { type: 'monthly' }, 'p');
-    expect(monthlyPlan(d, TODAY).leftToSpendCents).toBe(usd(1000));
-    d = source(d, TODAY, 'bill', 'Rent', 1200, '2026-11-01', { type: 'monthly' }, 'r');
-    expect(monthlyPlan(d, TODAY).leftToSpendCents).toBe(usd(-200));
-  });
-
-  it('leaves out turned-off items and one-time transactions', () => {
-    let d = unwrap(ops.deactivateSource(data(), 'phone', clockAt(TODAY)));
-    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(500), date: '2026-10-30' }, clockAt(TODAY)));
-    const plan = monthlyPlan(d, TODAY);
-    expect(plan.byKind.bill).toBe(usd(1200));
-  });
-
-  it('uses the schedule in effect today, not a future change', () => {
-    let d = data();
-    d = unwrap(ops.changeSourceSchedule(d, 'rent', { startDate: '2027-01-01', amountCents: usd(1300), rule: { type: 'monthly' } }, clockAt(TODAY)));
-    expect(monthlyPlan(d, TODAY).byKind.bill).toBe(usd(1260));
-    expect(monthlyPlan(d, '2027-01-02').byKind.bill).toBe(usd(1360));
+    d = source(d, TODAY, 'bill', 'Rent', 1200, '2026-10-20', { type: 'monthly' }, 'r');
+    expect(periodPlan(buildForecast(d, TODAY), '2026-10-15', '2026-11-14').leftToSpendCents).toBe(usd(-200));
   });
 });
 
 describe('categories', () => {
-  it('group into Income, Expenses (bills, subscriptions, liabilities), Savings, Spending', () => {
+  it('are Income and Expenses; savings is an expense', () => {
     expect(groupOf('income')).toBe('income');
-    expect(groupOf('bill')).toBe('expenses');
-    expect(groupOf('subscription')).toBe('expenses');
-    expect(groupOf('liability')).toBe('expenses');
-    expect(groupOf('savings')).toBe('savings');
-    expect(groupOf('spending')).toBe('spending');
-  });
-
-  it('savings and spending are money out in the forecast', () => {
-    let d = source(ops.emptyData(), TODAY, 'income', 'Pay', 1000, '2026-10-15', { type: 'monthly' }, 'p');
-    d = source(d, TODAY, 'savings', 'Save', 100, '2026-10-16', { type: 'monthly' }, 's');
-    d = source(d, TODAY, 'spending', 'Food', 50, '2026-10-17', { type: 'monthly' }, 'f');
-    expect(tallyOn(buildForecast(d, TODAY), '2026-10-17')).toBe(usd(850));
+    for (const k of ['bill', 'subscription', 'liability', 'savings'] as const) expect(groupOf(k)).toBe('expenses');
   });
 });
 
@@ -106,24 +90,20 @@ describe('tags', () => {
     expect(ops.normalizeTags(Array.from({ length: 15 }, (_, i) => `t${i}`))).toHaveLength(ops.MAX_TAGS);
   });
 
-  it('are saved on recurring and one-time items and totaled per month', () => {
+  it('are totaled for the period, on recurring and one-time items', () => {
     let d = ops.emptyData();
     d = unwrap(ops.addSource(d, { kind: 'income', description: 'Pay', amountCents: usd(2000), startDate: '2026-10-15', rule: { type: 'monthly' }, tags: ['Work'] }, clockAt(TODAY), 'p'));
-    d = unwrap(ops.addSource(d, { kind: 'bill', description: 'Rent', amountCents: usd(1200), startDate: '2026-11-01', rule: { type: 'monthly' }, tags: ['Housing'] }, clockAt(TODAY), 'r'));
-    d = unwrap(ops.addSource(d, { kind: 'spending', description: 'Games', amountCents: usd(15), startDate: '2026-10-20', rule: { type: 'weekly' }, tags: ['Gaming', 'fun'] }, clockAt(TODAY), 'g'));
+    d = unwrap(ops.addSource(d, { kind: 'bill', description: 'Rent', amountCents: usd(1200), startDate: '2026-10-16', rule: { type: 'monthly' }, tags: ['Housing'] }, clockAt(TODAY), 'r'));
     d = unwrap(ops.addSource(d, { kind: 'bill', description: 'Power', amountCents: usd(100), startDate: '2026-10-20', rule: { type: 'monthly' }, tags: ['housing'] }, clockAt(TODAY), 'e'));
-    d = unwrap(ops.addOneTime(d, { kind: 'spending', description: 'Console', amountCents: usd(400), date: '2026-10-25', tags: ['Gaming'] }, clockAt(TODAY)));
+    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Console', amountCents: usd(400), date: '2026-10-25', tags: ['Gaming', 'fun'] }, clockAt(TODAY)));
     expect(ops.allTags(d)).toEqual(['fun', 'Gaming', 'Housing', 'Work']);
-    const byTag = Object.fromEntries(monthlyPlan(d, TODAY).byTag.map((t) => [t.tag, [t.inCents, t.outCents, t.count]]));
+    const byTag = Object.fromEntries(periodPlan(buildForecast(d, TODAY), '2026-10-15', '2026-11-14').byTag.map((t) => [t.tag, [t.inCents, t.outCents, t.count]]));
     expect(byTag).toEqual({
       Work: [usd(2000), 0, 1],
       Housing: [0, usd(1300), 2],
-      Gaming: [0, usd(65), 1],
-      fun: [0, usd(65), 1],
+      Gaming: [0, usd(400), 1],
+      fun: [0, usd(400), 1],
     });
-    // Occurrences carry their tags for display.
-    const f = buildForecast(d, TODAY);
-    expect(f.entries.find((e) => e.occurrence.sourceId === 'g')!.occurrence.tags).toEqual(['Gaming', 'fun']);
   });
 
   it('can be changed without touching amounts or history', () => {
