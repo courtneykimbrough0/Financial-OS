@@ -82,7 +82,7 @@ export function AccountActions() {
             <p>
               This permanently deletes your account and everything saved in it from Financial OS. It can’t be undone.
             </p>
-            <p>Download a backup first if you want to keep a copy.</p>
+            <p>Download a backup first if you want to keep a copy. You’ll be asked to confirm with Google before anything is deleted.</p>
             <button
               type="button"
               className="button secondary full"

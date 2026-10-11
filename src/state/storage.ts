@@ -15,7 +15,7 @@ export type SaveResult =
 
 /**
  * Where data lives. Asynchronous so a server-backed implementation (e.g.
- * Supabase) can replace the device one without changing the app.
+ * Firebase) can replace the device one without changing the app.
  */
 export interface StorageAdapter {
   load(): Promise<AppData>;

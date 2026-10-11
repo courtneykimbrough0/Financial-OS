@@ -8,3 +8,6 @@ e2e-screenshots
 
 .env.local
 .env.*.local
+dist-e2e
+firebase-debug.log
+firestore-debug.log

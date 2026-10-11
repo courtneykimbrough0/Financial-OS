@@ -1,5 +1,0 @@
-# Supabase project settings for the CLI and the Supabase GitHub integration.
-# The integration applies new files in supabase/migrations when they reach the
-# production branch. Auth settings (email templates, SMTP) are set in the
-# Supabase dashboard; production ignores them here.
-project_id = "financial-os"

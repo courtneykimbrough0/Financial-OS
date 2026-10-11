@@ -1,96 +1,41 @@
 rules_version = '2';
+
+// Financial OS: each signed-in user owns exactly one document,
+// financialData/{uid}, holding their whole forecast and a revision number.
+// Everything else is denied.
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default-deny catch-all
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
 
     function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+      return request.auth != null && request.auth.uid == userId;
     }
 
-    function isValidUser(data, userId) {
-      return data.keys().hasAll(['id', 'email'])
-        && data.keys().hasOnly(['id', 'email', 'createdAt', 'updatedAt'])
-        && data.id == userId
-        && data.id == request.auth.uid
-        && data.email is string && data.email.size() > 0 && data.email.size() <= 256
-        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64))
-        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+    // The document the app writes: these fields only, with the right types.
+    function isValidForecast(userId) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['userId', 'schemaVersion', 'revision', 'onboardingComplete', 'sources', 'records', 'updatedAt'])
+        && d.keys().hasOnly(['userId', 'schemaVersion', 'revision', 'onboardingComplete', 'sources', 'records', 'updatedAt'])
+        && d.userId == userId
+        && d.schemaVersion is int
+        && d.revision is int
+        && d.onboardingComplete is bool
+        && d.sources is list && d.sources.size() <= 2000
+        && d.records is list && d.records.size() <= 20000
+        && d.updatedAt == request.time;
     }
 
-    function isValidFinancialData(data, userId) {
-      return data.keys().hasAll(['userId', 'schemaVersion', 'revision', 'onboardingComplete', 'sources', 'records'])
-        && data.keys().hasOnly(['userId', 'schemaVersion', 'revision', 'onboardingComplete', 'sources', 'records', 'updatedAt'])
-        && data.userId == userId
-        && data.userId == request.auth.uid
-        && data.schemaVersion is number
-        && data.revision is number && data.revision >= 1
-        && data.onboardingComplete is bool
-        && data.sources is list && data.sources.size() <= 1000
-        && data.records is list && data.records.size() <= 10000
-        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
-    }
-
-    match /users/{userId} {
-      allow get: if isValidId(userId) && isOwner(userId);
-      allow list: if false;
-
-      allow create: if isValidId(userId)
-        && isOwner(userId)
-        && isValidUser(incoming(), userId);
-
-      allow update: if isValidId(userId)
-        && isOwner(userId)
-        && isValidUser(incoming(), userId)
-        && incoming().id == existing().id
-        && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
-
-      allow delete: if isValidId(userId) && isOwner(userId);
-
-      match /data/{docId} {
-        allow get: if isValidId(userId)
-          && isValidId(docId)
-          && isOwner(userId);
-
-        allow list: if isValidId(userId)
-          && isOwner(userId)
-          && resource.data.userId == request.auth.uid;
-
-        allow create: if isValidId(userId)
-          && isValidId(docId)
-          && isOwner(userId)
-          && isValidFinancialData(incoming(), userId);
-
-        allow update: if isValidId(userId)
-          && isValidId(docId)
-          && isOwner(userId)
-          && isValidFinancialData(incoming(), userId)
-          && incoming().userId == existing().userId
-          && incoming().revision > existing().revision
-          && incoming().diff(existing()).affectedKeys().hasOnly(['schemaVersion', 'revision', 'onboardingComplete', 'sources', 'records', 'updatedAt']);
-
-        allow delete: if isValidId(userId)
-          && isValidId(docId)
-          && isOwner(userId);
-      }
+    match /financialData/{userId} {
+      allow get: if isOwner(userId);
+      // The first save is revision 1.
+      allow create: if isOwner(userId)
+        && isValidForecast(userId)
+        && request.resource.data.revision == 1;
+      // Every later save raises the revision by exactly one, so a device
+      // holding stale data can't overwrite newer data.
+      allow update: if isOwner(userId)
+        && isValidForecast(userId)
+        && request.resource.data.revision == resource.data.revision + 1;
+      allow delete: if isOwner(userId);
     }
   }
 }

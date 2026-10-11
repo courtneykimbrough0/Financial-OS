@@ -1,22 +1,12 @@
 /**
- * Accounts. When the app is built with Supabase settings, people sign in with
- * a 6-digit code sent to their email and their data is saved to their account.
- * A code (rather than a sign-in link) keeps sign-in inside the installed app:
- * on iPhone a link would open Safari, which has separate storage.
+ * Accounts. When accounts are turned on, people sign in with Google and their
+ * data is saved to their account (see `firebase.ts`). Otherwise the app runs on
+ * device storage only.
  *
- * Without Supabase settings the app runs on device storage only, as before.
+ * This file holds only what the app needs from any sign-in service, so the
+ * Firebase library loads only when accounts are on.
  */
-import { createClient, isAuthRetryableFetchError, type SupabaseClient, type User } from '@supabase/supabase-js';
-import {
-  GoogleAuthProvider,
-  deleteUser,
-  onAuthStateChanged,
-  signInWithPopup,
-  signOut as fbSignOut,
-} from 'firebase/auth';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { CloudAdapter, supabaseBackend } from './cloud';
-import { auth as firebaseAuthInstance, ensureUserDoc, firebaseBackend } from './firebase';
 import type { StorageAdapter } from './storage';
 
 export interface AccountUser {
@@ -29,24 +19,17 @@ export interface AuthService {
   /** The signed-in user, from the saved session. Works offline. */
   currentUser(): Promise<AccountUser | null>;
   onSignedOut(callback: () => void): () => void;
-  sendCode?(email: string): Promise<void>;
-  verifyCode?(email: string, code: string): Promise<AccountUser>;
-  signInWithGoogle?(): Promise<AccountUser>;
+  /** Rejects with an Error whose `cancelled` is true when the person closed the sign-in window. */
+  signInWithGoogle(): Promise<AccountUser>;
   signOut(): Promise<void>;
   deleteAccount(): Promise<void>;
   adapterFor(user: AccountUser): StorageAdapter & { forgetDevice(): void };
 }
 
-export function supabaseConfig(): { url: string; key: string } | null {
-  const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
-  return url && key ? { url, key } : null;
-}
-
 /** Remembers who was last signed in, so the app can open offline when the session can't be refreshed. */
 const LAST_USER_KEY = 'financial-os:account:last-user';
 
-function rememberUser(user: AccountUser | null) {
+export function rememberUser(user: AccountUser | null) {
   try {
     if (user) localStorage.setItem(LAST_USER_KEY, JSON.stringify(user));
     else localStorage.removeItem(LAST_USER_KEY);
@@ -55,128 +38,13 @@ function rememberUser(user: AccountUser | null) {
   }
 }
 
-function lastUser(): AccountUser | null {
+export function lastUser(): AccountUser | null {
   try {
     const text = localStorage.getItem(LAST_USER_KEY);
     return text ? (JSON.parse(text) as AccountUser) : null;
   } catch {
     return null;
   }
-}
-
-const toAccountUser = (u: User): AccountUser => ({ id: u.id, email: u.email ?? '' });
-
-function friendly(message: string): string {
-  const m = message.toLowerCase();
-  if (m.includes('expired') || m.includes('invalid')) return 'That code didn’t work. It may have expired. Check the code or send a new one.';
-  if (m.includes('rate limit') || m.includes('security purposes') || m.includes('too many')) return 'Too many tries. Wait a minute, then try again.';
-  if (m.includes('fetch') || m.includes('network')) return 'Financial OS can’t connect right now. Check your connection and try again.';
-  return message;
-}
-
-export function supabaseAuth(config: { url: string; key: string }): AuthService {
-  const client: SupabaseClient = createClient(config.url, config.key, {
-    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storageKey: 'financial-os:auth' },
-  });
-  return {
-    async currentUser() {
-      const { data, error } = await client.auth.getSession();
-      if (data.session) {
-        const user = toAccountUser(data.session.user);
-        rememberUser(user);
-        return user;
-      }
-      // Offline with a saved session: keep working from the device copy.
-      if (error && isAuthRetryableFetchError(error)) return lastUser();
-      return null;
-    },
-    onSignedOut(callback) {
-      const { data } = client.auth.onAuthStateChange((event) => {
-        if (event === 'SIGNED_OUT') callback();
-      });
-      return () => data.subscription.unsubscribe();
-    },
-    async sendCode(email) {
-      const { error } = await client.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
-      if (error) throw new Error(friendly(error.message));
-    },
-    async verifyCode(email, code) {
-      const { data, error } = await client.auth.verifyOtp({ email, token: code, type: 'email' });
-      if (error || !data.user) throw new Error(friendly(error?.message ?? 'invalid'));
-      const user = toAccountUser(data.user);
-      rememberUser(user);
-      return user;
-    },
-    async signOut() {
-      rememberUser(null);
-      // Local scope: signs out this device, and works offline.
-      await client.auth.signOut({ scope: 'local' });
-    },
-    async deleteAccount() {
-      const { error } = await client.rpc('delete_my_account');
-      if (error) throw new Error(friendly(error.message));
-      rememberUser(null);
-      await client.auth.signOut({ scope: 'local' });
-    },
-    adapterFor(user) {
-      return new CloudAdapter(supabaseBackend(client, user.id), user.id);
-    },
-  };
-}
-
-export function firebaseAuth(): AuthService {
-  return {
-    async currentUser() {
-      try {
-        await firebaseAuthInstance.authStateReady();
-        if (firebaseAuthInstance.currentUser) {
-          const user: AccountUser = {
-            id: firebaseAuthInstance.currentUser.uid,
-            email: firebaseAuthInstance.currentUser.email || '',
-          };
-          rememberUser(user);
-          void ensureUserDoc(user.id, user.email).catch(() => undefined);
-          return user;
-        }
-      } catch {
-        // Offline or connection failure: fall back to last remembered user
-      }
-      return lastUser();
-    },
-    onSignedOut(callback) {
-      return onAuthStateChanged(firebaseAuthInstance, (user) => {
-        if (!user) callback();
-      });
-    },
-    async signInWithGoogle() {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
-      const cred = await signInWithPopup(firebaseAuthInstance, provider);
-      const user: AccountUser = {
-        id: cred.user.uid,
-        email: cred.user.email || '',
-      };
-      rememberUser(user);
-      await ensureUserDoc(user.id, user.email).catch(() => undefined);
-      return user;
-    },
-    async signOut() {
-      rememberUser(null);
-      await fbSignOut(firebaseAuthInstance);
-    },
-    async deleteAccount() {
-      const user = firebaseAuthInstance.currentUser;
-      if (user) {
-        const backend = firebaseBackend(user.uid);
-        await backend.remove().catch(() => undefined);
-        await deleteUser(user);
-      }
-      rememberUser(null);
-    },
-    adapterFor(user) {
-      return new CloudAdapter(firebaseBackend(user.id), user.id);
-    },
-  };
 }
 
 interface AccountApi {

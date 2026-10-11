@@ -1,109 +1,162 @@
-import { describe, expect, it } from 'vitest';
-
 /**
- * Security Rule assertions verifying the 'Dirty Dozen' payloads
- * from security_spec.md are denied by the security model.
+ * Runs `firestore.rules` in the Firestore emulator (`npm run test:rules`) and
+ * checks every invariant in security_spec.md, then exercises the app's
+ * Firestore storage code (`firebaseBackend`) against those same rules.
  */
-describe('Firestore Security Rules: Dirty Dozen Validation', () => {
-  const isValidId = (id: string) => typeof id === 'string' && id.length > 0 && id.length <= 128 && /^[a-zA-Z0-9_-]+$/.test(id);
+import { deleteApp, initializeApp, type FirebaseApp } from 'firebase/app';
+import {
+  collection,
+  connectFirestoreEmulator,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  initializeFirestore,
+  serverTimestamp,
+  setDoc,
+  Timestamp,
+  type Firestore,
+} from 'firebase/firestore';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import firebaseJson from '../../../firebase.json';
+import { addOneTime, emptyData } from '../../domain/operations';
+import { CloudAccessError } from '../cloud';
+import { COLLECTION, firebaseBackend } from '../firebase';
 
-  const isValidUser = (data: Record<string, unknown>, userId: string, authUid: string) => {
-    const keys = Object.keys(data);
-    const hasRequired = ['id', 'email'].every((k) => keys.includes(k));
-    const allowed = ['id', 'email', 'createdAt', 'updatedAt'];
-    const hasOnlyAllowed = keys.every((k) => allowed.includes(k));
-    return (
-      hasRequired &&
-      hasOnlyAllowed &&
-      data.id === userId &&
-      data.id === authUid &&
-      typeof data.email === 'string' &&
-      data.email.length > 0 &&
-      data.email.length <= 256
-    );
-  };
+const PROJECT = 'demo-financial-os';
+const DATABASE = firebaseJson.firestore[0]!.database;
+const [HOST, PORT] = (process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080').split(':') as [string, string];
 
-  const isValidFinancialData = (data: Record<string, unknown>, userId: string, authUid: string) => {
-    const keys = Object.keys(data);
-    const hasRequired = ['userId', 'schemaVersion', 'revision', 'onboardingComplete', 'sources', 'records'].every((k) => keys.includes(k));
-    const allowed = ['userId', 'schemaVersion', 'revision', 'onboardingComplete', 'sources', 'records', 'updatedAt'];
-    const hasOnlyAllowed = keys.every((k) => allowed.includes(k));
-    return (
-      hasRequired &&
-      hasOnlyAllowed &&
-      data.userId === userId &&
-      data.userId === authUid &&
-      typeof data.schemaVersion === 'number' &&
-      typeof data.revision === 'number' &&
-      data.revision >= 1 &&
-      typeof data.onboardingComplete === 'boolean' &&
-      Array.isArray(data.sources) &&
-      data.sources.length <= 1000 &&
-      Array.isArray(data.records) &&
-      data.records.length <= 10000
-    );
-  };
+const apps: FirebaseApp[] = [];
+/** A Firestore client signed in as `uid`, or signed out when uid is null. */
+function client(uid: string | null): Firestore {
+  const app = initializeApp({ projectId: PROJECT, apiKey: 'test' }, `client-${apps.length}`);
+  apps.push(app);
+  const db = initializeFirestore(app, { ignoreUndefinedProperties: true }, DATABASE);
+  connectFirestoreEmulator(db, HOST, Number(PORT), uid ? { mockUserToken: { user_id: uid, sub: uid } } : undefined);
+  return db;
+}
 
-  it('Denies unauthenticated reads and writes (Dirty Dozen 1 & 4)', () => {
-    const authUid: string | null = null;
-    expect(authUid !== null).toBe(false);
+const alice = client('alice');
+const bob = client('bob');
+const anon = client(null);
+
+afterAll(async () => {
+  await Promise.all(apps.map((a) => deleteApp(a)));
+});
+
+beforeEach(async () => {
+  const res = await fetch(`http://${HOST}:${PORT}/emulator/v1/projects/${PROJECT}/databases/${DATABASE}/documents`, { method: 'DELETE' });
+  expect(res.ok).toBe(true);
+});
+
+function forecast(uid: string, revision: number, extra: Record<string, unknown> = {}) {
+  return { userId: uid, schemaVersion: 2, revision, onboardingComplete: false, sources: [], records: [], updatedAt: serverTimestamp(), ...extra };
+}
+const ref = (db: Firestore, uid: string) => doc(db, COLLECTION, uid);
+
+async function allowed(p: Promise<unknown>) {
+  await expect(p).resolves.not.toThrow();
+}
+async function denied(p: Promise<unknown>) {
+  await expect(p).rejects.toMatchObject({ code: 'permission-denied' });
+}
+
+describe('firestore.rules', () => {
+  it('lets a user create, read, update and delete their own forecast', async () => {
+    await allowed(setDoc(ref(alice, 'alice'), forecast('alice', 1)));
+    expect((await getDoc(ref(alice, 'alice'))).data()?.revision).toBe(1);
+    await allowed(setDoc(ref(alice, 'alice'), forecast('alice', 2)));
+    await allowed(deleteDoc(ref(alice, 'alice')));
   });
 
-  it('Denies cross-user profile and data access (Dirty Dozen 2, 3, 5)', () => {
-    const callerUid: string = 'alice';
-    const targetUserId: string = 'bob';
-    const isOwner = callerUid === targetUserId;
-    expect(isOwner).toBe(false);
+  it('denies signed-out reads and writes', async () => {
+    await setDoc(ref(alice, 'alice'), forecast('alice', 1));
+    await denied(getDoc(ref(anon, 'alice')));
+    await denied(setDoc(ref(anon, 'anon'), forecast('anon', 1)));
+    await denied(deleteDoc(ref(anon, 'alice')));
   });
 
-  it('Denies shadow field injections like isAdmin (Dirty Dozen 6)', () => {
-    const payload = {
-      id: 'alice',
-      email: 'alice@example.com',
-      isAdmin: true, // Ghost field
-    };
-    expect(isValidUser(payload, 'alice', 'alice')).toBe(false);
+  it('denies reading, writing or deleting another user’s forecast', async () => {
+    await setDoc(ref(alice, 'alice'), forecast('alice', 1));
+    await denied(getDoc(ref(bob, 'alice')));
+    await denied(setDoc(ref(bob, 'alice'), forecast('alice', 2)));
+    await denied(deleteDoc(ref(bob, 'alice')));
+    expect((await getDoc(ref(alice, 'alice'))).data()?.revision).toBe(1);
   });
 
-  it('Denies identity spoofing (Dirty Dozen 7)', () => {
-    const payload = {
-      userId: 'bob', // Spoofed UID
-      schemaVersion: 2,
-      revision: 1,
-      onboardingComplete: true,
-      sources: [],
-      records: [],
-    };
-    expect(isValidFinancialData(payload, 'alice', 'alice')).toBe(false);
+  it('denies listing the collection, even for your own document', async () => {
+    await setDoc(ref(alice, 'alice'), forecast('alice', 1));
+    await denied(getDocs(collection(alice, COLLECTION)));
   });
 
-  it('Denies path injection and invalid ID tokens (Dirty Dozen 8)', () => {
-    expect(isValidId('../traversal')).toBe(false);
-    expect(isValidId('user$@#special')).toBe(false);
-    expect(isValidId('a'.repeat(200))).toBe(false);
+  it('denies a forecast whose userId isn’t the caller', async () => {
+    await denied(setDoc(ref(alice, 'alice'), forecast('bob', 1)));
   });
 
-  it('Denies missing required attributes (Dirty Dozen 9)', () => {
-    const incompletePayload = {
-      userId: 'alice',
-      schemaVersion: 2,
-      // missing revision
-      onboardingComplete: true,
-      sources: [],
-      records: [],
-    };
-    expect(isValidFinancialData(incompletePayload, 'alice', 'alice')).toBe(false);
+  it('denies extra fields', async () => {
+    await denied(setDoc(ref(alice, 'alice'), forecast('alice', 1, { isAdmin: true })));
   });
 
-  it('Denies type-poisoned revisions and fields (Dirty Dozen 10)', () => {
-    const badPayload = {
-      userId: 'alice',
-      schemaVersion: 2,
-      revision: 'not-a-number' as unknown as number,
-      onboardingComplete: true,
-      sources: [],
-      records: [],
-    };
-    expect(isValidFinancialData(badPayload, 'alice', 'alice')).toBe(false);
+  it('denies missing fields and wrong types', async () => {
+    const { sources: _sources, ...noSources } = forecast('alice', 1);
+    await denied(setDoc(ref(alice, 'alice'), noSources));
+    await denied(setDoc(ref(alice, 'alice'), forecast('alice', 1, { revision: '1' })));
+    await denied(setDoc(ref(alice, 'alice'), forecast('alice', 1, { sources: 'none' })));
+    await denied(setDoc(ref(alice, 'alice'), forecast('alice', 1, { onboardingComplete: 'yes' })));
+  });
+
+  it('requires the first save to be revision 1', async () => {
+    await denied(setDoc(ref(alice, 'alice'), forecast('alice', 2)));
+    await denied(setDoc(ref(alice, 'alice'), forecast('alice', 0)));
+  });
+
+  it('requires every update to raise the revision by exactly one', async () => {
+    await setDoc(ref(alice, 'alice'), forecast('alice', 1));
+    await denied(setDoc(ref(alice, 'alice'), forecast('alice', 1)));
+    await denied(setDoc(ref(alice, 'alice'), forecast('alice', 3)));
+    await denied(setDoc(ref(alice, 'alice'), forecast('alice', 0)));
+    await allowed(setDoc(ref(alice, 'alice'), forecast('alice', 2)));
+  });
+
+  it('requires updatedAt to be the server’s time', async () => {
+    await denied(setDoc(ref(alice, 'alice'), forecast('alice', 1, { updatedAt: Timestamp.fromDate(new Date('2026-01-01')) })));
+    await denied(setDoc(ref(alice, 'alice'), forecast('alice', 1, { updatedAt: '2026-10-11T00:00:00Z' })));
+  });
+
+  it('denies every other collection', async () => {
+    await denied(setDoc(doc(alice, 'users', 'alice'), { id: 'alice' }));
+    await denied(getDoc(doc(alice, 'test', 'connection')));
+  });
+});
+
+describe('firebaseBackend against the rules', () => {
+  const clock = { today: '2026-10-11', now: '2026-10-11T12:00:00Z' };
+  function withBill(name: string) {
+    const r = addOneTime(emptyData(), { kind: 'bill', description: name, amountCents: 1000, date: '2026-10-20' }, clock, name);
+    if (!r.ok) throw new Error(r.error);
+    return r.data;
+  }
+
+  it('saves with revisions, rejects stale saves, loads and removes', async () => {
+    const backend = firebaseBackend(alice, 'alice');
+    expect(await backend.fetch()).toBeNull();
+    expect(await backend.save(withBill('A'), 0)).toBe(1);
+    expect(await backend.save(withBill('B'), 0)).toBeNull();
+    expect(await backend.save(withBill('B'), 1)).toBe(2);
+    expect(await backend.save(withBill('C'), 1)).toBeNull();
+    const stored = await backend.fetch();
+    expect(stored?.revision).toBe(2);
+    expect((stored?.data as { records: { description: string }[] }).records.map((r) => r.description)).toEqual(['B']);
+    await backend.remove();
+    expect(await backend.fetch()).toBeNull();
+  });
+
+  it('reports a refused request as an access error, not as offline', async () => {
+    await firebaseBackend(alice, 'alice').save(withBill('A'), 0);
+    const intruder = firebaseBackend(bob, 'alice');
+    await expect(intruder.fetch()).rejects.toBeInstanceOf(CloudAccessError);
+    await expect(intruder.save(withBill('X'), 1)).rejects.toBeInstanceOf(CloudAccessError);
+    await expect(intruder.remove()).rejects.toBeInstanceOf(CloudAccessError);
   });
 });

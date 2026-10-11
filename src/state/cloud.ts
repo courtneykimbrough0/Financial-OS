@@ -1,6 +1,6 @@
 /**
  * Account storage: the user's data saved to their Financial OS account
- * (Supabase), with a copy kept on the device so the app opens and keeps
+ * (Firebase), with a copy kept on the device so the app opens and keeps
  * working without a connection.
  *
  * Every change is written to the device copy first and marked pending, then
@@ -10,12 +10,15 @@
  * unsent changes are set aside as a recovered copy the user can download, so
  * neither version is silently lost.
  */
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { emptyData } from '../domain/operations';
 import type { AppData } from '../domain/types';
 import { migrate, type SaveResult, type StorageAdapter } from './storage';
 
-/** What the adapter needs from the server. Thrown errors mean it couldn't be reached. */
+/**
+ * What the adapter needs from the server. A thrown `CloudAccessError` means the
+ * server refused the request (a setup or permission problem); any other thrown
+ * error means it couldn't be reached.
+ */
 export interface CloudBackend {
   /** The stored document and its revision, or null when nothing is stored yet. */
   fetch(): Promise<{ data: unknown; revision: number } | null>;
@@ -24,25 +27,12 @@ export interface CloudBackend {
   remove(): Promise<void>;
 }
 
-const TABLE = 'financial_data';
-
-export function supabaseBackend(client: SupabaseClient, userId: string): CloudBackend {
-  return {
-    async fetch() {
-      const { data, error } = await client.from(TABLE).select('data, revision').eq('user_id', userId).maybeSingle();
-      if (error) throw new Error(error.message);
-      return data ? { data: data.data as unknown, revision: Number(data.revision) } : null;
-    },
-    async save(data, baseRevision) {
-      const { data: revision, error } = await client.rpc('save_financial_data', { p_data: data, p_base_revision: baseRevision });
-      if (error) throw new Error(error.message);
-      return revision === null ? null : Number(revision);
-    },
-    async remove() {
-      const { error } = await client.from(TABLE).delete().eq('user_id', userId);
-      if (error) throw new Error(error.message);
-    },
-  };
+/** The server was reached but refused the request, so retrying won't help. */
+export class CloudAccessError extends Error {
+  constructor(readonly code: string) {
+    super(`Account storage refused the request (${code}).`);
+    this.name = 'CloudAccessError';
+  }
 }
 
 /** The device copy: the latest data, the account revision it is based on, and whether it has unsent changes. */
@@ -55,6 +45,8 @@ export const cloudCacheKey = (userId: string) => `financial-os:account:${userId}
 const recoveredKey = (userId: string) => `${cloudCacheKey(userId)}:recovered`;
 
 export const OFFLINE_MESSAGE = 'Financial OS can’t reach your account right now. Your change is kept on this device and will be saved when you’re back online.';
+export const ACCESS_MESSAGE =
+  'Your account didn’t accept this change. Your change is kept on this device. Sign out and back in, and if this keeps happening, the app’s account setup needs attention.';
 const CONFLICT_MESSAGE = 'Your data was changed on another device or window. Reload to see the latest version.';
 
 export class CloudAdapter implements StorageAdapter {
@@ -136,7 +128,11 @@ export class CloudAdapter implements StorageAdapter {
     try {
       revision = await this.backend.save({ ...doc, schemaVersion: 2, revision: baseRevision + 1 }, baseRevision);
     } catch (err) {
-      console.error(err);
+      if (err instanceof CloudAccessError) {
+        console.error(err.message);
+        return { ok: false, reason: 'error', message: ACCESS_MESSAGE };
+      }
+      console.error('Account storage unreachable.');
       return { ok: false, reason: 'error', message: OFFLINE_MESSAGE };
     }
     // On a conflict the change stays pending on the device; the reload sets it aside.

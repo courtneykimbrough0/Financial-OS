@@ -21,7 +21,7 @@ const SHOTS = new URL('../e2e-screenshots/', import.meta.url).pathname;
 mkdirSync(SHOTS, { recursive: true });
 
 const viteBin = new URL('../node_modules/vite/bin/vite.js', import.meta.url).pathname;
-const server = spawn(process.execPath, [viteBin, 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'pipe' });
+const server = spawn(process.execPath, [viteBin, 'preview', '--port', String(PORT), '--strictPort', '--outDir', process.argv[2] ?? 'dist'], { stdio: 'pipe' });
 await new Promise((resolve, reject) => {
   const t = setTimeout(() => reject(new Error('preview server did not start')), 20000);
   server.stdout.on('data', (d) => {

@@ -1,0 +1,13 @@
+{
+  "firestore": [
+    {
+      "database": "ai-studio-financialos-de1b8680-2780-4a6a-8754-0c3455a5b5c8",
+      "rules": "firestore.rules"
+    }
+  ],
+  "emulators": {
+    "firestore": { "port": 8080 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
+  }
+}

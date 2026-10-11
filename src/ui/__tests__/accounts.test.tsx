@@ -19,7 +19,6 @@ const USER: AccountUser = { id: 'u1', email: 'alex@example.com' };
 
 class FakeAuth implements AuthService {
   user: AccountUser | null = null;
-  sent: string[] = [];
   deleted = false;
   constructor(readonly server: FakeServer) {}
   async currentUser() {
@@ -28,12 +27,14 @@ class FakeAuth implements AuthService {
   onSignedOut() {
     return () => {};
   }
-  async sendCode(email: string) {
-    this.sent.push(email);
-  }
-  async verifyCode(email: string, code: string) {
-    if (code !== '123456') throw new Error('That code didn’t work. It may have expired. Check the code or send a new one.');
-    this.user = { ...USER, email };
+  /** Set to make the next sign-in fail: 'cancelled' (window closed) or an error message. */
+  nextSignIn: 'cancelled' | string | null = null;
+  async signInWithGoogle() {
+    const outcome = this.nextSignIn;
+    this.nextSignIn = null;
+    if (outcome === 'cancelled') throw Object.assign(new Error('cancelled'), { cancelled: true });
+    if (outcome) throw new Error(outcome);
+    this.user = USER;
     return this.user;
   }
   async signOut() {
@@ -82,25 +83,20 @@ describe('accounts', () => {
     window.location.hash = '';
   });
 
-  it('signs in with an emailed code and saves setup to the account', async () => {
+  it('signs in with Google and saves setup to the account', async () => {
     const user = userEvent.setup();
     const server = new FakeServer();
     const auth = new FakeAuth(server);
     renderApp(auth);
 
-    await user.click(await screen.findByRole('button', { name: /Email me a code/ }));
-    expect(screen.getByText(/Enter an email address/)).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Email'), ' Alex@Example.com ');
-    await user.click(screen.getByRole('button', { name: /Email me a code/ }));
-    expect(auth.sent).toEqual(['alex@example.com']);
-    expect(await screen.findByRole('heading', { name: 'Check your email' })).toBeInTheDocument();
-
-    await user.type(screen.getByLabelText('Sign-in code'), '000000');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('That code didn’t work');
-    await user.clear(screen.getByLabelText('Sign-in code'));
-    await user.type(screen.getByLabelText('Sign-in code'), '123456');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    // Closing the Google window quietly returns to the button.
+    auth.nextSignIn = 'cancelled';
+    await user.click(await screen.findByRole('button', { name: /Continue with Google/ }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    auth.nextSignIn = 'Your browser blocked the Google sign-in window. Allow pop-ups for Financial OS, then try again.';
+    await user.click(screen.getByRole('button', { name: /Continue with Google/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('blocked the Google sign-in window');
+    await user.click(screen.getByRole('button', { name: /Continue with Google/ }));
 
     expect(await screen.findByText(/it’s saved to your account/)).toBeInTheDocument();
     expect(screen.getByText(/Signed in as alex@example.com/)).toBeInTheDocument();

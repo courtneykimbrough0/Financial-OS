@@ -1,187 +1,178 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import {
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocFromServer,
-  getFirestore,
-  runTransaction,
-  setDoc,
-} from 'firebase/firestore';
-import type { AppData } from '../domain/types';
-import type { CloudBackend } from './cloud';
-import firebaseConfig from '../../firebase-applet-config.json';
-
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app);
-
-export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-export interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  };
-}
-
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo:
-        auth.currentUser?.providerData?.map((provider) => ({
-          providerId: provider.providerId,
-          email: provider.email,
-        })) || [],
-    },
-    operationType,
-    path,
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
-
-// Connection check on boot
-export async function testConnection(): Promise<void> {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error('Please check your Firebase configuration.');
-    }
-  }
-}
-void testConnection();
-
-export async function ensureUserDoc(userId: string, email: string): Promise<void> {
-  const userPath = `users/${userId}`;
-  try {
-    const userRef = doc(db, 'users', userId);
-    const userSnap = await getDoc(userRef);
-    if (!userSnap.exists()) {
-      const now = new Date().toISOString();
-      await setDoc(userRef, {
-        id: userId,
-        email: email || auth.currentUser?.email || '',
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
-  } catch (err) {
-    if (err instanceof Error && err.message.includes('permission')) {
-      handleFirestoreError(err, OperationType.WRITE, userPath);
-    }
-  }
-}
-
 /**
- * Creates a CloudBackend implementation backed by Firebase Firestore.
- * Supports optimistic concurrency control via document revisions.
+ * Firebase accounts: Google sign-in (Firebase Auth) and account storage
+ * (Firestore). Loaded only when accounts are turned on, so device-only builds
+ * and the tests never download or start Firebase.
+ *
+ * Each user's whole forecast is one Firestore document at
+ * `financialData/{uid}`, holding the same data the app keeps on the device plus
+ * a revision number. `firestore.rules` lets each user reach only their own
+ * document and accepts a save only when it raises the revision by exactly one,
+ * which is what lets the app detect a stale device instead of overwriting newer
+ * data.
  */
-export function firebaseBackend(userId: string): CloudBackend {
-  const userPath = `users/${userId}`;
-  const dataDocPath = `users/${userId}/data/current`;
+import { initializeApp, type FirebaseOptions } from 'firebase/app';
+import {
+  deleteUser,
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  reauthenticateWithPopup,
+  signInWithPopup,
+  signOut,
+  type Auth,
+  type User,
+} from 'firebase/auth';
+import { deleteDoc, doc, getDoc, initializeFirestore, runTransaction, serverTimestamp, type Firestore } from 'firebase/firestore';
+import type { AppData } from '../domain/types';
+import { lastUser, rememberUser, type AccountUser, type AuthService } from './account';
+import { CloudAccessError, CloudAdapter, type CloudBackend } from './cloud';
 
+export const COLLECTION = 'financialData';
+
+/** Firestore error codes that mean "refused" rather than "unreachable". */
+const REFUSED = new Set(['permission-denied', 'unauthenticated', 'invalid-argument', 'failed-precondition', 'not-found', 'resource-exhausted']);
+
+function classify(err: unknown): never {
+  const code = typeof err === 'object' && err && 'code' in err ? String((err as { code: unknown }).code) : '';
+  if (REFUSED.has(code)) throw new CloudAccessError(code);
+  throw err instanceof Error ? err : new Error('Account storage unreachable.');
+}
+
+/** Firestore storage for one user's forecast, used through `CloudAdapter`. */
+export function firebaseBackend(db: Firestore, userId: string): CloudBackend {
+  const ref = doc(db, COLLECTION, userId);
   return {
     async fetch() {
       try {
-        const docRef = doc(db, 'users', userId, 'data', 'current');
-        const snap = await getDoc(docRef);
+        const snap = await getDoc(ref);
         if (!snap.exists()) return null;
-        const raw = snap.data();
-        return { data: raw, revision: Number(raw.revision || 0) };
+        const data = snap.data();
+        return { data, revision: Number(data.revision) };
       } catch (err) {
-        handleFirestoreError(err, OperationType.GET, dataDocPath);
+        classify(err);
       }
     },
-
-    async save(data: AppData, baseRevision: number): Promise<number | null> {
-      await ensureUserDoc(userId, auth.currentUser?.email || '');
-
+    async save(data: AppData, baseRevision: number) {
       try {
-        const docRef = doc(db, 'users', userId, 'data', 'current');
-        const result = await runTransaction(db, async (tx) => {
-          const snap = await tx.get(docRef);
-          const now = new Date().toISOString();
-
-          if (!snap.exists()) {
-            if (baseRevision !== 0) return null;
-            const newDoc = {
-              userId,
-              schemaVersion: 2,
-              revision: 1,
-              onboardingComplete: Boolean(data.onboardingComplete),
-              sources: data.sources || [],
-              records: data.records || [],
-              updatedAt: now,
-            };
-            tx.set(docRef, newDoc);
-            return 1;
-          }
-
-          const existing = snap.data();
-          if (Number(existing.revision || 0) !== baseRevision) {
-            return null; // Optimistic concurrency conflict
-          }
-
-          const nextRev = baseRevision + 1;
-          const updatedDoc = {
+        return await runTransaction(db, async (tx) => {
+          const snap = await tx.get(ref);
+          const stored = snap.exists() ? Number(snap.data().revision) : 0;
+          if (stored !== baseRevision) return null;
+          const revision = baseRevision + 1;
+          tx.set(ref, {
             userId,
             schemaVersion: 2,
-            revision: nextRev,
+            revision,
             onboardingComplete: Boolean(data.onboardingComplete),
-            sources: data.sources || [],
-            records: data.records || [],
-            updatedAt: now,
-          };
-          tx.update(docRef, updatedDoc);
-          return nextRev;
+            sources: data.sources,
+            records: data.records,
+            updatedAt: serverTimestamp(),
+          });
+          return revision;
         });
-
-        return result;
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, dataDocPath);
+        classify(err);
       }
     },
-
-    async remove(): Promise<void> {
+    async remove() {
       try {
-        const docRef = doc(db, 'users', userId, 'data', 'current');
-        await deleteDoc(docRef);
+        await deleteDoc(ref);
       } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, dataDocPath);
+        classify(err);
       }
+    },
+  };
+}
 
+export interface FirebaseSettings extends FirebaseOptions {
+  projectId: string;
+  apiKey: string;
+  firestoreDatabaseId?: string;
+}
+
+export function startFirebase(settings: FirebaseSettings): { auth: Auth; db: Firestore } {
+  const app = initializeApp(settings);
+  // Drop undefined fields instead of failing the whole save over one.
+  const db = initializeFirestore(app, { ignoreUndefinedProperties: true }, settings.firestoreDatabaseId || '(default)');
+  return { auth: getAuth(app), db };
+}
+
+const toAccountUser = (u: User): AccountUser => ({ id: u.uid, email: u.email ?? '' });
+
+function googleProvider() {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  return provider;
+}
+
+const CANCELLED = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request', 'auth/user-cancelled'];
+const errorCode = (err: unknown) => (typeof err === 'object' && err && 'code' in err ? String((err as { code: unknown }).code) : '');
+
+/** Sign-in failures in plain language. Returns null when the person simply closed the Google window. */
+export function signInMessage(err: unknown): string | null {
+  const code = errorCode(err);
+  if (CANCELLED.includes(code)) return null;
+  if (code === 'auth/popup-blocked') return 'Your browser blocked the Google sign-in window. Allow pop-ups for Financial OS, then try again.';
+  if (code === 'auth/network-request-failed') return 'Financial OS can’t connect right now. Check your connection and try again.';
+  if (code === 'auth/unauthorized-domain') return 'Sign-in isn’t set up for this web address yet.';
+  return 'Sign-in couldn’t be completed. Try again.';
+}
+
+export function firebaseAuthService(settings: FirebaseSettings): AuthService {
+  const { auth, db } = startFirebase(settings);
+  return {
+    async currentUser() {
       try {
-        const userRef = doc(db, 'users', userId);
-        await deleteDoc(userRef);
-      } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, userPath);
+        await auth.authStateReady();
+      } catch {
+        // Offline start-up: open with the account that was last signed in.
+        return lastUser();
       }
+      if (!auth.currentUser) return null;
+      const user = toAccountUser(auth.currentUser);
+      rememberUser(user);
+      return user;
+    },
+    onSignedOut(callback) {
+      return onAuthStateChanged(auth, (user) => {
+        if (!user) callback();
+      });
+    },
+    async signInWithGoogle() {
+      try {
+        const cred = await signInWithPopup(auth, googleProvider());
+        const user = toAccountUser(cred.user);
+        rememberUser(user);
+        return user;
+      } catch (err) {
+        const message = signInMessage(err);
+        throw Object.assign(new Error(message ?? 'cancelled'), { cancelled: message === null });
+      }
+    },
+    async signOut() {
+      rememberUser(null);
+      await signOut(auth);
+    },
+    async deleteAccount() {
+      const user = auth.currentUser;
+      if (!user) throw new Error('Sign in again, then delete your account.');
+      // Firebase deletes an account only right after a fresh sign-in, so confirm
+      // first; if the person backs out, nothing has been deleted.
+      try {
+        await reauthenticateWithPopup(user, googleProvider());
+      } catch (err) {
+        throw new Error(signInMessage(err) ?? 'Your account wasn’t deleted. Confirm with Google to delete it.');
+      }
+      try {
+        await firebaseBackend(db, user.uid).remove();
+      } catch {
+        throw new Error('Your account wasn’t deleted because its data couldn’t be removed. Check your connection and try again.');
+      }
+      await deleteUser(user);
+      rememberUser(null);
+    },
+    adapterFor(user) {
+      return new CloudAdapter(firebaseBackend(db, user.id), user.id);
     },
   };
 }
