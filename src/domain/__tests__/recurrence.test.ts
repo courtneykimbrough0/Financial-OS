@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { RecurrenceRule } from '../types';
 import { describeRule, nextOccurrenceOnOrAfter, occurrenceDates, validateRule } from '../recurrence';
 
 describe('recurrence generation', () => {
@@ -56,12 +57,12 @@ describe('recurrence generation', () => {
   });
 
   it('adjacent windows neither duplicate nor skip boundary occurrences', () => {
-    const rules = [
-      { type: 'weekly' } as const,
-      { type: 'biweekly' } as const,
-      { type: 'monthly' } as const,
-      { type: 'twiceMonthly', days: [1, 15] } as const,
-      { type: 'custom', interval: 2, unit: 'month' } as const,
+    const rules: RecurrenceRule[] = [
+      { type: 'weekly' },
+      { type: 'biweekly' },
+      { type: 'monthly' },
+      { type: 'twiceMonthly', days: [1, 15] },
+      { type: 'custom', interval: 2, unit: 'month' },
     ];
     for (const rule of rules) {
       const whole = occurrenceDates(rule, '2026-01-01', '2026-01-01', '2026-12-31');

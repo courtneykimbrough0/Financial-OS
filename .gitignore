@@ -4,3 +4,4 @@ dev-dist
 *.tsbuildinfo
 coverage
 .DS_Store
+e2e-screenshots

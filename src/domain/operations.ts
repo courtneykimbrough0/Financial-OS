@@ -140,6 +140,17 @@ export function changeSourceSchedule(data: AppData, id: string, change: Schedule
   });
 }
 
+/**
+ * Permanently removes a recurring source that has no recorded outcomes (e.g.
+ * one added by mistake during setup). Sources with history must be turned off
+ * instead so that history is preserved.
+ */
+export function deleteSource(data: AppData, id: string): Result {
+  if (!data.sources.some((s) => s.id === id)) return fail('That item no longer exists.');
+  if (data.records.some((r) => r.sourceId === id)) return fail('This item has recorded history. Turn it off instead so the history is kept.');
+  return ok({ ...data, sources: data.sources.filter((s) => s.id !== id) });
+}
+
 /** Stops forecasting from today. Past occurrences and recorded outcomes remain. */
 export function deactivateSource(data: AppData, id: string, clock: Clock): Result {
   return withSource(data, id, (s) => (s.active ? { ...s, active: false, endDate: clock.today, updatedAt: clock.now } : 'This item is already turned off.'));
