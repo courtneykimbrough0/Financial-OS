@@ -96,12 +96,12 @@ try {
   await shot('04-dashboard-month');
 
   step('dashboard: week view KPIs follow the period');
-  await page.getByRole('tab', { name: 'Week' }).click();
+  await page.getByRole('tab', { name: 'Week', exact: true }).click();
   await page.getByRole('button', { name: 'Next week' }).click();
   assert.match(await page.locator('.kpis').innerText(), /Projected income\s+\$0\.00[\s\S]*Projected expenses[\s\S]*?\$350\.00/);
 
   step('dashboard: paycheck view keeps the running tally');
-  await page.getByRole('tab', { name: 'Paycheck' }).click();
+  await page.getByRole('tab', { name: 'Paycheck', exact: true }).click();
   await page.getByRole('button', { name: 'Next pay period' }).click();
   await page.getByRole('heading', { name: 'Oct 29 – Nov 11' }).waitFor();
   const firstRow = page.locator('.timeline > li').first();
@@ -109,7 +109,7 @@ try {
   await shot('05-dashboard-paycheck');
 
   step('dashboard: custom range validation');
-  await page.getByRole('tab', { name: 'Custom' }).click();
+  await page.getByRole('tab', { name: 'Custom', exact: true }).click();
   await page.getByLabel('Start date').fill('2026-11-10');
   await page.getByLabel('End date').fill('2026-11-01');
   await page.getByText('The end date must be on or after the start date.').waitFor();
@@ -120,9 +120,9 @@ try {
   step('a day later: the paycheck is overdue');
   await page.clock.setFixedTime(new Date(2026, 9, 16, 9, 0));
   await page.reload();
-  await page.getByRole('heading', { name: '1 transaction needs an update' }).waitFor();
+  await page.getByRole('button', { name: '1 transaction needs an update' }).click();
   await shot('06-overdue');
-  await page.locator('.panel-warn .entry').first().click();
+  await page.getByRole('dialog').locator('.entry').first().click();
   const dialog = page.getByRole('dialog', { name: 'Paycheck' });
   await dialog.waitFor();
   await dialog.getByRole('button', { name: 'Mark received', exact: true }).click();
@@ -134,19 +134,30 @@ try {
   await shot('07-record-actual');
   await dialog.getByRole('button', { name: 'Save as received' }).click();
   await page.getByText('Recorded Paycheck: $1,650.00 received on Oct 16, 2026.').waitFor();
-  assert.equal(await page.getByRole('heading', { name: /needs an update/ }).count(), 0);
+  assert.equal(await page.locator('.overdue-banner').count(), 0);
 
   step('timeline reflects the actual date and amount');
-  await page.getByRole('tab', { name: 'Month' }).click();
+  await page.getByRole('tab', { name: 'Month', exact: true }).click();
+  await page.getByRole('tab', { name: 'Day by day' }).click();
   const tl = await page.locator('.timeline').innerText();
   assert.match(tl, /Fri, Oct 16[\s\S]*?\+\$1,650\.00[\s\S]*?\$1,650\.00/);
   assert.match(tl, /Thu, Oct 29[\s\S]*?\+\$1,800\.00[\s\S]*?\$3,040\.00/);
   assert.doesNotMatch(tl, /Thu, Oct 15/);
   await page.getByRole('button', { name: /^Friday, October 16, 2026/ }).click();
-  const day = await page.locator('#day-heading').locator('..').locator('..').innerText();
+  const day = await page.getByRole('dialog', { name: 'Friday, October 16, 2026' }).innerText();
   assert.match(day, /Received/);
   assert.match(day, /Expected \$1,800\.00 on Oct 15/);
+  assert.match(day, /Projected cash flow\s+\$1,650\.00/);
   await shot('08-after-actual');
+  await page.keyboard.press('Escape');
+
+  step('week rows open a sheet with that week');
+  await page.getByRole('tab', { name: 'Week by week' }).click();
+  await page.getByRole('button', { name: /Oct 25 – 31/ }).click();
+  const week = await page.getByRole('dialog', { name: /Week of Oct 25 – 31/ }).innerText();
+  assert.match(week, /Projected income\s+\+\$1,800\.00/);
+  assert.match(week, /Thu, Oct 29[\s\S]*Paycheck/);
+  await page.keyboard.press('Escape');
 
   step('income screen shows recorded history and keeps the schedule');
   await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Income' }).click();
@@ -174,10 +185,11 @@ try {
   await page.getByRole('dialog').getByRole('button', { name: 'Show sample data' }).click();
   await page.getByText('You’re exploring sample data.').waitFor();
   // Unpaid bill: stays visible as overdue.
-  await page.getByRole('heading', { name: '1 transaction needs an update' }).waitFor();
-  assert.match(await page.locator('.panel-warn').innerText(), /Phone/);
+  await page.getByRole('button', { name: '1 transaction needs an update' }).click();
+  assert.match(await page.getByRole('dialog').innerText(), /Phone/);
+  await page.keyboard.press('Escape');
   // Negative tally before a later payday (look ahead with a custom range).
-  await page.getByRole('tab', { name: 'Custom' }).click();
+  await page.getByRole('tab', { name: 'Custom', exact: true }).click();
   await page.getByLabel('End date').fill('2026-11-30');
   await page.getByText('Timing gap ahead').waitFor();
   assert.match(await page.locator('.callout-danger').innerText(), /Nov 5 – 9, by up to \$600\.00/);

@@ -75,9 +75,26 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
   - Danger is a red pill.
   - Link buttons are underlined text.
 - **Bottom sheet:** a grab handle, a sticky title row with a close button, and stacked full-width pill actions. It becomes a centered dialog on wide screens. The page behind it is inert.
+- **Pill tabs:** two options inside a raised pill track, used within cards. The active option is light.
+- **Totals strip / sheet stats:** three centered label-over-value columns, with values aligned on one baseline.
 - **Callouts:** soft-tinted rounded blocks (info, warn, danger, ok) that always lead with an icon or a bold phrase.
 - **Switch:** a pill track that turns green when on, built on a native checkbox with `role="switch"`.
 - **Toasts:** light pills with an icon, announced through a live region.
+
+## Layout pattern: summary on the page, details in sheets
+
+The dashboard shows only summaries. Detail opens in a bottom sheet:
+
+- **Overdue banner:** a one-line amber pill ("1 transaction needs an update ›") that opens the overdue list.
+- **Hero card:** the lowest projected cash flow, a one-line timing-gap or all-clear callout, and the next expected payday. The (i) button explains how projected cash flow works.
+- **Calendar card:** the grid, then a **totals strip** with the three period totals, then a "Calendar key" link that opens the key.
+- **Breakdown card:** a **pill-tab** switch (Week by week | Day by day) in the month view, and day-by-day only in the other views. Each row is one tappable line.
+- **Sheets:**
+  - A day shows money in, money out and projected cash flow, then that day's transactions.
+  - A week shows its totals, then its days.
+  - A transaction opened from a day or week sheet returns to that sheet when closed.
+
+Shortfall and overdue warnings always stay on the page and are never hidden behind a tap.
 
 ## Accessibility rules
 

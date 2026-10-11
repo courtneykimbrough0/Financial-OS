@@ -19,7 +19,7 @@ Node 20+ is required.
 
 ### Sample data
 
-To explore without entering anything, choose **Explore with sample data**. The button is on the onboarding welcome screen and at the bottom of every main screen. Sample data is fictional, dated relative to today, and stored under its own key (`financial-os:sample-data`). It never mixes with your real data, and a banner stays on screen the whole time. **Leave sample data** discards the sample and returns you to your own data unchanged.
+To explore without entering anything, choose **Explore with sample data**. The button is on the onboarding welcome screen and at the bottom of every main screen. Sample data is fictional, dated relative to today, and stored under its own key (`financial-os:sample-data`). It never mixes with your real data, and a banner stays on screen the whole time. **Leave** (on the sample-data banner) discards the sample and returns you to your own data unchanged.
 
 The sample (`src/domain/sample.ts`) covers recurring income, rent, utilities, a car-loan liability, and a one-time car repair. It also includes:
 - a paycheck that came a day late and was smaller than expected ($1,650 instead of $1,800);

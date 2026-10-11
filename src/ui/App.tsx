@@ -85,7 +85,7 @@ function SampleBanner() {
   return (
     <div className="sample-banner" role="note">
       <p>
-        <strong>You’re exploring sample data.</strong> These transactions are made up. Your own data is kept separately and stays unchanged.
+        <strong>You’re exploring sample data.</strong> Your own data stays unchanged.
       </p>
       <button
         type="button"
@@ -95,7 +95,8 @@ function SampleBanner() {
           window.location.hash = '';
         }}
       >
-        Leave sample data
+        Leave
+        <span className="sr-only"> sample data</span>
       </button>
     </div>
   );
@@ -120,7 +121,7 @@ function DataNotice() {
             <p>
               You’ll see a made-up example with a late paycheck, a bill that cost more than expected, an overdue bill, and a stretch where projected cash flow dips below $0.
             </p>
-            <p>Sample data is kept separate from yours. Your own entries stay exactly as they are, and you can return to them anytime with “Leave sample data”.</p>
+            <p>Sample data is kept separate from yours. Your own entries stay exactly as they are, and you can return to them anytime with “Leave” on the sample-data banner.</p>
             <div className="form-actions">
               <button type="button" className="button secondary" onClick={() => setConfirming(false)} data-autofocus>
                 Not now

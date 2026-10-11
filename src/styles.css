@@ -1573,3 +1573,273 @@ li.negative .tl-tally {
     transition: background-color 120ms ease, color 120ms ease;
   }
 }
+
+/* ---------- Condensed dashboard ---------- */
+
+.dashboard.stack-lg > * + * {
+  margin-top: var(--space-4);
+}
+
+/* One-line overdue banner that opens a sheet. */
+.overdue-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-warn-soft);
+  box-shadow: inset 0 0 0 1.5px var(--color-warn);
+  color: var(--color-warn);
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+.overdue-banner span {
+  flex: 1;
+}
+
+.hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: calc(-1 * var(--space-2));
+}
+.icon-button.small-icon {
+  width: 36px;
+  height: 36px;
+  color: var(--color-text-secondary);
+  margin-right: -8px;
+}
+.hero-body {
+  padding: var(--space-5) var(--space-6) var(--space-4);
+}
+.hero-value {
+  flex-wrap: wrap;
+  font-size: 2.25rem;
+}
+.hero-when {
+  font-size: var(--text-body);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--color-text-secondary);
+}
+.hero-body .callout.gap-line {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: 10px 12px;
+  font-size: var(--text-small);
+}
+.gap-line svg {
+  margin: 1px 0 0 0;
+}
+.hero-footer {
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-body);
+}
+
+/* Totals strip under the calendar (period KPIs). */
+.totals-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: var(--space-4) var(--space-3) var(--space-2);
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+.totals-strip dt {
+  font-size: var(--text-caption);
+  color: var(--color-text-secondary);
+}
+.totals-strip dd {
+  margin: 2px 0 0;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.totals-strip dd.negative,
+.sheet-stats dd.negative {
+  color: var(--color-neg);
+}
+@media (min-width: 520px) {
+  .totals-strip dt {
+    font-size: var(--text-small);
+  }
+  .totals-strip dd {
+    font-size: 1.375rem;
+  }
+}
+.calendar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: 0 var(--space-4) var(--space-2);
+}
+.calendar-actions .hint {
+  font-size: var(--text-caption);
+}
+.calendar-actions .button {
+  gap: 4px;
+  font-size: var(--text-small);
+  text-decoration: none;
+  color: var(--color-text-secondary);
+}
+
+/* Pill tabs inside a card (Week by week | Day by day). */
+.pill-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: var(--space-3) 0 var(--space-1);
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
+}
+.pill-tabs button {
+  min-height: 40px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-weight: 600;
+  font-size: var(--text-small);
+  cursor: pointer;
+}
+.pill-tabs button.active {
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+}
+
+/* Week rows are single tappable lines with a chevron. */
+.week-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: var(--space-2);
+}
+.week-row .week-label {
+  grid-column: 1;
+}
+.week-row .week-nums {
+  grid-column: 1;
+  padding-left: 0;
+}
+.week-row .chevron {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+@media (min-width: 520px) {
+  .week-row {
+    grid-template-columns: auto 1fr auto;
+  }
+  .week-row .week-nums {
+    grid-column: 2;
+    grid-row: 1;
+    justify-content: flex-end;
+  }
+  .week-row .chevron {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
+.tl-date {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.tl-date .badge-low {
+  margin-left: 0;
+}
+
+/* Stats row at the top of day and week sheets. */
+.sheet-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  text-align: center;
+}
+.sheet-stats dt {
+  font-size: var(--text-caption);
+  color: var(--color-text-secondary);
+}
+.sheet-stats dd {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 2px 0 0;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.modal .week-day + .week-day {
+  margin-top: var(--space-4);
+}
+
+/* Calendar key sheet */
+.key-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.key-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px 0;
+}
+.key-list li + li {
+  border-top: 1px solid var(--color-border);
+}
+.key-mark {
+  display: inline-flex;
+  justify-content: center;
+  min-width: 64px;
+}
+.today-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--color-text);
+  color: var(--color-text-inverse);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+.key-mark .chip {
+  min-height: 24px;
+  font-size: 0.8125rem;
+}
+
+/* Keep values on one baseline when labels wrap. */
+.totals-strip > div,
+.sheet-stats > div {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Compact sample-data banner */
+.sample-banner {
+  flex-wrap: nowrap;
+  padding: 10px 10px 10px 18px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-small);
+}
+.sample-banner p {
+  flex: 1 1 auto;
+}
