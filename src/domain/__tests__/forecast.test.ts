@@ -34,8 +34,8 @@ function baseline(): AppData {
   let d = ops.emptyData();
   d = source(d, TODAY, 'income', 'Paycheck', 1800, '2026-10-15', { type: 'biweekly' }, PAY);
   d = source(d, TODAY, 'liability', 'Car loan', 350, '2026-10-20', { type: 'monthly' }, CAR);
-  d = source(d, TODAY, 'expense', 'Phone', 60, '2026-10-25', { type: 'monthly' }, PHONE);
-  d = source(d, TODAY, 'expense', 'Rent', 1200, '2026-11-01', { type: 'monthly' }, RENT);
+  d = source(d, TODAY, 'bill', 'Phone', 60, '2026-10-25', { type: 'monthly' }, PHONE);
+  d = source(d, TODAY, 'bill', 'Rent', 1200, '2026-11-01', { type: 'monthly' }, RENT);
   return d;
 }
 
@@ -102,8 +102,8 @@ describe('forecast anchor and running tally', () => {
 
   it('nets several transactions on the same day and orders them deterministically', () => {
     let d = baseline();
-    d = unwrap(ops.addOneTime(d, { kind: 'expense', description: 'Groceries', amountCents: usd(150), date: '2026-10-29' }, clockAt(TODAY), 'one-groc'));
-    d = unwrap(ops.addOneTime(d, { kind: 'expense', description: 'Gas', amountCents: usd(40), date: '2026-10-29' }, clockAt(TODAY), 'one-gas'));
+    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Groceries', amountCents: usd(150), date: '2026-10-29' }, clockAt(TODAY), 'one-groc'));
+    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Gas', amountCents: usd(40), date: '2026-10-29' }, clockAt(TODAY), 'one-gas'));
     const f = buildForecast(d, TODAY);
     const row = dailyTimeline(f, '2026-10-29', '2026-10-29')[0]!;
     expect(row.inCents).toBe(usd(1800));
@@ -115,7 +115,7 @@ describe('forecast anchor and running tally', () => {
 
   it('finds the lowest point and negative stretches', () => {
     let d = baseline();
-    d = unwrap(ops.addOneTime(d, { kind: 'expense', description: 'Car repair', amountCents: usd(2000), date: '2026-10-22' }, clockAt(TODAY)));
+    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Car repair', amountCents: usd(2000), date: '2026-10-22' }, clockAt(TODAY)));
     const f = buildForecast(d, TODAY);
     const rows = dailyTimeline(f, '2026-10-01', '2026-11-30');
     expect(lowestPoint(rows)).toEqual({ date: '2026-10-25', tallyCents: usd(-610) });
@@ -128,7 +128,7 @@ describe('forecast anchor and running tally', () => {
 
   it('explains instead of forecasting when there is no recurring income', () => {
     let d = ops.emptyData();
-    d = source(d, TODAY, 'expense', 'Rent', 1200, '2026-11-01');
+    d = source(d, TODAY, 'bill', 'Rent', 1200, '2026-11-01');
     d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Gift', amountCents: usd(100), date: '2026-10-20' }, clockAt(TODAY)));
     const f = buildForecast(d, TODAY);
     expect(f.issue).toBe('no-recurring-income');
@@ -262,7 +262,7 @@ describe('overdue, rescheduled, and canceled occurrences', () => {
 
   it('overdue items dated before the forecast start are carried forward, not dropped', () => {
     let d = baseline();
-    d = unwrap(ops.addOneTime(d, { kind: 'expense', description: 'Dentist', amountCents: usd(100), date: '2026-10-05' }, clockAt('2026-10-01'), 'one-dentist'));
+    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Dentist', amountCents: usd(100), date: '2026-10-05' }, clockAt('2026-10-01'), 'one-dentist'));
     const f = buildForecast(d, TODAY);
     const dentist = f.entries.find((e) => e.occurrence.id === 'one-dentist')!;
     expect(dentist.occurrence.displayStatus).toBe('overdue');
@@ -274,7 +274,7 @@ describe('overdue, rescheduled, and canceled occurrences', () => {
 
   it('upcoming items before the next payday are shown but not part of the tally', () => {
     let d = baseline();
-    d = unwrap(ops.addOneTime(d, { kind: 'expense', description: 'Electric', amountCents: usd(90), date: '2026-10-12' }, clockAt(TODAY)));
+    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Electric', amountCents: usd(90), date: '2026-10-12' }, clockAt(TODAY)));
     const f = buildForecast(d, TODAY);
     const row = dailyTimeline(f, '2026-10-12', '2026-10-12')[0]!;
     expect(row.outCents).toBe(usd(90));
@@ -399,7 +399,7 @@ describe('one-time transactions', () => {
   });
 
   it('can be deleted; recurring occurrences cannot', () => {
-    let d = unwrap(ops.addOneTime(baseline(), { kind: 'expense', description: 'Gift', amountCents: usd(50), date: '2026-10-30' }, clockAt(TODAY), 'one-gift'));
+    let d = unwrap(ops.addOneTime(baseline(), { kind: 'bill', description: 'Gift', amountCents: usd(50), date: '2026-10-30' }, clockAt(TODAY), 'one-gift'));
     d = unwrap(ops.deleteOneTime(d, 'one-gift'));
     expect(buildForecast(d, TODAY).entries.some((e) => e.occurrence.id === 'one-gift')).toBe(false);
     const withRecord = unwrap(ops.cancelOccurrence(d, id(PHONE, '2026-10-25'), '', clockAt(TODAY)));

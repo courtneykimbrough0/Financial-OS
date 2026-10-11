@@ -4,13 +4,13 @@ import { diffDays, formatLong, formatMedium, type DateStr } from '../../domain/d
 import { centsToInput, formatMoney, formatSignedMoney, parseMoney } from '../../domain/money';
 import { findOccurrence } from '../../domain/occurrences';
 import * as ops from '../../domain/operations';
-import { KIND_LABEL, type Occurrence } from '../../domain/types';
+import { doneVerb as kindDoneVerb, KIND_LABEL, type Occurrence } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { Field, FlowAmount, FormError, Icon, KindAvatar, Modal, MoneyInput, StatusBadge, useToast } from './common';
 
 type Mode = 'view' | 'record' | 'correct' | 'reschedule' | 'cancel' | 'delete';
 
-const doneVerb = (o: Occurrence) => (o.kind === 'income' ? 'received' : 'paid');
+const doneVerb = (o: Occurrence) => kindDoneVerb(o.kind);
 
 /** "1 day late", "2 days early", "on time" */
 function timing(expected: DateStr, actual: DateStr): string {

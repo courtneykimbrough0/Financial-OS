@@ -7,24 +7,37 @@ import * as ops from '../../domain/operations';
 import { describeRule } from '../../domain/recurrence';
 import type { AppData, Occurrence, RecurringSource, TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
-import { EmptyState, FlowAmount, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, useToast } from '../components/common';
+import { EmptyState, FlowAmount, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
 import { KIND_COPY, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm } from '../components/forms';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 
-const SCREEN_COPY: Record<TransactionKind, { title: string; intro: string; recurringHeading: string; addRecurring: string; empty: string }> = {
+const SCREEN_COPY: Record<
+  TransactionKind,
+  { title: string; intro: string; recurringHeading: string; addRecurring: string; empty: string; oneTime: { heading: string; empty: string } | null }
+> = {
   income: {
     title: 'Income',
     intro: 'Money you expect to receive, like wages or benefits.',
     recurringHeading: 'Recurring income',
     addRecurring: 'Add recurring income',
     empty: 'Add a paycheck or other regular income to start your forecast.',
+    oneTime: { heading: 'One-time income', empty: 'Add things like a tax refund or a gift. They count once.' },
   },
-  expense: {
-    title: 'Expenses',
-    intro: 'Bills and spending you expect, like rent, utilities, and subscriptions.',
-    recurringHeading: 'Recurring expenses',
-    addRecurring: 'Add recurring expense',
-    empty: 'Add regular bills like rent, utilities, insurance, or subscriptions.',
+  bill: {
+    title: 'Bills',
+    intro: 'Regular bills like rent, utilities, phone, and insurance.',
+    recurringHeading: 'Recurring bills',
+    addRecurring: 'Add bill',
+    empty: 'Add regular bills like rent, utilities, phone, or insurance.',
+    oneTime: { heading: 'One-time expenses', empty: 'Add a bill that happens once, like a medical bill. It counts once.' },
+  },
+  subscription: {
+    title: 'Subscriptions',
+    intro: 'Services that charge you on a schedule.',
+    recurringHeading: 'Subscriptions',
+    addRecurring: 'Add subscription',
+    empty: 'Add streaming, apps, memberships, or anything else that renews.',
+    oneTime: null,
   },
   liability: {
     title: 'Liabilities',
@@ -32,6 +45,23 @@ const SCREEN_COPY: Record<TransactionKind, { title: string; intro: string; recur
     recurringHeading: 'Liability payments',
     addRecurring: 'Add liability payment',
     empty: 'Add payments like a car loan, student loan, or credit card payment.',
+    oneTime: null,
+  },
+  savings: {
+    title: 'Savings',
+    intro: 'Money you plan to set aside on a schedule. It comes out of what’s left to spend.',
+    recurringHeading: 'Recurring savings',
+    addRecurring: 'Add savings',
+    empty: 'Add regular amounts you set aside, like an emergency fund.',
+    oneTime: { heading: 'One-time savings', empty: 'Add a single deposit you plan to make. It counts once.' },
+  },
+  spending: {
+    title: 'Spending',
+    intro: 'Everyday money you expect to spend on a schedule, like groceries or gas. It comes out of what’s left to spend.',
+    recurringHeading: 'Recurring spending',
+    addRecurring: 'Add spending',
+    empty: 'Add regular spending, like weekly groceries or gas.',
+    oneTime: { heading: 'One-time spending', empty: 'Add something you’ll pay for once, like a car repair or a trip.' },
   },
 };
 
@@ -101,8 +131,8 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
           <h3>{source.description}</h3>
           <p className="muted">
             {describeRule(current.rule, current.startDate)}
-            {source.category ? ` · ${source.category}` : ''}
           </p>
+          <TagList tags={source.tags} />
         </div>
         <div className="source-amount">
           <FlowAmount kind={source.kind} cents={current.amountCents} />
@@ -207,7 +237,8 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
   );
 }
 
-export function SourcesScreen({ kind }: { kind: TransactionKind }) {
+/** One kind's list. `embedded` drops the screen header when shown inside another screen's tabs. */
+export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKind; embedded?: boolean }) {
   const { data, today } = useStore();
   const copy = SCREEN_COPY[kind];
   const [adding, setAdding] = useState<'recurring' | 'one-time' | null>(null);
@@ -224,10 +255,14 @@ export function SourcesScreen({ kind }: { kind: TransactionKind }) {
 
   return (
     <div className="stack-lg">
-      <header className="screen-header">
-        <h1>{copy.title}</h1>
-        <p className="muted">{copy.intro}</p>
-      </header>
+      {embedded ? (
+        <p className="muted center">{copy.intro}</p>
+      ) : (
+        <header className="screen-header">
+          <h1>{copy.title}</h1>
+          <p className="muted">{copy.intro}</p>
+        </header>
+      )}
 
       <section className="stack" aria-labelledby="recurring-heading">
         <SectionLabel
@@ -253,7 +288,7 @@ export function SourcesScreen({ kind }: { kind: TransactionKind }) {
         )}
       </section>
 
-      {kind !== 'liability' && (
+      {copy.oneTime && (
         <section className="stack" aria-labelledby="onetime-heading">
           <SectionLabel
             id="onetime-heading"
@@ -263,11 +298,11 @@ export function SourcesScreen({ kind }: { kind: TransactionKind }) {
               </button>
             }
           >
-            One-time {kind === 'income' ? 'income' : 'expenses'}
+            {copy.oneTime.heading}
           </SectionLabel>
           {oneTimes.length === 0 ? (
             <EmptyState title="Nothing one-time yet">
-              <p>{kind === 'income' ? 'Add things like a tax refund or a gift. They count once.' : 'Add things like a car repair or a trip. They count once.'}</p>
+              <p>{copy.oneTime.empty}</p>
             </EmptyState>
           ) : (
             <>
@@ -305,7 +340,7 @@ export function SourcesScreen({ kind }: { kind: TransactionKind }) {
           <SourceForm kind={kind} onDone={() => setAdding(null)} />
         </Modal>
       )}
-      {adding === 'one-time' && kind !== 'liability' && (
+      {adding === 'one-time' && kind !== 'subscription' && kind !== 'liability' && (
         <Modal title={`Add one-time ${KIND_COPY[kind].noun}`} onClose={() => setAdding(null)}>
           <OneTimeForm kind={kind} onDone={() => setAdding(null)} />
         </Modal>
@@ -316,6 +351,34 @@ export function SourcesScreen({ kind }: { kind: TransactionKind }) {
         </Modal>
       )}
       {sheetId && <OccurrenceSheet occurrenceId={sheetId} onClose={() => setSheetId(null)} />}
+    </div>
+  );
+}
+
+const EXPENSE_TABS: { kind: TransactionKind; label: string }[] = [
+  { kind: 'bill', label: 'Bills' },
+  { kind: 'subscription', label: 'Subscriptions' },
+  { kind: 'liability', label: 'Liabilities' },
+];
+
+/** Expenses: bills, subscriptions, and liability payments, one pill tab each. */
+export function ExpensesScreen({ initial = 'bill' }: { initial?: TransactionKind }) {
+  const [tab, setTab] = useState<TransactionKind>(initial);
+  return (
+    <div className="stack-lg">
+      <header className="screen-header">
+        <h1>Expenses</h1>
+      </header>
+      <div className="pill-tabs pill-tabs-3" role="tablist" aria-label="Expense type">
+        {EXPENSE_TABS.map((t) => (
+          <button key={t.kind} type="button" role="tab" id={`expense-tab-${t.kind}`} aria-selected={tab === t.kind} aria-controls="expense-panel" className={tab === t.kind ? 'active' : ''} onClick={() => setTab(t.kind)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div id="expense-panel" role="tabpanel" aria-labelledby={`expense-tab-${tab}`}>
+        <SourcesScreen key={tab} kind={tab} embedded />
+      </div>
     </div>
   );
 }

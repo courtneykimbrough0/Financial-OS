@@ -1,19 +1,23 @@
 import { useEffect, useState } from 'react';
-import { CreditCard, HandCoins, LayoutGrid, Receipt, type LucideIcon } from 'lucide-react';
+import { HandCoins, LayoutGrid, PiggyBank, Receipt, ShoppingBag, type LucideIcon } from 'lucide-react';
 import { useDataMode } from '../state/mode';
 import { useStore } from '../state/store';
 import { Icon, Modal } from './components/common';
 import { navigate, useRoute, type Route } from './router';
 import { Dashboard } from './screens/Dashboard';
 import { Onboarding } from './screens/Onboarding';
-import { SourcesScreen } from './screens/SourcesScreen';
+import { ExpensesScreen, SourcesScreen } from './screens/SourcesScreen';
 
 const NAV: { route: Route; label: string; icon: LucideIcon }[] = [
   { route: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
   { route: 'income', label: 'Income', icon: HandCoins },
   { route: 'expenses', label: 'Expenses', icon: Receipt },
-  { route: 'liabilities', label: 'Liabilities', icon: CreditCard },
+  { route: 'savings', label: 'Savings', icon: PiggyBank },
+  { route: 'spending', label: 'Spending', icon: ShoppingBag },
 ];
+
+/** Liabilities live under Expenses; its old route opens that tab. */
+const navRoute = (r: Route): Route => (r === 'liabilities' ? 'expenses' : r);
 
 export function App() {
   const { data } = useStore();
@@ -29,6 +33,8 @@ export function App() {
     income: 'Income',
     expenses: 'Expenses',
     liabilities: 'Liabilities',
+    savings: 'Savings',
+    spending: 'Spending',
     onboarding: 'Get started',
   };
   useEffect(() => {
@@ -50,7 +56,7 @@ export function App() {
         {showNav && (
           <nav className="top-nav" aria-label="Main">
             {NAV.map((n) => (
-              <a key={n.route} href={`#/${n.route}`} aria-current={route === n.route ? 'page' : undefined}>
+              <a key={n.route} href={`#/${n.route}`} aria-current={navRoute(route) === n.route ? 'page' : undefined}>
                 {n.label}
               </a>
             ))}
@@ -62,14 +68,16 @@ export function App() {
         {route === 'onboarding' && <Onboarding />}
         {route === 'dashboard' && <Dashboard />}
         {route === 'income' && <SourcesScreen key="income" kind="income" />}
-        {route === 'expenses' && <SourcesScreen key="expense" kind="expense" />}
-        {route === 'liabilities' && <SourcesScreen key="liability" kind="liability" />}
+        {route === 'expenses' && <ExpensesScreen key="expenses" />}
+        {route === 'liabilities' && <ExpensesScreen key="liabilities" initial="liability" />}
+        {route === 'savings' && <SourcesScreen key="savings" kind="savings" />}
+        {route === 'spending' && <SourcesScreen key="spending" kind="spending" />}
         {showNav && <DataNotice />}
       </main>
       {showNav && (
         <nav className="bottom-nav" aria-label="Main">
           {NAV.map((n) => (
-            <a key={n.route} href={`#/${n.route}`} aria-current={route === n.route ? 'page' : undefined}>
+            <a key={n.route} href={`#/${n.route}`} aria-current={navRoute(route) === n.route ? 'page' : undefined}>
               <Icon icon={n.icon} size={24} className="nav-icon" />
               {n.label}
             </a>

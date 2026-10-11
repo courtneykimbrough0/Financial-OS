@@ -1,31 +1,34 @@
-import { useState, type FormEvent } from 'react';
+import { Plus, X } from 'lucide-react';
+import { useId, useState, type FormEvent } from 'react';
 import { formatMedium, parts, type DateStr } from '../../domain/dates';
 import { centsToInput, formatMoney, parseMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { describeRule, nextOccurrenceOnOrAfter } from '../../domain/recurrence';
 import type { RecurrenceRule, RecurringSource, TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
-import { Field, FormError, MoneyInput, useToast } from './common';
+import { Field, FormError, Icon, MoneyInput, useToast } from './common';
 
-export const KIND_COPY: Record<
-  TransactionKind,
-  { noun: string; nameLabel: string; placeholder: string; amountLabel: string; dateLabel: string; categories: string[] }
-> = {
+export const KIND_COPY: Record<TransactionKind, { noun: string; nameLabel: string; placeholder: string; amountLabel: string; dateLabel: string }> = {
   income: {
     noun: 'income',
     nameLabel: 'What is this income?',
     placeholder: 'e.g. Paycheck from work',
     amountLabel: 'Amount you expect to receive',
     dateLabel: 'Next payment date',
-    categories: ['Wages', 'Benefits', 'Side work', 'Support payments', 'Other'],
   },
-  expense: {
-    noun: 'expense',
-    nameLabel: 'What is this expense?',
+  bill: {
+    noun: 'bill',
+    nameLabel: 'What is this bill?',
     placeholder: 'e.g. Rent',
     amountLabel: 'Amount you expect to pay',
     dateLabel: 'Next due date',
-    categories: ['Housing', 'Utilities', 'Groceries', 'Insurance', 'Subscriptions', 'Transportation', 'Other'],
+  },
+  subscription: {
+    noun: 'subscription',
+    nameLabel: 'What is this subscription?',
+    placeholder: 'e.g. Streaming service',
+    amountLabel: 'Amount you expect to pay',
+    dateLabel: 'Next charge date',
   },
   liability: {
     noun: 'liability payment',
@@ -33,9 +36,91 @@ export const KIND_COPY: Record<
     placeholder: 'e.g. Car loan',
     amountLabel: 'Payment amount',
     dateLabel: 'Next payment due date',
-    categories: ['Vehicle', 'Student loan', 'Credit card', 'Personal loan', 'Medical', 'Other'],
+  },
+  savings: {
+    noun: 'savings',
+    nameLabel: 'What are you saving for?',
+    placeholder: 'e.g. Emergency fund',
+    amountLabel: 'Amount you plan to set aside',
+    dateLabel: 'Next date you’ll set it aside',
+  },
+  spending: {
+    noun: 'spending',
+    nameLabel: 'What is this spending?',
+    placeholder: 'e.g. Weekly groceries',
+    amountLabel: 'Amount you expect to spend',
+    dateLabel: 'Next date you’ll spend it',
   },
 };
+
+/**
+ * Optional, user-created tags. Nothing is suggested except tags the user has
+ * already made elsewhere in their own data.
+ */
+export function TagInput({ value, onChange }: { value: string[]; onChange: (tags: string[]) => void }) {
+  const { data } = useStore();
+  const [draft, setDraft] = useState('');
+  const inputId = useId();
+  const mine = ops.allTags(data).filter((t) => !value.some((v) => v.toLowerCase() === t.toLowerCase()));
+  const add = (raw: string) => {
+    const next = ops.normalizeTags([...value, raw]);
+    onChange(next);
+    setDraft('');
+  };
+  const full = value.length >= ops.MAX_TAGS;
+  return (
+    <div className="field">
+      <label htmlFor={inputId}>Tags (optional)</label>
+      <p className="hint" id={`${inputId}-hint`}>
+        Your own labels for grouping, like a place or a hobby. Press Enter or Add after each one.
+      </p>
+      {value.length > 0 && (
+        <ul className="tag-chips" aria-label="Tags on this item">
+          {value.map((t) => (
+            <li key={t}>
+              <span className="tag">{t}</span>
+              <button type="button" className="tag-remove" onClick={() => onChange(value.filter((v) => v !== t))} aria-label={`Remove tag ${t}`}>
+                <Icon icon={X} size={14} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="tag-entry">
+        <input
+          id={inputId}
+          type="text"
+          value={draft}
+          maxLength={ops.MAX_TAG_LENGTH}
+          disabled={full}
+          aria-describedby={`${inputId}-hint`}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (draft.trim()) add(draft);
+            }
+          }}
+        />
+        <button type="button" className="button small secondary" disabled={full || !draft.trim()} onClick={() => add(draft)}>
+          Add
+          <span className="sr-only"> tag</span>
+        </button>
+      </div>
+      {mine.length > 0 && !full && (
+        <div className="tag-suggestions">
+          <span className="hint">Your tags:</span>
+          {mine.slice(0, 12).map((t) => (
+            <button key={t} type="button" className="tag tag-button" onClick={() => add(t)}>
+              <Icon icon={Plus} size={11} />
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type Freq = RecurrenceRule['type'];
 
@@ -161,7 +246,7 @@ export function SourceForm({
   const defaultStart = source ? (nextScheduledDate(source, today) ?? today) : '';
 
   const [description, setDescription] = useState(source?.description ?? '');
-  const [category, setCategory] = useState(source?.category ?? '');
+  const [tags, setTags] = useState<string[]>(source?.tags ?? []);
   const [amount, setAmount] = useState(current ? centsToInput(current.amountCents) : '');
   const [startDate, setStartDate] = useState<DateStr>(defaultStart);
   const [rule, setRule] = useState<RuleState>(() => ruleToState(current?.rule ?? { type: kind === 'income' ? 'biweekly' : 'monthly' }, defaultStart || null));
@@ -181,14 +266,14 @@ export function SourceForm({
     if (typeof r === 'string') return setError(r);
 
     if (!source) {
-      const result = run((d, clock) => ops.addSource(d, { kind, description, category, amountCents: cents!, startDate, rule: r }, clock));
+      const result = run((d, clock) => ops.addSource(d, { kind, description, tags, amountCents: cents!, startDate, rule: r }, clock));
       if (!result.ok) return setError(result.error);
       toast(`Added ${description.trim()}.`);
       return onDone();
     }
 
     if (fresh) {
-      const result = run((d, clock) => ops.redefineSource(d, source.id, { description, category, amountCents: cents!, startDate, rule: r }, clock));
+      const result = run((d, clock) => ops.redefineSource(d, source.id, { description, tags, amountCents: cents!, startDate, rule: r }, clock));
       if (!result.ok) return setError(result.error);
       toast(`Saved ${description.trim()}.`);
       return onDone();
@@ -198,7 +283,7 @@ export function SourceForm({
       source.active &&
       (cents !== current!.amountCents || startDate !== defaultStart || JSON.stringify(r) !== JSON.stringify(current!.rule));
     const result = run((d, clock) => {
-      const step = ops.updateSourceDetails(d, source.id, { description, category }, clock);
+      const step = ops.updateSourceDetails(d, source.id, { description, tags }, clock);
       if (!step.ok || !scheduleChanged) return step;
       return ops.changeSourceSchedule(step.data, source.id, { startDate, amountCents: cents!, rule: r }, clock);
     });
@@ -211,16 +296,6 @@ export function SourceForm({
     <form onSubmit={submit} noValidate className="stack">
       <Field label={copy.nameLabel} error={fieldErrors.description}>
         {(p) => <input {...p} type="text" maxLength={80} placeholder={copy.placeholder} value={description} onChange={(e) => setDescription(e.target.value)} data-autofocus />}
-      </Field>
-      <Field label="Category (optional)">
-        {(p) => (
-          <select {...p} value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="">None</option>
-            {copy.categories.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-        )}
       </Field>
       {source && !source.active && <p className="callout callout-info">This item is turned off. Turn it back on to change its amount or schedule.</p>}
       {source && source.active && !fresh && (
@@ -243,6 +318,7 @@ export function SourceForm({
       <RecurrenceFields value={rule} onChange={setRule} />
         </>
       )}
+      <TagInput value={tags} onChange={setTags} />
       <FormError message={error} />
       <div className="form-actions">
         <button type="button" className="button secondary" onClick={onDone}>
@@ -256,12 +332,13 @@ export function SourceForm({
   );
 }
 
-export function OneTimeForm({ kind, onDone }: { kind: 'income' | 'expense'; onDone: () => void }) {
+export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; onDone: () => void }) {
   const { run, today } = useStore();
   const toast = useToast();
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState<DateStr>(today);
+  const [tags, setTags] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -274,7 +351,7 @@ export function OneTimeForm({ kind, onDone }: { kind: 'income' | 'expense'; onDo
     if (!date) errs.date = 'Choose a date.';
     setFieldErrors(errs);
     if (Object.keys(errs).length) return;
-    const result = run((d, clock) => ops.addOneTime(d, { kind, description, amountCents: cents!, date }, clock));
+    const result = run((d, clock) => ops.addOneTime(d, { kind, description, tags, amountCents: cents!, date }, clock));
     if (!result.ok) return setError(result.error);
     toast(`Added ${description.trim()} on ${formatMedium(date)}.`);
     onDone();
@@ -285,7 +362,7 @@ export function OneTimeForm({ kind, onDone }: { kind: 'income' | 'expense'; onDo
       <p className="hint">This happens once and will not repeat.</p>
       <Field label="Description" error={fieldErrors.description}>
         {(p) => (
-          <input {...p} type="text" maxLength={80} placeholder={kind === 'income' ? 'e.g. Tax refund' : 'e.g. Car repair'} value={description} onChange={(e) => setDescription(e.target.value)} data-autofocus />
+          <input {...p} type="text" maxLength={80} placeholder={kind === 'income' ? 'e.g. Tax refund' : kind === 'savings' ? 'e.g. Extra deposit' : 'e.g. Car repair'} value={description} onChange={(e) => setDescription(e.target.value)} data-autofocus />
         )}
       </Field>
       <Field label="Expected amount" error={fieldErrors.amount}>
@@ -294,13 +371,14 @@ export function OneTimeForm({ kind, onDone }: { kind: 'income' | 'expense'; onDo
       <Field label="Expected date" error={fieldErrors.date}>
         {(p) => <input {...p} type="date" value={date} onChange={(e) => setDate(e.target.value)} />}
       </Field>
+      <TagInput value={tags} onChange={setTags} />
       <FormError message={error} />
       <div className="form-actions">
         <button type="button" className="button secondary" onClick={onDone}>
           Cancel
         </button>
         <button type="submit" className="button primary">
-          Add one-time {kind}
+          Add one-time {KIND_COPY[kind].noun}
         </button>
       </div>
     </form>

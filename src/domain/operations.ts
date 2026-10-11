@@ -47,6 +47,35 @@ function validateAmount(amountCents: Cents, label = 'Amount'): string | null {
   return null;
 }
 
+export const MAX_TAGS = 10;
+export const MAX_TAG_LENGTH = 24;
+
+/**
+ * Cleans user-entered tags: trims, collapses spaces, drops empties, removes
+ * case-insensitive duplicates (keeping the first spelling), and caps length
+ * and count. Tags are always the user's own words; none are built in.
+ */
+export function normalizeTags(tags: string[] | undefined, limit = MAX_TAGS): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of tags ?? []) {
+    const tag = raw.replace(/\s+/g, ' ').trim().slice(0, MAX_TAG_LENGTH);
+    const key = tag.toLowerCase();
+    if (!tag || seen.has(key)) continue;
+    seen.add(key);
+    out.push(tag);
+    if (out.length === limit) break;
+  }
+  return out;
+}
+
+/** Every tag the user has created, for suggestions. Sorted, case-insensitively unique (no cap on count). */
+export function allTags(data: AppData): string[] {
+  // De-duplicate in the order tags were created (keeping the user's first spelling), then sort.
+  const tags = [...data.sources.flatMap((s) => s.tags), ...data.records.flatMap((r) => r.tags)];
+  return normalizeTags(tags, Infinity).sort((a, b) => a.localeCompare(b));
+}
+
 function validateDescription(description: string): string | null {
   if (description.trim() === '') return 'Enter a description.';
   if (description.trim().length > 80) return 'Keep the description under 80 characters.';
@@ -60,7 +89,7 @@ function validateDescription(description: string): string | null {
 export interface SourceInput {
   kind: TransactionKind;
   description: string;
-  category?: string;
+  tags?: string[];
   amountCents: Cents;
   startDate: DateStr;
   rule: RecurrenceRule;
@@ -78,7 +107,7 @@ export function addSource(data: AppData, input: SourceInput, clock: Clock, id = 
     id,
     kind: input.kind,
     description: input.description.trim(),
-    category: (input.category ?? '').trim(),
+    tags: normalizeTags(input.tags),
     versions: [{ id: newId('ver'), startDate: input.startDate, amountCents: input.amountCents, rule: input.rule }],
     active: true,
     endDate: null,
@@ -98,13 +127,13 @@ function withSource(data: AppData, id: string, fn: (s: RecurringSource) => Recur
 }
 
 /** Rename / recategorize. Does not touch amounts, dates, or recorded outcomes. */
-export function updateSourceDetails(data: AppData, id: string, details: { description: string; category?: string }, clock: Clock): Result {
+export function updateSourceDetails(data: AppData, id: string, details: { description: string; tags?: string[] }, clock: Clock): Result {
   const err = validateDescription(details.description);
   if (err) return fail(err);
   return withSource(data, id, (s) => ({
     ...s,
     description: details.description.trim(),
-    category: (details.category ?? s.category).trim(),
+    tags: details.tags ? normalizeTags(details.tags) : s.tags,
     updatedAt: clock.now,
   }));
 }
@@ -167,7 +196,7 @@ export function redefineSource(data: AppData, id: string, input: Omit<SourceInpu
   return withSource(data, id, (s) => ({
     ...s,
     description: input.description.trim(),
-    category: (input.category ?? '').trim(),
+    tags: normalizeTags(input.tags),
     versions: [{ id: newId('ver'), startDate: input.startDate, amountCents: input.amountCents, rule: input.rule }],
     updatedAt: clock.now,
   }));
@@ -220,7 +249,8 @@ export function reactivateSource(data: AppData, id: string, nextDate: DateStr, c
 // ---------------------------------------------------------------------------
 
 export interface OneTimeInput {
-  kind: 'income' | 'expense';
+  kind: Exclude<TransactionKind, 'subscription' | 'liability'>;
+  tags?: string[];
   description: string;
   amountCents: Cents;
   date: DateStr;
@@ -237,6 +267,7 @@ export function addOneTime(data: AppData, input: OneTimeInput, clock: Clock, id 
     sourceId: null,
     kind: input.kind,
     description: input.description.trim(),
+    tags: normalizeTags(input.tags),
     expectedDate: input.date,
     expectedAmountCents: input.amountCents,
     scheduledDate: input.date,

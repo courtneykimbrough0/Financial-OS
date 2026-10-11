@@ -72,38 +72,58 @@ try {
   await sheet.getByRole('button', { name: 'Save' }).click();
   await page.getByText('Every 2 weeks · next Oct 15, 2026').waitFor();
   assert.match(await page.locator('.entry-list').innerText(), /\+\$1,800\.00/);
+  // $1,800 every 2 weeks = $3,900 in an average month.
+  assert.match(await page.locator('.left-to-spend').innerText(), /Left to spend[\s\S]*\$3,900\.00/);
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  step('onboarding: expenses');
-  await page.getByRole('button', { name: 'Add an expense' }).click();
-  sheet = page.getByRole('dialog', { name: 'Add an expense' });
-  await sheet.getByLabel('What is this expense?').fill('Phone');
+  step('onboarding: expenses (bills, subscriptions, liabilities on one step)');
+  await page.getByRole('button', { name: 'Add a bill' }).click();
+  sheet = page.getByRole('dialog', { name: 'Add a bill' });
+  await sheet.getByLabel('What is this bill?').fill('Phone');
   await sheet.getByLabel('Amount you expect to pay').fill('60');
   await sheet.getByLabel('Next due date').fill('2026-10-25');
   await sheet.getByRole('button', { name: 'Save' }).click();
-  await page.getByRole('button', { name: 'Add another expense' }).click();
-  sheet = page.getByRole('dialog', { name: 'Add an expense' });
-  await sheet.getByLabel('What is this expense?').fill('Rent');
+  await page.getByRole('button', { name: 'Add a bill' }).click();
+  sheet = page.getByRole('dialog', { name: 'Add a bill' });
+  await sheet.getByLabel('What is this bill?').fill('Rent');
   await sheet.getByLabel('Amount you expect to pay').fill('1,200');
   await sheet.getByLabel('Next due date').fill('2026-11-01');
+  // Tags are optional and typed by the user.
+  await sheet.getByLabel('Tags (optional)').fill('Housing');
+  await sheet.getByRole('button', { name: 'Add tag' }).click();
+  await sheet.getByRole('button', { name: 'Remove tag Housing' }).waitFor();
+  await shot('02b-bill-with-tag');
   await sheet.getByRole('button', { name: 'Save' }).click();
-  await page.getByRole('button', { name: 'Continue' }).click();
-
-  step('onboarding: liabilities');
+  assert.match(await page.locator('.left-to-spend').innerText(), /\$2,640\.00/);
   await page.getByRole('button', { name: 'Add a payment' }).click();
   sheet = page.getByRole('dialog', { name: 'Add a payment' });
   await sheet.getByLabel('What is this payment for?').fill('Car loan');
   await sheet.getByLabel('Payment amount').fill('350');
   await sheet.getByLabel('Next payment due date').fill('2026-10-20');
   await sheet.getByRole('button', { name: 'Save' }).click();
+  assert.match(await page.locator('.left-to-spend').innerText(), /\$2,290\.00/);
+  await shot('02c-expenses-step');
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  step('onboarding: review');
+  step('onboarding: savings and spending are optional');
+  await page.getByRole('heading', { name: 'Do you set money aside?' }).waitFor();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('heading', { name: 'What do you spend regularly?' }).waitFor();
+  await page.getByRole('button', { name: 'Continue' }).click();
+
+  step('onboarding: review with monthly breakdown');
   await page.getByText('Next expected payday', { exact: true }).waitFor();
   const hero = await page.locator('.review-hero').innerText();
   assert.match(hero, /Oct 15[\s\S]*in 4 days/);
   assert.match(hero, /Lowest point before Oct 28: \$1,390\.00/);
-  assert.match(await page.locator('main').innerText(), /INCOME[\s\S]*Paycheck[\s\S]*EXPENSES[\s\S]*Phone[\s\S]*Rent[\s\S]*LIABILITY PAYMENTS[\s\S]*Car loan/i);
+  const breakdown = await page.locator('section[aria-labelledby="breakdown-month"]').innerText();
+  assert.match(breakdown, /Income\s+\+\$3,900\.00/);
+  assert.match(breakdown, /Expenses\s+−\$1,610\.00/);
+  assert.match(breakdown, /Bills\s+\$1,260\.00/);
+  assert.match(breakdown, /Liability payments\s+\$350\.00/);
+  assert.match(breakdown, /Left to spend\s+\$2,290\.00/);
+  assert.match(await page.locator('section[aria-labelledby="breakdown-tags"]').innerText(), /Housing[\s\S]*−\$1,200\.00/);
+  assert.match(await page.locator('main').innerText(), /INCOME[\s\S]*Paycheck[\s\S]*EXPENSES[\s\S]*Phone[\s\S]*Rent[\s\S]*Car loan[\s\S]*SAVINGS[\s\S]*SPENDING/i);
   await shot('03-review');
   await page.getByRole('button', { name: 'See my forecast' }).click();
 
@@ -111,14 +131,14 @@ try {
   await page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
   const kpiText = await page.locator('.kpis').innerText();
   assert.match(kpiText, /Projected income\s+\$3,600\.00/);
-  assert.match(kpiText, /Projected expenses[\s\S]*?\$410\.00/);
+  assert.match(kpiText, /Projected money out[\s\S]*?\$410\.00/);
   assert.match(kpiText, /Projected cash flow[\s\S]*?\+\$3,190\.00/);
   await shot('04-dashboard-month');
 
   step('dashboard: week view KPIs follow the period');
   await page.getByRole('tab', { name: 'Week', exact: true }).click();
   await page.getByRole('button', { name: 'Next week' }).click();
-  assert.match(await page.locator('.kpis').innerText(), /Projected income\s+\$0\.00[\s\S]*Projected expenses[\s\S]*?\$350\.00/);
+  assert.match(await page.locator('.kpis').innerText(), /Projected income\s+\$0\.00[\s\S]*Projected money out[\s\S]*?\$350\.00/);
 
   step('dashboard: paycheck view keeps the running tally');
   await page.getByRole('tab', { name: 'Paycheck', exact: true }).click();
@@ -186,6 +206,14 @@ try {
   assert.match(dates, /Oct 16, 2026[\s\S]*Expected \$1,800\.00 on Oct 15, 2026[\s\S]*Received/);
   assert.match(dates, /Oct 29, 2026[\s\S]*\+\$1,800\.00[\s\S]*Expected/);
   await shot('09-income');
+
+  step('liabilities live under Expenses');
+  await page.goto(`${BASE}#/liabilities`);
+  await page.getByRole('tab', { name: 'Liabilities', selected: true }).waitFor();
+  assert.match(await page.locator('.source-card').innerText(), /Car loan/);
+  await page.getByRole('tab', { name: 'Bills' }).click();
+  assert.match(await page.locator('.card-list').innerText(), /Rent[\s\S]*Housing/);
+  await page.goto(`${BASE}#/income`);
 
   step('data persists across reloads');
   await page.reload();

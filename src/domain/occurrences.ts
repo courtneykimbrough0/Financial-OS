@@ -35,6 +35,7 @@ export function expandSource(source: RecurringSource, from: DateStr, to: DateStr
         sourceId: source.id,
         kind: source.kind,
         description: source.description,
+        tags: source.tags,
         expectedDate: date,
         expectedAmountCents: version.amountCents,
         scheduledDate: date,

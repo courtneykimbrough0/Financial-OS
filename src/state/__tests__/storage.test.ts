@@ -27,3 +27,24 @@ describe('LocalStorageAdapter', () => {
     expect(localStorage.getItem(backups[0]!)).toBe('{not json');
   });
 });
+
+describe('migrating data saved by earlier builds', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('turns the old "expense" kind into bills, drops the old fixed categories, and adds empty tags', () => {
+    const old = {
+      schemaVersion: 1,
+      onboardingComplete: true,
+      sources: [
+        { id: 'r', kind: 'expense', description: 'Rent', category: 'Housing', versions: [{ id: 'v', startDate: '2026-11-01', amountCents: 120000, rule: { type: 'monthly' } }], active: true, endDate: null, createdAt: 'x', updatedAt: 'x' },
+      ],
+      records: [
+        { id: 'one', sourceId: null, kind: 'expense', description: 'Repair', expectedDate: '2026-10-20', expectedAmountCents: 5000, scheduledDate: '2026-10-20', scheduledAmountCents: 5000, status: 'scheduled', actualDate: null, actualAmountCents: null, completedAt: null, canceledAt: null, cancelNote: null, createdAt: 'x', updatedAt: 'x' },
+      ],
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(old));
+    const data = new LocalStorageAdapter().load();
+    expect(data.sources[0]).toMatchObject({ kind: 'bill', tags: [], pausedRanges: [] });
+    expect(data.records[0]).toMatchObject({ kind: 'bill', tags: [] });
+  });
+});

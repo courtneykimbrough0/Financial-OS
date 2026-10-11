@@ -38,8 +38,8 @@ describe('A. Basic projection', () => {
   function data() {
     let d = ops.emptyData();
     d = source(d, today, 'income', 'Paycheck', 2000, '2026-11-15', { type: 'monthly' }, 'pay');
-    d = source(d, today, 'expense', 'Rent', 1200, '2026-12-01', { type: 'monthly' }, 'rent');
-    d = source(d, today, 'expense', 'Internet', 100, '2026-11-05', { type: 'monthly' }, 'net');
+    d = source(d, today, 'bill', 'Rent', 1200, '2026-12-01', { type: 'monthly' }, 'rent');
+    d = source(d, today, 'bill', 'Internet', 100, '2026-11-05', { type: 'monthly' }, 'net');
     return d;
   }
 
@@ -71,7 +71,7 @@ describe('B. Timing gap', () => {
     const today = '2026-11-01';
     let d = ops.emptyData();
     d = source(d, today, 'income', 'Paycheck', 1000, '2026-11-06', { type: 'biweekly' }, 'pay');
-    d = source(d, today, 'expense', 'Rent', 1500, '2026-11-10', { type: 'monthly' }, 'rent');
+    d = source(d, today, 'bill', 'Rent', 1500, '2026-11-10', { type: 'monthly' }, 'rent');
     const f = buildForecast(d, today);
     expect(activity(f, '2026-11-01', '2026-11-30')).toEqual([
       ['2026-11-06', 1000, 1000],
@@ -86,7 +86,7 @@ describe('C. Actual income differs from expectation', () => {
   it('$1,800 expected on the 15th, $1,650 received on the 16th', () => {
     const setup = '2026-11-01';
     let d = source(ops.emptyData(), setup, 'income', 'Paycheck', 1800, '2026-11-15', { type: 'biweekly' }, 'pay');
-    d = source(d, setup, 'expense', 'Groceries', 100, '2026-11-20', { type: 'weekly' }, 'food');
+    d = source(d, setup, 'bill', 'Groceries', 100, '2026-11-20', { type: 'weekly' }, 'food');
     d = unwrap(ops.recordActual(d, occ('pay', '2026-11-15'), { amountCents: usd(1650), date: '2026-11-16' }, clockAt('2026-11-16')));
     const f = buildForecast(d, '2026-11-16');
 
@@ -115,7 +115,7 @@ describe('D. Actual expense differs from expectation', () => {
   it('$200 expected on the 10th, $240 paid on the 12th', () => {
     const setup = '2026-10-31';
     let d = source(ops.emptyData(), setup, 'income', 'Paycheck', 2000, '2026-11-01', { type: 'monthly' }, 'pay');
-    d = source(d, setup, 'expense', 'Insurance', 200, '2026-11-10', { type: 'monthly' }, 'ins');
+    d = source(d, setup, 'bill', 'Insurance', 200, '2026-11-10', { type: 'monthly' }, 'ins');
     const today = '2026-11-12';
     // Before recording: overdue on the 10th.
     let f = buildForecast(d, today);
@@ -164,7 +164,7 @@ describe('F. Recurring schedule change', () => {
   it('$100 becomes $120 from a chosen future occurrence; completed records stay as they were', () => {
     const setup = '2026-11-01';
     let d = source(ops.emptyData(), setup, 'income', 'Paycheck', 2000, '2026-11-01', { type: 'monthly' }, 'pay');
-    d = source(d, setup, 'expense', 'Gym', 100, '2026-11-10', { type: 'monthly' }, 'gym');
+    d = source(d, setup, 'bill', 'Gym', 100, '2026-11-10', { type: 'monthly' }, 'gym');
     d = unwrap(ops.recordActual(d, occ('gym', '2026-11-10'), { amountCents: usd(100), date: '2026-11-10' }, clockAt('2026-11-11')));
     const completedBefore = d.records.find((r) => r.id === occ('gym', '2026-11-10'));
 
@@ -186,7 +186,7 @@ describe('G. One-time transaction', () => {
   it('a one-time $350 expense happens exactly once', () => {
     const today = '2026-11-01';
     let d = source(ops.emptyData(), today, 'income', 'Paycheck', 2000, '2026-11-05', { type: 'biweekly' }, 'pay');
-    d = unwrap(ops.addOneTime(d, { kind: 'expense', description: 'Concert tickets', amountCents: usd(350), date: '2026-11-21' }, clockAt(today), 'tickets'));
+    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Concert tickets', amountCents: usd(350), date: '2026-11-21' }, clockAt(today), 'tickets'));
     const f = buildForecast(d, today, { through: '2028-12-31' });
     const hits = f.entries.filter((e) => e.occurrence.description === 'Concert tickets');
     expect(hits.map((e) => [e.date, e.amountCents])).toEqual([['2026-11-21', usd(350)]]);
@@ -200,7 +200,7 @@ describe('H. Overdue transaction rescheduling', () => {
   it('moves the unpaid expense to the new date only, counted once', () => {
     const setup = '2026-11-01';
     let d = source(ops.emptyData(), setup, 'income', 'Paycheck', 2000, '2026-11-01', { type: 'monthly' }, 'pay');
-    d = source(d, setup, 'expense', 'Water bill', 80, '2026-11-05', { type: 'monthly' }, 'water');
+    d = source(d, setup, 'bill', 'Water bill', 80, '2026-11-05', { type: 'monthly' }, 'water');
     const today = '2026-11-07';
     expect(overdueEntries(buildForecast(d, today)).map((e) => e.occurrence.id)).toContain(occ('water', '2026-11-05'));
 
@@ -219,7 +219,7 @@ describe('I. Canceled transaction', () => {
   it('stops affecting the forecast and is recorded as canceled, not completed', () => {
     const today = '2026-11-01';
     let d = source(ops.emptyData(), today, 'income', 'Paycheck', 2000, '2026-11-02', { type: 'monthly' }, 'pay');
-    d = source(d, today, 'expense', 'Streaming', 15, '2026-11-12', { type: 'monthly' }, 'tv');
+    d = source(d, today, 'bill', 'Streaming', 15, '2026-11-12', { type: 'monthly' }, 'tv');
     d = unwrap(ops.cancelOccurrence(d, occ('tv', '2026-11-12'), 'Paused this month', clockAt(today)));
     const f = buildForecast(d, today);
     const canceled = f.entries.find((e) => e.occurrence.id === occ('tv', '2026-11-12'))!;
@@ -239,10 +239,10 @@ function richData(): { d: AppData; today: string } {
   let d = ops.emptyData();
   d = source(d, setup, 'income', 'Paycheck', 1800, '2026-11-06', { type: 'biweekly' }, 'pay');
   d = source(d, setup, 'income', 'Benefits', 450, '2026-11-03', { type: 'monthly' }, 'ben');
-  d = source(d, setup, 'expense', 'Rent', 1400, '2026-11-01', { type: 'monthly' }, 'rent');
-  d = source(d, setup, 'expense', 'Groceries', 120.55, '2026-11-02', { type: 'weekly' }, 'food');
+  d = source(d, setup, 'bill', 'Rent', 1400, '2026-11-01', { type: 'monthly' }, 'rent');
+  d = source(d, setup, 'bill', 'Groceries', 120.55, '2026-11-02', { type: 'weekly' }, 'food');
   d = source(d, setup, 'liability', 'Card payment', 75.1, '2026-11-15', { type: 'twiceMonthly', days: [15, 31] }, 'card');
-  d = unwrap(ops.addOneTime(d, { kind: 'expense', description: 'Repair', amountCents: usd(350), date: '2026-11-18' }, clockAt(setup)));
+  d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(350), date: '2026-11-18' }, clockAt(setup)));
   const today = '2026-11-07';
   d = unwrap(ops.recordActual(d, occ('pay', '2026-11-06'), { amountCents: usd(1712.34), date: '2026-11-07' }, clockAt(today)));
   d = unwrap(ops.cancelOccurrence(d, occ('food', '2026-11-23'), '', clockAt(today)));
@@ -315,7 +315,7 @@ describe('L. Date and recurrence boundaries', () => {
   it('month-end and leap-year dates', () => {
     const today = '2028-01-01';
     let d = source(ops.emptyData(), today, 'income', 'Paycheck', 1000, '2028-01-31', { type: 'monthly' }, 'pay');
-    d = source(d, today, 'expense', 'Rent', 500, '2028-01-30', { type: 'monthly' }, 'rent');
+    d = source(d, today, 'bill', 'Rent', 500, '2028-01-30', { type: 'monthly' }, 'rent');
     const f = buildForecast(d, today);
     const pays = f.entries.filter((e) => e.occurrence.sourceId === 'pay' && e.date <= '2028-05-31').map((e) => e.date);
     expect(pays).toEqual(['2028-01-31', '2028-02-29', '2028-03-31', '2028-04-30', '2028-05-31']);
@@ -328,7 +328,7 @@ describe('L. Date and recurrence boundaries', () => {
     const today = '2026-11-01';
     let d = source(ops.emptyData(), today, 'income', 'Job A', 900, '2026-11-13', { type: 'biweekly' }, 'a');
     d = source(d, today, 'income', 'Job B', 400, '2026-11-13', { type: 'weekly' }, 'b');
-    d = source(d, today, 'expense', 'Car insurance', 150, '2026-11-13', { type: 'monthly' }, 'ins');
+    d = source(d, today, 'bill', 'Car insurance', 150, '2026-11-13', { type: 'monthly' }, 'ins');
     const f = buildForecast(d, today);
     expect(f.anchor).toBe('2026-11-12');
     const row = dailyTimeline(f, '2026-11-13', '2026-11-13')[0]!;

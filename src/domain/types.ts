@@ -1,7 +1,29 @@
 import type { DateStr } from './dates';
 import type { Cents } from './money';
 
-export type TransactionKind = 'income' | 'expense' | 'liability';
+/**
+ * What a transaction is. Kinds roll up into four groups:
+ *   Income
+ *   Expenses: bills, subscriptions, liability payments
+ *   Savings
+ *   Spending
+ * Every kind except income is money going out in the forecast.
+ */
+export type TransactionKind = 'income' | 'bill' | 'subscription' | 'liability' | 'savings' | 'spending';
+export type KindGroup = 'income' | 'expenses' | 'savings' | 'spending';
+
+export const KINDS: TransactionKind[] = ['income', 'bill', 'subscription', 'liability', 'savings', 'spending'];
+export const EXPENSE_KINDS: TransactionKind[] = ['bill', 'subscription', 'liability'];
+
+export function groupOf(kind: TransactionKind): KindGroup {
+  if (kind === 'income' || kind === 'savings' || kind === 'spending') return kind;
+  return 'expenses';
+}
+
+/** Past-tense verb for a completed occurrence: received, paid, saved, spent. */
+export function doneVerb(kind: TransactionKind): string {
+  return kind === 'income' ? 'received' : kind === 'savings' ? 'saved' : kind === 'spending' ? 'spent' : 'paid';
+}
 
 /**
  * How a recurring source repeats. The first occurrence is always the schedule
@@ -41,7 +63,8 @@ export interface RecurringSource {
   id: string;
   kind: TransactionKind;
   description: string;
-  category: string;
+  /** Optional labels the user creates (e.g. "housing"). Never pre-filled. */
+  tags: string[];
   /** Sorted ascending by startDate; never empty. */
   versions: ScheduleVersion[];
   active: boolean;
@@ -72,6 +95,8 @@ export interface OccurrenceRecord {
   sourceId: string | null;
   kind: TransactionKind;
   description: string;
+  /** One-time items carry their own tags; recurring occurrences copy their source's. */
+  tags: string[];
   expectedDate: DateStr;
   expectedAmountCents: Cents;
   scheduledDate: DateStr;
@@ -105,8 +130,18 @@ export interface AppData {
 
 export const KIND_LABEL: Record<TransactionKind, string> = {
   income: 'Income',
-  expense: 'Expense',
+  bill: 'Bill',
+  subscription: 'Subscription',
   liability: 'Liability payment',
+  savings: 'Savings',
+  spending: 'Spending',
+};
+
+export const GROUP_LABEL: Record<KindGroup, string> = {
+  income: 'Income',
+  expenses: 'Expenses',
+  savings: 'Savings',
+  spending: 'Spending',
 };
 
 /** Sign convention: income raises the tally; expenses and liability payments lower it. */

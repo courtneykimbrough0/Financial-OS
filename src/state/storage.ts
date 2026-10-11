@@ -6,7 +6,7 @@
  */
 import { isValidDateStr } from '../domain/dates';
 import { emptyData } from '../domain/operations';
-import type { AppData, OccurrenceRecord, RecurringSource } from '../domain/types';
+import type { AppData, OccurrenceRecord, RecurringSource, TransactionKind } from '../domain/types';
 
 export interface StorageAdapter {
   load(): AppData;
@@ -17,12 +17,19 @@ export const STORAGE_KEY = 'financial-os:data';
 /** Synthetic demonstration data lives under its own key and never touches real data. */
 export const SAMPLE_STORAGE_KEY = 'financial-os:sample-data';
 
+const KNOWN_KINDS = ['income', 'bill', 'subscription', 'liability', 'savings', 'spending', 'expense'];
+
+/** Early builds used a single "expense" kind; those are bills now. */
+function upgradeKind(kind: string): TransactionKind {
+  return (kind === 'expense' ? 'bill' : kind) as TransactionKind;
+}
+
 function isSource(s: unknown): s is RecurringSource {
   if (!s || typeof s !== 'object') return false;
   const v = s as RecurringSource;
   return (
     typeof v.id === 'string' &&
-    ['income', 'expense', 'liability'].includes(v.kind) &&
+    KNOWN_KINDS.includes(v.kind) &&
     typeof v.description === 'string' &&
     Array.isArray(v.versions) &&
     v.versions.length > 0 &&
@@ -35,7 +42,7 @@ function isRecord(r: unknown): r is OccurrenceRecord {
   const v = r as OccurrenceRecord;
   return (
     typeof v.id === 'string' &&
-    ['income', 'expense', 'liability'].includes(v.kind) &&
+    KNOWN_KINDS.includes(v.kind) &&
     isValidDateStr(v.expectedDate) &&
     isValidDateStr(v.scheduledDate) &&
     Number.isSafeInteger(v.expectedAmountCents) &&
@@ -56,8 +63,8 @@ export function migrate(raw: unknown): AppData {
     schemaVersion: 1,
     onboardingComplete: Boolean(doc.onboardingComplete),
     ...(doc.isSample ? { isSample: true } : {}),
-    sources: sources.map((s) => ({ ...s, category: s.category ?? '', pausedRanges: s.pausedRanges ?? [], endDate: s.endDate ?? null })),
-    records,
+    sources: sources.map(({ category: _oldCategory, ...s }: RecurringSource & { category?: unknown }) => ({ ...s, kind: upgradeKind(s.kind), tags: Array.isArray(s.tags) ? s.tags : [], pausedRanges: s.pausedRanges ?? [], endDate: s.endDate ?? null })),
+    records: records.map((r) => ({ ...r, kind: upgradeKind(r.kind), tags: Array.isArray(r.tags) ? r.tags : [] })),
   };
 }
 

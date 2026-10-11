@@ -31,11 +31,12 @@ The sample (`src/domain/sample.ts`) covers recurring income, rent, utilities, a 
 
 | Screen | Purpose |
 | --- | --- |
-| Onboarding | Five short steps: welcome, recurring income, expenses, liabilities, review. Shows the next payday and forecast start before you reach the dashboard. |
-| Dashboard | Month / Week / Paycheck / Custom views. Each view has KPI cards, a calendar, details for the selected day, a day-by-day timeline with the running tally, the lowest point, and below-zero stretches. The month view also has expandable week summaries. Overdue items are listed at the top. |
+| Guided setup | Six steps: welcome, income, expenses (bills, subscriptions, liability payments), savings, spending, review. A **Left to spend** figure updates as you add items. The review shows the next payday, a monthly breakdown by category, and totals by tag. |
+| Dashboard | Month / Week / Paycheck / Custom views. Each view has a summary card (lowest point, timing gap, next payday), a calendar with period totals, and a Week by week / Day by day breakdown. Days and weeks open in sheets. Overdue items sit behind a banner at the top. |
 | Income | Recurring income (add, edit from an effective date, turn off/on) and one-time income. |
-| Expenses | Recurring expenses and one-time expenses. |
-| Liabilities | Recurring liability payments. These count once, as money out. |
+| Expenses | Three tabs: **Bills** (with one-time expenses), **Subscriptions**, and **Liabilities**. Liability payments count once, as money out. |
+| Savings | Money set aside on a schedule, plus one-time deposits. |
+| Spending | Everyday spending on a schedule (e.g. groceries), plus one-time spending. |
 
 Tap any transaction to mark it received/paid, change its date or amount, cancel it, undo, or fix a recorded actual.
 
@@ -89,7 +90,23 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 
 **Running tally.** `tally(d) = tally(d−1) + income(d) − outflows(d)` for each day after the anchor. Days on or before the anchor show "—". A week, pay period, or custom range that starts later carries the cumulative value forward from the anchor and never restarts at $0. A negative tally means scheduled outflows have run ahead of inflows since the anchor. The UI calls it "projected cash flow" and never "balance".
 
-**KPIs.** Projected income, projected expenses (liability payments included), and projected cash flow (income − expenses) are the sums of counted entries whose effective date falls within the selected period.
+**KPIs.** Projected income, projected money out (expenses, savings, and spending), and projected cash flow (income − money out) are the sums of counted entries whose effective date falls within the selected period.
+
+**Categories.** Every item is one of six kinds, grouped as:
+
+1. Income
+2. Expenses: bills, subscriptions, liability payments
+3. Savings
+4. Spending
+
+Every kind except income is money out in the forecast.
+
+**Tags.** Tags are optional, free-text labels (e.g. "housing", "gaming") that the user adds to any item. None are built in. The only suggestions offered are tags the user has already created.
+
+**Left to spend** (`src/domain/plan.ts`) is monthly income minus monthly expenses (bills, subscriptions, and liability payments). Savings and spending are shown separately as uses of what's left; they are not subtracted.
+- Each active recurring item is converted to an average month: weekly ×52/12, every 2 weeks ×26/12, twice a month ×2, monthly ×1, and custom intervals in proportion.
+- Each item is rounded to whole cents once, so every subtotal is an exact sum of the items under it.
+- One-time items are left out, since they don't repeat.
 
 **Weeks.** Weeks run Sunday through Saturday. Month summaries split weeks at the month's edges, so the weekly totals add up exactly to the month.
 

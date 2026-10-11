@@ -1,8 +1,8 @@
 import { createPortal } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { AlertCircle, Ban, Banknote, Check, CircleDashed, CreditCard, Receipt, X, type LucideIcon } from 'lucide-react';
+import { AlertCircle, Ban, Banknote, Check, CircleDashed, CreditCard, PiggyBank, Receipt, Repeat, ShoppingBag, Tag, X, type LucideIcon } from 'lucide-react';
 import { formatMoney } from '../../domain/money';
-import type { OccurrenceStatus, TransactionKind } from '../../domain/types';
+import { doneVerb, KIND_LABEL, type OccurrenceStatus, type TransactionKind } from '../../domain/types';
 
 // ---------------------------------------------------------------------------
 // Icons: one line-icon set (Lucide) at one stroke weight, always decorative
@@ -15,8 +15,11 @@ export function Icon({ icon: I, size = 20, label, className }: { icon: LucideIco
 
 export const KIND_ICON: Record<TransactionKind, LucideIcon> = {
   income: Banknote,
-  expense: Receipt,
+  bill: Receipt,
+  subscription: Repeat,
   liability: CreditCard,
+  savings: PiggyBank,
+  spending: ShoppingBag,
 };
 
 /** Round leading avatar for a transaction, colored and shaped by kind. */
@@ -168,7 +171,7 @@ const STATUS_ICON: Record<OccurrenceStatus, LucideIcon> = {
 
 export function StatusBadge({ status, kind }: { status: OccurrenceStatus; kind?: TransactionKind }) {
   let label = STATUS_LABEL[status];
-  if (status === 'completed' && kind) label = kind === 'income' ? 'Received' : 'Paid';
+  if (status === 'completed' && kind) label = doneVerb(kind).replace(/^./, (c) => c.toUpperCase());
   return (
     <span className={`badge badge-${status}`}>
       <Icon icon={STATUS_ICON[status]} size={13} /> {label}
@@ -177,8 +180,24 @@ export function StatusBadge({ status, kind }: { status: OccurrenceStatus; kind?:
 }
 
 export function KindTag({ kind }: { kind: TransactionKind }) {
-  const label = kind === 'income' ? 'Money in' : kind === 'liability' ? 'Liability' : 'Expense';
+  const label = kind === 'income' ? 'Money in' : kind === 'liability' ? 'Liability' : KIND_LABEL[kind];
   return <span className={`kind-tag kind-${kind}`}>{label}</span>;
+}
+
+/** User-created tags shown as small pills. Renders nothing when there are none. */
+export function TagList({ tags }: { tags: string[] }) {
+  if (tags.length === 0) return null;
+  return (
+    <span className="tag-list">
+      <span className="sr-only">Tags: </span>
+      {tags.map((t) => (
+        <span key={t} className="tag">
+          <Icon icon={Tag} size={11} />
+          {t}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 /** Amount with an explicit +/− sign by direction. */
