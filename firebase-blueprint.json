@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile document containing authentication metadata",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Firebase Auth user ID",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address",
+          "maxLength": 256
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "email"]
+    },
+    "FinancialData": {
+      "title": "FinancialData",
+      "description": "Forecast document containing recurring sources and occurrence records",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth user ID of the owner",
+          "maxLength": 128
+        },
+        "schemaVersion": {
+          "type": "number",
+          "description": "Data schema version"
+        },
+        "revision": {
+          "type": "number",
+          "description": "Optimistic concurrency revision number"
+        },
+        "onboardingComplete": {
+          "type": "boolean",
+          "description": "Flag indicating if onboarding was completed"
+        },
+        "sources": {
+          "type": "array",
+          "description": "Recurring income and expense sources"
+        },
+        "records": {
+          "type": "array",
+          "description": "Materialized occurrence records"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp of the last modification",
+          "maxLength": 64
+        }
+      },
+      "required": ["userId", "schemaVersion", "revision", "onboardingComplete", "sources", "records"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile collection partitioned by user ID"
+    },
+    "/users/{userId}/data/{docId}": {
+      "schema": "FinancialData",
+      "description": "User financial forecast data document"
+    }
+  }
+}
