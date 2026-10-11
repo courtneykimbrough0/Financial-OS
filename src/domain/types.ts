@@ -129,7 +129,13 @@ export interface Occurrence extends OccurrenceRecord {
 }
 
 export interface AppData {
-  schemaVersion: 1;
+  schemaVersion: 2;
+  /**
+   * Increases by one with every successful save. A save is accepted only when
+   * it is based on the revision currently stored, so an out-of-date copy
+   * (another tab, another device) can never overwrite newer data.
+   */
+  revision: number;
   onboardingComplete: boolean;
   /** True for synthetic demonstration data, which is stored apart from real data. */
   isSample?: boolean;

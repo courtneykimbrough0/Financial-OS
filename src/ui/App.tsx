@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CreditCard, HandCoins, LayoutGrid, Receipt, type LucideIcon } from 'lucide-react';
 import { useDataMode } from '../state/mode';
 import { useStore } from '../state/store';
+import { DownloadBackupButton, RestoreBackupButton, SaveStatusBar } from './components/backup';
 import { Icon, Modal } from './components/common';
 import { navigate, useRoute, type Route } from './router';
 import { Dashboard } from './screens/Dashboard';
@@ -62,6 +63,7 @@ export function App() {
         )}
       </header>
       <main id="main" className={showNav ? 'with-nav' : ''}>
+        <SaveStatusBar />
         {data.isSample && <SampleBanner />}
         {route === 'onboarding' && <Onboarding />}
         {route === 'dashboard' && <Dashboard />}
@@ -114,11 +116,15 @@ function DataNotice() {
   const [confirming, setConfirming] = useState(false);
   return (
     <footer className="data-notice">
-      <p>Your data is saved in this browser on this device only. It is not backed up or synced to other devices, and clearing your browser’s site data removes it.</p>
+      <p>Your data is saved in this browser on this device only. It isn’t synced to other devices, and clearing your browser’s site data removes it. Download a backup to keep a copy or move it to another device.</p>
       {!data.isSample && (
-        <button type="button" className="button small link" onClick={() => setConfirming(true)}>
-          Explore with sample data
-        </button>
+        <div className="data-actions">
+          <DownloadBackupButton />
+          <RestoreBackupButton />
+          <button type="button" className="button small link" onClick={() => setConfirming(true)}>
+            Explore with sample data
+          </button>
+        </div>
       )}
       {confirming && (
         <Modal title="Explore with sample data?" onClose={() => setConfirming(false)}>
@@ -135,8 +141,7 @@ function DataNotice() {
                 type="button"
                 className="button primary"
                 onClick={() => {
-                  enterSample();
-                  navigate('dashboard');
+                  void enterSample().then(() => navigate('dashboard'));
                 }}
               >
                 Show sample data

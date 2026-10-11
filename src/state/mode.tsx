@@ -10,7 +10,7 @@ const MODE_KEY = 'financial-os:mode';
 interface ModeApi {
   mode: DataMode;
   /** Switches to a fresh copy of the sample data. Real data is left untouched. */
-  enterSample: () => void;
+  enterSample: () => Promise<void>;
   /** Discards the sample data and returns to the user's own data. */
   exitSample: () => void;
 }
@@ -34,8 +34,11 @@ export function DataModeProvider({ children, storage = window.localStorage }: { 
   const [mode, setMode] = useState<DataMode>(() => readMode(storage));
   const adapter = useMemo(() => new LocalStorageAdapter(storage, mode === 'sample' ? SAMPLE_STORAGE_KEY : STORAGE_KEY), [storage, mode]);
 
-  const enterSample = useCallback(() => {
-    new LocalStorageAdapter(storage, SAMPLE_STORAGE_KEY).save(buildSampleData(todayLocal()));
+  const enterSample = useCallback(async () => {
+    const sample = new LocalStorageAdapter(storage, SAMPLE_STORAGE_KEY);
+    await sample.clear();
+    const result = await sample.save(buildSampleData(todayLocal()), 0);
+    if (!result.ok) throw new Error(result.message);
     storage.setItem(MODE_KEY, 'sample');
     setMode('sample');
   }, [storage]);

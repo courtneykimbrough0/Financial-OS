@@ -359,11 +359,11 @@ describe('L. Date and recurrence boundaries', () => {
 describe('M. Persistence', () => {
   beforeEach(() => localStorage.clear());
 
-  it('schedules and recorded outcomes survive a reload without duplicating transactions', () => {
+  it('schedules and recorded outcomes survive a reload without duplicating transactions', async () => {
     const { d, today } = richData();
-    new LocalStorageAdapter().save(d);
-    const reloaded = new LocalStorageAdapter().load();
-    expect(reloaded).toEqual(d);
+    expect(await new LocalStorageAdapter().save(d, 0)).toEqual({ ok: true, revision: 1 });
+    const reloaded = await new LocalStorageAdapter().load();
+    expect(reloaded).toEqual({ ...d, revision: 1 });
 
     const before = buildForecast(d, today);
     const after = buildForecast(reloaded, today);
@@ -373,8 +373,8 @@ describe('M. Persistence', () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(findOccurrence(reloaded, occ('pay', '2026-11-06'), today)).toMatchObject({ status: 'completed', actualAmountCents: usd(1712.34), expectedAmountCents: usd(1800) });
 
-    // Reloading and saving again (as each app session does) changes nothing.
-    new LocalStorageAdapter().save(reloaded);
-    expect(new LocalStorageAdapter().load()).toEqual(d);
+    // Reloading and saving again (as each app session does) changes nothing but the revision.
+    await new LocalStorageAdapter().save(reloaded, reloaded.revision);
+    expect(await new LocalStorageAdapter().load()).toEqual({ ...d, revision: 2 });
   });
 });

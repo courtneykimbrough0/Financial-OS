@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { buildForecast, tallyOn } from '../../domain/forecast';
@@ -23,8 +23,9 @@ function Spy() {
   return null;
 }
 
-function renderSheet(adapter: MemoryAdapter, today: string, onClose = () => {}) {
-  return render(
+/** Renders the sheet and waits for the store to finish loading. */
+async function renderSheet(adapter: MemoryAdapter, today: string, onClose = () => {}) {
+  render(
     <StoreProvider adapter={adapter} today={today}>
       <ToastProvider>
         <Spy />
@@ -32,6 +33,17 @@ function renderSheet(adapter: MemoryAdapter, today: string, onClose = () => {}) 
       </ToastProvider>
     </StoreProvider>,
   );
+  await screen.findByRole('dialog');
+}
+
+/** Waits until the background save has written `count` records. */
+async function savedWith(adapter: MemoryAdapter, count: number): Promise<AppData> {
+  let saved: AppData | null = null;
+  await waitFor(async () => {
+    saved = await adapter.load();
+    expect(saved.records).toHaveLength(count);
+  });
+  return saved!;
 }
 
 describe('OccurrenceSheet', () => {
@@ -39,7 +51,7 @@ describe('OccurrenceSheet', () => {
     const user = userEvent.setup();
     const adapter = new MemoryAdapter(seed());
     let closed = false;
-    renderSheet(adapter, '2026-10-16', () => (closed = true));
+    await renderSheet(adapter, '2026-10-16', () => (closed = true));
 
     expect(screen.getByText(/hasn’t been marked received/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Mark received' }));
@@ -54,8 +66,7 @@ describe('OccurrenceSheet', () => {
     await user.click(screen.getByRole('button', { name: 'Save as received' }));
 
     expect(closed).toBe(true);
-    const saved = adapter.load();
-    expect(saved.records).toHaveLength(1);
+    const saved = await savedWith(adapter, 1);
     expect(saved.records[0]).toMatchObject({
       expectedAmountCents: 180000,
       expectedDate: '2026-10-15',
@@ -70,38 +81,40 @@ describe('OccurrenceSheet', () => {
 
   it('saves only one completion when the save button is tapped twice', async () => {
     const adapter = new MemoryAdapter(seed());
-    renderSheet(adapter, '2026-10-16');
+    await renderSheet(adapter, '2026-10-16');
     fireEvent.click(screen.getByRole('button', { name: 'Mark received' }));
     const save = screen.getByRole('button', { name: 'Save as received' });
     act(() => {
       fireEvent.click(save);
       fireEvent.click(save);
     });
-    expect(adapter.load().records).toHaveLength(1);
     expect(latest!.records).toHaveLength(1);
+    await savedWith(adapter, 1);
+    expect(adapter.saves).toBe(1);
   });
 
   it('blocks an actual date in the future', async () => {
     const user = userEvent.setup();
     const adapter = new MemoryAdapter(seed());
-    renderSheet(adapter, '2026-10-11');
+    await renderSheet(adapter, '2026-10-11');
     await user.click(screen.getByRole('button', { name: 'Mark received' }));
     // Defaults to today because the expected date is still ahead.
     expect(screen.getByLabelText('Date received')).toHaveValue('2026-10-11');
     fireEvent.change(screen.getByLabelText('Date received'), { target: { value: '2026-10-15' } });
     await user.click(screen.getByRole('button', { name: 'Save as received' }));
     expect(screen.getByRole('alert')).toHaveTextContent(/cannot be in the future/);
-    expect(adapter.load().records).toHaveLength(0);
+    expect((await adapter.load()).records).toHaveLength(0);
+    expect(adapter.saves).toBe(0);
   });
 
   it('cancels one occurrence without affecting the next', async () => {
     const user = userEvent.setup();
     const adapter = new MemoryAdapter(seed());
-    renderSheet(adapter, '2026-10-11');
+    await renderSheet(adapter, '2026-10-11');
     await user.click(screen.getByRole('button', { name: 'Cancel this one' }));
     await user.type(screen.getByLabelText('Note (optional)'), 'Unpaid leave');
     await user.click(screen.getByRole('button', { name: 'Cancel occurrence' }));
-    const saved = adapter.load();
+    const saved = await savedWith(adapter, 1);
     expect(saved.records[0]).toMatchObject({ status: 'canceled', cancelNote: 'Unpaid leave', actualAmountCents: null });
     const f = buildForecast(saved, '2026-10-11');
     expect(f.forecastStart).toBe('2026-10-29');

@@ -4,16 +4,32 @@ import type { Clock, Result } from '../domain/operations';
 import type { AppData } from '../domain/types';
 import type { StorageAdapter } from './storage';
 
+/**
+ * idle: everything on screen is saved.
+ * saving: a save is in progress.
+ * error: the latest change could not be saved; retry is available.
+ * conflict: newer data was saved elsewhere; reload to continue.
+ */
+export type SaveStatus = 'idle' | 'saving' | 'error' | 'conflict';
+
 interface Store {
   data: AppData;
   today: DateStr;
   /**
-   * Applies a pure operation to the latest data and saves it. Operations run
-   * against a ref, so two rapid calls (e.g. a double tap) are applied in
-   * sequence and the second sees the first's result; that is what lets the
-   * domain layer reject duplicate completions.
+   * Applies a pure operation to the latest data, shows the result right away,
+   * and saves it in the background. Operations run against a ref, so two rapid
+   * calls (e.g. a double tap) are applied in sequence and the second sees the
+   * first's result; that is what lets the domain layer reject duplicate
+   * completions. Returns the operation's result (validation errors), not the
+   * save outcome, which is reported through `saveStatus`.
    */
   run: (op: (data: AppData, clock: Clock) => Result) => Result;
+  saveStatus: SaveStatus;
+  saveMessage: string | null;
+  /** Try the last failed save again. */
+  retrySave: () => void;
+  /** Discard unsaved changes and load the latest saved data. */
+  reload: () => void;
 }
 
 const StoreContext = createContext<Store | null>(null);
@@ -36,30 +52,132 @@ function useToday(override?: DateStr): DateStr {
 }
 
 export function StoreProvider({ adapter, today: todayOverride, children }: { adapter: StorageAdapter; today?: DateStr; children: ReactNode }) {
-  const [data, setData] = useState<AppData>(() => adapter.load());
-  const dataRef = useRef(data);
+  const [data, setData] = useState<AppData | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [loadCount, setLoadCount] = useState(0);
   const today = useToday(todayOverride);
   const todayRef = useRef(today);
   todayRef.current = today;
 
+  // Latest in-memory data, the revision it was last saved at, and save-loop state.
+  const dataRef = useRef<AppData | null>(null);
+  const savedRevision = useRef(0);
+  const dirty = useRef(false);
+  const saving = useRef(false);
+  /** Why saving is paused, if it is. */
+  const blocked = useRef<'error' | 'conflict' | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setData(null);
+    setLoadError(null);
+    adapter.load().then(
+      (loaded) => {
+        if (cancelled) return;
+        dataRef.current = loaded;
+        savedRevision.current = loaded.revision;
+        dirty.current = false;
+        blocked.current = null;
+        setSaveStatus('idle');
+        setSaveMessage(null);
+        setData(loaded);
+      },
+      (err: unknown) => {
+        if (cancelled) return;
+        console.error(err);
+        setLoadError('Your data could not be loaded.');
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [adapter, loadCount]);
+
+  /** Saves the newest data, one save at a time; changes made meanwhile are coalesced into the next save. */
+  const flush = useCallback(async () => {
+    if (saving.current || blocked.current || !dirty.current || !dataRef.current) return;
+    saving.current = true;
+    setSaveStatus('saving');
+    while (dirty.current && dataRef.current && !blocked.current) {
+      dirty.current = false;
+      const snapshot = dataRef.current;
+      const result = await adapter.save(snapshot, savedRevision.current);
+      if (result.ok) {
+        savedRevision.current = result.revision;
+        continue;
+      }
+      dirty.current = true;
+      blocked.current = result.reason;
+      setSaveStatus(result.reason);
+      setSaveMessage(result.message);
+    }
+    saving.current = false;
+    if (!blocked.current) {
+      setSaveStatus('idle');
+      setSaveMessage(null);
+    }
+  }, [adapter]);
+
   const run = useCallback<Store['run']>(
     (op) => {
+      if (!dataRef.current) return { ok: false, error: 'Still loading. Try again in a moment.' };
+      if (blocked.current === 'conflict') return { ok: false, error: 'Reload to see the latest version before making changes.' };
       const result = op(dataRef.current, { today: todayRef.current, now: new Date().toISOString() });
       if (!result.ok) return result;
-      try {
-        adapter.save(result.data);
-      } catch (err) {
-        console.error(err);
-        return { ok: false, error: 'Your change could not be saved on this device. Check available storage and try again.' };
-      }
       dataRef.current = result.data;
+      dirty.current = true;
       setData(result.data);
+      void flush();
       return result;
     },
-    [adapter],
+    [flush],
   );
 
-  const value = useMemo(() => ({ data, today, run }), [data, today, run]);
+  const retrySave = useCallback(() => {
+    if (blocked.current !== 'error') return;
+    blocked.current = null;
+    void flush();
+  }, [flush]);
+
+  const reload = useCallback(() => setLoadCount((n) => n + 1), []);
+
+  // Warn before closing the page while a change is unsaved.
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (dirty.current || saving.current) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
+
+  const value = useMemo(
+    () => (data ? { data, today, run, saveStatus, saveMessage, retrySave, reload } : null),
+    [data, today, run, saveStatus, saveMessage, retrySave, reload],
+  );
+
+  if (loadError) {
+    return (
+      <div className="load-screen" role="alert">
+        <p>{loadError}</p>
+        <button type="button" className="button primary" onClick={reload}>
+          Try again
+        </button>
+      </div>
+    );
+  }
+  if (!value) {
+    return (
+      <div className="load-screen" role="status" aria-live="polite">
+        <span className="spinner" aria-hidden="true" />
+        <p>Loading your forecast…</p>
+      </div>
+    );
+  }
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 

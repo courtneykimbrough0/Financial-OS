@@ -251,6 +251,24 @@ try {
   await page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
   await shot('10-desktop');
 
+  step('backup: download, wipe the device, restore');
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download backup' }).click()]);
+  assert.equal(download.suggestedFilename(), 'financial-os-backup-2026-10-16.json');
+  const backupPath = `${SHOTS}backup.json`;
+  await download.saveAs(backupPath);
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(BASE);
+  await page.getByRole('heading', { name: 'See your cash flow ahead of time' }).waitFor();
+  await page.locator('input[aria-label="Backup file"]').setInputFiles(backupPath);
+  const restoreSheet = page.getByRole('dialog', { name: 'Restore this backup?' });
+  assert.match(await restoreSheet.innerText(), /This backup has 4 items, saved Oct 16, 2026/);
+  await restoreSheet.getByRole('button', { name: 'Replace with backup' }).click();
+  await page.getByText('Backup restored.').waitFor();
+  await page.getByRole('heading', { name: /Your cash flow/ }).waitFor();
+  await page.goto(`${BASE}#/income`);
+  assert.match(await page.locator('.source-card').innerText(), /Paycheck[\s\S]*Next: Oct 29, 2026/);
+  await page.goto(`${BASE}#/dashboard`);
+
   // The clock still reads Oct 16 here, so sample dates are relative to Oct 16.
   step('sample data: separate from real data, shows the three checkpoint behaviors');
   await page.setViewportSize({ width: 390, height: 844 });

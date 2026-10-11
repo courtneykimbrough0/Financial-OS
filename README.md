@@ -74,7 +74,12 @@ Every dashboard element (calendar, KPIs, summaries, timeline, cycles) reads from
 
 ### Persistence
 
-Data is stored on the device as one versioned JSON document in `localStorage`, behind the `StorageAdapter` interface. That interface keeps the forecast engine and UI independent of storage, so a synced backend can replace localStorage later without changing either. If saved data can't be read, a copy is set aside under a separate key instead of being discarded.
+Data is one versioned JSON document per user (`schemaVersion: 2`), stored on the device in `localStorage` for now. All storage goes through the asynchronous `StorageAdapter` interface (`src/state/storage.ts`), so a server-backed adapter such as Supabase can replace it without changing the forecast engine or UI.
+
+- **Revisions.** Each save increments `revision`. A save is accepted only if it's based on the revision currently stored. Otherwise it is rejected as a conflict, so a stale copy (another tab, later another device) can't overwrite newer data. When that happens, the app shows "Your data was changed somewhere else" with a **Reload** button.
+- **Background saving.** Changes appear on screen immediately and save in the background, one save at a time. Changes made while a save is running are folded into the next save. A failed save keeps the change on screen and shows **Try again**. The page warns before closing if a change is still unsaved. The app shows a loading state until data has loaded.
+- **Backups.** **Download backup** (at the bottom of every main screen) saves a dated JSON file. **Restore from backup** (there and on the setup welcome screen) validates the file the same way saved data is validated, then replaces the current data after the user confirms.
+- If saved data can't be read, a copy is set aside under a separate key instead of being discarded.
 
 ## Forecast rules
 
@@ -143,7 +148,7 @@ The visual language (color, type, spacing, and components) is documented in [DES
 
 ## Known limitations
 
-- Data lives in this browser on one device. It is not backed up, synced, or exportable yet, and clearing site data erases it. The app says so at the bottom of every main screen.
+- Data lives in this browser on one device and isn't synced; clearing site data erases it. Users can download a backup and restore it on any device. The app says so at the bottom of every main screen.
 - USD only.
 - Recurring sources can be turned off but not deleted once they have recorded history. This is intentional, so the history is preserved.
 - Because the anchor moves to the next payday once a paycheck is in the past, items between today and the next payday appear on the calendar and in the KPIs but are outside the running tally until they become overdue.

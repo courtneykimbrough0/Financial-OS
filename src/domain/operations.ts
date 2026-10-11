@@ -32,7 +32,7 @@ export function newId(prefix: string): string {
 }
 
 export function emptyData(): AppData {
-  return { schemaVersion: 1, onboardingComplete: false, sources: [], records: [] };
+  return { schemaVersion: 2, revision: 0, onboardingComplete: false, sources: [], records: [] };
 }
 
 export interface Clock {

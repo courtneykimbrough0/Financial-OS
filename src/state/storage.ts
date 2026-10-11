@@ -8,9 +8,25 @@ import { isValidDateStr } from '../domain/dates';
 import { emptyData } from '../domain/operations';
 import { LIABILITY_TYPES, type AppData, type OccurrenceRecord, type RecurringSource, type TransactionKind } from '../domain/types';
 
+export type SaveResult =
+  | { ok: true; revision: number }
+  | { ok: false; reason: 'conflict'; message: string }
+  | { ok: false; reason: 'error'; message: string };
+
+/**
+ * Where data lives. Asynchronous so a server-backed implementation (e.g.
+ * Supabase) can replace the device one without changing the app.
+ */
 export interface StorageAdapter {
-  load(): AppData;
-  save(data: AppData): void;
+  load(): Promise<AppData>;
+  /**
+   * Saves `data` as revision `baseRevision + 1`, but only if the stored
+   * revision is still `baseRevision`. Otherwise returns a conflict and
+   * changes nothing.
+   */
+  save(data: AppData, baseRevision: number): Promise<SaveResult>;
+  /** Removes all stored data for this adapter. */
+  clear(): Promise<void>;
 }
 
 export const STORAGE_KEY = 'financial-os:data';
@@ -54,13 +70,15 @@ function isRecord(r: unknown): r is OccurrenceRecord {
 /** Validates and upgrades parsed JSON. Throws if the document is unusable. */
 export function migrate(raw: unknown): AppData {
   if (!raw || typeof raw !== 'object') throw new Error('Saved data is not an object.');
-  const doc = raw as Partial<AppData>;
-  if (doc.schemaVersion !== 1) throw new Error(`Unsupported data version: ${String(doc.schemaVersion)}`);
+  const doc = raw as Omit<Partial<AppData>, 'schemaVersion'> & { schemaVersion?: number };
+  if (doc.schemaVersion !== 1 && doc.schemaVersion !== 2) throw new Error(`Unsupported data version: ${String(doc.schemaVersion)}`);
   const sources = Array.isArray(doc.sources) ? doc.sources : [];
   const records = Array.isArray(doc.records) ? doc.records : [];
   if (!sources.every(isSource) || !records.every(isRecord)) throw new Error('Saved data is damaged.');
+  const revision = Number.isSafeInteger(doc.revision) && doc.revision! >= 0 ? doc.revision! : 0;
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    revision,
     onboardingComplete: Boolean(doc.onboardingComplete),
     ...(doc.isSample ? { isSample: true } : {}),
     sources: sources.map(({ category: _oldCategory, liabilityType, ...s }: RecurringSource & { category?: unknown }) => ({
@@ -76,13 +94,16 @@ export function migrate(raw: unknown): AppData {
   };
 }
 
+const CONFLICT_MESSAGE = 'Your data was changed somewhere else, such as another window. Reload to see the latest version.';
+
+/** Device storage (localStorage). Used for testing and before accounts exist. */
 export class LocalStorageAdapter implements StorageAdapter {
   constructor(
     private readonly storage: Storage = window.localStorage,
     private readonly key = STORAGE_KEY,
   ) {}
 
-  load(): AppData {
+  private read(): AppData {
     const text = this.storage.getItem(this.key);
     if (text === null) return emptyData();
     try {
@@ -90,22 +111,57 @@ export class LocalStorageAdapter implements StorageAdapter {
     } catch (err) {
       // Keep the unreadable copy so it is never silently lost.
       this.storage.setItem(`${this.key}:unreadable:${Date.now()}`, text);
+      this.storage.removeItem(this.key);
       console.error('Could not read saved data; starting fresh.', err);
       return emptyData();
     }
   }
 
-  save(data: AppData): void {
-    this.storage.setItem(this.key, JSON.stringify(data));
+  async load(): Promise<AppData> {
+    return this.read();
+  }
+
+  async save(data: AppData, baseRevision: number): Promise<SaveResult> {
+    try {
+      const current = this.read();
+      if (current.revision !== baseRevision) return { ok: false, reason: 'conflict', message: CONFLICT_MESSAGE };
+      const revision = baseRevision + 1;
+      this.storage.setItem(this.key, JSON.stringify({ ...data, schemaVersion: 2, revision }));
+      return { ok: true, revision };
+    } catch (err) {
+      console.error(err);
+      return { ok: false, reason: 'error', message: 'Your change could not be saved on this device. Check available storage and try again.' };
+    }
+  }
+
+  async clear(): Promise<void> {
+    this.storage.removeItem(this.key);
   }
 }
 
+/** In-memory storage for tests. `failNext` / `conflictNext` simulate problems. */
 export class MemoryAdapter implements StorageAdapter {
+  failNext = false;
+  saves = 0;
   constructor(private data: AppData = emptyData()) {}
-  load(): AppData {
+  async load(): Promise<AppData> {
     return structuredClone(this.data);
   }
-  save(data: AppData): void {
-    this.data = structuredClone(data);
+  async save(data: AppData, baseRevision: number): Promise<SaveResult> {
+    if (this.failNext) {
+      this.failNext = false;
+      return { ok: false, reason: 'error', message: 'Save failed.' };
+    }
+    if (this.data.revision !== baseRevision) return { ok: false, reason: 'conflict', message: CONFLICT_MESSAGE };
+    this.saves += 1;
+    this.data = structuredClone({ ...data, revision: baseRevision + 1 });
+    return { ok: true, revision: baseRevision + 1 };
+  }
+  async clear(): Promise<void> {
+    this.data = emptyData();
+  }
+  /** Test helper: replace stored data as if another device had saved. */
+  externalWrite(data: AppData) {
+    this.data = structuredClone({ ...data, revision: this.data.revision + 1 });
   }
 }

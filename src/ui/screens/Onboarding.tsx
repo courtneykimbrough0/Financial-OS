@@ -13,6 +13,7 @@ import { FlowAmount, Icon, KindAvatar, Modal, SectionLabel, TagList, useToast } 
 import { KIND_COPY, OneTimeForm, SourceForm } from '../components/forms';
 import { TimingGapsBanner } from '../components/gaps';
 import { LeftToSpend, PeriodBreakdown, TagBreakdown } from '../components/plan';
+import { RestoreBackupButton } from '../components/backup';
 import { navigate } from '../router';
 
 interface StepDef {
@@ -454,12 +455,14 @@ export function Onboarding() {
             type="button"
             className="button link full"
             onClick={() => {
-              enterSample();
-              navigate('dashboard');
+              void enterSample().then(() => navigate('dashboard'));
             }}
           >
             Explore with sample data
           </button>
+          <div className="center">
+            <RestoreBackupButton label="Have a backup? Restore it" />
+          </div>
         </div>
       )}
       {def.kinds.length > 0 && <KindStep key={step} kinds={def.kinds} onSheet={setSheet} />}

@@ -12,7 +12,7 @@ import { Onboarding } from '../screens/Onboarding';
 const TODAY = '2026-10-11';
 
 async function reachReview(data: AppData) {
-  new LocalStorageAdapter().save(data);
+  await new LocalStorageAdapter().save(data, 0);
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
   render(
     <DataModeProvider>
@@ -21,7 +21,7 @@ async function reachReview(data: AppData) {
       </ToastProvider>
     </DataModeProvider>,
   );
-  await user.click(screen.getByRole('button', { name: 'Get started' }));
+  await user.click(await screen.findByRole('button', { name: 'Get started' }));
   for (let i = 0; i < 2; i++) await user.click(screen.getByRole('button', { name: 'Continue' }));
   await screen.findByRole('heading', { name: 'Check everything over' });
   return user;

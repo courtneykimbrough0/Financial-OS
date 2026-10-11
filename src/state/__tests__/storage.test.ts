@@ -7,31 +7,59 @@ const clock = { today: '2026-10-11', now: '2026-10-11T12:00:00Z' };
 describe('LocalStorageAdapter', () => {
   beforeEach(() => localStorage.clear());
 
-  it('starts empty and round-trips data, including recorded outcomes', () => {
-    const adapter = new LocalStorageAdapter();
-    expect(adapter.load()).toEqual(emptyData());
+  function sampleData() {
     let r = addSource(emptyData(), { kind: 'income', description: 'Pay', amountCents: 180000, startDate: '2026-10-11', rule: { type: 'biweekly' } }, clock, 'pay');
     if (!r.ok) throw new Error(r.error);
     r = recordActual(r.data, 'pay@2026-10-11', { amountCents: 165000, date: '2026-10-11' }, clock);
     if (!r.ok) throw new Error(r.error);
-    adapter.save(r.data);
-    expect(new LocalStorageAdapter().load()).toEqual(r.data);
+    return r.data;
+  }
+
+  it('starts empty and round-trips data, including recorded outcomes', async () => {
+    const adapter = new LocalStorageAdapter();
+    expect(await adapter.load()).toEqual(emptyData());
+    const data = sampleData();
+    expect(await adapter.save(data, 0)).toEqual({ ok: true, revision: 1 });
+    expect(await new LocalStorageAdapter().load()).toEqual({ ...data, revision: 1 });
   });
 
-  it('keeps an unreadable copy instead of silently discarding damaged data', () => {
+  it('increments the revision on each save and rejects saves based on an old revision', async () => {
+    const a = new LocalStorageAdapter();
+    const b = new LocalStorageAdapter(); // e.g. a second tab
+    const data = sampleData();
+    expect(await a.save(data, 0)).toEqual({ ok: true, revision: 1 });
+    expect(await a.save(data, 1)).toEqual({ ok: true, revision: 2 });
+    // The second tab still thinks revision 1 is current.
+    const stale = await b.save({ ...data, onboardingComplete: true }, 1);
+    expect(stale).toMatchObject({ ok: false, reason: 'conflict' });
+    expect((await a.load()).onboardingComplete).toBe(false);
+    expect((await a.load()).revision).toBe(2);
+  });
+
+  it('reports a failed write instead of throwing', async () => {
+    const broken = { getItem: () => null, setItem: () => { throw new Error('QuotaExceeded'); }, removeItem: () => {} } as unknown as Storage;
+    expect(await new LocalStorageAdapter(broken).save(emptyData(), 0)).toMatchObject({ ok: false, reason: 'error' });
+  });
+
+  it('keeps an unreadable copy instead of silently discarding damaged data', async () => {
     localStorage.setItem(STORAGE_KEY, '{not json');
-    const data = new LocalStorageAdapter().load();
+    const data = await new LocalStorageAdapter().load();
     expect(data).toEqual(emptyData());
     const backups = Object.keys(localStorage).filter((k) => k.startsWith(`${STORAGE_KEY}:unreadable:`));
     expect(backups).toHaveLength(1);
     expect(localStorage.getItem(backups[0]!)).toBe('{not json');
+  });
+
+  it('upgrades version 1 data to version 2 at revision 0', async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ schemaVersion: 1, onboardingComplete: true, sources: [], records: [] }));
+    expect(await new LocalStorageAdapter().load()).toEqual({ ...emptyData(), onboardingComplete: true });
   });
 });
 
 describe('migrating data saved by earlier builds', () => {
   beforeEach(() => localStorage.clear());
 
-  it('turns the old "expense" kind into bills, drops the old fixed categories, and adds empty tags', () => {
+  it('turns the old "expense" kind into bills, drops the old fixed categories, and adds empty tags', async () => {
     const old = {
       schemaVersion: 1,
       onboardingComplete: true,
@@ -43,12 +71,12 @@ describe('migrating data saved by earlier builds', () => {
       ],
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(old));
-    const data = new LocalStorageAdapter().load();
+    const data = (await new LocalStorageAdapter().load());
     expect(data.sources[0]).toMatchObject({ kind: 'bill', tags: [], pausedRanges: [] });
     expect(data.records[0]).toMatchObject({ kind: 'bill', tags: [] });
   });
 
-  it('turns the removed "spending" kind into bills', () => {
+  it('turns the removed "spending" kind into bills', async () => {
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -58,10 +86,10 @@ describe('migrating data saved by earlier builds', () => {
         records: [],
       }),
     );
-    expect(new LocalStorageAdapter().load().sources[0]!.kind).toBe('bill');
+    expect((await new LocalStorageAdapter().load()).sources[0]!.kind).toBe('bill');
   });
 
-  it('keeps valid liability types and drops anything else so the user is asked again', () => {
+  it('keeps valid liability types and drops anything else so the user is asked again', async () => {
     const v = [{ id: 'v', startDate: '2026-11-01', amountCents: 5000, rule: { type: 'monthly' } }];
     const base = { active: true, endDate: null, createdAt: 'x', updatedAt: 'x', versions: v, tags: [] };
     localStorage.setItem(
@@ -77,7 +105,7 @@ describe('migrating data saved by earlier builds', () => {
         records: [],
       }),
     );
-    const [a, b, c] = new LocalStorageAdapter().load().sources;
+    const [a, b, c] = (await new LocalStorageAdapter().load()).sources;
     expect(a!.liabilityType).toBe('card');
     expect(b!.liabilityType).toBeUndefined();
     expect(c!.liabilityType).toBeUndefined();
