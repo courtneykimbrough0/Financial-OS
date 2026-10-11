@@ -124,6 +124,8 @@ try {
   const hero = await page.locator('.review-hero').innerText();
   assert.match(hero, /Oct 15[\s\S]*in 4 days/);
   assert.match(hero, /Lowest point before Oct 28: \$1,390\.00/);
+  // No timing gaps in this setup, so no warning appears.
+  assert.equal(await page.locator('.gap-banner').count(), 0);
   const breakdown = await page.locator('section[aria-labelledby="breakdown-month"]').innerText();
   assert.match(breakdown, /Income\s+\+\$3,900\.00/);
   assert.match(breakdown, /Expenses\s+−\$1,610\.00/);

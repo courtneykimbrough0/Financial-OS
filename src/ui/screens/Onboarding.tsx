@@ -1,7 +1,7 @@
 import { AlertCircle, Banknote, CalendarClock, ChevronRight, Info, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { diffDays, formatMedium, formatShort } from '../../domain/dates';
-import { buildForecast, dailyTimeline, lowestPoint, paycheckCycles } from '../../domain/forecast';
+import { buildForecast, dailyTimeline, lowestPoint, paycheckCycles, timingGapsAhead } from '../../domain/forecast';
 import { formatMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { monthlyPlan } from '../../domain/plan';
@@ -11,6 +11,7 @@ import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
 import { FlowAmount, Icon, KindAvatar, Modal, SectionLabel, TagList, useToast } from '../components/common';
 import { KIND_COPY, SourceForm } from '../components/forms';
+import { TimingGapsBanner } from '../components/gaps';
 import { LeftToSpend, MonthlyBreakdown, TagBreakdown } from '../components/plan';
 import { navigate } from '../router';
 
@@ -228,6 +229,8 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
           )}
         </section>
       )}
+
+      {payday && <TimingGapsBanner gaps={timingGapsAhead(forecast)} from={payday} />}
 
       <MonthlyBreakdown plan={plan} />
       <TagBreakdown plan={plan} />

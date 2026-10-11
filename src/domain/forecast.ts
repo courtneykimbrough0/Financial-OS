@@ -254,6 +254,32 @@ export function negativeStretches(rows: DayRow[]): NegativeStretch[] {
   return out;
 }
 
+export interface TimingGap {
+  start: DateStr;
+  end: DateStr;
+  days: number;
+  /** Most negative tally in the gap, and the first day it is reached. */
+  lowestCents: Cents;
+  lowestDate: DateStr;
+}
+
+export const GAP_LOOKAHEAD_DAYS = 90;
+
+/**
+ * Every stretch in the next `days` days (from the forecast start) where the
+ * running tally is below $0. Empty when the forecast cannot start or the tally
+ * never goes negative.
+ */
+export function timingGapsAhead(forecast: Forecast, days = GAP_LOOKAHEAD_DAYS): TimingGap[] {
+  if (!forecast.forecastStart) return [];
+  const rows = dailyTimeline(forecast, forecast.forecastStart, addDays(forecast.forecastStart, days - 1));
+  return negativeStretches(rows).map((n) => {
+    const inGap = rows.filter((r) => r.date >= n.start && r.date <= n.end);
+    const lowest = inGap.find((r) => r.tallyCents === n.lowestCents)!;
+    return { start: n.start, end: n.end, days: inGap.length, lowestCents: n.lowestCents, lowestDate: lowest.date };
+  });
+}
+
 export interface WeekSummary extends PeriodKpis {
   start: DateStr;
   end: DateStr;

@@ -79,6 +79,7 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
 - **Breakdown list:** label/value rows with sub-rows indented in secondary text and the key total on a heavier divider (used for the monthly breakdown and totals by tag).
 - **Tags:** small outlined pills with a tag icon. In forms they become removable chips, entered through a text field with an Add button. The only suggestions are tags the user has already created.
 - **Kind avatars:** income (banknote, green), bill (receipt, indigo), subscription (repeat, blue), liability (card, violet), savings (piggy bank, teal), spending (bag, rose).
+- **Timing-gap banner:** a red-outlined card with a warning triangle ("2 timing gaps ahead · Next 90 days"), shown only when the tally goes below $0. It opens a sheet listing each gap's dates, length, and lowest amount. Its wording describes the gap and gives no advice.
 - **Choice pills:** a required single choice (e.g. liability type: Card, Loan, Line of credit) shown as equal-width pills backed by native radio buttons. The selected pill is light, and all pills get a red outline if nothing is chosen on save.
 - **Navigation:** four tabs: Dashboard, Income, Expenses (Bills, Subscriptions, Savings, Spending), and Liabilities.
 - **Pill tabs:** two options inside a raised pill track, used within cards. The active option is light.

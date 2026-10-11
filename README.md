@@ -31,7 +31,11 @@ The sample (`src/domain/sample.ts`) covers recurring income, rent, utilities, a 
 
 | Screen | Purpose |
 | --- | --- |
-| Guided setup | Six steps: welcome, income, expenses (bills, subscriptions, liability payments), savings, spending, review. A **Left to spend** figure updates as you add items. The review shows the next payday, a monthly breakdown by category, and totals by tag. |
+| Guided setup | Six steps: welcome, income, expenses (bills, subscriptions, liability payments), savings, spending, review. A **Timing gaps at the end of setup.** The review step keeps the lowest point before the next payday. When the running tally drops below $0 anywhere in the next 90 days, a warning banner appears ("2 timing gaps ahead"). It opens a sheet listing every gap's dates, length, and lowest amount. The banner only shows when a gap exists, and it gives no advice.
+
+**One-time items** (income, bills, savings, spending) are entered on their screens and occur exactly once. They count everywhere their date falls: the running tally, calendar, month, week, pay period, custom range, KPIs, and timing gaps. A one-time income never starts a new pay period. They are left out of the monthly "left to spend" average, which covers recurring items only.
+
+**Left to spend** figure updates as you add items. The review shows the next payday, a monthly breakdown by category, and totals by tag. |
 | Dashboard | Month / Week / Paycheck / Custom views. Each view has a summary card (lowest point, timing gap, next payday), a calendar with period totals, and a Week by week / Day by day breakdown. Days and weeks open in sheets. Overdue items sit behind a banner at the top. |
 | Income | Recurring income (add, edit from an effective date, turn off/on) and one-time income. |
 | Expenses | Four tabs: **Bills** (with one-time expenses), **Subscriptions**, **Savings**, and **Spending** (each with one-time items where they make sense). |
