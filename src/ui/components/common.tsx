@@ -1,7 +1,44 @@
 import { createPortal } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { AlertCircle, Ban, Banknote, Check, CircleDashed, CreditCard, Receipt, X, type LucideIcon } from 'lucide-react';
 import { formatMoney } from '../../domain/money';
 import type { OccurrenceStatus, TransactionKind } from '../../domain/types';
+
+// ---------------------------------------------------------------------------
+// Icons: one line-icon set (Lucide) at one stroke weight, always decorative
+// unless given a label.
+// ---------------------------------------------------------------------------
+
+export function Icon({ icon: I, size = 20, label, className }: { icon: LucideIcon; size?: number; label?: string; className?: string }) {
+  return <I size={size} strokeWidth={1.75} className={className} aria-hidden={label ? undefined : true} aria-label={label} role={label ? 'img' : undefined} focusable={false} />;
+}
+
+export const KIND_ICON: Record<TransactionKind, LucideIcon> = {
+  income: Banknote,
+  expense: Receipt,
+  liability: CreditCard,
+};
+
+/** Round leading avatar for a transaction, colored and shaped by kind. */
+export function KindAvatar({ kind, size = 'md' }: { kind: TransactionKind; size?: 'sm' | 'md' }) {
+  return (
+    <span className={`avatar avatar-${kind} avatar-${size}`} aria-hidden="true">
+      <Icon icon={KIND_ICON[kind]} size={size === 'sm' ? 14 : 18} />
+    </span>
+  );
+}
+
+/** Small uppercase label that introduces a group of cards. */
+export function SectionLabel({ id, children, action }: { id?: string; children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="section-label-row">
+      <h2 className="section-label" id={id}>
+        {children}
+      </h2>
+      {action}
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Toasts (confirmation feedback, announced to screen readers)
@@ -30,7 +67,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         <div className="toasts" role="status" aria-live="polite">
           {toasts.map((t) => (
             <div key={t.id} className={`toast toast-${t.tone}`}>
-              <span aria-hidden="true">{t.tone === 'success' ? '✓' : '!'}</span> {t.message}
+              <Icon icon={t.tone === 'success' ? Check : AlertCircle} size={18} /> {t.message}
             </div>
           ))}
         </div>,
@@ -98,10 +135,11 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
   return createPortal(
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby={titleId} ref={ref} tabIndex={-1}>
+        <span className="sheet-grabber" aria-hidden="true" />
         <div className="modal-header">
           <h2 id={titleId}>{title}</h2>
           <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
-            <span aria-hidden="true">×</span>
+            <Icon icon={X} size={22} />
           </button>
         </div>
         <div className="modal-body">{children}</div>
@@ -121,11 +159,11 @@ const STATUS_LABEL: Record<OccurrenceStatus, string> = {
   completed: 'Done',
   canceled: 'Canceled',
 };
-const STATUS_ICON: Record<OccurrenceStatus, string> = {
-  scheduled: '○',
-  overdue: '!',
-  completed: '✓',
-  canceled: '⊘',
+const STATUS_ICON: Record<OccurrenceStatus, LucideIcon> = {
+  scheduled: CircleDashed,
+  overdue: AlertCircle,
+  completed: Check,
+  canceled: Ban,
 };
 
 export function StatusBadge({ status, kind }: { status: OccurrenceStatus; kind?: TransactionKind }) {
@@ -133,7 +171,7 @@ export function StatusBadge({ status, kind }: { status: OccurrenceStatus; kind?:
   if (status === 'completed' && kind) label = kind === 'income' ? 'Received' : 'Paid';
   return (
     <span className={`badge badge-${status}`}>
-      <span aria-hidden="true">{STATUS_ICON[status]}</span> {label}
+      <Icon icon={STATUS_ICON[status]} size={13} /> {label}
     </span>
   );
 }
@@ -195,7 +233,7 @@ export function FormError({ message }: { message: string | null }) {
   if (!message) return null;
   return (
     <p className="form-error" role="alert">
-      <span aria-hidden="true">! </span>
+      <Icon icon={AlertCircle} size={16} />
       {message}
     </p>
   );

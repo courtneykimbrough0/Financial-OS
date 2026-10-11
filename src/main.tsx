@@ -4,6 +4,7 @@ import { registerSW } from 'virtual:pwa-register';
 import { DataModeProvider } from './state/mode';
 import { App } from './ui/App';
 import { ToastProvider } from './ui/components/common';
+import '@fontsource-variable/inter';
 import './styles.css';
 
 registerSW({ immediate: true });

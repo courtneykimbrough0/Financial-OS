@@ -1,3 +1,4 @@
+import { AlertCircle, ChevronRight, CircleCheck, CircleOff, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { addDays, formatMedium, type DateStr } from '../../domain/dates';
 import { formatMoney } from '../../domain/money';
@@ -6,7 +7,7 @@ import * as ops from '../../domain/operations';
 import { describeRule } from '../../domain/recurrence';
 import type { AppData, Occurrence, RecurringSource, TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
-import { EmptyState, FlowAmount, Modal, StatusBadge, useToast } from '../components/common';
+import { EmptyState, FlowAmount, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, useToast } from '../components/common';
 import { KIND_COPY, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm } from '../components/forms';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 
@@ -57,6 +58,7 @@ function OccurrenceRow({ o, onOpen }: { o: Occurrence; onOpen: (id: string) => v
   const date = o.status === 'completed' ? o.actualDate! : o.scheduledDate;
   return (
     <button type="button" className="entry" onClick={() => onOpen(o.id)}>
+      <KindAvatar kind={o.kind} size="sm" />
       <span className="entry-main">
         <span className="entry-title">{formatMedium(date)}</span>
         {o.sourceId === null && <span className="entry-sub">{o.description}</span>}
@@ -70,6 +72,7 @@ function OccurrenceRow({ o, onOpen }: { o: Occurrence; onOpen: (id: string) => v
         <FlowAmount kind={o.kind} cents={amount} strike={o.status === 'canceled'} />
         <StatusBadge status={o.displayStatus} kind={o.kind} />
       </span>
+      <Icon icon={ChevronRight} size={18} className="chevron" />
     </button>
   );
 }
@@ -93,7 +96,8 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
   return (
     <li className={`card source-card${source.active ? '' : ' inactive'}`}>
       <div className="source-top">
-        <div>
+        <KindAvatar kind={source.kind} />
+        <div className="source-name">
           <h3>{source.description}</h3>
           <p className="muted">
             {describeRule(current.rule, current.startDate)}
@@ -104,11 +108,11 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
           <FlowAmount kind={source.kind} cents={current.amountCents} />
           {source.active ? (
             <span className="badge badge-active">
-              <span aria-hidden="true">●</span> On
+              <Icon icon={CircleCheck} size={13} /> On
             </span>
           ) : (
             <span className="badge badge-canceled">
-              <span aria-hidden="true">○</span> Off
+              <Icon icon={CircleOff} size={13} /> Off
             </span>
           )}
         </div>
@@ -133,7 +137,7 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
       )}
       {overdueCount > 0 && (
         <p className="callout callout-warn small">
-          <span aria-hidden="true">! </span>
+          <Icon icon={AlertCircle} size={16} /> 
           {overdueCount} overdue {overdueCount === 1 ? 'payment needs' : 'payments need'} an update.
         </p>
       )}
@@ -226,12 +230,16 @@ export function SourcesScreen({ kind }: { kind: TransactionKind }) {
       </header>
 
       <section className="stack" aria-labelledby="recurring-heading">
-        <div className="section-head">
-          <h2 id="recurring-heading">{copy.recurringHeading}</h2>
-          <button type="button" className="button primary small" onClick={() => setAdding('recurring')}>
-            + {copy.addRecurring}
-          </button>
-        </div>
+        <SectionLabel
+          id="recurring-heading"
+          action={
+            <button type="button" className="button primary small" onClick={() => setAdding('recurring')}>
+              <Icon icon={Plus} size={16} /> {copy.addRecurring}
+            </button>
+          }
+        >
+          {copy.recurringHeading}
+        </SectionLabel>
         {sources.length === 0 ? (
           <EmptyState title={`No ${copy.recurringHeading.toLowerCase()} yet`}>
             <p>{copy.empty}</p>
@@ -247,12 +255,16 @@ export function SourcesScreen({ kind }: { kind: TransactionKind }) {
 
       {kind !== 'liability' && (
         <section className="stack" aria-labelledby="onetime-heading">
-          <div className="section-head">
-            <h2 id="onetime-heading">One-time {kind === 'income' ? 'income' : 'expenses'}</h2>
-            <button type="button" className="button secondary small" onClick={() => setAdding('one-time')}>
-              + Add one-time
-            </button>
-          </div>
+          <SectionLabel
+            id="onetime-heading"
+            action={
+              <button type="button" className="button secondary small" onClick={() => setAdding('one-time')}>
+                <Icon icon={Plus} size={16} /> Add one-time
+              </button>
+            }
+          >
+            One-time {kind === 'income' ? 'income' : 'expenses'}
+          </SectionLabel>
           {oneTimes.length === 0 ? (
             <EmptyState title="Nothing one-time yet">
               <p>{kind === 'income' ? 'Add things like a tax refund or a gift. They count once.' : 'Add things like a car repair or a trip. They count once.'}</p>

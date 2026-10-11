@@ -5,7 +5,7 @@ import { LocalStorageAdapter, SAMPLE_STORAGE_KEY, STORAGE_KEY } from './storage'
 import { StoreProvider } from './store';
 
 export type DataMode = 'real' | 'sample';
-const MODE_KEY = 'cashflow-forecast:mode';
+const MODE_KEY = 'financial-os:mode';
 
 interface ModeApi {
   mode: DataMode;

@@ -1,3 +1,4 @@
+import { AlertCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
 import { diffDays, formatLong, formatMedium, type DateStr } from '../../domain/dates';
 import { centsToInput, formatMoney, formatSignedMoney, parseMoney } from '../../domain/money';
@@ -5,7 +6,7 @@ import { findOccurrence } from '../../domain/occurrences';
 import * as ops from '../../domain/operations';
 import { KIND_LABEL, type Occurrence } from '../../domain/types';
 import { useStore } from '../../state/store';
-import { Field, FlowAmount, FormError, Modal, MoneyInput, StatusBadge, useToast } from './common';
+import { Field, FlowAmount, FormError, Icon, KindAvatar, Modal, MoneyInput, StatusBadge, useToast } from './common';
 
 type Mode = 'view' | 'record' | 'correct' | 'reschedule' | 'cancel' | 'delete';
 
@@ -110,7 +111,8 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
   return (
     <Modal title={title} onClose={onClose}>
       <div className="occ-summary">
-        <div>
+        <KindAvatar kind={o.kind} />
+        <div className="occ-summary-main">
           <FlowAmount kind={o.kind} cents={o.status === 'completed' ? o.actualAmountCents! : o.scheduledAmountCents} strike={o.status === 'canceled'} />
           <p className="muted">
             {KIND_LABEL[o.kind]} · {o.sourceId ? 'Recurring' : 'One-time'}
@@ -121,7 +123,7 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
       <p className="occ-date">{formatLong(o.status === 'completed' ? o.actualDate! : o.scheduledDate)}</p>
       {o.displayStatus === 'overdue' && (
         <p className="callout callout-warn">
-          <span aria-hidden="true">! </span>
+          <Icon icon={AlertCircle} size={16} /> 
           This was expected on {formatMedium(o.scheduledDate)} and hasn’t been marked {doneVerb(o)}. It stays in your forecast until you record what happened, change its date, or cancel it.
         </p>
       )}

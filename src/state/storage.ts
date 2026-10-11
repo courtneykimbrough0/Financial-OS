@@ -13,9 +13,9 @@ export interface StorageAdapter {
   save(data: AppData): void;
 }
 
-export const STORAGE_KEY = 'cashflow-forecast:data';
+export const STORAGE_KEY = 'financial-os:data';
 /** Synthetic demonstration data lives under its own key and never touches real data. */
-export const SAMPLE_STORAGE_KEY = 'cashflow-forecast:sample-data';
+export const SAMPLE_STORAGE_KEY = 'financial-os:sample-data';
 
 function isSource(s: unknown): s is RecurringSource {
   if (!s || typeof s !== 'object') return false;

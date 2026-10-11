@@ -1,3 +1,4 @@
+import { AlertCircle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { formatMedium } from '../../domain/dates';
 import { buildForecast, dailyTimeline, lowestPoint, paycheckCycles } from '../../domain/forecast';
@@ -7,7 +8,7 @@ import { describeRule } from '../../domain/recurrence';
 import type { RecurringSource, TransactionKind } from '../../domain/types';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
-import { FlowAmount, useToast } from '../components/common';
+import { FlowAmount, Icon, KindAvatar, useToast } from '../components/common';
 import { SourceForm } from '../components/forms';
 import { navigate } from '../router';
 
@@ -38,6 +39,7 @@ function SourceSummary({ s, onRemove }: { s: RecurringSource; onRemove?: () => v
   const v = s.versions[s.versions.length - 1]!;
   return (
     <li className="summary-row">
+      <KindAvatar kind={s.kind} size="sm" />
       <span className="entry-main">
         <span className="entry-title">{s.description}</span>
         <span className="entry-sub">
@@ -107,8 +109,7 @@ function Review() {
     <div className="stack">
       {forecast.issue ? (
         <p className="callout callout-warn">
-          <span aria-hidden="true">! </span>
-          You haven’t added recurring income yet. Your forecast starts the day before your next expected payday, so add income with its next payment date to see your running cash flow. You can do that now
+          <Icon icon={AlertCircle} size={16} /> You haven’t added recurring income yet. Your forecast starts the day before your next expected payday, so add income with its next payment date to see your running cash flow. You can do that now
           or later on the Income screen.
         </p>
       ) : (
@@ -228,8 +229,7 @@ export function Onboarding() {
 
       {needIncome && (
         <p className="callout callout-warn" role="alert">
-          <span aria-hidden="true">! </span>
-          Add at least one recurring income so we can start your forecast from your next payday. You can also continue and add it later.
+          <Icon icon={AlertCircle} size={16} /> Add at least one recurring income so we can start your forecast from your next payday. You can also continue and add it later.
         </p>
       )}
 

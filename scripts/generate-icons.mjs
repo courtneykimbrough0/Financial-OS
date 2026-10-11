@@ -21,7 +21,7 @@ for (const [size, name, inset] of [
 ]) {
   await page.setViewportSize({ width: size, height: size });
   await page.setContent(
-    `<html><body style="margin:0;background:#1f4e79"><div style="padding:${inset}px;width:${size}px;height:${size}px;box-sizing:border-box">${svg.replace('<svg ', '<svg width="100%" height="100%" ')}</div></body></html>`,
+    `<html><body style="margin:0;background:#1c1c1e"><div style="padding:${inset}px;width:${size}px;height:${size}px;box-sizing:border-box">${svg.replace('<svg ', '<svg width="100%" height="100%" ')}</div></body></html>`,
   );
   await page.screenshot({ path: new URL(`../public/${name}`, import.meta.url).pathname, omitBackground: false });
   console.log('wrote', name);

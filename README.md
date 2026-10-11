@@ -19,7 +19,7 @@ Node 20+ is required.
 
 ### Sample data
 
-To explore without entering anything, choose **Explore with sample data**. The button is on the onboarding welcome screen and at the bottom of every main screen. Sample data is fictional, dated relative to today, and stored under its own key (`cashflow-forecast:sample-data`). It never mixes with your real data, and a banner stays on screen the whole time. **Leave sample data** discards the sample and returns you to your own data unchanged.
+To explore without entering anything, choose **Explore with sample data**. The button is on the onboarding welcome screen and at the bottom of every main screen. Sample data is fictional, dated relative to today, and stored under its own key (`financial-os:sample-data`). It never mixes with your real data, and a banner stays on screen the whole time. **Leave sample data** discards the sample and returns you to your own data unchanged.
 
 The sample (`src/domain/sample.ts`) covers recurring income, rent, utilities, a car-loan liability, and a one-time car repair. It also includes:
 - a paycheck that came a day late and was smaller than expected ($1,650 instead of $1,800);
@@ -115,14 +115,17 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 - `src/ui/__tests__`: recording an actual, the double-tap guard, future-date validation, and cancellation, all through the real UI.
 - `scripts/e2e-smoke.mjs`: drives the production build in Chromium with a pinned clock (onboarding → all four views → late paycheck → reload → sample data).
 
+## Design system
+
+The visual language (color, type, spacing, and components) is documented in [DESIGN.md](DESIGN.md). Its tokens live at the top of `src/styles.css`.
+
 ## Accessibility
 
-- Every status pairs color with a symbol or word: ✓ Done, ! Overdue, ▼ Below $0, +/− signs on amounts.
+- Every status pairs color with an icon or word: a check for Done, an alert for Overdue, a downward trend for Below $0, and +/− signs on amounts. Calendar chips are also filled when done and outlined while expected.
 - Calendar days are buttons with full spoken summaries.
 - Dialogs trap focus, close on Escape, return focus when closed, and make the page behind them inert.
 - Form fields have labels and error descriptions. Toasts and the selected day are announced through live regions.
 - Focus rings are visible, a skip link is provided, and tap targets are at least 44px.
-- Dark mode follows the system setting.
 
 ## Known limitations
 

@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react';
+import { CreditCard, HandCoins, LayoutGrid, Receipt, type LucideIcon } from 'lucide-react';
 import { useDataMode } from '../state/mode';
 import { useStore } from '../state/store';
-import { Modal } from './components/common';
+import { Icon, Modal } from './components/common';
 import { navigate, useRoute, type Route } from './router';
 import { Dashboard } from './screens/Dashboard';
 import { Onboarding } from './screens/Onboarding';
 import { SourcesScreen } from './screens/SourcesScreen';
 
-const NAV: { route: Route; label: string; icon: string }[] = [
-  { route: 'dashboard', label: 'Dashboard', icon: '▦' },
-  { route: 'income', label: 'Income', icon: '+' },
-  { route: 'expenses', label: 'Expenses', icon: '−' },
-  { route: 'liabilities', label: 'Liabilities', icon: '≡' },
+const NAV: { route: Route; label: string; icon: LucideIcon }[] = [
+  { route: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
+  { route: 'income', label: 'Income', icon: HandCoins },
+  { route: 'expenses', label: 'Expenses', icon: Receipt },
+  { route: 'liabilities', label: 'Liabilities', icon: CreditCard },
 ];
 
 export function App() {
@@ -69,9 +70,7 @@ export function App() {
         <nav className="bottom-nav" aria-label="Main">
           {NAV.map((n) => (
             <a key={n.route} href={`#/${n.route}`} aria-current={route === n.route ? 'page' : undefined}>
-              <span className="nav-icon" aria-hidden="true">
-                {n.icon}
-              </span>
+              <Icon icon={n.icon} size={24} className="nav-icon" />
               {n.label}
             </a>
           ))}

@@ -91,14 +91,14 @@ try {
   await page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
   const kpiText = await page.locator('.kpis').innerText();
   assert.match(kpiText, /Projected income\s+\$3,600\.00/);
-  assert.match(kpiText, /Projected expenses\s+\$410\.00/);
-  assert.match(kpiText, /Projected cash flow\s+\+\$3,190\.00/);
+  assert.match(kpiText, /Projected expenses[\s\S]*?\$410\.00/);
+  assert.match(kpiText, /Projected cash flow[\s\S]*?\+\$3,190\.00/);
   await shot('04-dashboard-month');
 
   step('dashboard: week view KPIs follow the period');
   await page.getByRole('tab', { name: 'Week' }).click();
   await page.getByRole('button', { name: 'Next week' }).click();
-  assert.match(await page.locator('.kpis').innerText(), /Projected income\s+\$0\.00[\s\S]*Projected expenses\s+\$350\.00/);
+  assert.match(await page.locator('.kpis').innerText(), /Projected income\s+\$0\.00[\s\S]*Projected expenses[\s\S]*?\$350\.00/);
 
   step('dashboard: paycheck view keeps the running tally');
   await page.getByRole('tab', { name: 'Paycheck' }).click();

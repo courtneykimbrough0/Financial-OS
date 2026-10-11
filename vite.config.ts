@@ -8,13 +8,14 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,woff2}'] },
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Financial OS',
         short_name: 'Financial OS',
         description: 'See when money comes in, when it goes out, and spot shortfalls before they happen.',
-        theme_color: '#1f4e79',
-        background_color: '#f7f8fa',
+        theme_color: '#1c1c1e',
+        background_color: '#1c1c1e',
         display: 'standalone',
         start_url: '.',
         icons: [
