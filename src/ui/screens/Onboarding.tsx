@@ -6,7 +6,7 @@ import { formatMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { monthlyPlan } from '../../domain/plan';
 import { describeRule } from '../../domain/recurrence';
-import type { RecurringSource, TransactionKind } from '../../domain/types';
+import { liabilityPrefix, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
 import { FlowAmount, Icon, KindAvatar, Modal, SectionLabel, TagList, useToast } from '../components/common';
@@ -59,6 +59,7 @@ function SourceRow({ s, onOpen }: { s: RecurringSource; onOpen: () => void }) {
         <span className="entry-main">
           <span className="entry-title">{s.description}</span>
           <span className="entry-sub">
+            {liabilityPrefix(s)}
             {describeRule(v.rule, v.startDate)} · next {formatMedium(v.startDate)}
           </span>
           <TagList tags={s.tags} />

@@ -133,3 +133,31 @@ describe('tags', () => {
     expect(d.sources[0]!.versions[0]!.amountCents).toBe(usd(1200));
   });
 });
+
+describe('liability types', () => {
+  const input = { kind: 'liability' as const, description: 'Card', amountCents: usd(75), startDate: '2026-10-20', rule: { type: 'monthly' as const } };
+
+  it('must be card, loan, or line of credit', () => {
+    const missing = ops.addSource(ops.emptyData(), input, clockAt(TODAY));
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.error).toMatch(/card, a loan, or a line of credit/);
+    for (const t of ['card', 'loan', 'lineOfCredit'] as const) {
+      const d = unwrap(ops.addSource(ops.emptyData(), { ...input, liabilityType: t }, clockAt(TODAY), 'x'));
+      expect(d.sources[0]!.liabilityType).toBe(t);
+    }
+    const bogus = ops.addSource(ops.emptyData(), { ...input, liabilityType: 'other' as never }, clockAt(TODAY));
+    expect(bogus.ok).toBe(false);
+  });
+
+  it('is never set on other kinds', () => {
+    const d = unwrap(ops.addSource(ops.emptyData(), { ...input, kind: 'bill', liabilityType: 'card' }, clockAt(TODAY), 'b'));
+    expect(d.sources[0]!.liabilityType).toBeUndefined();
+  });
+
+  it('can be changed without touching the schedule', () => {
+    let d = unwrap(ops.addSource(ops.emptyData(), { ...input, liabilityType: 'card' }, clockAt(TODAY), 'c'));
+    d = unwrap(ops.updateSourceDetails(d, 'c', { description: 'Card', liabilityType: 'lineOfCredit' }, clockAt(TODAY)));
+    expect(d.sources[0]!.liabilityType).toBe('lineOfCredit');
+    expect(d.sources[0]!.versions).toHaveLength(1);
+  });
+});

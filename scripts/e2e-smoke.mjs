@@ -100,8 +100,16 @@ try {
   await sheet.getByLabel('What is this payment for?').fill('Car loan');
   await sheet.getByLabel('Payment amount').fill('350');
   await sheet.getByLabel('Next payment due date').fill('2026-10-20');
+  // The liability type is required.
+  await sheet.getByRole('button', { name: 'Save' }).click();
+  await sheet.getByText('Choose card, loan, or line of credit.').waitFor();
+  await sheet.getByRole('radio', { name: 'Loan' }).check();
+  assert.equal(await sheet.getByText('Choose card, loan, or line of credit.').count(), 0);
+  await shot('02d-liability-type');
+  await sheet.getByLabel('Next payment due date').fill('2026-10-20');
   await sheet.getByRole('button', { name: 'Save' }).click();
   assert.match(await page.locator('.left-to-spend').innerText(), /\$2,290\.00/);
+  await page.getByText('Loan · Monthly on the 20th').waitFor();
   await shot('02c-expenses-step');
   await page.getByRole('button', { name: 'Continue' }).click();
 
@@ -207,11 +215,15 @@ try {
   assert.match(dates, /Oct 29, 2026[\s\S]*\+\$1,800\.00[\s\S]*Expected/);
   await shot('09-income');
 
-  step('liabilities live under Expenses');
-  await page.goto(`${BASE}#/liabilities`);
-  await page.getByRole('tab', { name: 'Liabilities', selected: true }).waitFor();
-  assert.match(await page.locator('.source-card').innerText(), /Car loan/);
-  await page.getByRole('tab', { name: 'Bills' }).click();
+  step('navigation: Dashboard, Income, Expenses, Liabilities');
+  const nav = page.getByRole('navigation', { name: 'Main' }).last();
+  assert.deepEqual(await nav.getByRole('link').allInnerTexts(), ['Dashboard', 'Income', 'Expenses', 'Liabilities']);
+  await nav.getByRole('link', { name: 'Liabilities' }).click();
+  await page.getByRole('heading', { name: 'Liabilities', level: 1 }).waitFor();
+  assert.match(await page.locator('.source-card').innerText(), /Car loan[\s\S]*Loan · Monthly on the 20th/);
+  await nav.getByRole('link', { name: 'Expenses' }).click();
+  await page.getByRole('tab', { name: 'Bills', selected: true }).waitFor();
+  assert.deepEqual(await page.getByRole('tablist', { name: 'Expense type' }).getByRole('tab').allInnerTexts(), ['Bills', 'Subscriptions', 'Savings', 'Spending']);
   assert.match(await page.locator('.card-list').innerText(), /Rent[\s\S]*Housing/);
   await page.goto(`${BASE}#/income`);
 

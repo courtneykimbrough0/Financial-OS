@@ -5,7 +5,7 @@ import { formatMoney } from '../../domain/money';
 import { resolveOccurrences } from '../../domain/occurrences';
 import * as ops from '../../domain/operations';
 import { describeRule } from '../../domain/recurrence';
-import type { AppData, Occurrence, RecurringSource, TransactionKind } from '../../domain/types';
+import { liabilityPrefix, type AppData, type Occurrence, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { EmptyState, FlowAmount, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
 import { KIND_COPY, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm } from '../components/forms';
@@ -36,7 +36,7 @@ const SCREEN_COPY: Record<
     intro: 'Services that charge you on a schedule.',
     recurringHeading: 'Subscriptions',
     addRecurring: 'Add subscription',
-    empty: 'Add streaming, apps, memberships, or anything else that renews.',
+    empty: 'Add streaming services, apps, and memberships that renew on a schedule.',
     oneTime: null,
   },
   liability: {
@@ -130,6 +130,7 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
         <div className="source-name">
           <h3>{source.description}</h3>
           <p className="muted">
+            {liabilityPrefix(source)}
             {describeRule(current.rule, current.startDate)}
           </p>
           <TagList tags={source.tags} />
@@ -358,10 +359,11 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
 const EXPENSE_TABS: { kind: TransactionKind; label: string }[] = [
   { kind: 'bill', label: 'Bills' },
   { kind: 'subscription', label: 'Subscriptions' },
-  { kind: 'liability', label: 'Liabilities' },
+  { kind: 'savings', label: 'Savings' },
+  { kind: 'spending', label: 'Spending' },
 ];
 
-/** Expenses: bills, subscriptions, and liability payments, one pill tab each. */
+/** Expenses screen: bills, subscriptions, savings, and spending, one pill tab each. Liabilities have their own screen. */
 export function ExpensesScreen({ initial = 'bill' }: { initial?: TransactionKind }) {
   const [tab, setTab] = useState<TransactionKind>(initial);
   return (
@@ -369,7 +371,7 @@ export function ExpensesScreen({ initial = 'bill' }: { initial?: TransactionKind
       <header className="screen-header">
         <h1>Expenses</h1>
       </header>
-      <div className="pill-tabs pill-tabs-3" role="tablist" aria-label="Expense type">
+      <div className="pill-tabs pill-tabs-4" role="tablist" aria-label="Expense type">
         {EXPENSE_TABS.map((t) => (
           <button key={t.kind} type="button" role="tab" id={`expense-tab-${t.kind}`} aria-selected={tab === t.kind} aria-controls="expense-panel" className={tab === t.kind ? 'active' : ''} onClick={() => setTab(t.kind)}>
             {t.label}

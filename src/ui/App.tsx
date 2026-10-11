@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { HandCoins, LayoutGrid, PiggyBank, Receipt, ShoppingBag, type LucideIcon } from 'lucide-react';
+import { CreditCard, HandCoins, LayoutGrid, Receipt, type LucideIcon } from 'lucide-react';
 import { useDataMode } from '../state/mode';
 import { useStore } from '../state/store';
 import { Icon, Modal } from './components/common';
@@ -12,12 +12,11 @@ const NAV: { route: Route; label: string; icon: LucideIcon }[] = [
   { route: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
   { route: 'income', label: 'Income', icon: HandCoins },
   { route: 'expenses', label: 'Expenses', icon: Receipt },
-  { route: 'savings', label: 'Savings', icon: PiggyBank },
-  { route: 'spending', label: 'Spending', icon: ShoppingBag },
+  { route: 'liabilities', label: 'Liabilities', icon: CreditCard },
 ];
 
-/** Liabilities live under Expenses; its old route opens that tab. */
-const navRoute = (r: Route): Route => (r === 'liabilities' ? 'expenses' : r);
+/** Savings and spending are tabs inside Expenses; their routes highlight the Expenses tab. */
+const navRoute = (r: Route): Route => (r === 'savings' || r === 'spending' ? 'expenses' : r);
 
 export function App() {
   const { data } = useStore();
@@ -69,9 +68,9 @@ export function App() {
         {route === 'dashboard' && <Dashboard />}
         {route === 'income' && <SourcesScreen key="income" kind="income" />}
         {route === 'expenses' && <ExpensesScreen key="expenses" />}
-        {route === 'liabilities' && <ExpensesScreen key="liabilities" initial="liability" />}
-        {route === 'savings' && <SourcesScreen key="savings" kind="savings" />}
-        {route === 'spending' && <SourcesScreen key="spending" kind="spending" />}
+        {route === 'savings' && <ExpensesScreen key="savings" initial="savings" />}
+        {route === 'spending' && <ExpensesScreen key="spending" initial="spending" />}
+        {route === 'liabilities' && <SourcesScreen key="liability" kind="liability" />}
         {showNav && <DataNotice />}
       </main>
       {showNav && (

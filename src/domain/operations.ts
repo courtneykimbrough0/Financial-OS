@@ -16,7 +16,7 @@ import { isValidDateStr, type DateStr } from './dates';
 import type { Cents } from './money';
 import { findOccurrence } from './occurrences';
 import { validateRule } from './recurrence';
-import type { AppData, OccurrenceRecord, RecurrenceRule, RecurringSource, TransactionKind } from './types';
+import { LIABILITY_TYPES, type AppData, type LiabilityType, type OccurrenceRecord, type RecurrenceRule, type RecurringSource, type TransactionKind } from './types';
 
 export type Result = { ok: true; data: AppData } | { ok: false; error: string };
 
@@ -90,14 +90,22 @@ export interface SourceInput {
   kind: TransactionKind;
   description: string;
   tags?: string[];
+  /** Required when kind is 'liability'. */
+  liabilityType?: LiabilityType;
   amountCents: Cents;
   startDate: DateStr;
   rule: RecurrenceRule;
 }
 
+function validateLiabilityType(kind: TransactionKind, type: LiabilityType | undefined): string | null {
+  if (kind !== 'liability') return null;
+  return type && LIABILITY_TYPES.includes(type) ? null : 'Choose whether this is a card, a loan, or a line of credit.';
+}
+
 export function addSource(data: AppData, input: SourceInput, clock: Clock, id = newId('src')): Result {
   const err =
     validateDescription(input.description) ??
+    validateLiabilityType(input.kind, input.liabilityType) ??
     validateAmount(input.amountCents) ??
     (!isValidDateStr(input.startDate) ? 'Enter a valid date.' : null) ??
     (input.startDate < clock.today ? 'The next expected date must be today or later.' : null) ??
@@ -108,6 +116,7 @@ export function addSource(data: AppData, input: SourceInput, clock: Clock, id = 
     kind: input.kind,
     description: input.description.trim(),
     tags: normalizeTags(input.tags),
+    ...(input.kind === 'liability' ? { liabilityType: input.liabilityType } : {}),
     versions: [{ id: newId('ver'), startDate: input.startDate, amountCents: input.amountCents, rule: input.rule }],
     active: true,
     endDate: null,
@@ -127,15 +136,20 @@ function withSource(data: AppData, id: string, fn: (s: RecurringSource) => Recur
 }
 
 /** Rename / recategorize. Does not touch amounts, dates, or recorded outcomes. */
-export function updateSourceDetails(data: AppData, id: string, details: { description: string; tags?: string[] }, clock: Clock): Result {
+export function updateSourceDetails(data: AppData, id: string, details: { description: string; tags?: string[]; liabilityType?: LiabilityType }, clock: Clock): Result {
   const err = validateDescription(details.description);
   if (err) return fail(err);
-  return withSource(data, id, (s) => ({
-    ...s,
-    description: details.description.trim(),
-    tags: details.tags ? normalizeTags(details.tags) : s.tags,
-    updatedAt: clock.now,
-  }));
+  return withSource(data, id, (s) => {
+    const typeErr = validateLiabilityType(s.kind, details.liabilityType ?? s.liabilityType);
+    if (typeErr) return typeErr;
+    return {
+      ...s,
+      ...(s.kind === 'liability' ? { liabilityType: details.liabilityType ?? s.liabilityType } : {}),
+      description: details.description.trim(),
+      tags: details.tags ? normalizeTags(details.tags) : s.tags,
+      updatedAt: clock.now,
+    };
+  });
 }
 
 export interface ScheduleChange {
@@ -186,8 +200,10 @@ export function sourceHasNoHistory(data: AppData, id: string, today: DateStr): b
  */
 export function redefineSource(data: AppData, id: string, input: Omit<SourceInput, 'kind'>, clock: Clock): Result {
   if (!sourceHasNoHistory(data, id, clock.today)) return fail('This item already has history. Change its schedule from a future date instead.');
+  const kind = data.sources.find((x) => x.id === id)!.kind;
   const err =
     validateDescription(input.description) ??
+    validateLiabilityType(kind, input.liabilityType) ??
     validateAmount(input.amountCents) ??
     (!isValidDateStr(input.startDate) ? 'Enter a valid date.' : null) ??
     (input.startDate < clock.today ? 'The next expected date must be today or later.' : null) ??
@@ -197,6 +213,7 @@ export function redefineSource(data: AppData, id: string, input: Omit<SourceInpu
     ...s,
     description: input.description.trim(),
     tags: normalizeTags(input.tags),
+    ...(kind === 'liability' ? { liabilityType: input.liabilityType } : {}),
     versions: [{ id: newId('ver'), startDate: input.startDate, amountCents: input.amountCents, rule: input.rule }],
     updatedAt: clock.now,
   }));

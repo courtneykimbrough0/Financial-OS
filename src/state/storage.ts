@@ -6,7 +6,7 @@
  */
 import { isValidDateStr } from '../domain/dates';
 import { emptyData } from '../domain/operations';
-import type { AppData, OccurrenceRecord, RecurringSource, TransactionKind } from '../domain/types';
+import { LIABILITY_TYPES, type AppData, type OccurrenceRecord, type RecurringSource, type TransactionKind } from '../domain/types';
 
 export interface StorageAdapter {
   load(): AppData;
@@ -63,7 +63,15 @@ export function migrate(raw: unknown): AppData {
     schemaVersion: 1,
     onboardingComplete: Boolean(doc.onboardingComplete),
     ...(doc.isSample ? { isSample: true } : {}),
-    sources: sources.map(({ category: _oldCategory, ...s }: RecurringSource & { category?: unknown }) => ({ ...s, kind: upgradeKind(s.kind), tags: Array.isArray(s.tags) ? s.tags : [], pausedRanges: s.pausedRanges ?? [], endDate: s.endDate ?? null })),
+    sources: sources.map(({ category: _oldCategory, liabilityType, ...s }: RecurringSource & { category?: unknown }) => ({
+      ...s,
+      kind: upgradeKind(s.kind),
+      // Keep a liability type only when it is one of the three allowed values; the edit form asks for it otherwise.
+      ...(s.kind === 'liability' && liabilityType && LIABILITY_TYPES.includes(liabilityType) ? { liabilityType } : {}),
+      tags: Array.isArray(s.tags) ? s.tags : [],
+      pausedRanges: s.pausedRanges ?? [],
+      endDate: s.endDate ?? null,
+    })),
     records: records.map((r) => ({ ...r, kind: upgradeKind(r.kind), tags: Array.isArray(r.tags) ? r.tags : [] })),
   };
 }

@@ -45,7 +45,7 @@ export function buildSampleData(today: DateStr): AppData {
   d = must(ops.addSource(d, { kind: 'bill', description: 'Rent', amountCents: 120000, startDate: T(12), rule: { type: 'monthly' } }, setup, SAMPLE_IDS.rent));
   d = must(ops.addSource(d, { kind: 'bill', description: 'Electric bill', amountCents: 9000, startDate: T(-12), rule: { type: 'monthly' } }, setup, SAMPLE_IDS.electric));
   d = must(ops.addSource(d, { kind: 'bill', description: 'Phone', amountCents: 6000, startDate: T(-6), rule: { type: 'monthly' } }, setup, SAMPLE_IDS.phone));
-  d = must(ops.addSource(d, { kind: 'liability', description: 'Car loan', amountCents: 35000, startDate: T(15), rule: { type: 'monthly' } }, setup, SAMPLE_IDS.carLoan));
+  d = must(ops.addSource(d, { kind: 'liability', liabilityType: 'loan', description: 'Car loan', amountCents: 35000, startDate: T(15), rule: { type: 'monthly' } }, setup, SAMPLE_IDS.carLoan));
   // Added after the T+25 payday so they show the categories without changing the timing gap.
   d = must(ops.addSource(d, { kind: 'subscription', description: 'Streaming service', amountCents: 1500, startDate: T(27), rule: { type: 'monthly' } }, setup, SAMPLE_IDS.streaming));
   d = must(ops.addSource(d, { kind: 'savings', description: 'Emergency fund', amountCents: 10000, startDate: T(26), rule: { type: 'biweekly' } }, setup, SAMPLE_IDS.savings));

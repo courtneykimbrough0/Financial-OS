@@ -34,9 +34,8 @@ The sample (`src/domain/sample.ts`) covers recurring income, rent, utilities, a 
 | Guided setup | Six steps: welcome, income, expenses (bills, subscriptions, liability payments), savings, spending, review. A **Left to spend** figure updates as you add items. The review shows the next payday, a monthly breakdown by category, and totals by tag. |
 | Dashboard | Month / Week / Paycheck / Custom views. Each view has a summary card (lowest point, timing gap, next payday), a calendar with period totals, and a Week by week / Day by day breakdown. Days and weeks open in sheets. Overdue items sit behind a banner at the top. |
 | Income | Recurring income (add, edit from an effective date, turn off/on) and one-time income. |
-| Expenses | Three tabs: **Bills** (with one-time expenses), **Subscriptions**, and **Liabilities**. Liability payments count once, as money out. |
-| Savings | Money set aside on a schedule, plus one-time deposits. |
-| Spending | Everyday spending on a schedule (e.g. groceries), plus one-time spending. |
+| Expenses | Four tabs: **Bills** (with one-time expenses), **Subscriptions**, **Savings**, and **Spending** (each with one-time items where they make sense). |
+| Liabilities | Recurring payments on a **card**, **loan**, or **line of credit**. Choosing one of the three is required. Each payment counts once, as money out. |
 
 Tap any transaction to mark it received/paid, change its date or amount, cancel it, undo, or fix a recorded actual.
 
@@ -100,6 +99,8 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 4. Spending
 
 Every kind except income is money out in the forecast.
+
+**Liability types.** Every liability payment is exactly one of card, loan, or line of credit. No category in the app is labeled "other", "misc", or anything similarly ambiguous.
 
 **Tags.** Tags are optional, free-text labels (e.g. "housing", "gaming") that the user adds to any item. None are built in. The only suggestions offered are tags the user has already created.
 

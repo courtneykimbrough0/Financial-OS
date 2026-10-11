@@ -247,7 +247,7 @@ main.with-nav {
   left: 0;
   right: 0;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   background: var(--color-bg);
   border-top: 1px solid var(--color-border);
   padding-bottom: env(safe-area-inset-bottom);
@@ -2065,4 +2065,63 @@ li.negative .tl-tally {
 .pill-tabs-3 {
   grid-template-columns: repeat(3, 1fr);
   margin: 0;
+}
+
+.pill-tabs-4 {
+  grid-template-columns: repeat(4, 1fr);
+  margin: 0;
+}
+.pill-tabs-4 button {
+  font-size: 0.8125rem;
+  padding: 0 4px;
+}
+
+/* Required single choice shown as pills (e.g. liability type). */
+.choice-field {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+.choice-field legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+.choice-pills {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+.choice-pill {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 8px 10px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--color-border-strong);
+  background: var(--color-surface-raised);
+  font-weight: 600;
+  font-size: var(--text-small);
+  text-align: center;
+  cursor: pointer;
+}
+.choice-pill input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.choice-pill.selected {
+  background: var(--color-text);
+  border-color: var(--color-text);
+  color: var(--color-text-inverse);
+}
+.choice-pill:has(input:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.choice-field[aria-invalid='true'] .choice-pill {
+  border-color: var(--color-neg);
 }

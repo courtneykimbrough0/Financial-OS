@@ -47,4 +47,26 @@ describe('migrating data saved by earlier builds', () => {
     expect(data.sources[0]).toMatchObject({ kind: 'bill', tags: [], pausedRanges: [] });
     expect(data.records[0]).toMatchObject({ kind: 'bill', tags: [] });
   });
+
+  it('keeps valid liability types and drops anything else so the user is asked again', () => {
+    const v = [{ id: 'v', startDate: '2026-11-01', amountCents: 5000, rule: { type: 'monthly' } }];
+    const base = { active: true, endDate: null, createdAt: 'x', updatedAt: 'x', versions: v, tags: [] };
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        schemaVersion: 1,
+        onboardingComplete: true,
+        sources: [
+          { ...base, id: 'a', kind: 'liability', description: 'Card', liabilityType: 'card' },
+          { ...base, id: 'b', kind: 'liability', description: 'Mystery', liabilityType: 'misc' },
+          { ...base, id: 'c', kind: 'bill', description: 'Rent', liabilityType: 'loan' },
+        ],
+        records: [],
+      }),
+    );
+    const [a, b, c] = new LocalStorageAdapter().load().sources;
+    expect(a!.liabilityType).toBe('card');
+    expect(b!.liabilityType).toBeUndefined();
+    expect(c!.liabilityType).toBeUndefined();
+  });
 });

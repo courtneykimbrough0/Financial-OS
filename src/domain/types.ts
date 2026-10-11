@@ -12,6 +12,15 @@ import type { Cents } from './money';
 export type TransactionKind = 'income' | 'bill' | 'subscription' | 'liability' | 'savings' | 'spending';
 export type KindGroup = 'income' | 'expenses' | 'savings' | 'spending';
 
+/** Every liability payment is exactly one of these. */
+export type LiabilityType = 'card' | 'loan' | 'lineOfCredit';
+export const LIABILITY_TYPES: LiabilityType[] = ['card', 'loan', 'lineOfCredit'];
+export const LIABILITY_TYPE_LABEL: Record<LiabilityType, string> = {
+  card: 'Card',
+  loan: 'Loan',
+  lineOfCredit: 'Line of credit',
+};
+
 export const KINDS: TransactionKind[] = ['income', 'bill', 'subscription', 'liability', 'savings', 'spending'];
 export const EXPENSE_KINDS: TransactionKind[] = ['bill', 'subscription', 'liability'];
 
@@ -65,6 +74,8 @@ export interface RecurringSource {
   description: string;
   /** Optional labels the user creates (e.g. "housing"). Never pre-filled. */
   tags: string[];
+  /** Required for liability payments, absent for every other kind. */
+  liabilityType?: LiabilityType;
   /** Sorted ascending by startDate; never empty. */
   versions: ScheduleVersion[];
   active: boolean;
@@ -147,6 +158,11 @@ export const GROUP_LABEL: Record<KindGroup, string> = {
 /** Sign convention: income raises the tally; expenses and liability payments lower it. */
 export function signFor(kind: TransactionKind): 1 | -1 {
   return kind === 'income' ? 1 : -1;
+}
+
+/** "Loan · " style prefix for a liability's type; empty for every other kind. */
+export function liabilityPrefix(source: { kind: TransactionKind; liabilityType?: LiabilityType }): string {
+  return source.kind === 'liability' && source.liabilityType ? `${LIABILITY_TYPE_LABEL[source.liabilityType]} · ` : '';
 }
 
 export function recurringOccurrenceId(sourceId: string, expectedDate: DateStr): string {

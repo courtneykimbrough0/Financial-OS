@@ -4,7 +4,7 @@ import { formatMedium, parts, type DateStr } from '../../domain/dates';
 import { centsToInput, formatMoney, parseMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { describeRule, nextOccurrenceOnOrAfter } from '../../domain/recurrence';
-import type { RecurrenceRule, RecurringSource, TransactionKind } from '../../domain/types';
+import { LIABILITY_TYPE_LABEL, LIABILITY_TYPES, type LiabilityType, type RecurrenceRule, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { Field, FormError, Icon, MoneyInput, useToast } from './common';
 
@@ -119,6 +119,29 @@ export function TagInput({ value, onChange }: { value: string[]; onChange: (tags
         </div>
       )}
     </div>
+  );
+}
+
+/** Required choice for liability payments: exactly one of card, loan, or line of credit. */
+function LiabilityTypePicker({ value, onChange, error }: { value: LiabilityType | undefined; onChange: (t: LiabilityType) => void; error?: string }) {
+  const id = useId();
+  return (
+    <fieldset className="choice-field" aria-describedby={error ? `${id}-error` : undefined} aria-invalid={error ? true : undefined}>
+      <legend>What kind of liability is it?</legend>
+      <div className="choice-pills">
+        {LIABILITY_TYPES.map((t) => (
+          <label key={t} className={`choice-pill${value === t ? ' selected' : ''}`}>
+            <input type="radio" name={`${id}-type`} value={t} checked={value === t} onChange={() => onChange(t)} />
+            {LIABILITY_TYPE_LABEL[t]}
+          </label>
+        ))}
+      </div>
+      {error && (
+        <p className="field-error" id={`${id}-error`}>
+          {error}
+        </p>
+      )}
+    </fieldset>
   );
 }
 
@@ -247,6 +270,7 @@ export function SourceForm({
 
   const [description, setDescription] = useState(source?.description ?? '');
   const [tags, setTags] = useState<string[]>(source?.tags ?? []);
+  const [liabilityType, setLiabilityType] = useState<LiabilityType | undefined>(source?.liabilityType);
   const [amount, setAmount] = useState(current ? centsToInput(current.amountCents) : '');
   const [startDate, setStartDate] = useState<DateStr>(defaultStart);
   const [rule, setRule] = useState<RuleState>(() => ruleToState(current?.rule ?? { type: kind === 'income' ? 'biweekly' : 'monthly' }, defaultStart || null));
@@ -257,6 +281,7 @@ export function SourceForm({
     e.preventDefault();
     const errs: Record<string, string> = {};
     if (description.trim() === '') errs.description = 'Enter a description.';
+    if (kind === 'liability' && !liabilityType) errs.liabilityType = 'Choose card, loan, or line of credit.';
     const cents = parseMoney(amount);
     if (cents === null || cents <= 0) errs.amount = 'Enter an amount greater than $0, like 1250 or 1250.50.';
     if (!startDate) errs.startDate = 'Choose a date.';
@@ -266,14 +291,14 @@ export function SourceForm({
     if (typeof r === 'string') return setError(r);
 
     if (!source) {
-      const result = run((d, clock) => ops.addSource(d, { kind, description, tags, amountCents: cents!, startDate, rule: r }, clock));
+      const result = run((d, clock) => ops.addSource(d, { kind, description, tags, liabilityType, amountCents: cents!, startDate, rule: r }, clock));
       if (!result.ok) return setError(result.error);
       toast(`Added ${description.trim()}.`);
       return onDone();
     }
 
     if (fresh) {
-      const result = run((d, clock) => ops.redefineSource(d, source.id, { description, tags, amountCents: cents!, startDate, rule: r }, clock));
+      const result = run((d, clock) => ops.redefineSource(d, source.id, { description, tags, liabilityType, amountCents: cents!, startDate, rule: r }, clock));
       if (!result.ok) return setError(result.error);
       toast(`Saved ${description.trim()}.`);
       return onDone();
@@ -283,7 +308,7 @@ export function SourceForm({
       source.active &&
       (cents !== current!.amountCents || startDate !== defaultStart || JSON.stringify(r) !== JSON.stringify(current!.rule));
     const result = run((d, clock) => {
-      const step = ops.updateSourceDetails(d, source.id, { description, tags }, clock);
+      const step = ops.updateSourceDetails(d, source.id, { description, tags, liabilityType }, clock);
       if (!step.ok || !scheduleChanged) return step;
       return ops.changeSourceSchedule(step.data, source.id, { startDate, amountCents: cents!, rule: r }, clock);
     });
@@ -297,6 +322,16 @@ export function SourceForm({
       <Field label={copy.nameLabel} error={fieldErrors.description}>
         {(p) => <input {...p} type="text" maxLength={80} placeholder={copy.placeholder} value={description} onChange={(e) => setDescription(e.target.value)} data-autofocus />}
       </Field>
+      {kind === 'liability' && (
+        <LiabilityTypePicker
+          value={liabilityType}
+          onChange={(t) => {
+            setLiabilityType(t);
+            setFieldErrors(({ liabilityType: _cleared, ...rest }) => rest);
+          }}
+          error={fieldErrors.liabilityType}
+        />
+      )}
       {source && !source.active && <p className="callout callout-info">This item is turned off. Turn it back on to change its amount or schedule.</p>}
       {source && source.active && !fresh && (
         <p className="callout callout-info">

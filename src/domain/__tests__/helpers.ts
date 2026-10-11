@@ -28,7 +28,7 @@ export function source(
   rule: RecurrenceRule = { type: 'monthly' },
   id = `${kind}-${++seq}`,
 ): AppData {
-  return unwrap(ops.addSource(data, { kind, description, amountCents: Math.round(dollars * 100), startDate, rule }, clockAt(today), id));
+  return unwrap(ops.addSource(data, { kind, description, amountCents: Math.round(dollars * 100), startDate, rule, ...(kind === 'liability' ? { liabilityType: 'loan' as const } : {}) }, clockAt(today), id));
 }
 
 export const usd = (dollars: number) => Math.round(dollars * 100);
