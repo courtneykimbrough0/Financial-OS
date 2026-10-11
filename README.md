@@ -100,7 +100,7 @@ Accounts turn on when the build has `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLI
 
 **Setting up a Supabase project**
 
-1. Apply `supabase/migrations/20261011000000_financial_data.sql` (SQL editor or `supabase db push`). Then run `supabase/tests/financial_data_check.sql`; it ends with "All checks passed" and rolls back everything it created.
+1. Apply `supabase/migrations/20261011000000_financial_data.sql`. With the Supabase GitHub integration and **Deploy to production** turned on, merging to the production branch applies it; otherwise use the SQL editor or `supabase db push`. Then run `supabase/tests/financial_data_check.sql`; it ends with "All checks passed" and rolls back everything it created.
 2. Authentication → Emails: in both the **Magic link** and **Confirm signup** templates, include `{{ .Token }}` so the email contains the code.
 3. Authentication → Emails → SMTP: set up a custom email provider before inviting testers. Supabase's built-in sender is for development only and is heavily rate limited.
 4. Set the two `VITE_` variables in the hosting environment. Never put a `service_role` or secret key in a `VITE_` variable; those are shipped to browsers.
