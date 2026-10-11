@@ -1,14 +1,14 @@
-import { useEffect, useState } from 'react';
-import { CreditCard, HandCoins, LayoutGrid, Receipt, type LucideIcon } from 'lucide-react';
-import { useAccount } from '../state/account';
+import { useEffect } from 'react';
+import { CreditCard, HandCoins, LayoutGrid, Receipt, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
 import { useDataMode } from '../state/mode';
 import { useStore } from '../state/store';
-import { AccountActions, DeviceDataOffer, RecoveredChangesNotice } from './components/account';
-import { DownloadBackupButton, RestoreBackupButton, SaveStatusBar } from './components/backup';
-import { Icon, Modal } from './components/common';
+import { DeviceDataOffer, RecoveredChangesNotice } from './components/account';
+import { SaveStatusBar } from './components/backup';
+import { Icon } from './components/common';
 import { navigate, useRoute, type Route } from './router';
 import { Dashboard } from './screens/Dashboard';
 import { Onboarding } from './screens/Onboarding';
+import { Settings } from './screens/Settings';
 import { ExpensesScreen, SourcesScreen } from './screens/SourcesScreen';
 
 const NAV: { route: Route; label: string; icon: LucideIcon }[] = [
@@ -36,6 +36,7 @@ export function App() {
     expenses: 'Expenses',
     liabilities: 'Liabilities',
     savings: 'Savings',
+    settings: 'Settings',
     onboarding: 'Get started',
   };
   useEffect(() => {
@@ -63,6 +64,11 @@ export function App() {
             ))}
           </nav>
         )}
+        {showNav && (
+          <a className="icon-button settings-link" href="#/settings" aria-current={route === 'settings' ? 'page' : undefined} aria-label="Settings">
+            <Icon icon={SettingsIcon} size={22} />
+          </a>
+        )}
       </header>
       <main id="main" className={showNav ? 'with-nav' : ''}>
         <SaveStatusBar />
@@ -73,7 +79,7 @@ export function App() {
         {route === 'expenses' && <ExpensesScreen key="expenses" />}
         {route === 'savings' && <ExpensesScreen key="savings" initial="savings" />}
         {route === 'liabilities' && <SourcesScreen key="liability" kind="liability" />}
-        {showNav && <DataNotice />}
+        {route === 'settings' && <Settings />}
         <RecoveredChangesNotice />
         <DeviceDataOffer />
       </main>
@@ -110,56 +116,5 @@ function SampleBanner() {
         <span className="sr-only"> sample data</span>
       </button>
     </div>
-  );
-}
-
-/** States plainly where data lives, and offers sample data in its own separate space. */
-function DataNotice() {
-  const { data } = useStore();
-  const account = useAccount();
-  const { enterSample } = useDataMode();
-  const [confirming, setConfirming] = useState(false);
-  return (
-    <footer className="data-notice">
-      {account ? (
-        <p>Your data is saved to your Financial OS account, with a copy on this device so it opens offline. Changes made offline are saved to your account when you reconnect.</p>
-      ) : (
-        <p>Your data is saved in this browser on this device only. It isn’t synced to other devices, and clearing your browser’s site data removes it. Download a backup to keep a copy or move it to another device.</p>
-      )}
-      {!data.isSample && (
-        <div className="data-actions">
-          <DownloadBackupButton />
-          <RestoreBackupButton />
-          <button type="button" className="button small link" onClick={() => setConfirming(true)}>
-            Explore with sample data
-          </button>
-        </div>
-      )}
-      <AccountActions />
-      {confirming && (
-        <Modal title="Explore with sample data?" onClose={() => setConfirming(false)}>
-          <div className="stack">
-            <p>
-              You’ll see a made-up example with a late paycheck, a bill that cost more than expected, an overdue bill, and a stretch where projected cash flow dips below $0.
-            </p>
-            <p>Sample data is kept separate from yours. Your own entries stay exactly as they are, and you can return to them anytime with “Leave” on the sample-data banner.</p>
-            <div className="form-actions">
-              <button type="button" className="button secondary" onClick={() => setConfirming(false)} data-autofocus>
-                Not now
-              </button>
-              <button
-                type="button"
-                className="button primary"
-                onClick={() => {
-                  void enterSample().then(() => navigate('dashboard'));
-                }}
-              >
-                Show sample data
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-    </footer>
   );
 }

@@ -10,8 +10,8 @@
  *   T+11  Next paycheck $1,800 (forecast anchor is T+10).
  *   T+12  Rent $1,200.
  *   T+15  Car loan $350 (liability).
- *   T+20  One-time car repair $700 (bill) — pushes projected cash flow below $0.
- *   T+25  Paycheck $1,800 — projected cash flow recovers.
+ *   T+20  One-time car repair $700 (bill) — pushes the running total below $0.
+ *   T+25  Paycheck $1,800 — the running total recovers.
  *   T+26  Emergency fund $100 every 2 weeks (savings).
  *   T+27  Streaming service $15 monthly (subscription).
  */

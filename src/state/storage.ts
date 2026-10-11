@@ -86,11 +86,12 @@ export function migrate(raw: unknown): AppData {
     revision,
     onboardingComplete: Boolean(doc.onboardingComplete),
     ...(doc.isSample ? { isSample: true } : {}),
-    sources: sources.map(({ category: _oldCategory, liabilityType, ...s }: RecurringSource & { category?: unknown }) => ({
+    sources: sources.map(({ category: _oldCategory, liabilityType, mainPaycheck, ...s }: RecurringSource & { category?: unknown }) => ({
       ...s,
       kind: upgradeKind(s.kind),
       // Keep a liability type only when it is one of the three allowed values; the edit form asks for it otherwise.
       ...(s.kind === 'liability' && liabilityType && LIABILITY_TYPES.includes(liabilityType) ? { liabilityType } : {}),
+      ...(s.kind === 'income' && mainPaycheck === true ? { mainPaycheck: true } : {}),
       tags: Array.isArray(s.tags) ? s.tags : [],
       pausedRanges: s.pausedRanges ?? [],
       endDate: s.endDate ?? null,

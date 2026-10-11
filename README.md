@@ -20,13 +20,13 @@ Node 20+ is required. The e2e script uses Playwright with a pinned clock and sav
 
 ### Sample data
 
-To explore without entering anything, choose **Explore with sample data**. The button is on the onboarding welcome screen and at the bottom of every main screen. Sample data is fictional, dated relative to today, and stored under its own key (`financial-os:sample-data`). It never mixes with your real data, and a banner stays on screen the whole time. **Leave** (on the sample-data banner) discards the sample and returns you to your own data unchanged.
+To explore without entering anything, choose **Explore with sample data**. The button is on the onboarding welcome screen and on the Settings page. Sample data is fictional, dated relative to today, and stored under its own key (`financial-os:sample-data`). It never mixes with your real data, and a banner stays on screen the whole time. **Leave** (on the sample-data banner) discards the sample and returns you to your own data unchanged.
 
 The sample (`src/domain/sample.ts`) covers recurring income, rent, utilities, a car-loan liability, and a one-time car repair. It also includes:
 - a paycheck that came a day late and was smaller than expected ($1,650 instead of $1,800);
 - an electric bill that cost more than expected ($128 instead of $90);
 - an unpaid phone bill that shows as overdue;
-- a stretch where projected cash flow drops below $0 before the next payday.
+- a stretch where the running total drops below $0 before the next payday.
 
 It also has a subscription and a savings item.
 
@@ -34,11 +34,12 @@ It also has a subscription and a savings item.
 
 | Screen | Purpose |
 | --- | --- |
-| Guided setup | Four steps: welcome, income, expenses (bills, subscriptions, liability payments, savings, and one-time expenses), review. One-time income can be added too. A **Left to spend** figure for the first pay period updates as you go. The review shows the next payday, the lowest point, a timing-gap warning when one exists, and a breakdown of the first pay period. |
-| Dashboard | Month / Week / Paycheck / Custom views. Each view has a summary card (lowest point, timing gap, next payday), a calendar with period totals, and a Week by week / Day by day breakdown. Days and weeks open in sheets. Overdue items sit behind a banner at the top. |
-| Income | Recurring income (add, edit from an effective date, turn off/on) and one-time income. |
+| Guided setup | Seven steps, one category per step so long lists stay manageable: welcome, income (plus one-time income and, with two or more incomes, the main paycheck), bills (plus one-time expenses), subscriptions, liability payments, savings, review. A **Cash flow** figure for the first pay period updates as you go. The review shows the next payday, the lowest running total, a timing-gap warning when one exists, and a breakdown of the first pay period. |
+| Dashboard | Month / Week / Paycheck / Custom views. Each view leads with **cash flow** (income − expenses) for the period, then the lowest running total, any timing gap, and the next payday. Below: a calendar, a breakdown by category (categories with nothing in the period are left out), totals by tag, and the period's weeks. Each week shows its running total and opens in place to show its days; a day opens a sheet with its transactions. The week view lists its days directly. Overdue items sit behind a banner at the top. |
+| Income | Recurring income (add, edit from an effective date, turn off/on), one-time income, and the **main paycheck** choice when there are two or more incomes. |
 | Expenses | Three tabs: **Bills** (with one-time expenses), **Subscriptions**, and **Savings** (with one-time deposits). |
 | Liabilities | Recurring payments on a **card**, **loan**, or **line of credit**. Choosing one of the three is required. Each payment counts once, as money out. |
+| Settings | The gear in the top bar. Account (signed-in email, sign out, delete account), backups (download, restore), and sample data. |
 
 Tap any transaction to mark it received/paid, change its date or amount, cancel it, undo, or fix a recorded actual.
 
@@ -85,7 +86,7 @@ Data is one versioned JSON document per user (`schemaVersion: 2`), stored on the
 
 - **Revisions.** Each save increments `revision`. A save is accepted only if it's based on the revision currently stored. Otherwise it is rejected as a conflict, so a stale copy (another tab, later another device) can't overwrite newer data. When that happens, the app shows "Your data was changed somewhere else" with a **Reload** button.
 - **Background saving.** Changes appear on screen immediately and save in the background, one save at a time. Changes made while a save is running are folded into the next save. A failed save keeps the change on screen and shows **Try again**. The page warns before closing if a change is still unsaved. The app shows a loading state until data has loaded.
-- **Backups.** **Download backup** (at the bottom of every main screen) saves a dated JSON file. **Restore from backup** (there and on the setup welcome screen) validates the file the same way saved data is validated, then replaces the current data after the user confirms.
+- **Backups.** **Download backup** (on the Settings page) saves a dated JSON file. **Restore from backup** (there and on the setup welcome screen) validates the file the same way saved data is validated, then replaces the current data after the user confirms.
 - If saved data can't be read, a copy is set aside under a separate key instead of being discarded.
 
 ### Accounts (Firebase)
@@ -113,27 +114,29 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 - *Canceled*: shown on its scheduled date, struck through, and never counted.
 - *Outstanding* (scheduled or overdue): the latest scheduled date and amount. An overdue item dated before the forecast start moves forward to the forecast start ("Overdue since …"), so money still owed or expected stays in the tally.
 
-**Forecast anchor.** The next expected payday is the earliest recurring-income occurrence that is either still outstanding (including overdue, since a late paycheck hasn't arrived yet) or was received today. The anchor is the day before that payday. The tally is $0 at the end of the anchor day, and transactions count from the payday onward. If no recurring income is active, the dashboard explains what to add and shows no tally. It never picks an arbitrary date.
+**Main paycheck.** One recurring income defines pay periods: the one marked as the main paycheck, or else the first active income. Other income still counts as money in; it just doesn't start a pay period. A household paid on Wednesday and Thursday gets weekly pay periods starting Wednesday, instead of a one-day period followed by a six-day one.
 
-**Running tally.** `tally(d) = tally(d−1) + income(d) − outflows(d)` for each day after the anchor. Days on or before the anchor show "—". A week, pay period, or custom range that starts later carries the cumulative value forward from the anchor and never restarts at $0. A negative tally means scheduled outflows have run ahead of inflows since the anchor. The UI calls it "projected cash flow" and never "balance".
+**Forecast anchor.** The next expected payday is the earliest main-paycheck occurrence that is either still outstanding (including overdue, since a late paycheck hasn't arrived yet) or was received today. The anchor is the day before that payday. The tally is $0 at the end of the anchor day, and transactions count from the payday onward. If no recurring income is active, the dashboard explains what to add and shows no tally. It never picks an arbitrary date.
 
-**KPIs.** Projected income, projected expenses (savings included), and **left to spend** (income − expenses) are the sums of counted entries whose effective date falls within the selected period.
+**Running tally.** `tally(d) = tally(d−1) + income(d) − outflows(d)` for each day after the anchor. Days on or before the anchor show "—". A week, pay period, or custom range that starts later carries the cumulative value forward from the anchor and never restarts at $0. A negative tally means scheduled outflows have run ahead of inflows since the anchor. The UI calls it the "running total" and never "balance".
 
-**Categories.** Every item is either **income** or an **expense**. Expenses are bills, subscriptions, liability payments, and savings (savings is treated as an expense). Spending is not tracked: what remains after expenses is left to spend.
+**KPIs.** Projected income, projected expenses (savings included), and **cash flow** (income − expenses) are the sums of counted entries whose effective date falls within the selected period.
+
+**Categories.** Every item is either **income** or an **expense**. Expenses are bills, subscriptions, liability payments, and savings (savings is treated as an expense). Spending is not tracked: income minus expenses is the period's cash flow.
 
 **Liability types.** Every liability payment is exactly one of card, loan, or line of credit. No category in the app is labeled "other", "misc", or anything similarly ambiguous.
 
 **Tags.** Tags are optional, free-text labels (e.g. "housing", "gaming") that the user adds to any item. None are built in. The only suggestions offered are tags the user has already created.
 
-**Left to spend** (`src/domain/plan.ts`) = income − expenses for a period. It covers repeating and one-time items on the dates they fall, uses actual amounts once recorded, and leaves out canceled items. On the dashboard it follows the selected period (month, week, pay period, or custom). During setup it covers the first pay period: the first payday through the day before the next one.
+**Cash flow** (`src/domain/plan.ts`) = income − expenses for a period. It covers repeating and one-time items on the dates they fall, uses actual amounts once recorded, and leaves out canceled items. On the dashboard it follows the selected period (month, week, pay period, or custom). During setup it covers the first pay period: the first payday through the day before the next one.
 
-**Timing gaps at the end of setup.** The review step keeps the lowest point in the first pay period. When the running tally drops below $0 anywhere in the next 90 days, a warning banner appears ("2 timing gaps ahead"). It opens a sheet listing every gap's dates, length, and lowest amount. The banner only shows when a gap exists, and it gives no advice.
+**Timing gaps at the end of setup.** The review step keeps the lowest running total in the first pay period. When the running tally drops below $0 anywhere in the next 90 days, a warning banner appears ("2 timing gaps ahead"). It opens a sheet listing every gap's dates, length, and lowest amount. The banner only shows when a gap exists, and it gives no advice.
 
-**One-time items** (income, bills, savings) occur exactly once. They count everywhere their date falls: the running tally, calendar, month, week, pay period, custom range, KPIs, left to spend, and timing gaps. A one-time income never starts a new pay period.
+**One-time items** (income, bills, savings) occur exactly once. They count everywhere their date falls: the running tally, calendar, month, week, pay period, custom range, KPIs, cash flow, and timing gaps. A one-time income never starts a new pay period.
 
 **Weeks.** Weeks run Sunday through Saturday. Month summaries split weeks at the month's edges, so the weekly totals add up exactly to the month.
 
-**Paycheck cycles.** Cycle boundaries are the dates of counted recurring-income entries from the forecast start onward, merged across all income sources. A cycle runs from one income date to the day before the next. A late paycheck's boundary uses its actual date. If there aren't two upcoming income dates, the view explains why instead of inventing dates.
+**Paycheck cycles.** Cycle boundaries are the dates of counted main-paycheck entries from the forecast start onward. A cycle runs from one main payday to the day before the next; other income lands inside the cycle. A late paycheck's boundary uses its actual date. If there aren't two upcoming main paydays, the view explains why instead of inventing dates.
 
 **Recurrence.**
 - *Every 2 weeks* is every 14 days. *Twice a month* uses two explicit days of the month (e.g. the 1st and 15th). That gives 24 payments a year, compared with 26 for every 2 weeks.
@@ -155,7 +158,7 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 - `src/state/__tests__/firestore.rules.test.ts` (`npm run test:rules`): every guarantee in `security_spec.md`, checked against the real rules in the Firestore emulator, plus the app's Firestore storage code.
 - `src/ui/__tests__/accounts.test.tsx`: Google sign-in, moving device data into a new account, offline saving, recovered changes, and account deletion.
 - `src/ui/__tests__`: recording an actual, the double-tap guard, future-date validation, and cancellation, all through the real UI.
-- `scripts/e2e-smoke.mjs`: drives the production build in Chromium with a pinned clock (onboarding → all four views → late paycheck → reload → sample data).
+- `scripts/e2e-smoke.mjs`: drives a device-only production build in Chromium with a pinned clock (onboarding step by step → all four views → weeks opening into days → late paycheck → settings → backup and restore → sample data).
 
 ## Design system
 
@@ -171,7 +174,7 @@ The visual language (color, type, spacing, and components) is documented in [DES
 
 ## Known limitations
 
-- Without accounts turned on, data lives in this browser on one device and isn't synced; clearing site data erases it. Users can download a backup and restore it on any device. The app says so at the bottom of every main screen.
+- Without accounts turned on, data lives in this browser on one device and isn't synced; clearing site data erases it. Users can download a backup and restore it on any device. The Settings page says so.
 - With accounts, two devices editing at the same time don't merge changes: the first save wins and the other device's changes are offered as a download.
 - USD only.
 - Recurring sources can be turned off but not deleted once they have recorded history. This is intentional, so the history is preserved.

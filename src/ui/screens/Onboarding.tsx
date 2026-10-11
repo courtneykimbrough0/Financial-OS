@@ -11,9 +11,9 @@ import { useAccount } from '../../state/account';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
 import { FlowAmount, Icon, KindAvatar, Modal, SectionLabel, TagList, useToast } from '../components/common';
-import { KIND_COPY, OneTimeForm, SourceForm } from '../components/forms';
+import { KIND_COPY, MainPaycheckPicker, OneTimeForm, SourceForm } from '../components/forms';
 import { TimingGapsBanner } from '../components/gaps';
-import { LeftToSpend, PeriodBreakdown, TagBreakdown } from '../components/plan';
+import { CashFlowBanner, PeriodBreakdown, TagBreakdown } from '../components/plan';
 import { SignedInLine } from '../components/account';
 import { RestoreBackupButton } from '../components/backup';
 import { navigate } from '../router';
@@ -34,15 +34,33 @@ const STEPS: StepDef[] = [
     body: 'Add your regular income, like a paycheck or benefits. Your forecast is built around your next expected payday.',
   },
   {
-    name: 'Expenses',
-    kinds: ['bill', 'subscription', 'liability', 'savings'],
-    title: 'What goes out?',
-    body: 'Bills, subscriptions, loan or card payments, and money you set aside in savings. Add one-time expenses too.',
+    name: 'Bills',
+    kinds: ['bill'],
+    title: 'What bills do you pay?',
+    body: 'Rent, utilities, phone, insurance, and other regular bills. Add one-time expenses here too, like a car repair.',
+  },
+  {
+    name: 'Subscriptions',
+    kinds: ['subscription'],
+    title: 'What subscriptions renew?',
+    body: 'Streaming services, apps, and memberships that charge you on a schedule.',
+  },
+  {
+    name: 'Liabilities',
+    kinds: ['liability'],
+    title: 'What do you pay toward debts?',
+    body: 'Regular payments on a card, loan, or line of credit.',
+  },
+  {
+    name: 'Savings',
+    kinds: ['savings'],
+    title: 'What do you set aside?',
+    body: 'Money you move into savings on a schedule. It counts as an expense, so cash flow shows what’s left after it.',
   },
   { name: 'Review', kinds: [], title: 'Check everything over', body: 'Tap anything to change it before you start.' },
 ];
 const REVIEW = STEPS.length - 1;
-const STEP_OF: Record<TransactionKind, number> = { income: 1, bill: 2, subscription: 2, liability: 2, savings: 2 };
+const STEP_OF: Record<TransactionKind, number> = { income: 1, bill: 2, subscription: 3, liability: 4, savings: 5 };
 
 const KIND_SECTION: Record<TransactionKind, { label: string; add: string; addAnother: string; empty: string }> = {
   income: { label: 'Income', add: 'Add income', addAnother: 'Add another income', empty: 'No income added yet' },
@@ -170,7 +188,7 @@ function SetupSheetView({ sheet, onClose }: { sheet: SetupSheet; onClose: () => 
 }
 
 /** Items of one kind: a list card plus an add button, or an empty card with the add button. */
-function KindSection({ kind, labelled, onSheet }: { kind: TransactionKind; labelled: boolean; onSheet: (s: SetupSheet) => void }) {
+function KindSection({ kind, onSheet }: { kind: TransactionKind; onSheet: (s: SetupSheet) => void }) {
   const { data } = useStore();
   const items = data.sources.filter((s) => s.kind === kind);
   const copy = KIND_SECTION[kind];
@@ -179,32 +197,6 @@ function KindSection({ kind, labelled, onSheet }: { kind: TransactionKind; label
       <Icon icon={Plus} size={18} /> {items.length ? copy.addAnother : copy.add}
     </button>
   );
-
-  if (labelled) {
-    return (
-      <section className="stack-sm" aria-labelledby={`setup-${kind}`}>
-        <SectionLabel
-          id={`setup-${kind}`}
-          action={
-            <button type="button" className="button small link" onClick={() => onSheet({ mode: 'add', kind })} aria-haspopup="dialog">
-              <Icon icon={Plus} size={16} /> {copy.add}
-            </button>
-          }
-        >
-          {copy.label}
-        </SectionLabel>
-        {items.length === 0 ? (
-          <p className="card review-empty muted">{copy.empty}</p>
-        ) : (
-          <ul className="entry-list card list-card">
-            {items.map((s) => (
-              <SourceRow key={s.id} s={s} onOpen={() => onSheet({ mode: 'edit', source: s })} />
-            ))}
-          </ul>
-        )}
-      </section>
-    );
-  }
 
   return items.length === 0 ? (
     <div className="empty-state">
@@ -256,15 +248,12 @@ function OneTimeSection({ income, onSheet }: { income: boolean; onSheet: (s: Set
   );
 }
 
-function KindStep({ kinds, onSheet }: { kinds: TransactionKind[]; onSheet: (s: SetupSheet) => void }) {
-  const labelled = kinds.length > 1;
-  const income = kinds.includes('income');
+function KindStep({ kind, onSheet }: { kind: TransactionKind; onSheet: (s: SetupSheet) => void }) {
   return (
     <div className="stack-lg">
-      {kinds.map((k) => (
-        <KindSection key={k} kind={k} labelled={labelled} onSheet={onSheet} />
-      ))}
-      <OneTimeSection income={income} onSheet={onSheet} />
+      <KindSection kind={kind} onSheet={onSheet} />
+      {kind === 'income' && <MainPaycheckPicker />}
+      {(kind === 'income' || kind === 'bill') && <OneTimeSection income={kind === 'income'} onSheet={onSheet} />}
       <p className="hint center">Tap an item to change or remove it.</p>
     </div>
   );
@@ -281,7 +270,10 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
   const days = payday ? diffDays(today, payday) : 0;
   const groups: [string, TransactionKind[]][] = [
     ['Income', ['income']],
-    ['Expenses', ['bill', 'subscription', 'liability', 'savings']],
+    ['Bills', ['bill']],
+    ['Subscriptions', ['subscription']],
+    ['Liability payments', ['liability']],
+    ['Savings', ['savings']],
   ];
 
   return (
@@ -304,7 +296,7 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
               <p className="hero-label" id="review-hero-label">
                 Next expected payday
               </p>
-              <button type="button" className="icon-button small-icon" onClick={() => setAbout(true)} aria-label="How projected cash flow works">
+              <button type="button" className="icon-button small-icon" onClick={() => setAbout(true)} aria-label="How the running total works">
                 <Icon icon={Info} size={20} />
               </button>
             </div>
@@ -317,7 +309,7 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
             <div className="hero-footer">
               <Icon icon={low.tallyCents < 0 ? AlertCircle : Banknote} size={22} className={low.tallyCents < 0 ? 'flag-neg' : 'hero-footer-icon'} />
               <span>
-                Lowest point before {formatShort(cycle.end)}: <strong className={low.tallyCents < 0 ? 'negative-text' : ''}>{formatMoney(low.tallyCents)}</strong>
+                Lowest running total before {formatShort(cycle.end)}: <strong className={low.tallyCents < 0 ? 'negative-text' : ''}>{formatMoney(low.tallyCents)}</strong>
                 <span className="muted"> · {formatShort(low.date)}</span>
               </span>
             </div>
@@ -332,7 +324,8 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
 
       {groups.map(([label, kinds]) => {
         const items = data.sources.filter((s) => kinds.includes(s.kind));
-        const once = oneTimes(data.records, label === 'Income');
+        // One-time expenses are added on the Bills step, so they're listed there.
+        const once = label === 'Income' ? oneTimes(data.records, true) : label === 'Bills' ? oneTimes(data.records, false) : [];
         return (
           <section key={label} className="stack-sm" aria-labelledby={`review-${label}`}>
             <SectionLabel
@@ -363,14 +356,14 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
       })}
 
       <p className="hint center">
-        <Icon icon={CalendarClock} size={16} /> You can change any of these later. Everything is saved on this device.
+        <Icon icon={CalendarClock} size={16} /> You can change any of these later.
       </p>
 
       {about && forecast.anchor && payday && (
-        <Modal title="How projected cash flow works" onClose={() => setAbout(false)}>
+        <Modal title="How the running total works" onClose={() => setAbout(false)}>
           <div className="stack">
             <p>
-              Projected cash flow starts at $0 on {formatMedium(forecast.anchor)}, the day before your next expected payday ({formatMedium(payday)}), and adds money in and subtracts money out day by day.
+              The running total starts at $0 on {formatMedium(forecast.anchor)}, the day before your next expected payday ({formatMedium(payday)}), and adds money in and subtracts money out day by day.
             </p>
             <p>It shows timing, separate from your bank balance.</p>
           </div>
@@ -436,7 +429,7 @@ export function Onboarding() {
         </p>
       </div>
 
-      {step > 0 && <LeftToSpend plan={plan} />}
+      {step > 0 && <CashFlowBanner plan={plan} />}
 
       <header className="onboarding-header">
         <h1 ref={headingRef} tabIndex={-1}>
@@ -450,7 +443,7 @@ export function Onboarding() {
           <ul className="card list-card checklist">
             <li>Add when you expect to get paid</li>
             <li>Add your bills, subscriptions, loan payments, and savings</li>
-            <li>See what’s left to spend and your projected cash flow</li>
+            <li>See your cash flow for each pay period and your running total day by day</li>
             <li>Record what actually happens, and the forecast updates</li>
           </ul>
           <p className="hint center">
@@ -471,7 +464,7 @@ export function Onboarding() {
           <SignedInLine />
         </div>
       )}
-      {def.kinds.length > 0 && <KindStep key={step} kinds={def.kinds} onSheet={setSheet} />}
+      {def.kinds.length > 0 && <KindStep key={step} kind={def.kinds[0]!} onSheet={setSheet} />}
       {step === REVIEW && <Review onSheet={setSheet} goTo={setStep} today={today} />}
 
       {needIncome && (

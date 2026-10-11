@@ -288,7 +288,7 @@ describe('K. View changes', () => {
   it('month, week, paycheck, and custom views share one anchor and never reset the tally', () => {
     const { d, today } = richData();
     const f = buildForecast(d, today);
-    const reference = new Map(dailyTimeline(f, f.forecastStart!, '2027-02-28').map((r) => [r.date, r.tallyCents]));
+    const reference = new Map(dailyTimeline(f, f.forecastStart!, '2027-06-30').map((r) => [r.date, r.tallyCents]));
     const check = (rows: ReturnType<typeof dailyTimeline>) => {
       for (const r of rows) if (r.date >= f.forecastStart!) expect(r.tallyCents).toBe(reference.get(r.date));
     };
@@ -334,11 +334,10 @@ describe('L. Date and recurrence boundaries', () => {
     const row = dailyTimeline(f, '2026-11-13', '2026-11-13')[0]!;
     expect(row.entries.map((e) => e.occurrence.description)).toEqual(['Job A', 'Job B', 'Car insurance']);
     expect(row.netCents).toBe(usd(1150));
-    // Cycles from both schedules merge into weekly boundaries.
-    expect(paycheckCycles(f, 3).map((c) => [c.start, c.end])).toEqual([
-      ['2026-11-13', '2026-11-19'],
-      ['2026-11-20', '2026-11-26'],
-      ['2026-11-27', '2026-12-03'],
+    // Pay periods follow the main paycheck (Job A, biweekly); Job B's weekly pay lands inside them.
+    expect(paycheckCycles(f, 2).map((c) => [c.start, c.end])).toEqual([
+      ['2026-11-13', '2026-11-26'],
+      ['2026-11-27', '2026-12-10'],
     ]);
   });
 

@@ -12,7 +12,7 @@ import { navigate } from '../router';
 import { downloadFile } from './backup';
 import { Icon, Modal, useToast } from './common';
 
-/** Signed-in email, sign out, and delete account. Renders nothing without an account. */
+/** Settings card: signed-in email, sign out, and delete account. Renders nothing without an account. */
 export function AccountActions() {
   const account = useAccount();
   const { data } = useStore();
@@ -47,17 +47,20 @@ export function AccountActions() {
 
   return (
     <>
-      <p className="account-line">
-        Signed in as <strong>{account.user.email}</strong>
-      </p>
-      <div className="data-actions">
-        <button type="button" className="button small link" onClick={startSignOut}>
-          <Icon icon={LogOut} size={16} /> Sign out
-        </button>
-        <button type="button" className="button small danger-link" onClick={() => setSheet('delete')}>
-          <Icon icon={Trash2} size={16} /> Delete account
-        </button>
-      </div>
+      <section className="card settings-card" aria-labelledby="settings-account">
+        <h2 id="settings-account">Account</h2>
+        <p>
+          Signed in as <strong>{account.user.email}</strong>
+        </p>
+        <div className="settings-actions">
+          <button type="button" className="button small link" onClick={startSignOut}>
+            <Icon icon={LogOut} size={16} /> Sign out
+          </button>
+          <button type="button" className="button small danger-link" onClick={() => setSheet('delete')}>
+            <Icon icon={Trash2} size={16} /> Delete account
+          </button>
+        </div>
+      </section>
 
       {sheet === 'sign-out' && (
         <Modal title="Sign out now?" onClose={() => setSheet(null)}>

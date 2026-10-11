@@ -1,7 +1,7 @@
 /**
- * Left to spend for a period:
+ * Cash flow for a period:
  *
- *   Left to spend = income − expenses
+ *   Cash flow = income − expenses
  *
  * where expenses are bills, subscriptions, liability payments, and savings.
  * It is computed from the same forecast entries as every other view, so
@@ -27,8 +27,8 @@ export interface PeriodPlan {
   incomeCents: Cents;
   /** Bills + subscriptions + liability payments + savings. */
   expensesCents: Cents;
-  /** Income − expenses. */
-  leftToSpendCents: Cents;
+  /** Cash flow: income − expenses. */
+  cashFlowCents: Cents;
   /** Totals per user-created tag in the period. An item with several tags counts toward each. */
   byTag: TagTotal[];
 }
@@ -56,7 +56,7 @@ export function periodPlan(forecast: Forecast, start: DateStr, end: DateStr): Pe
     byKind,
     incomeCents: byKind.income,
     expensesCents,
-    leftToSpendCents: byKind.income - expensesCents,
+    cashFlowCents: byKind.income - expensesCents,
     byTag: [...tags.values()].sort((a, b) => b.outCents + b.inCents - (a.outCents + a.inCents) || a.tag.localeCompare(b.tag)),
   };
 }

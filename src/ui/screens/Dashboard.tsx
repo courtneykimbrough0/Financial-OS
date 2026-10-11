@@ -3,8 +3,10 @@ import {
   AlertCircle,
   Banknote,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Info,
   TrendingDown,
 } from 'lucide-react';
@@ -32,11 +34,10 @@ import {
   buildForecast,
   dailyTimeline,
   lowestPoint,
-  monthWeekSummaries,
   negativeStretches,
   overdueEntries,
   paycheckCycles,
-  periodKpis,
+  weekSummaries,
   type DayRow,
   type Forecast,
   type ForecastEntry,
@@ -44,10 +45,12 @@ import {
   type NegativeStretch,
 } from '../../domain/forecast';
 import { formatCompact, formatMoney, formatSignedMoney } from '../../domain/money';
+import { periodPlan, type PeriodPlan } from '../../domain/plan';
 import { doneVerb } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { EmptyState, FlowAmount, Icon, KindAvatar, KindTag, Modal, SectionLabel, StatusBadge } from '../components/common';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
+import { PeriodBreakdown, TagBreakdown } from '../components/plan';
 import { navigate } from '../router';
 
 type View = 'month' | 'week' | 'cycle' | 'custom';
@@ -71,12 +74,11 @@ function tallyText(cents: number | null): string {
 
 /**
  * Which bottom sheet is open. Details live in sheets so the dashboard itself
- * stays short: tap a day, a week, or the overdue banner to see more. An
+ * stays short: tap a day or the overdue banner to see more. An
  * occurrence opened from another sheet returns to it when closed.
  */
 type Sheet =
   | { kind: 'day'; date: DateStr }
-  | { kind: 'week'; start: DateStr; end: DateStr }
   | { kind: 'overdue' }
   | { kind: 'occurrence'; id: string; back: Sheet | null }
   | { kind: 'about-tally' }
@@ -188,15 +190,15 @@ export function Dashboard() {
                 onNext={cycleIndex < cycles.length - 1 ? () => setCycleIndex(cycleIndex + 1) : undefined}
               />
               <p className="hint center">
-                Pay period {cycleIndex + 1} of {cycles.length} · starts with {cycle.paydayEntries.map((e) => e.occurrence.description).join(' and ')} · next income {formatShort(addDays(cycle.end, 1))}
+                Pay period {cycleIndex + 1} of {cycles.length} · starts with {cycle.paydayEntries.map((e) => e.occurrence.description).join(' and ')} · next main payday {formatShort(addDays(cycle.end, 1))}
               </p>
             </div>
           ) : (
             <EmptyState title="Pay periods aren’t available yet">
               <p>
                 {forecast.issue
-                  ? 'Add a recurring income with its next payment date. Pay periods run from one expected payday to the next.'
-                  : 'We need at least two upcoming paydays to show a pay period. Check that your recurring income is turned on.'}
+                  ? 'Add a recurring income with its next payment date. Pay periods run from one main payday to the next.'
+                  : 'We need at least two upcoming main paydays to show a pay period. Check that your main paycheck is turned on.'}
               </p>
             </EmptyState>
           ))}
@@ -227,7 +229,6 @@ export function Dashboard() {
             today={today}
             selected={selected && selected >= range[0] && selected <= range[1] ? selected : null}
             onDay={openDay}
-            onWeek={(start, end) => setSheet({ kind: 'week', start, end })}
             onInfo={(kind) => setSheet({ kind })}
           />
         )}
@@ -237,23 +238,22 @@ export function Dashboard() {
       {sheet?.kind === 'day' && (
         <DaySheet forecast={forecast} date={sheet.date} onClose={() => setSheet(null)} onOpen={(id) => openOccurrence(id, sheet)} />
       )}
-      {sheet?.kind === 'week' && (
-        <WeekSheet forecast={forecast} start={sheet.start} end={sheet.end} onClose={() => setSheet(null)} onOpen={(id) => openOccurrence(id, sheet)} />
-      )}
       {sheet?.kind === 'overdue' && (
         <Modal title={overdue.length === 1 ? '1 transaction needs an update' : `${overdue.length} transactions need an update`} onClose={() => setSheet(null)}>
           <OverdueList entries={overdue} onOpen={(id) => openOccurrence(id, overdue.length > 1 ? sheet : null)} />
         </Modal>
       )}
       {sheet?.kind === 'about-tally' && forecast.anchor && forecast.forecastStart && (
-        <Modal title="How projected cash flow works" onClose={() => setSheet(null)}>
+        <Modal title="How cash flow and the running total work" onClose={() => setSheet(null)}>
           <div className="stack">
             <p>
-              Projected cash flow starts at $0 on {formatMedium(forecast.anchor)}, the day before your next expected payday ({formatMedium(forecast.forecastStart)}), and adds money in and subtracts money out
-              day by day.
+              <strong>Cash flow</strong> is income minus expenses (including savings) for the period you’re looking at.
             </p>
-            <p>It shows timing, separate from your bank balance. A number below $0 means scheduled money out runs ahead of money in by that amount.</p>
-            <p className="hint">Days on or before {formatMedium(forecast.anchor)} show “—” in place of a projected cash flow.</p>
+            <p>
+              The <strong>running total</strong> starts at $0 on {formatMedium(forecast.anchor)}, the day before your next expected payday ({formatMedium(forecast.forecastStart)}), and adds money in and subtracts money out
+              day by day. It shows timing, separate from your bank balance. Below $0 means scheduled money out runs ahead of money in by that amount.
+            </p>
+            <p className="hint">Days on or before {formatMedium(forecast.anchor)} show “—” in place of a running total.</p>
           </div>
         </Modal>
       )}
@@ -276,7 +276,7 @@ function IssueCard({ forecast }: { forecast: Forecast }) {
       </p>
       <p>
         {forecast.issue === 'no-recurring-income'
-          ? 'Your running cash flow starts the day before your next expected payday, so we need at least one recurring income (like a paycheck or benefits) with its next payment date.'
+          ? 'Your running total starts the day before your next expected payday, so we need at least one recurring income (like a paycheck or benefits) with its next payment date.'
           : 'None of your recurring income has an upcoming payment. Check its next payment date.'}{' '}
         Totals for each period are still shown below.
       </p>
@@ -359,7 +359,6 @@ function PeriodBody({
   today,
   selected,
   onDay,
-  onWeek,
   onInfo,
 }: {
   forecast: Forecast;
@@ -368,73 +367,98 @@ function PeriodBody({
   today: DateStr;
   selected: DateStr | null;
   onDay: (d: DateStr) => void;
-  onWeek: (start: DateStr, end: DateStr) => void;
   onInfo: (kind: 'about-tally' | 'calendar-key') => void;
 }) {
   const [start, end] = range;
   const rows = useMemo(() => dailyTimeline(forecast, start, end), [forecast, start, end]);
-  const kpis = periodKpis(forecast, start, end);
+  const plan = useMemo(() => periodPlan(forecast, start, end), [forecast, start, end]);
   const low = lowestPoint(rows);
   const negatives = negativeStretches(rows);
 
   return (
     <>
-      <TallyHero forecast={forecast} low={low} negatives={negatives} today={today} onInfo={() => onInfo('about-tally')} />
+      <CashFlowHero forecast={forecast} plan={plan} low={low} negatives={negatives} today={today} onInfo={() => onInfo('about-tally')} />
 
       <div className="calendar-card">
         <Calendar rows={rows} start={start} end={end} today={today} selected={selected} lowDate={low?.date ?? null} onSelect={onDay} />
-        <dl className="kpis totals-strip" aria-label={`Totals for ${formatRange(start, end)}`}>
-          <div>
-            <dt>Projected income</dt>
-            <dd className="amount-in">{formatMoney(kpis.incomeCents)}</dd>
-          </div>
-          <div>
-            <dt>Projected expenses</dt>
-            <dd className="amount-out">{formatMoney(kpis.outflowCents)}</dd>
-          </div>
-          <div>
-            <dt>Left to spend</dt>
-            <dd className={kpis.netCents < 0 ? 'negative' : ''}>{formatSignedMoney(kpis.netCents)}</dd>
-          </div>
-        </dl>
         <div className="calendar-actions">
-          <p className="hint">Expenses include savings. Left to spend is income minus expenses for this period. Tap a day for details.</p>
+          <p className="hint">Tap a day for details.</p>
           <button type="button" className="button small link" onClick={() => onInfo('calendar-key')}>
             <Icon icon={Info} size={16} /> Calendar key
           </button>
         </div>
       </div>
 
-      <Breakdown forecast={forecast} rows={rows} view={view} start={start} lowDate={low?.date ?? null} onDay={onDay} onWeek={onWeek} />
+      <PeriodBreakdown plan={plan} title="Breakdown" showRange={false} />
+      <TagBreakdown plan={plan} />
+
+      {view === 'week' ? (
+        <section aria-labelledby="days-heading" className="stack-sm">
+          <SectionLabel id="days-heading">Day by day</SectionLabel>
+          <div className="card list-card">
+            <Timeline rows={rows} lowDate={low?.date ?? null} onSelect={onDay} anchor={forecast.anchor} anyBeforeAnchor={rows.some((r) => r.tallyCents === null)} />
+          </div>
+        </section>
+      ) : (
+        <WeekList forecast={forecast} start={start} end={end} lowDate={low?.date ?? null} onDay={onDay} />
+      )}
     </>
   );
 }
 
-/** The headline card: the lowest projected cash flow in view, any timing gap, and the next expected payday. */
-function TallyHero({ forecast, low, negatives, today, onInfo }: { forecast: Forecast; low: LowPoint | null; negatives: NegativeStretch[]; today: DateStr; onInfo: () => void }) {
-  if (!forecast.anchor || !forecast.forecastStart) return null;
+/**
+ * The headline card: cash flow (income minus expenses) for the period in view,
+ * then the lowest running total, any timing gap, and the next expected payday.
+ */
+function CashFlowHero({
+  forecast,
+  plan,
+  low,
+  negatives,
+  today,
+  onInfo,
+}: {
+  forecast: Forecast;
+  plan: PeriodPlan;
+  low: LowPoint | null;
+  negatives: NegativeStretch[];
+  today: DateStr;
+  onInfo: () => void;
+}) {
   const payday = forecast.forecastStart;
-  const daysToPayday = diffDays(today, payday);
+  const daysToPayday = payday ? diffDays(today, payday) : 0;
   const worst = negatives.reduce<NegativeStretch | null>((w, n) => (w === null || n.lowestCents < w.lowestCents ? n : w), null);
+  const negative = plan.cashFlowCents < 0;
   return (
     <section className="card hero" aria-labelledby="hero-label">
       <div className="hero-body">
         <div className="hero-top">
           <p className="hero-label" id="hero-label">
-            Lowest projected cash flow
+            Cash flow
           </p>
-          <button type="button" className="icon-button small-icon" onClick={onInfo} aria-label="How projected cash flow works">
+          <button type="button" className="icon-button small-icon" onClick={onInfo} aria-label="How cash flow and the running total work">
             <Icon icon={Info} size={20} />
           </button>
         </div>
-        {low ? (
-          <p className={`hero-value${low.tallyCents < 0 ? ' negative' : ''}`}>
-            {low.tallyCents < 0 && <Icon icon={TrendingDown} size={28} />}
-            {formatMoney(low.tallyCents)}
-            <span className="hero-when">on {formatShort(low.date)}</span>
-          </p>
-        ) : (
-          <p className="hero-sub">This period ends before your projected cash flow begins on {formatMedium(payday)}.</p>
+        <p className={`hero-value${negative ? ' negative' : ''}`}>
+          {negative && <Icon icon={TrendingDown} size={28} />}
+          {formatSignedMoney(plan.cashFlowCents)}
+        </p>
+        <p className="hero-sub">
+          <span className="amount-in">+{formatMoney(plan.incomeCents)}</span> in · <span className="amount-out">−{formatMoney(plan.expensesCents)}</span> out
+        </p>
+        {payday && (
+          <div className="hero-stat">
+            <span className="muted">Lowest running total</span>
+            {low ? (
+              <span className={low.tallyCents < 0 ? 'negative-text' : ''}>
+                <strong>{formatMoney(low.tallyCents)}</strong>
+                <span className="muted"> · {formatShort(low.date)}</span>
+              </span>
+            ) : (
+              <span className="muted">Starts {formatShort(payday)}</span>
+            )}
+          </div>
         )}
         {worst && (
           <p className="callout callout-danger gap-line" role="note">
@@ -448,23 +472,25 @@ function TallyHero({ forecast, low, negatives, today, onInfo }: { forecast: Fore
         {low && !worst && (
           <p className="callout callout-ok gap-line">
             <Icon icon={Check} size={16} />
-            <span>Stays at or above $0 this period</span>
+            <span>Running total stays at or above $0 this period</span>
           </p>
         )}
       </div>
-      <div className="hero-footer">
-        <Icon icon={Banknote} size={22} className="hero-footer-icon" />
-        <span>
-          {daysToPayday > 1
-            ? `Next expected payday in ${daysToPayday} days`
-            : daysToPayday === 1
-              ? 'Next expected payday is tomorrow'
-              : daysToPayday === 0
-                ? 'Next expected payday is today'
-                : `Next expected payday was ${formatShort(payday)}`}
-          <span className="muted"> · {formatShort(payday)}</span>
-        </span>
-      </div>
+      {payday && (
+        <div className="hero-footer">
+          <Icon icon={Banknote} size={22} className="hero-footer-icon" />
+          <span>
+            {daysToPayday > 1
+              ? `Next expected payday in ${daysToPayday} days`
+              : daysToPayday === 1
+                ? 'Next expected payday is tomorrow'
+                : daysToPayday === 0
+                  ? 'Next expected payday is today'
+                  : `Next expected payday was ${formatShort(payday)}`}
+            <span className="muted"> · {formatShort(payday)}</span>
+          </span>
+        </div>
+      )}
     </section>
   );
 }
@@ -480,7 +506,7 @@ function dayAriaLabel(row: DayRow | undefined, date: DateStr, isLow: boolean): s
   if (overdue) bits.push(`${overdue} overdue`);
   const done = row.entries.filter((e) => e.occurrence.status === 'completed').length;
   if (done) bits.push(`${done} done`);
-  if (row.tallyCents !== null) bits.push(`projected cash flow ${formatMoney(row.tallyCents)}${row.tallyCents < 0 ? ', below zero' : ''}`);
+  if (row.tallyCents !== null) bits.push(`running total ${formatMoney(row.tallyCents)}${row.tallyCents < 0 ? ', below zero' : ''}`);
   if (isLow) bits.push('lowest point');
   return bits.join(', ');
 }
@@ -572,8 +598,8 @@ function CalendarKey() {
     [<span className="chip chip-out chip-done legend-chip">−$350</span>, 'Filled chip: everything that day is done (received or paid)'],
     [<span className="chip chip-out chip-expected legend-chip">−$350</span>, 'Outlined chip: still expected'],
     [<Icon icon={AlertCircle} size={18} className="flag-overdue" />, 'Overdue: the date passed and it hasn’t been recorded'],
-    [<Icon icon={TrendingDown} size={18} className="flag-neg" />, 'Projected cash flow is below $0 that day'],
-    [<span className="flag-low">Low</span>, 'Lowest projected cash flow in this period'],
+    [<Icon icon={TrendingDown} size={18} className="flag-neg" />, 'Running total is below $0 that day'],
+    [<span className="flag-low">Low</span>, 'Lowest running total in this period'],
     [<span className="today-dot">11</span>, 'Today'],
   ];
   return (
@@ -592,95 +618,51 @@ function CalendarKey() {
 
 // ---------------------------------------------------------------------------
 
-/** Weeks | Days pill switch: one compact list at a time. Rows open sheets with the details. */
-function Breakdown({
-  forecast,
-  rows,
-  view,
-  start,
-  lowDate,
-  onDay,
-  onWeek,
-}: {
-  forecast: Forecast;
-  rows: DayRow[];
-  view: View;
-  start: DateStr;
-  lowDate: DateStr | null;
-  onDay: (d: DateStr) => void;
-  onWeek: (start: DateStr, end: DateStr) => void;
-}) {
-  const showWeeks = view === 'month';
-  const [tab, setTab] = useState<'weeks' | 'days'>(showWeeks ? 'weeks' : 'days');
-  const [showAll, setShowAll] = useState(false);
-  const active = showWeeks ? tab : 'days';
+/** Week by week. Each week opens in place to show its days, with the running total at the end of each day. */
+function WeekList({ forecast, start, end, lowDate, onDay }: { forecast: Forecast; start: DateStr; end: DateStr; lowDate: DateStr | null; onDay: (d: DateStr) => void }) {
+  const weeks = useMemo(() => weekSummaries(forecast, start, end), [forecast, start, end]);
+  const [open, setOpen] = useState<DateStr | null>(null);
   return (
-    <section aria-labelledby="breakdown-heading" className="stack-sm">
-      <SectionLabel
-        id="breakdown-heading"
-        action={
-          active === 'days' ? (
-            <label className="toggle">
-              <input type="checkbox" role="switch" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-              <span className="toggle-track" aria-hidden="true" />
-              Show every day
-            </label>
-          ) : undefined
-        }
-      >
-        {showWeeks ? 'Breakdown' : 'Day by day'}
-      </SectionLabel>
+    <section aria-labelledby="weeks-heading" className="stack-sm">
+      <SectionLabel id="weeks-heading">Week by week</SectionLabel>
       <div className="card list-card">
-        {showWeeks && (
-          <div className="pill-tabs" role="tablist" aria-label="Breakdown">
-            <button type="button" role="tab" aria-selected={tab === 'weeks'} className={tab === 'weeks' ? 'active' : ''} onClick={() => setTab('weeks')}>
-              Week by week
-            </button>
-            <button type="button" role="tab" aria-selected={tab === 'days'} className={tab === 'days' ? 'active' : ''} onClick={() => setTab('days')}>
-              Day by day
-            </button>
-          </div>
-        )}
-        {active === 'weeks' ? (
-          <WeekList forecast={forecast} monthDate={start} onWeek={onWeek} />
-        ) : (
-          <Timeline rows={showAll ? rows : rows.filter((r) => r.entries.length > 0 || r.date === lowDate)} lowDate={lowDate} onSelect={onDay} anchor={forecast.anchor} anyBeforeAnchor={rows.some((r) => r.tallyCents === null)} />
-        )}
+        <ul className="week-list">
+          {weeks.map((w) => {
+            const expanded = open === w.start;
+            const negative = w.endTallyCents !== null && w.endTallyCents < 0;
+            return (
+              <li key={w.start} className={expanded ? 'open' : ''}>
+                <button type="button" className="week-row" aria-expanded={expanded} aria-controls={`week-${w.start}`} onClick={() => setOpen(expanded ? null : w.start)}>
+                  <span className="week-label">{formatRange(w.start, w.end)}</span>
+                  <span className="week-nums">
+                    <span>
+                      <span className="sr-only">Income </span>
+                      <span className="amount amount-in">+{formatMoney(w.incomeCents)}</span>
+                    </span>
+                    <span>
+                      <span className="sr-only">Expenses </span>
+                      <span className="amount amount-out">−{formatMoney(w.outflowCents)}</span>
+                    </span>
+                    <span className={w.netCents < 0 ? 'week-net negative' : 'week-net'}>Net {formatSignedMoney(w.netCents)}</span>
+                    <span className={negative ? 'week-tally negative' : 'week-tally'}>
+                      {negative && <Icon icon={TrendingDown} size={14} />}
+                      Running total {tallyText(w.endTallyCents)}
+                    </span>
+                  </span>
+                  <Icon icon={expanded ? ChevronUp : ChevronDown} size={18} className="chevron" />
+                </button>
+                {expanded && (
+                  <div id={`week-${w.start}`} className="week-days">
+                    <Timeline rows={w.days} lowDate={lowDate} onSelect={onDay} anchor={forecast.anchor} anyBeforeAnchor={w.days.some((r) => r.tallyCents === null)} />
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <p className="hint card-note">Weeks run Sunday to Saturday. Tap a week to see its days, and a day for its transactions.</p>
       </div>
     </section>
-  );
-}
-
-function WeekList({ forecast, monthDate, onWeek }: { forecast: Forecast; monthDate: DateStr; onWeek: (start: DateStr, end: DateStr) => void }) {
-  const weeks = useMemo(() => monthWeekSummaries(forecast, monthDate), [forecast, monthDate]);
-  return (
-    <>
-      <ul className="week-list">
-        {weeks.map((w) => (
-          <li key={w.start}>
-            <button type="button" className="week-row" aria-haspopup="dialog" onClick={() => onWeek(w.start, w.end)}>
-              <span className="week-label">{formatRange(w.start, w.end)}</span>
-              <span className="week-nums">
-                <span>
-                  <span className="sr-only">Income </span>
-                  <span className="amount amount-in">+{formatMoney(w.incomeCents)}</span>
-                </span>
-                <span>
-                  <span className="sr-only">Expenses </span>
-                  <span className="amount amount-out">−{formatMoney(w.outflowCents)}</span>
-                </span>
-                <span className={w.netCents < 0 ? 'week-net negative' : 'week-net'}>
-                  <span className="sr-only">Net </span>
-                  Net {formatSignedMoney(w.netCents)}
-                </span>
-              </span>
-              <Icon icon={ChevronRight} size={18} className="chevron" />
-            </button>
-          </li>
-        ))}
-      </ul>
-      <p className="hint card-note">Weeks run Sunday to Saturday. Tap a week for its days.</p>
-    </>
   );
 }
 
@@ -710,7 +692,7 @@ function Timeline({
                 <button type="button" className="timeline-row" aria-haspopup="dialog" onClick={() => onSelect(r.date)} aria-label={`Show details for ${formatLong(r.date)}`}>
                   <span className="tl-date">
                     {shortDay(r.date)}
-                    {r.date === lowDate && <span className="badge badge-low">Lowest point</span>}
+                    {r.date === lowDate && <span className="badge badge-low">Lowest</span>}
                   </span>
                   <span className="tl-cell">
                     <span className="tl-label">In</span>
@@ -725,7 +707,7 @@ function Timeline({
                     <span>{formatSignedMoney(r.netCents)}</span>
                   </span>
                   <span className="tl-cell tl-tally">
-                    <span className="tl-label">Cash flow</span>
+                    <span className="tl-label">Running total</span>
                     <span>
                       {negative && <Icon icon={TrendingDown} size={14} />}
                       {tallyText(r.tallyCents)}
@@ -738,7 +720,7 @@ function Timeline({
           })}
         </ol>
       )}
-      {anchor && anyBeforeAnchor && <p className="hint card-note">“—” means the day is on or before {formatMedium(anchor)}, when the projected cash flow begins.</p>}
+      {anchor && anyBeforeAnchor && <p className="hint card-note">“—” means the day is on or before {formatMedium(anchor)}, when the running total begins.</p>}
     </>
   );
 }
@@ -786,7 +768,7 @@ function DayTotals({ row }: { row: DayRow }) {
         <dd className="amount-out">{row.outCents ? `−${formatMoney(row.outCents)}` : '—'}</dd>
       </div>
       <div>
-        <dt>Projected cash flow</dt>
+        <dt>Running total</dt>
         <dd className={row.tallyCents !== null && row.tallyCents < 0 ? 'negative' : ''}>
           {row.tallyCents !== null && row.tallyCents < 0 && <Icon icon={TrendingDown} size={14} />}
           {tallyText(row.tallyCents)}
@@ -812,51 +794,6 @@ function DaySheet({ forecast, date, onClose, onOpen }: { forecast: Forecast; dat
             </li>
           ))}
         </ul>
-      )}
-    </Modal>
-  );
-}
-
-function WeekSheet({ forecast, start, end, onClose, onOpen }: { forecast: Forecast; start: DateStr; end: DateStr; onClose: () => void; onOpen: (id: string) => void }) {
-  const days = dailyTimeline(forecast, start, end);
-  const k = periodKpis(forecast, start, end);
-  const active = days.filter((d) => d.entries.length > 0);
-  return (
-    <Modal title={`Week of ${formatRange(start, end)}`} onClose={onClose}>
-      <dl className="sheet-stats">
-        <div>
-          <dt>Projected income</dt>
-          <dd className="amount-in">+{formatMoney(k.incomeCents)}</dd>
-        </div>
-        <div>
-          <dt>Projected expenses</dt>
-          <dd className="amount-out">−{formatMoney(k.outflowCents)}</dd>
-        </div>
-        <div>
-          <dt>Left to spend</dt>
-          <dd className={k.netCents < 0 ? 'negative' : ''}>{formatSignedMoney(k.netCents)}</dd>
-        </div>
-      </dl>
-      {active.length === 0 ? (
-        <p className="muted">Nothing scheduled this week.</p>
-      ) : (
-        active.map((d) => (
-          <section key={d.date} className="week-day" aria-label={formatLong(d.date)}>
-            <p className="week-day-head">
-              <strong>{shortDay(d.date)}</strong>
-              <span>
-                Net {formatSignedMoney(d.netCents)} · Cash flow {tallyText(d.tallyCents)}
-              </span>
-            </p>
-            <ul className="entry-list">
-              {d.entries.map((e) => (
-                <li key={e.occurrence.id}>
-                  <EntryButton e={e} onOpen={onOpen} />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))
       )}
     </Modal>
   );

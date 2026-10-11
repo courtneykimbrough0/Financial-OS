@@ -2,20 +2,21 @@ import { Tag, TrendingDown } from 'lucide-react';
 import { formatRange } from '../../domain/dates';
 import { formatMoney, formatSignedMoney } from '../../domain/money';
 import type { PeriodPlan } from '../../domain/plan';
+import type { TransactionKind } from '../../domain/types';
 import { Icon, SectionLabel } from './common';
 
 /** The single headline number for a period: income minus expenses. */
-export function LeftToSpend({ plan }: { plan: PeriodPlan | null }) {
-  const negative = plan !== null && plan.leftToSpendCents < 0;
+export function CashFlowBanner({ plan }: { plan: PeriodPlan | null }) {
+  const negative = plan !== null && plan.cashFlowCents < 0;
   return (
     <div className={`left-to-spend${negative ? ' negative' : ''}`} role="status" aria-live="polite">
       <span className="lts-label">
-        Left to spend
+        Cash flow
         <span className="lts-sub">{plan ? `First pay period · ${formatRange(plan.start, plan.end)}` : 'Add income to see this'}</span>
       </span>
       <span className="lts-value">
         {negative && <Icon icon={TrendingDown} size={20} />}
-        {plan ? formatMoney(plan.leftToSpendCents) : '—'}
+        {plan ? formatSignedMoney(plan.cashFlowCents) : '—'}
       </span>
     </div>
   );
@@ -30,23 +31,33 @@ function Row({ label, value, tone, level = 0, strong = false }: { label: string;
   );
 }
 
-/** Income, Expenses (bills, subscriptions, liability payments, savings), and Left to spend for a period. */
-export function PeriodBreakdown({ plan, title }: { plan: PeriodPlan; title: string }) {
+const EXPENSE_ROWS: [Exclude<TransactionKind, 'income'>, string][] = [
+  ['bill', 'Bills'],
+  ['subscription', 'Subscriptions'],
+  ['liability', 'Liability payments'],
+  ['savings', 'Savings'],
+];
+
+/**
+ * Income, expenses by category, and cash flow for a period. Categories with
+ * nothing in the period are left out.
+ */
+export function PeriodBreakdown({ plan, title, showRange = true }: { plan: PeriodPlan; title: string; showRange?: boolean }) {
+  const rows = EXPENSE_ROWS.filter(([kind]) => plan.byKind[kind] > 0);
   return (
     <section className="stack-sm" aria-labelledby="breakdown-period">
       <SectionLabel id="breakdown-period">{title}</SectionLabel>
       <div className="card">
-        <p className="hint">{formatRange(plan.start, plan.end)}</p>
+        {showRange && <p className="hint">{formatRange(plan.start, plan.end)}</p>}
         <dl className="breakdown">
           <Row label="Income" value={formatSignedMoney(plan.incomeCents)} tone="in" />
           <Row label="Expenses" value={plan.expensesCents ? `−${formatMoney(plan.expensesCents)}` : formatMoney(0)} tone="out" />
-          <Row label="Bills" value={formatMoney(plan.byKind.bill)} level={1} />
-          <Row label="Subscriptions" value={formatMoney(plan.byKind.subscription)} level={1} />
-          <Row label="Liability payments" value={formatMoney(plan.byKind.liability)} level={1} />
-          <Row label="Savings" value={formatMoney(plan.byKind.savings)} level={1} />
-          <Row label="Left to spend" value={formatMoney(plan.leftToSpendCents)} tone={plan.leftToSpendCents < 0 ? 'neg' : undefined} strong />
+          {rows.map(([kind, label]) => (
+            <Row key={kind} label={label} value={formatMoney(plan.byKind[kind])} level={1} />
+          ))}
+          <Row label="Cash flow" value={formatSignedMoney(plan.cashFlowCents)} tone={plan.cashFlowCents < 0 ? 'neg' : undefined} strong />
         </dl>
-        <p className="hint">Left to spend is income minus expenses. Includes repeating and one-time items dated in this period.</p>
+        <p className="hint">Cash flow is income minus expenses, including savings. It counts repeating and one-time items dated in this period.</p>
       </div>
     </section>
   );

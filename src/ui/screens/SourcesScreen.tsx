@@ -5,10 +5,10 @@ import { formatMoney } from '../../domain/money';
 import { resolveOccurrences } from '../../domain/occurrences';
 import * as ops from '../../domain/operations';
 import { describeRule } from '../../domain/recurrence';
-import { liabilityPrefix, type AppData, type Occurrence, type RecurringSource, type TransactionKind } from '../../domain/types';
+import { liabilityPrefix, mainPaycheckId, type AppData, type Occurrence, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { EmptyState, FlowAmount, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
-import { KIND_COPY, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm } from '../components/forms';
+import { KIND_COPY, MainPaycheckPicker, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm } from '../components/forms';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 
 const SCREEN_COPY: Record<
@@ -125,6 +125,7 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
             {liabilityPrefix(source)}
             {describeRule(current.rule, current.startDate)}
           </p>
+          {source.id === mainPaycheckId(data) && <span className="badge badge-main">Main paycheck</span>}
           <TagList tags={source.tags} />
         </div>
         <div className="source-amount">
@@ -268,6 +269,7 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
         >
           {copy.recurringHeading}
         </SectionLabel>
+        {kind === 'income' && <MainPaycheckPicker />}
         {sources.length === 0 ? (
           <EmptyState title={`No ${copy.recurringHeading.toLowerCase()} yet`}>
             <p>{copy.empty}</p>

@@ -65,13 +65,36 @@ describe('forecast anchor and running tally', () => {
     ]);
   });
 
-  it('uses the earliest upcoming date when there are several income schedules', () => {
+  it('anchors on the main paycheck when there are several income schedules', () => {
     let d = baseline();
     d = source(d, TODAY, 'income', 'Side job', 300, '2026-10-13', { type: 'monthly' }, 'income-side');
+    // The first income added is the main paycheck unless another is chosen.
     const f = buildForecast(d, TODAY);
-    expect(f.anchor).toBe('2026-10-12');
-    expect(tallyOn(f, '2026-10-13')).toBe(usd(300));
-    expect(tallyOn(f, '2026-10-15')).toBe(usd(2100));
+    expect(f.mainSourceId).toBe(PAY);
+    expect(f.anchor).toBe('2026-10-14');
+    expect(tallyOn(f, '2026-10-15')).toBe(usd(1800));
+    // Its income still counts, inside the main paycheck's pay periods.
+    expect(tallyOn(f, '2026-11-13')! - tallyOn(buildForecast(baseline(), TODAY), '2026-11-13')!).toBe(usd(300));
+
+    const switched = buildForecast(unwrap(ops.setMainPaycheck(d, 'income-side', clockAt(TODAY))), TODAY);
+    expect(switched.mainSourceId).toBe('income-side');
+    expect(switched.anchor).toBe('2026-10-12');
+    expect(tallyOn(switched, '2026-10-13')).toBe(usd(300));
+    expect(tallyOn(switched, '2026-10-15')).toBe(usd(2100));
+  });
+
+  it('allows only active income as the main paycheck, and only one at a time', () => {
+    let d = baseline();
+    d = source(d, TODAY, 'income', 'Side job', 300, '2026-10-13', { type: 'monthly' }, 'income-side');
+    const c = clockAt(TODAY);
+    d = unwrap(ops.setMainPaycheck(d, 'income-side', c));
+    d = unwrap(ops.setMainPaycheck(d, PAY, c));
+    expect(d.sources.filter((s) => s.mainPaycheck).map((s) => s.id)).toEqual([PAY]);
+    expect(ops.setMainPaycheck(d, RENT, c)).toMatchObject({ ok: false });
+    // Turning the main paycheck off falls back to the next active income.
+    d = unwrap(ops.deactivateSource(d, PAY, c));
+    expect(buildForecast(d, TODAY).mainSourceId).toBe('income-side');
+    expect(ops.setMainPaycheck(d, PAY, c)).toMatchObject({ ok: false });
   });
 
   it('keeps the same anchor and tally in every view', () => {
@@ -458,15 +481,29 @@ describe('paycheck-to-paycheck cycles', () => {
     expect(periodKpis(f, second.start, second.end)).toEqual({ incomeCents: usd(1800), outflowCents: usd(1200), netCents: usd(600) });
   });
 
-  it('merges boundaries from several income schedules', () => {
+  it('starts pay periods only on the main paycheck; other income lands inside them', () => {
     let d = baseline();
     d = source(d, TODAY, 'income', 'Benefits', 400, '2026-11-03', { type: 'monthly' }, 'income-benefits');
-    const cycles = paycheckCycles(buildForecast(d, TODAY), 4);
+    const f = buildForecast(d, TODAY);
+    const cycles = paycheckCycles(f, 4);
     expect(cycles.map((c) => [c.start, c.end, c.paydayEntries.map((e) => e.occurrence.description).join('+')])).toEqual([
       ['2026-10-15', '2026-10-28', 'Paycheck'],
-      ['2026-10-29', '2026-11-02', 'Paycheck'],
-      ['2026-11-03', '2026-11-11', 'Benefits'],
+      ['2026-10-29', '2026-11-11', 'Paycheck'],
       ['2026-11-12', '2026-11-25', 'Paycheck'],
+      ['2026-11-26', '2026-12-09', 'Paycheck'],
+    ]);
+    const second = entriesInRange(f, cycles[1]!.start, cycles[1]!.end).filter((e) => e.occurrence.kind === 'income');
+    expect(second.map((e) => `${e.date} ${e.occurrence.description}`)).toEqual(['2026-10-29 Paycheck', '2026-11-03 Benefits']);
+  });
+
+  it('gives a household paid on back-to-back days one pay period, not a one-day one', () => {
+    // Paid Wednesday and Thursday every week.
+    let d = source(ops.emptyData(), TODAY, 'income', 'My pay', 900, '2026-10-14', { type: 'weekly' }, 'mine');
+    d = source(d, TODAY, 'income', 'Partner pay', 800, '2026-10-15', { type: 'weekly' }, 'partner');
+    const cycles = paycheckCycles(buildForecast(d, TODAY), 2);
+    expect(cycles.map((c) => [c.start, c.end])).toEqual([
+      ['2026-10-14', '2026-10-20'],
+      ['2026-10-21', '2026-10-27'],
     ]);
   });
 

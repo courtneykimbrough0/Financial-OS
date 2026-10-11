@@ -14,10 +14,17 @@
  *     the forecast start so the money that is still owed/expected stays in
  *     the tally.
  *
+ * Main paycheck:
+ *   One recurring income defines pay periods (`mainPaycheckId`): the one the
+ *   user marked, or else the first active income. Other income still counts
+ *   as money in; it just doesn't start a pay period. This keeps households
+ *   paid on nearby days (say Wednesday and Thursday) from getting one-day pay
+ *   periods.
+ *
  * Forecast anchor:
- *   The "next expected payday" is the earliest recurring-income occurrence
- *   that is still outstanding (including overdue: a late paycheck has not
- *   arrived yet) or that was received today. The anchor is the day before it.
+ *   The "next expected payday" is the earliest main-paycheck occurrence that
+ *   is still outstanding (including overdue: a late paycheck has not arrived
+ *   yet) or that was received today. The anchor is the day before it.
  *   The running tally is $0 at the end of the anchor day and transactions are
  *   processed from the next day (the payday itself) onward.
  *
@@ -30,7 +37,7 @@
 import { addDays, eachDay, endOfMonth, endOfWeek, maxDate, minDate, startOfMonth, type DateStr } from './dates';
 import type { Cents } from './money';
 import { resolveOccurrences } from './occurrences';
-import { signFor, type AppData, type Occurrence } from './types';
+import { mainPaycheckId, signFor, type AppData, type Occurrence } from './types';
 
 export interface ForecastEntry {
   occurrence: Occurrence;
@@ -53,6 +60,8 @@ export interface Forecast {
   anchor: DateStr | null;
   forecastStart: DateStr | null;
   horizonEnd: DateStr;
+  /** The income source that defines pay periods. */
+  mainSourceId: string | null;
   /** Sorted deterministically: date, income before outflows, larger amounts first, description, id. */
   entries: ForecastEntry[];
   issue: ForecastIssue | null;
@@ -86,10 +95,10 @@ function dataStart(data: AppData, today: DateStr): DateStr {
 /**
  * The next expected payday per the anchor rule above, or null.
  */
-export function nextExpectedPayday(occurrences: Occurrence[], today: DateStr): DateStr | null {
+export function nextExpectedPayday(occurrences: Occurrence[], today: DateStr, mainSourceId: string | null): DateStr | null {
   let best: DateStr | null = null;
   for (const o of occurrences) {
-    if (o.kind !== 'income' || o.sourceId === null || o.status === 'canceled') continue;
+    if (o.kind !== 'income' || o.sourceId === null || o.sourceId !== mainSourceId || o.status === 'canceled') continue;
     let candidate: DateStr | null = null;
     if (isOutstanding(o)) candidate = o.scheduledDate;
     else if (o.status === 'completed' && o.actualDate !== null && o.actualDate >= today) candidate = o.actualDate;
@@ -102,8 +111,9 @@ export function buildForecast(data: AppData, today: DateStr, options: { through?
   const horizonEnd = maxDate(options.through ?? today, addDays(today, DEFAULT_HORIZON_DAYS));
   const occurrences = resolveOccurrences(data, dataStart(data, today), horizonEnd, today);
 
-  const hasActiveIncome = data.sources.some((s) => s.kind === 'income' && s.active);
-  const payday = hasActiveIncome ? nextExpectedPayday(occurrences, today) : null;
+  const mainSourceId = mainPaycheckId(data);
+  const hasActiveIncome = mainSourceId !== null;
+  const payday = hasActiveIncome ? nextExpectedPayday(occurrences, today, mainSourceId) : null;
   const forecastStart = payday;
   const anchor = payday ? addDays(payday, -1) : null;
   const issue: ForecastIssue | null = !hasActiveIncome ? 'no-recurring-income' : payday ? null : 'no-upcoming-income';
@@ -135,7 +145,7 @@ export function buildForecast(data: AppData, today: DateStr, options: { through?
   });
   entries.sort(compareEntries);
 
-  return { today, anchor, forecastStart, horizonEnd, entries, issue };
+  return { today, anchor, forecastStart, horizonEnd, mainSourceId, entries, issue };
 }
 
 /** Entries (counted and not) whose timeline date falls in [start, end]. */
@@ -206,7 +216,7 @@ export interface PeriodKpis {
   netCents: Cents;
 }
 
-/** Projected income, projected expenses (incl. liability payments), and projected cash flow for [start, end]. */
+/** Projected income, projected expenses (incl. liability payments), and cash flow (income − expenses) for [start, end]. */
 export function periodKpis(forecast: Forecast, start: DateStr, end: DateStr): PeriodKpis {
   const t = totals(entriesInRange(forecast, start, end));
   return { incomeCents: t.inCents, outflowCents: t.outCents, netCents: t.netCents };
@@ -284,45 +294,50 @@ export interface WeekSummary extends PeriodKpis {
   start: DateStr;
   end: DateStr;
   days: DayRow[];
+  /** Running total at the end of the week's last day; null on or before the anchor. */
+  endTallyCents: Cents | null;
 }
 
 /**
- * Sunday–Saturday weeks of the month containing `monthDate`, clipped to the
- * month so the weekly totals add up exactly to the month's totals.
+ * Sunday–Saturday weeks covering [start, end], clipped to the range so the
+ * weekly totals add up exactly to the range's totals.
  */
-export function monthWeekSummaries(forecast: Forecast, monthDate: DateStr): WeekSummary[] {
-  const first = startOfMonth(monthDate);
-  const last = endOfMonth(monthDate);
-  const rows = dailyTimeline(forecast, first, last);
+export function weekSummaries(forecast: Forecast, start: DateStr, end: DateStr): WeekSummary[] {
+  const rows = dailyTimeline(forecast, start, end);
   const out: WeekSummary[] = [];
-  for (let ws = first; ws <= last; ws = addDays(endOfWeek(ws), 1)) {
-    const we = minDate(endOfWeek(ws), last);
+  for (let ws = start; ws <= end; ws = addDays(endOfWeek(ws), 1)) {
+    const we = minDate(endOfWeek(ws), end);
     const days = rows.filter((r) => r.date >= ws && r.date <= we);
     const t = totals(days.flatMap((d) => d.entries));
-    out.push({ start: ws, end: we, days, incomeCents: t.inCents, outflowCents: t.outCents, netCents: t.netCents });
+    out.push({ start: ws, end: we, days, incomeCents: t.inCents, outflowCents: t.outCents, netCents: t.netCents, endTallyCents: days[days.length - 1]?.tallyCents ?? null });
   }
   return out;
+}
+
+/** The weeks of the month containing `monthDate` (see `weekSummaries`). */
+export function monthWeekSummaries(forecast: Forecast, monthDate: DateStr): WeekSummary[] {
+  return weekSummaries(forecast, startOfMonth(monthDate), endOfMonth(monthDate));
 }
 
 export interface PaycheckCycle {
   start: DateStr;
   end: DateStr;
-  /** The income entries that open the cycle. */
+  /** The main-paycheck entries that open the cycle. */
   paydayEntries: ForecastEntry[];
 }
 
 /**
- * Paycheck-to-paycheck cycles from the next expected payday onward. Boundaries
- * are the dates of counted recurring-income entries (any source), so multiple
- * income sources produce cycles between consecutive income dates. A cycle
- * runs from one income date to the day before the next. The last income date
- * in the horizon has no known end and therefore does not start a cycle.
+ * Pay periods from the next expected payday onward. Boundaries are the dates
+ * of counted main-paycheck entries only; other income lands inside a period
+ * as money in. A period runs from one main payday to the day before the next.
+ * The last main payday in the horizon has no known end and therefore does not
+ * start a period.
  */
 export function paycheckCycles(forecast: Forecast, maxCycles = 12): PaycheckCycle[] {
   if (!forecast.forecastStart) return [];
   const byDate = new Map<DateStr, ForecastEntry[]>();
   for (const e of forecast.entries) {
-    if (!e.counts || e.occurrence.kind !== 'income' || e.occurrence.sourceId === null) continue;
+    if (!e.counts || e.occurrence.kind !== 'income' || e.occurrence.sourceId !== forecast.mainSourceId) continue;
     if (e.date < forecast.forecastStart) continue;
     const list = byDate.get(e.date);
     if (list) list.push(e);

@@ -104,11 +104,18 @@ describe('accounts', () => {
     await user.click(screen.getByRole('button', { name: 'Get started' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('button', { name: 'Continue without income' }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    // Bills, subscriptions, liabilities, and savings each have their own step.
+    for (const step of ['What bills do you pay?', 'What subscriptions renew?', 'What do you pay toward debts?', 'What do you set aside?']) {
+      expect(screen.getByRole('heading', { name: step })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+    }
     await user.click(screen.getByRole('button', { name: 'See my forecast' }));
     await waitFor(() => expect(server.row?.data.onboardingComplete).toBe(true));
     expect(server.row?.revision).toBe(1);
-    expect(screen.getByText(/saved to your Financial OS account/)).toBeInTheDocument();
+    // Account details live on the Settings page.
+    await user.click(screen.getByRole('link', { name: 'Settings' }));
+    expect(await screen.findByText(/saved to your Financial OS account/)).toBeInTheDocument();
+    expect(screen.getByText(/Signed in as/)).toHaveTextContent('alex@example.com');
   });
 
   it('offers to move a forecast saved on this device into a new, empty account', async () => {
@@ -212,7 +219,7 @@ describe('accounts', () => {
     server.row = { data: forecast(), revision: 1 };
     const auth = new FakeAuth(server);
     auth.user = USER;
-    window.location.hash = '#/dashboard';
+    window.location.hash = '#/settings';
     renderApp(auth);
     await user.click(await screen.findByRole('button', { name: /Delete account/ }));
     const dialog = screen.getByRole('dialog', { name: 'Delete your account?' });

@@ -35,7 +35,7 @@ describe('left to spend for a period', () => {
     expect(p.incomeCents).toBe(usd(2300));
     expect(p.byKind).toEqual({ income: usd(2300), bill: usd(360), subscription: usd(10.99), liability: usd(350), savings: usd(100) });
     expect(p.expensesCents).toBe(usd(820.99));
-    expect(p.leftToSpendCents).toBe(usd(1479.01));
+    expect(p.cashFlowCents).toBe(usd(1479.01));
   });
 
   it('changes with the period and matches the dashboard totals for it', () => {
@@ -49,10 +49,10 @@ describe('left to spend for a period', () => {
     for (const [start, end] of periods) {
       const p = periodPlan(f, start, end);
       const k = periodKpis(f, start, end);
-      expect([p.incomeCents, p.expensesCents, p.leftToSpendCents]).toEqual([k.incomeCents, k.outflowCents, k.netCents]);
+      expect([p.incomeCents, p.expensesCents, p.cashFlowCents]).toEqual([k.incomeCents, k.outflowCents, k.netCents]);
     }
-    expect(periodPlan(f, '2026-10-01', '2026-10-31').leftToSpendCents).toBe(usd(4100 - 920.99));
-    expect(periodPlan(f, '2026-10-18', '2026-10-24').leftToSpendCents).toBe(usd(500 - 360.99));
+    expect(periodPlan(f, '2026-10-01', '2026-10-31').cashFlowCents).toBe(usd(4100 - 920.99));
+    expect(periodPlan(f, '2026-10-18', '2026-10-24').cashFlowCents).toBe(usd(500 - 360.99));
   });
 
   it('uses actual amounts once recorded and leaves out canceled items', () => {
@@ -66,7 +66,7 @@ describe('left to spend for a period', () => {
   it('goes negative when expenses exceed income in the period', () => {
     let d = source(ops.emptyData(), TODAY, 'income', 'Pay', 1000, '2026-10-15', { type: 'monthly' }, 'p');
     d = source(d, TODAY, 'bill', 'Rent', 1200, '2026-10-20', { type: 'monthly' }, 'r');
-    expect(periodPlan(buildForecast(d, TODAY), '2026-10-15', '2026-11-14').leftToSpendCents).toBe(usd(-200));
+    expect(periodPlan(buildForecast(d, TODAY), '2026-10-15', '2026-11-14').cashFlowCents).toBe(usd(-200));
   });
 });
 

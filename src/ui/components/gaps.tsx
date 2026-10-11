@@ -29,7 +29,7 @@ export function TimingGapsBanner({ gaps, from }: { gaps: TimingGap[]; from: Date
           <div className="stack">
             <p className="gap-intro">
               <Icon icon={TriangleAlert} size={18} />
-              <span>Scheduled money out runs ahead of money in on these dates, so projected cash flow drops below $0.</span>
+              <span>Scheduled money out runs ahead of money in on these dates, so the running total drops below $0.</span>
             </p>
             <ul className="gap-list">
               {gaps.map((g) => (
@@ -45,7 +45,7 @@ export function TimingGapsBanner({ gaps, from }: { gaps: TimingGap[]; from: Date
               ))}
             </ul>
             <p className="hint">
-              Covers {formatMedium(from)} through {formatMedium(addDays(from, GAP_LOOKAHEAD_DAYS - 1))}. Projected cash flow shows timing, separate from your bank balance.
+              Covers {formatMedium(from)} through {formatMedium(addDays(from, GAP_LOOKAHEAD_DAYS - 1))}. The running total shows timing, separate from your bank balance.
             </p>
           </div>
         </Modal>

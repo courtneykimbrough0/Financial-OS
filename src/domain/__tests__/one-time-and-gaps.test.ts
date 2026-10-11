@@ -71,8 +71,8 @@ describe('one-time income and expenses across every view', () => {
 
   it('counts in left to spend for the period it falls in', () => {
     const f = buildForecast(data(), TODAY);
-    expect(periodPlan(f, '2026-10-15', '2026-10-28')).toMatchObject({ incomeCents: usd(2300), expensesCents: usd(360), leftToSpendCents: usd(1940) });
-    expect(periodPlan(f, '2026-10-29', '2026-11-11')).toMatchObject({ incomeCents: usd(1800), expensesCents: 0, leftToSpendCents: usd(1800) });
+    expect(periodPlan(f, '2026-10-15', '2026-10-28')).toMatchObject({ incomeCents: usd(2300), expensesCents: usd(360), cashFlowCents: usd(1940) });
+    expect(periodPlan(f, '2026-10-29', '2026-11-11')).toMatchObject({ incomeCents: usd(1800), expensesCents: 0, cashFlowCents: usd(1800) });
   });
 
   it('can create a timing gap', () => {

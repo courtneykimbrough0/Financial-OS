@@ -4,7 +4,7 @@ import { formatMedium, parts, type DateStr } from '../../domain/dates';
 import { centsToInput, formatMoney, parseMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { describeRule, nextOccurrenceOnOrAfter } from '../../domain/recurrence';
-import { LIABILITY_TYPE_LABEL, LIABILITY_TYPES, type LiabilityType, type RecurrenceRule, type RecurringSource, type TransactionKind } from '../../domain/types';
+import { LIABILITY_TYPE_LABEL, LIABILITY_TYPES, mainPaycheckId, type LiabilityType, type RecurrenceRule, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { Field, FormError, Icon, MoneyInput, useToast } from './common';
 
@@ -441,5 +441,44 @@ export function ReactivateForm({ source, onDone }: { source: RecurringSource; on
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Which income starts pay periods. Shown once there are two or more active
+ * recurring incomes; with one, that income is the main paycheck.
+ */
+export function MainPaycheckPicker() {
+  const { data, run } = useStore();
+  const toast = useToast();
+  const id = useId();
+  const incomes = data.sources.filter((s) => s.kind === 'income' && s.active);
+  const main = mainPaycheckId(data);
+  if (incomes.length < 2) return null;
+  return (
+    <fieldset className="choice-field main-paycheck" aria-describedby={`${id}-hint`}>
+      <legend>Main paycheck</legend>
+      <p className="hint" id={`${id}-hint`}>
+        Pay periods run from one main payday to the next. Other income still counts as money coming in during the pay period.
+      </p>
+      <div className="choice-pills">
+        {incomes.map((s) => (
+          <label key={s.id} className={`choice-pill${main === s.id ? ' selected' : ''}`}>
+            <input
+              type="radio"
+              name={`${id}-main`}
+              value={s.id}
+              checked={main === s.id}
+              onChange={() => {
+                const r = run((d, c) => ops.setMainPaycheck(d, s.id, c));
+                if (r.ok) toast(`Pay periods now follow ${s.description}.`);
+                else toast(r.error, 'error');
+              }}
+            />
+            {s.description}
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }

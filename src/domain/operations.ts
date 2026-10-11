@@ -231,6 +231,23 @@ export function deleteSource(data: AppData, id: string): Result {
 }
 
 /** Stops forecasting from today. Past occurrences and recorded outcomes remain. */
+/** Makes this income the main paycheck: pay periods run from one of its paydays to the next. */
+export function setMainPaycheck(data: AppData, id: string, clock: Clock): Result {
+  const source = data.sources.find((s) => s.id === id);
+  if (!source) return fail('This item no longer exists.');
+  if (source.kind !== 'income') return fail('Only income can be the main paycheck.');
+  if (!source.active) return fail('Turn this income back on before making it the main paycheck.');
+  return ok({
+    ...data,
+    sources: data.sources.map((s) => {
+      if (s.id === id) return { ...s, mainPaycheck: true, updatedAt: clock.now };
+      if (!s.mainPaycheck) return s;
+      const { mainPaycheck: _was, ...rest } = s;
+      return { ...rest, updatedAt: clock.now };
+    }),
+  });
+}
+
 export function deactivateSource(data: AppData, id: string, clock: Clock): Result {
   return withSource(data, id, (s) => (s.active ? { ...s, active: false, endDate: clock.today, updatedAt: clock.now } : 'This item is already turned off.'));
 }
