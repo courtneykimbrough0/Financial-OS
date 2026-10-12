@@ -2,6 +2,7 @@ import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import { AccountGate, useAccount, type AuthService } from './state/account';
+import { forwardedAuthDomain } from './state/auth-domain';
 import { DataModeProvider } from './state/mode';
 import { App } from './ui/App';
 import { ToastProvider } from './ui/components/common';
@@ -38,8 +39,8 @@ function WithAccounts() {
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     // Firebase is a separate download that only signed-in builds need.
-    import('./state/firebase').then(
-      (m) => setAuth(m.firebaseAuthService(firebaseSettings)),
+    Promise.all([import('./state/firebase'), forwardedAuthDomain()]).then(
+      ([m, authDomain]) => setAuth(m.firebaseAuthService(authDomain ? { ...firebaseSettings, authDomain } : firebaseSettings)),
       () => setFailed(true),
     );
   }, []);

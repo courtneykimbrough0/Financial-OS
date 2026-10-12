@@ -31,19 +31,20 @@ Firebase project: `financial-os-505002`. Firestore database: `ai-studio-financia
 - [x] Firebase console → Authentication → Sign-in method: enable **Google**. (Done by AI Studio.)
 - [x] Authentication → Settings → Authorized domains: add every web address the app will be served from (Cloud Run URL, custom domain). Sign-in shows "Sign-in isn't set up for this web address yet" on any domain that's missing. (Done by AI Studio: financial-os-505002.firebaseapp.com, financial-os-505002.web.app, both ais-…run.app addresses, localhost.)
 
-## 4. Hosting
+## 4. Hosting on Cloud Run
 
-**Recommended: Firebase Hosting.** This is a static app with no server code. Firebase Hosting serves it from a CDN, and because the app is then on the same domain as Firebase's sign-in pages, Google sign-in works in Safari and in the installed iPhone app.
+The app is hosted on Cloud Run; Firebase provides only sign-in and data. `server.mjs` is the production server: it serves the built app with the right caching, and forwards Firebase's sign-in pages (`/__/auth/*`) through the app's own address so Google sign-in works in Safari and in the installed iPhone app. The app detects the server (it answers `/__/financial-os/config.json`) and signs in through the address it was opened from, so no `authDomain` change is needed.
 
-- [x] Add a `hosting` section to `firebase.json`: `"public": "dist"`, a rewrite of `**` to `/index.html`, and `Cache-Control: no-cache` headers for `/sw.js`, `/index.html` and `/manifest.webmanifest`.
-- [ ] Deploy: `npm ci && npm run build && firebase deploy --only hosting`.
-- [x] Set `authDomain` in `firebase-applet-config.json` to the Hosting domain. It's `financial-os-505002.firebaseapp.com`, so test sign-in there: on the `run.app` addresses, Google sign-in may fail in Safari and in the installed iPhone app.
+- [x] Production server (`server.mjs`, started with `npm start`) and `Dockerfile` are in the repo.
+- [ ] Deploy each Cloud Run service from the repo's `Dockerfile` (for example `gcloud run deploy SERVICE --source . --region us-east5`). If AI Studio builds the container itself, make it run `npm ci && npm run build` and start with `npm start`. Never run the Vite dev server (`npm run dev`) in production.
+- [ ] Check each deployed address: `https://<address>/__/financial-os/config.json` shows `{"authProxy":true}`. If it shows the app's page instead, the service isn't running `server.mjs`.
+- [ ] Google Cloud console → APIs & Services → Credentials → OAuth 2.0 Client IDs → the Web client (auto created by Google Service):
+  - under **Authorized JavaScript origins**, add each Cloud Run address (for example `https://ais-pre-tqz7tccpwk764w5cepd4c6-14112508718.us-east5.run.app`);
+  - under **Authorized redirect URIs**, add each address followed by `/__/auth/handler`.
+  Without this, Google shows "redirect_uri_mismatch" during sign-in.
+- [x] Firebase console → Authentication → Settings → Authorized domains lists both Cloud Run addresses (done in step 3).
 
-**If you stay on Cloud Run:**
-
-- [ ] Serve the built files in `dist/` with a small static server listening on `$PORT`. Never run the Vite dev server (`npm run dev`) in production.
-- [ ] Send `Cache-Control: no-cache` for `sw.js`, `index.html` and `manifest.webmanifest`, and route every unknown path to `index.html`.
-- [ ] Forward `/__/auth/*` to `https://financial-os-505002.firebaseapp.com/__/auth/*`, and set `authDomain` in `firebase-applet-config.json` to the Cloud Run domain. Without this, Safari blocks Google sign-in.
+Firebase Hosting is optional and not used. `firebase.json` keeps a `hosting` section in case it's ever wanted.
 
 ## 5. Test sign-in on a real iPhone
 

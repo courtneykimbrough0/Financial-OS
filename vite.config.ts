@@ -12,7 +12,11 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      workbox: { globPatterns: ['**/*.{js,css,html,svg,png,woff2}'] },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // Firebase's sign-in pages and the server's config file must come from the network, never the app shell.
+        navigateFallbackDenylist: [/^\/__\//],
+      },
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Financial OS',

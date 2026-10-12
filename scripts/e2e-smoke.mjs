@@ -20,8 +20,12 @@ const BASE = `http://localhost:${PORT}/`;
 const SHOTS = new URL('../e2e-screenshots/', import.meta.url).pathname;
 mkdirSync(SHOTS, { recursive: true });
 
-const viteBin = new URL('../node_modules/vite/bin/vite.js', import.meta.url).pathname;
-const server = spawn(process.execPath, [viteBin, 'preview', '--port', String(PORT), '--strictPort', '--outDir', process.argv[2] ?? 'dist'], { stdio: 'pipe' });
+// Runs the production server (server.mjs), the same one Cloud Run uses.
+const serverScript = new URL('../server.mjs', import.meta.url).pathname;
+const server = spawn(process.execPath, [serverScript], {
+  stdio: 'pipe',
+  env: { ...process.env, PORT: String(PORT), DIST_DIR: process.argv[2] ?? 'dist' },
+});
 await new Promise((resolve, reject) => {
   const t = setTimeout(() => reject(new Error('preview server did not start')), 20000);
   server.stdout.on('data', (d) => {

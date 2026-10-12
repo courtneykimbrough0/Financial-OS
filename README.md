@@ -14,6 +14,7 @@ npm run typecheck
 npm run build        # production build + service worker in dist/
 npm run e2e          # end-to-end smoke test in Chromium (builds its own device-only copy)
 npm run test:rules   # Firestore security rules, in the Firestore emulator (needs Java)
+npm start            # production server (server.mjs) for the built app; used on Cloud Run
 ```
 
 Node 20+ is required. The e2e script uses Playwright with a pinned clock and saves screenshots to `e2e-screenshots/`, which git ignores.
@@ -65,7 +66,9 @@ src/
     store.tsx      React context; applies operations and saves
     mode.tsx       Switches between real data and sample data (separate storage keys)
 firestore.rules    Firestore security rules (see security_spec.md)
-firebase.json      Hosting, rules deployment (named database) and emulator settings
+firebase.json      Rules deployment (named database), emulator settings, optional Firebase Hosting
+server.mjs         Production server for Cloud Run (static files, caching, sign-in forwarding)
+Dockerfile         Cloud Run image: builds the app, runs server.mjs
   ui/              React screens and components
 ```
 
@@ -100,6 +103,8 @@ Accounts turn on when `firebase-applet-config.json` has a `projectId` and `apiKe
 - **First sign-in.** If the account is empty and the device already has a forecast, the app offers to move it into the account.
 - **Sign out** removes the account's data from the device (and warns first if changes haven't been sent yet). **Delete account** asks the person to confirm with Google first, then deletes their data and their account.
 - The app also asks the browser for persistent storage, so the browser is less likely to clear the device copy when space runs low.
+
+**Hosting.** The app runs on Cloud Run from the `Dockerfile`, served by `server.mjs` (no dependencies). The server sets caching so new versions show up, sends app pages to `index.html`, and forwards Firebase's sign-in pages (`/__/auth/*`, `/__/firebase/*`) to `https://<project>.firebaseapp.com`, so Google sign-in runs on the app's own address; Safari and installed iPhone apps block sign-in on a different one. The app asks the server for `/__/financial-os/config.json` and, when it's there, signs in through the address it was opened from. The service worker never answers `/__/` paths, so sign-in pages always reach the server. The e2e test runs against `server.mjs`.
 
 Setup steps for the Firebase project are in [AI_STUDIO_TASKS.md](AI_STUDIO_TASKS.md).
 

@@ -1,0 +1,9 @@
+node_modules
+dist
+dist-e2e
+e2e-screenshots
+coverage
+*.log
+.git
+.env.local
+.env.*.local
