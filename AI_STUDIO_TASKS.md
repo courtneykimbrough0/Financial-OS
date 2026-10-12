@@ -6,7 +6,7 @@ Firebase project: `financial-os-505002`. Firestore database: `ai-studio-financia
 
 ## Ground rules for any code change
 
-- Use **npm**. Keep `package-lock.json` committed, and don't add `bun.lock` or another lockfile.
+- Use **npm**. Keep `package-lock.json` committed, and don't add `bun.lock` or another lockfile. Only change `package-lock.json` by running `npm install` with a real npm; every package entry should keep its `resolved` and `integrity` fields, which let `npm ci` verify that each download is the expected file.
 - Before committing, run all of these and keep them passing: `npm run lint`, `npm test`, `npm run test:rules` (needs Java), `npm run build` and `npm run e2e`.
 - The Firestore data lives at `financialData/{uid}`. If you change that path or the document's fields, update `firestore.rules`, `security_spec.md`, `firebase-blueprint.json` and `src/state/__tests__/firestore.rules.test.ts` in the same change.
 - Keep the revision check in `firebaseBackend.save` (a transaction) and in the rules (exactly +1). It's what stops a stale device from overwriting newer data.
