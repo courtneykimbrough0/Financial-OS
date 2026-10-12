@@ -13,6 +13,11 @@ Firebase project: `financial-os-505002`. Firestore database: `ai-studio-financia
 - Import Firebase only from `src/state/firebase.ts`, which loads on demand. `account.tsx` and the screens stay free of Firebase so device-only builds don't download it.
 - Don't put user details (email, uid, provider data) in error messages or console logs.
 
+## 0. Stop the preview from reloading while someone types
+
+- [ ] Run the preview (financial-os-2.ai.studio) with the environment variable `DISABLE_HMR=true`. vite.config.ts turns live reload off when it's set; without it, the page reloads whenever files change or the preview's connection drops, and whatever was being typed is lost.
+- [ ] For testing with real data, prefer a production build (`npm run build && npm start`, or the Cloud Run deploy) over the dev server. It never live-reloads, and new versions wait for the "Update" bar instead of reloading on their own.
+
 ## 1. Bring in your pending fixes
 
 - [x] Done. AI Studio's commit "simplify Firestore data model and security rules" is merged into this branch. Its hosting settings and App Check setup are kept; the rest was already covered here (one document per user, no profile document, revision check).

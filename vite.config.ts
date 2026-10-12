@@ -7,11 +7,17 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
+    // AI Studio sets DISABLE_HMR=true in its preview: live reload there
+    // refreshes the page whenever files change or its connection drops,
+    // which wipes whatever someone is typing.
+    hmr: process.env.DISABLE_HMR !== 'true',
   },
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // A new version waits until the person taps "Update" (or reopens the
+      // app), so the page never reloads in the middle of entering something.
+      registerType: 'prompt',
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         // Firebase's sign-in pages and the server's config file must come from the network, never the app shell.

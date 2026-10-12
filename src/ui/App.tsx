@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
-import { CreditCard, HandCoins, LayoutGrid, Receipt, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
+import { CreditCard, HandCoins, LayoutGrid, Receipt, RefreshCw, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
 import { useDataMode } from '../state/mode';
 import { useStore } from '../state/store';
 import { DeviceDataOffer, RecoveredChangesNotice } from './components/account';
 import { SaveStatusBar } from './components/backup';
 import { Icon } from './components/common';
 import { navigate, useRoute, type Route } from './router';
+import { useWaitingUpdate } from './update';
 import { Dashboard } from './screens/Dashboard';
 import { Onboarding } from './screens/Onboarding';
 import { Settings } from './screens/Settings';
@@ -72,6 +73,7 @@ export function App() {
       </header>
       <main id="main" className={showNav ? 'with-nav' : ''}>
         <SaveStatusBar />
+        <UpdateBanner />
         {data.isSample && <SampleBanner />}
         {route === 'onboarding' && <Onboarding />}
         {route === 'dashboard' && <Dashboard />}
@@ -114,6 +116,23 @@ function SampleBanner() {
       >
         Leave
         <span className="sr-only"> sample data</span>
+      </button>
+    </div>
+  );
+}
+
+/** Shown when a new version is ready. Updating reloads the page, so it waits for a tap. */
+function UpdateBanner() {
+  const apply = useWaitingUpdate();
+  const { saveStatus } = useStore();
+  if (!apply) return null;
+  return (
+    <div className="sample-banner update-banner" role="status">
+      <p>
+        <strong>A new version of Financial OS is ready.</strong> Update when you’re done entering things.
+      </p>
+      <button type="button" className="button small secondary" onClick={apply} disabled={saveStatus === 'saving'}>
+        <Icon icon={RefreshCw} size={16} /> Update
       </button>
     </div>
   );

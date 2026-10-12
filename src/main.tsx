@@ -5,13 +5,17 @@ import { AccountGate, useAccount, type AuthService } from './state/account';
 import { forwardedAuthDomain } from './state/auth-domain';
 import { DataModeProvider } from './state/mode';
 import { App } from './ui/App';
+import { announceUpdate } from './ui/update';
 import { ToastProvider } from './ui/components/common';
 import { SignIn } from './ui/screens/SignIn';
 import firebaseSettings from '../firebase-applet-config.json';
 import '@fontsource-variable/inter';
 import './styles.css';
 
-registerSW({ immediate: true });
+const updateServiceWorker = registerSW({
+  immediate: true,
+  onNeedRefresh: () => announceUpdate(() => void updateServiceWorker(true)),
+});
 
 // Ask the browser to keep this app's storage instead of clearing it when space runs low.
 void navigator.storage?.persist?.().catch(() => undefined);
