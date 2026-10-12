@@ -13,31 +13,31 @@ Firebase project: `financial-os-505002`. Firestore database: `ai-studio-financia
 - Import Firebase only from `src/state/firebase.ts`, which loads on demand. `account.tsx` and the screens stay free of Firebase so device-only builds don't download it.
 - Don't put user details (email, uid, provider data) in error messages or console logs.
 
-## 1. Bring in your two pending fixes
+## 1. Bring in your pending fixes
 
-Two fixes made in AI Studio didn't reach GitHub before this change was written. Re-apply them on top of this branch, keeping the rules above. If either one touched sign-in, Firestore or the rules, check it against this branch's versions of `src/state/firebase.ts` and `firestore.rules` rather than restoring the old files.
+- [x] Done. AI Studio's commit "simplify Firestore data model and security rules" is merged into this branch. Its hosting settings and App Check setup are kept; the rest was already covered here (one document per user, no profile document, revision check).
 
-- [ ] Fixes re-applied, and all checks above pass.
+## 2. Deploy the security rules (again)
 
-## 2. Deploy the security rules
+**Redeploy now.** The rules AI Studio published earlier expect `updatedAt` as a string, but the app now writes the server's timestamp (the rules check it equals the request time). Until this version of `firestore.rules` is live, every save is refused and the app shows "Your account didn't accept this change."
 
-The rules in `firestore.rules` must be live before anyone signs in. Without them every save is refused, and the app shows "Your account didn't accept this change."
-
-- [ ] Deploy with `firebase deploy --only firestore:rules --project financial-os-505002` (firebase.json points the rules at the database above). Or paste `firestore.rules` into Firebase console → Firestore → that database → Rules → Publish.
+- [x] First deployment to the named database (done by AI Studio).
+- [ ] Deploy this version: `firebase deploy --only firestore:rules --project financial-os-505002` (firebase.json points the rules at the named database, the one the app uses). Or paste `firestore.rules` into Firebase console → Firestore → that database → Rules → Publish.
+- [ ] If the project also has a `(default)` database, publish the same rules to it (or delete it if nothing uses it), so it isn't left open in test mode.
 - [ ] Confirm by signing in, adding an item, and reloading: the item is still there.
 
 ## 3. Turn on Google sign-in
 
-- [ ] Firebase console → Authentication → Sign-in method: enable **Google**.
-- [ ] Authentication → Settings → Authorized domains: add every web address the app will be served from (Cloud Run URL, custom domain). Sign-in shows "Sign-in isn't set up for this web address yet" on any domain that's missing.
+- [x] Firebase console → Authentication → Sign-in method: enable **Google**. (Done by AI Studio.)
+- [x] Authentication → Settings → Authorized domains: add every web address the app will be served from (Cloud Run URL, custom domain). Sign-in shows "Sign-in isn't set up for this web address yet" on any domain that's missing. (Done by AI Studio: financial-os-505002.firebaseapp.com, financial-os-505002.web.app, both ais-…run.app addresses, localhost.)
 
 ## 4. Hosting
 
 **Recommended: Firebase Hosting.** This is a static app with no server code. Firebase Hosting serves it from a CDN, and because the app is then on the same domain as Firebase's sign-in pages, Google sign-in works in Safari and in the installed iPhone app.
 
-- [ ] Add a `hosting` section to `firebase.json`: `"public": "dist"`, a rewrite of `**` to `/index.html`, and `Cache-Control: no-cache` headers for `/sw.js`, `/index.html` and `/manifest.webmanifest`.
+- [x] Add a `hosting` section to `firebase.json`: `"public": "dist"`, a rewrite of `**` to `/index.html`, and `Cache-Control: no-cache` headers for `/sw.js`, `/index.html` and `/manifest.webmanifest`.
 - [ ] Deploy: `npm ci && npm run build && firebase deploy --only hosting`.
-- [ ] Set `authDomain` in `firebase-applet-config.json` to the Hosting domain (for example `financial-os-505002.web.app`, or the custom domain), and add it to Authorized domains.
+- [x] Set `authDomain` in `firebase-applet-config.json` to the Hosting domain. It's `financial-os-505002.firebaseapp.com`, so test sign-in there: on the `run.app` addresses, Google sign-in may fail in Safari and in the installed iPhone app.
 
 **If you stay on Cloud Run:**
 
@@ -56,10 +56,10 @@ If the Google window doesn't return to the installed app, switch `signInWithPopu
 ## 6. Lock down the project
 
 - [ ] Google Cloud console → APIs & Services → Credentials → the Browser key: under Application restrictions, allow only the app's domains (HTTP referrers). Under API restrictions, allow only Identity Toolkit API, Token Service API, Cloud Firestore API and Firebase Installations API.
-- [ ] Firebase console → App Check: register the web app with reCAPTCHA Enterprise. Call `initializeAppCheck` in `startFirebase` in `src/state/firebase.ts` with that site key. Watch the App Check metrics for a few days, then turn on enforcement for Firestore and Authentication.
+- [ ] Firebase console → App Check: register the web app with reCAPTCHA Enterprise, then put the site key in `recaptchaSiteKey` in `firebase-applet-config.json`. The code in `startFirebase` already turns App Check on once the key is there. Watch the App Check metrics for a few days, then turn on enforcement for Firestore and Authentication.
 - [ ] Turn on Firestore backups (point-in-time recovery or scheduled backups) for the database.
 
 ## 7. Before inviting testers
 
-- [ ] Publish a short privacy policy: what's stored (the user's forecast and their Google email), where (Firebase, the database's region), and how to delete it (Delete account, at the bottom of every main screen).
+- [ ] Publish a short privacy policy: what's stored (the user's forecast and their Google email), where (Firebase, the database's region), and how to delete it (Settings → Delete account).
 - [ ] Optional: add email and password sign-in as a second option for people who don't want to use Google. Add it to `AuthService` in `src/state/account.tsx` and implement it in `src/state/firebase.ts`; `SignIn.tsx` renders the options.

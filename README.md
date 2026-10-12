@@ -65,7 +65,7 @@ src/
     store.tsx      React context; applies operations and saves
     mode.tsx       Switches between real data and sample data (separate storage keys)
 firestore.rules    Firestore security rules (see security_spec.md)
-firebase.json      Rules deployment and emulator settings
+firebase.json      Hosting, rules deployment (named database) and emulator settings
   ui/              React screens and components
 ```
 

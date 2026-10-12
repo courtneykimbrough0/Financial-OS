@@ -11,6 +11,7 @@
  * data.
  */
 import { initializeApp, type FirebaseOptions } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import {
   deleteUser,
   getAuth,
@@ -88,10 +89,17 @@ export interface FirebaseSettings extends FirebaseOptions {
   projectId: string;
   apiKey: string;
   firestoreDatabaseId?: string;
+  recaptchaSiteKey?: string;
 }
 
 export function startFirebase(settings: FirebaseSettings): { auth: Auth; db: Firestore } {
   const app = initializeApp(settings);
+  // App Check proves requests come from this app. It turns on once a
+  // reCAPTCHA Enterprise site key is in firebase-applet-config.json;
+  // enforcement is switched on separately in the Firebase console.
+  if (settings.recaptchaSiteKey && typeof window !== 'undefined') {
+    initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(settings.recaptchaSiteKey), isTokenAutoRefreshEnabled: true });
+  }
   // Drop undefined fields instead of failing the whole save over one.
   const db = initializeFirestore(app, { ignoreUndefinedProperties: true }, settings.firestoreDatabaseId || '(default)');
   return { auth: getAuth(app), db };
