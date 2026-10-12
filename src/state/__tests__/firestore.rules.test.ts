@@ -25,7 +25,7 @@ import { COLLECTION, firebaseBackend } from '../firebase';
 
 const PROJECT = 'demo-financial-os';
 const DATABASE = firebaseJson.firestore[0]!.database;
-const [HOST, PORT] = (process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080').split(':') as [string, string];
+const [HOST, PORT] = (process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8088').split(':') as [string, string];
 
 const apps: FirebaseApp[] = [];
 /** A Firestore client signed in as `uid`, or signed out when uid is null. */

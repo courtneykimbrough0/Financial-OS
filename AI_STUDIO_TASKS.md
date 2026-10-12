@@ -22,8 +22,8 @@ Firebase project: `financial-os-505002`. Firestore database: `ai-studio-financia
 **Redeploy now.** The rules AI Studio published earlier expect `updatedAt` as a string, but the app now writes the server's timestamp (the rules check it equals the request time). Until this version of `firestore.rules` is live, every save is refused and the app shows "Your account didn't accept this change."
 
 - [x] First deployment to the named database (done by AI Studio).
-- [ ] Deploy this version: `firebase deploy --only firestore:rules --project financial-os-505002` (firebase.json points the rules at the named database, the one the app uses). Or paste `firestore.rules` into Firebase console → Firestore → that database → Rules → Publish.
-- [ ] If the project also has a `(default)` database, publish the same rules to it (or delete it if nothing uses it), so it isn't left open in test mode.
+- [x] Deploy this version: `firestore.rules` deployed to named database `ai-studio-financialos-de1b8680-2780-4a6a-8754-0c3455a5b5c8` (done by AI Studio via `deploy_firebase` and `fax.DeployRules` RPC).
+- [x] Checked `(default)` database: Verified that project `financial-os-505002` does not have a `(default)` database (returned `5 NOT_FOUND`); only the named database exists.
 - [ ] Confirm by signing in, adding an item, and reloading: the item is still there.
 
 ## 3. Turn on Google sign-in
