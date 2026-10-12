@@ -7,17 +7,12 @@
  * Without Supabase settings the app runs on device storage only, as before.
  */
 import { createClient, isAuthRetryableFetchError, type SupabaseClient, type User } from '@supabase/supabase-js';
-import {
-  GoogleAuthProvider,
-  deleteUser,
-  onAuthStateChanged,
-  signInWithPopup,
-  signOut as fbSignOut,
-} from 'firebase/auth';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { CloudAdapter, supabaseBackend } from './cloud';
-import { auth as firebaseAuthInstance, ensureUserDoc, firebaseBackend } from './firebase';
+import { firebaseAuth } from './firebase';
 import type { StorageAdapter } from './storage';
+
+export { firebaseAuth };
 
 export interface AccountUser {
   id: string;
@@ -120,61 +115,6 @@ export function supabaseAuth(config: { url: string; key: string }): AuthService 
     },
     adapterFor(user) {
       return new CloudAdapter(supabaseBackend(client, user.id), user.id);
-    },
-  };
-}
-
-export function firebaseAuth(): AuthService {
-  return {
-    async currentUser() {
-      try {
-        await firebaseAuthInstance.authStateReady();
-        if (firebaseAuthInstance.currentUser) {
-          const user: AccountUser = {
-            id: firebaseAuthInstance.currentUser.uid,
-            email: firebaseAuthInstance.currentUser.email || '',
-          };
-          rememberUser(user);
-          void ensureUserDoc(user.id, user.email).catch(() => undefined);
-          return user;
-        }
-      } catch {
-        // Offline or connection failure: fall back to last remembered user
-      }
-      return lastUser();
-    },
-    onSignedOut(callback) {
-      return onAuthStateChanged(firebaseAuthInstance, (user) => {
-        if (!user) callback();
-      });
-    },
-    async signInWithGoogle() {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
-      const cred = await signInWithPopup(firebaseAuthInstance, provider);
-      const user: AccountUser = {
-        id: cred.user.uid,
-        email: cred.user.email || '',
-      };
-      rememberUser(user);
-      await ensureUserDoc(user.id, user.email).catch(() => undefined);
-      return user;
-    },
-    async signOut() {
-      rememberUser(null);
-      await fbSignOut(firebaseAuthInstance);
-    },
-    async deleteAccount() {
-      const user = firebaseAuthInstance.currentUser;
-      if (user) {
-        const backend = firebaseBackend(user.uid);
-        await backend.remove().catch(() => undefined);
-        await deleteUser(user);
-      }
-      rememberUser(null);
-    },
-    adapterFor(user) {
-      return new CloudAdapter(firebaseBackend(user.id), user.id);
     },
   };
 }

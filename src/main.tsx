@@ -28,8 +28,14 @@ function AppWithData() {
   );
 }
 
+function isE2ePreview(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.location.port === '4179' || window.location.search.includes('e2e=1');
+}
+
 function Root() {
   const auth = useMemo(() => {
+    if (isE2ePreview()) return null;
     if (firebaseConfig?.projectId && firebaseConfig?.apiKey) {
       return firebaseAuth();
     }

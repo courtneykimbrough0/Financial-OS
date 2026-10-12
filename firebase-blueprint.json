@@ -1,41 +1,13 @@
 {
   "entities": {
-    "User": {
-      "title": "User",
-      "description": "User profile document containing authentication metadata",
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Firebase Auth user ID",
-          "maxLength": 128
-        },
-        "email": {
-          "type": "string",
-          "description": "User email address",
-          "maxLength": 256
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Creation timestamp",
-          "maxLength": 64
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Last update timestamp",
-          "maxLength": 64
-        }
-      },
-      "required": ["id", "email"]
-    },
     "FinancialData": {
       "title": "FinancialData",
-      "description": "Forecast document containing recurring sources and occurrence records",
+      "description": "User forecast document containing recurring sources and occurrence records",
       "type": "object",
       "properties": {
         "userId": {
           "type": "string",
-          "description": "Firebase Auth user ID of the owner",
+          "description": "Firebase Auth UID of the document owner",
           "maxLength": 128
         },
         "schemaVersion": {
@@ -44,11 +16,11 @@
         },
         "revision": {
           "type": "number",
-          "description": "Optimistic concurrency revision number"
+          "description": "Monotonically increasing revision counter for optimistic concurrency control"
         },
         "onboardingComplete": {
           "type": "boolean",
-          "description": "Flag indicating if onboarding was completed"
+          "description": "Whether onboarding has been completed"
         },
         "sources": {
           "type": "array",
@@ -60,7 +32,7 @@
         },
         "updatedAt": {
           "type": "string",
-          "description": "Timestamp of the last modification",
+          "description": "ISO timestamp of the last update",
           "maxLength": 64
         }
       },
@@ -68,13 +40,9 @@
     }
   },
   "firestore": {
-    "/users/{userId}": {
-      "schema": "User",
-      "description": "User profile collection partitioned by user ID"
-    },
-    "/users/{userId}/data/{docId}": {
+    "/financialData/{uid}": {
       "schema": "FinancialData",
-      "description": "User financial forecast data document"
+      "description": "User forecast document keyed by Firebase Auth UID"
     }
   }
 }

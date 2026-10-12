@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { handleFirestoreError, OperationType, type FirestoreErrorInfo } from '../firebase';
 
 describe('Firebase Error Handler', () => {
-  it('serializes errors to the specified JSON schema', () => {
+  it('serializes errors and redacts any user ID from paths', () => {
     let thrown: Error | null = null;
     try {
-      handleFirestoreError(new Error('Missing or insufficient permissions.'), OperationType.WRITE, 'users/user-123/data/current');
+      handleFirestoreError(new Error('Missing or insufficient permissions.'), OperationType.WRITE, 'financialData/secret-user-123');
     } catch (err) {
       thrown = err as Error;
     }
@@ -14,14 +14,14 @@ describe('Firebase Error Handler', () => {
     const parsed = JSON.parse(thrown!.message) as FirestoreErrorInfo;
     expect(parsed.error).toBe('Missing or insufficient permissions.');
     expect(parsed.operationType).toBe('write');
-    expect(parsed.path).toBe('users/user-123/data/current');
-    expect(parsed.authInfo).toBeDefined();
+    // UID must be sanitized to avoid leaking UID in logs
+    expect(parsed.path).toBe('financialData/[uid]');
   });
 
-  it('handles non-Error objects gracefully', () => {
+  it('handles non-Error objects gracefully and without PII', () => {
     let thrown: Error | null = null;
     try {
-      handleFirestoreError('Network failure', OperationType.GET, 'users/user-123');
+      handleFirestoreError('Network failure', OperationType.GET, null);
     } catch (err) {
       thrown = err as Error;
     }
@@ -30,6 +30,6 @@ describe('Firebase Error Handler', () => {
     const parsed = JSON.parse(thrown!.message) as FirestoreErrorInfo;
     expect(parsed.error).toBe('Network failure');
     expect(parsed.operationType).toBe('get');
-    expect(parsed.path).toBe('users/user-123');
+    expect(parsed.path).toBeNull();
   });
 });

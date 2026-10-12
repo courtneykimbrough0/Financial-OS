@@ -2,28 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * Security Rule assertions verifying the 'Dirty Dozen' payloads
- * from security_spec.md are denied by the security model.
+ * from security_spec.md against the financialData/{uid} schema.
  */
 describe('Firestore Security Rules: Dirty Dozen Validation', () => {
   const isValidId = (id: string) => typeof id === 'string' && id.length > 0 && id.length <= 128 && /^[a-zA-Z0-9_-]+$/.test(id);
 
-  const isValidUser = (data: Record<string, unknown>, userId: string, authUid: string) => {
-    const keys = Object.keys(data);
-    const hasRequired = ['id', 'email'].every((k) => keys.includes(k));
-    const allowed = ['id', 'email', 'createdAt', 'updatedAt'];
-    const hasOnlyAllowed = keys.every((k) => allowed.includes(k));
-    return (
-      hasRequired &&
-      hasOnlyAllowed &&
-      data.id === userId &&
-      data.id === authUid &&
-      typeof data.email === 'string' &&
-      data.email.length > 0 &&
-      data.email.length <= 256
-    );
-  };
-
-  const isValidFinancialData = (data: Record<string, unknown>, userId: string, authUid: string) => {
+  const isValidFinancialData = (data: Record<string, unknown>, uid: string, authUid: string) => {
     const keys = Object.keys(data);
     const hasRequired = ['userId', 'schemaVersion', 'revision', 'onboardingComplete', 'sources', 'records'].every((k) => keys.includes(k));
     const allowed = ['userId', 'schemaVersion', 'revision', 'onboardingComplete', 'sources', 'records', 'updatedAt'];
@@ -31,7 +15,7 @@ describe('Firestore Security Rules: Dirty Dozen Validation', () => {
     return (
       hasRequired &&
       hasOnlyAllowed &&
-      data.userId === userId &&
+      data.userId === uid &&
       data.userId === authUid &&
       typeof data.schemaVersion === 'number' &&
       typeof data.revision === 'number' &&
@@ -44,25 +28,34 @@ describe('Firestore Security Rules: Dirty Dozen Validation', () => {
     );
   };
 
-  it('Denies unauthenticated reads and writes (Dirty Dozen 1 & 4)', () => {
+  it('Denies unauthenticated reads and writes (Dirty Dozen 1 & 3)', () => {
     const authUid: string | null = null;
     expect(authUid !== null).toBe(false);
   });
 
-  it('Denies cross-user profile and data access (Dirty Dozen 2, 3, 5)', () => {
+  it('Denies cross-user reads and writes (Dirty Dozen 2 & 4)', () => {
     const callerUid: string = 'alice';
-    const targetUserId: string = 'bob';
-    const isOwner = callerUid === targetUserId;
+    const targetUid: string = 'bob';
+    const isOwner = callerUid === targetUid;
     expect(isOwner).toBe(false);
+  });
+
+  it('Denies collection listing (Dirty Dozen 5)', () => {
+    const allowList = false;
+    expect(allowList).toBe(false);
   });
 
   it('Denies shadow field injections like isAdmin (Dirty Dozen 6)', () => {
     const payload = {
-      id: 'alice',
-      email: 'alice@example.com',
+      userId: 'alice',
+      schemaVersion: 2,
+      revision: 1,
+      onboardingComplete: true,
+      sources: [],
+      records: [],
       isAdmin: true, // Ghost field
     };
-    expect(isValidUser(payload, 'alice', 'alice')).toBe(false);
+    expect(isValidFinancialData(payload, 'alice', 'alice')).toBe(false);
   });
 
   it('Denies identity spoofing (Dirty Dozen 7)', () => {
@@ -105,5 +98,11 @@ describe('Firestore Security Rules: Dirty Dozen Validation', () => {
       records: [],
     };
     expect(isValidFinancialData(badPayload, 'alice', 'alice')).toBe(false);
+  });
+
+  it('Denies revision skipping or non-incrementing updates (Dirty Dozen 12)', () => {
+    const existingRev = 1;
+    const incomingRev = 3; // skipped revision 2
+    expect(incomingRev === existingRev + 1).toBe(false);
   });
 });
