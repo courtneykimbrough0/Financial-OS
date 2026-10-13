@@ -18,7 +18,7 @@ Each step lists:
 
 **Inspect**
 - Git state: current branch (`ccr-12ec4965-6tzwgr`), uncommitted work, and whether work done elsewhere (AI Studio) has been pushed.
-- `package.json` scripts, `package-lock.json` integrity fields, test configuration (`vite.config.ts`, `vitest.rules.config.ts`, `src/test-setup.ts`), and CI (none exists today).
+- `package.json` scripts, `package-lock.json` integrity fields, existing tests (`src/**/__tests__/`, `scripts/__tests__/`, `scripts/e2e-smoke.mjs`) and what they cover, test configuration (`vite.config.ts`, `vitest.rules.config.ts`, `src/test-setup.ts`), and CI (none exists today).
 - Architecture against [AGENTS.md](AGENTS.md) section C and [README.md](README.md); storage (`src/state/`), security (`firestore.rules`, `security_spec.md`), hosting (`server.mjs`, `Dockerfile`), and documentation.
 
 **Build or correct**
@@ -240,7 +240,8 @@ Only if the product owner authorizes implementation.
 - Test coverage against Steps 1–10, open defects, and documented limitations.
 
 **Build or correct**
-- Regression tests for every bug found; simplifications suggested by Step 11.
+- Regression tests for every bug found.
+- Keep measuring the experience (Step 11) and remove steps people don't need.
 
 **Tests**
 - The full suite in AGENTS.md section H on every change.
