@@ -407,12 +407,22 @@ export function cancelOccurrence(data: AppData, id: string, note: string, clock:
   });
 }
 
-/** Undoes a completion or cancellation, returning the occurrence to outstanding. */
+/**
+ * Undoes a completion or cancellation, returning the occurrence to outstanding.
+ * A recurring occurrence that was never rescheduled goes back to following its
+ * schedule, exactly as before it was recorded or canceled: its record is
+ * removed, so later amount or schedule changes apply to it again. A
+ * rescheduled one keeps its new date and amount.
+ */
 export function restoreOccurrence(data: AppData, id: string, clock: Clock): Result {
-  return withOccurrence(data, id, clock, (r) => {
+  const result = withOccurrence(data, id, clock, (r) => {
     if (r.status === 'scheduled') return 'This transaction is already outstanding.';
     return { ...r, status: 'scheduled', actualAmountCents: null, actualDate: null, completedAt: null, canceledAt: null, cancelNote: null };
   });
+  if (!result.ok) return result;
+  const r = result.data.records.find((x) => x.id === id)!;
+  const unchanged = r.sourceId !== null && r.scheduledDate === r.expectedDate && r.scheduledAmountCents === r.expectedAmountCents;
+  return unchanged ? ok({ ...result.data, records: result.data.records.filter((x) => x.id !== id) }) : result;
 }
 
 export function completeOnboarding(data: AppData): Result {

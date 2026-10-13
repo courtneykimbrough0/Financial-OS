@@ -1,4 +1,5 @@
-import { addDays, minDate, type DateStr } from './dates';
+import { addDays, diffDays, minDate, type DateStr } from './dates';
+import type { Cents } from './money';
 import { occurrenceDates } from './recurrence';
 import {
   recurringOccurrenceId,
@@ -113,4 +114,18 @@ export function findOccurrence(data: AppData, id: string, today: DateStr): Occur
   if (!source) return null;
   const gen = expandSource(source, date, date).find((o) => o.id === id);
   return gen ? { ...gen, displayStatus: deriveStatus(gen, today), virtual: true } : null;
+}
+
+/** How a recorded outcome differed from the original prediction. */
+export interface Variance {
+  /** Actual minus expected amount: positive when more than expected. */
+  amountCents: Cents;
+  /** Days from the expected date to the actual date: positive when later. */
+  days: number;
+}
+
+/** Variance of a recorded occurrence against its original prediction; null until it is recorded. */
+export function variance(record: OccurrenceRecord): Variance | null {
+  if (record.status !== 'completed' || record.actualDate === null || record.actualAmountCents === null) return null;
+  return { amountCents: record.actualAmountCents - record.expectedAmountCents, days: diffDays(record.expectedDate, record.actualDate) };
 }

@@ -4,7 +4,7 @@ How stored data becomes the forecast, and which tests prove each behavior. Writt
 
 ## Calculation path
 
-1. **Stored inputs** (`types.ts`, `AppData`). Recurring sources (each with schedule versions, an active flag, end date and paused ranges) and stored records (one-time items, plus recurring occurrences a person has acted on). Amounts are integer cents; dates are `YYYY-MM-DD`.
+1. **Stored inputs** (`types.ts`, `AppData`). Recurring sources (each with schedule versions, an active flag, end date and paused ranges) and stored records (one-time items, plus recurring occurrences a person has acted on). Each record keeps three things apart: the original prediction (`expected*`, set once when the record is created), the latest expectation (`scheduled*`, changed by moving it) and what happened (`actual*`, set by recording or correcting a payment). Undoing a payment or cancellation of an occurrence that was never moved removes its record, so it follows the schedule again. Amounts are integer cents; dates are `YYYY-MM-DD`.
 2. **Schedule dates** (`recurrence.ts`, `occurrenceDates`). Each version's rule produces dates from its start date. Every date is computed from the start, never chained, so date windows never duplicate or skip. Month days that don't exist clamp to the month's last day.
 3. **Generated occurrences** (`occurrences.ts`, `expandSource`). Each version covers its start date up to the next version's start. Dates on or after an inactive source's end date, or inside a paused range, are left out. Each occurrence's id is `<sourceId>@<originalDate>`.
 4. **Merging stored records** (`occurrences.ts`, `resolveOccurrences`). A stored record replaces the generated occurrence with the same id. One-time records are always included. A stored change to an unpaid recurring occurrence whose original date the schedule no longer produces is set aside (`isSuperseded`); recorded and canceled occurrences are always kept. `findOccurrence` follows the same rules for a single id.
@@ -19,6 +19,7 @@ How stored data becomes the forecast, and which tests prove each behavior. Writt
 9. **Derived views.**
    - `periodKpis` and `totals`: cash flow for any date range (every counted entry in the range, before payday included).
    - `periodPlan` (`plan.ts`): cash flow by kind and tag.
+   - `variance` (`occurrences.ts`): a recorded outcome against its original prediction, in cents and days.
    - `weekSummaries`, `monthWeekSummaries`, `paycheckCycles`, `lowestPoint`, `negativeStretches`, `timingGapsAhead` (90 days from the forecast start), `overdueEntries`.
    - Screens read only these; none computes money itself.
 
@@ -47,12 +48,13 @@ Files are in `src/domain/__tests__/`. "EV" is `engine-validation.test.ts`; "SC" 
 | Spending before payday | `forecast` › upcoming items before the next payday…, overdue items dated before the forecast start…; EV › spending before the next payday |
 | Timing gaps and 90-day lookahead | `one-time-and-gaps` › timing gaps ahead |
 | Actuals (late, early, different amount) | `forecast` › expected vs actual outcomes; spec › C, D, E |
-| Paying a bill: once only, correction, undo | `forecast` › rejects duplicate completion…, corrects a recorded actual…, undoing a recorded outcome…; SC › marking a bill paid |
+| Paying a bill: once only, correction, undo | `forecast` › rejects duplicate completion…, corrects a recorded actual…, undoing a recorded outcome…; SC › marking a bill paid; `history` › paying a bill, correcting a payment, undoing a payment or cancellation |
+| Variance (actual vs. original prediction) | `history` › paying a bill |
 | Rescheduling and canceling | `forecast` › overdue, rescheduled, and canceled occurrences; spec › H, I; SC › a moved occurrence |
 | Schedule changes and effective dates | `forecast` › recurring schedule changes; spec › F; SC › D1 |
 | Turning items off and on | `forecast` › deactivating stops future occurrences…; SC › D2, items that are turned off |
 | Stored records never double count | SC › D1, D2, never list the same occurrence twice; `forecast` › KPIs use actual outcomes… |
-| History preserved | SC › recorded history after later changes; spec › F |
+| History preserved | SC › recorded history after later changes; spec › F; `history` › schedule changes and history, the original prediction never changes; `state/history-roundtrip` (device storage and backups) |
 | Repeatable, order-independent, no mutation | SC › repeated forecasts, building a forecast; EV › gives the same order and totals however the data is stored |
 | One-time items | `one-time-and-gaps` › one-time income and expenses…; spec › G |
 | Cash flow by kind and tag | `plan` (all) |

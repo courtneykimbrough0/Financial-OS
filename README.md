@@ -152,6 +152,8 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 - Recording an actual for an item that is already completed is rejected, which covers double taps and retried saves. To change a recorded actual, use "Fix what was paid".
 - Actual dates can't be in the future.
 - Rescheduling replaces the scheduled date, so the item is never counted on both dates.
+- Undoing a payment or cancellation returns the item to exactly where it was: a recurring item that was never moved follows its schedule again (so later price changes apply to it), and a moved one keeps its new date and amount.
+- `variance` (`occurrences.ts`) compares a recorded outcome with its original prediction: the amount difference in cents and the number of days early or late.
 - A schedule change or turning a source off replaces the occurrences from its date on. An occurrence that was rescheduled but is still outstanding stops counting once its original date is no longer in the schedule; its record is kept, and it counts again if a later schedule brings that date back. Recorded and canceled occurrences are history and stay as they are.
 - Turning a source off stops future occurrences. Turning it back on starts at a new next date and leaves the turned-off stretch empty, so no backlog of overdue items appears.
 
@@ -160,6 +162,7 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 - `src/domain/__tests__/spec-scenarios.test.ts`: the specification's scenarios A–M (basic projection, timing gap, actual income and expenses that differ from expectations, late liability payment, schedule change, one-time transaction, rescheduling, cancellation, dashboard consistency, view changes, date boundaries, persistence).
 - `forecast.test.ts`, `recurrence.test.ts`, `dates-money.test.ts`: engine edge cases, including time-zone independence checked across five zones.
 - `engine-validation.test.ts`: hand-computed running totals in cents, spending before payday, same-day events, period and year boundaries, several paydays in one week, and the payday anchor after payments, moves and cancellations.
+- `history.test.ts` and `src/state/__tests__/history-roundtrip.test.ts`: the original prediction, the latest expectation and the actual stay distinct through paying, correcting, undoing, canceling and schedule changes, including on the device and in backups; variance values.
 - `saved-changes.test.ts`: rescheduled, recorded and canceled occurrences after a later schedule change or turning an item off, paying a moved bill, the next payday after a schedule change, repeated forecasts that never change stored data, and month-end schedules.
 - `sample.test.ts`: checks that the sample data shows each behavior it is meant to demonstrate, with the sample built on several different "today" dates.
 - `src/state/__tests__`: storage round-trips, damaged data handling, the separation between sample and real data, background saving, backups, and account storage (offline changes, sending them later, conflicts that set changes aside, refused saves).
