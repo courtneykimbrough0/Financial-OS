@@ -162,8 +162,10 @@ export interface ScheduleChange {
 /**
  * Changes the amount and/or schedule from `change.startDate` onward. Versions
  * starting on or after that date are replaced; occurrences before it keep the
- * expectations they were generated with. Occurrences the user already acted on
- * (completed, rescheduled, canceled) are stored records and are unaffected.
+ * expectations they were generated with. Recorded and canceled occurrences are
+ * kept as they are. A rescheduled occurrence that is still outstanding stops
+ * applying if the new schedule no longer has its original date (see
+ * `resolveOccurrences`); its record is kept.
  */
 export function changeSourceSchedule(data: AppData, id: string, change: ScheduleChange, clock: Clock): Result {
   const err =
@@ -230,7 +232,6 @@ export function deleteSource(data: AppData, id: string): Result {
   return ok({ ...data, sources: data.sources.filter((s) => s.id !== id) });
 }
 
-/** Stops forecasting from today. Past occurrences and recorded outcomes remain. */
 /** Makes this income the main paycheck: pay periods run from one of its paydays to the next. */
 export function setMainPaycheck(data: AppData, id: string, clock: Clock): Result {
   const source = data.sources.find((s) => s.id === id);
@@ -248,6 +249,11 @@ export function setMainPaycheck(data: AppData, id: string, clock: Clock): Result
   });
 }
 
+/**
+ * Stops forecasting from today. Past occurrences and recorded outcomes remain;
+ * outstanding occurrences originally due today or later, including rescheduled
+ * ones, are no longer counted.
+ */
 export function deactivateSource(data: AppData, id: string, clock: Clock): Result {
   return withSource(data, id, (s) => (s.active ? { ...s, active: false, endDate: clock.today, updatedAt: clock.now } : 'This item is already turned off.'));
 }
