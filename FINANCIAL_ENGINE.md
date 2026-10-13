@@ -1,0 +1,58 @@
+# Financial engine: calculation path and test matrix
+
+How stored data becomes the forecast, and which tests prove each behavior. Written for roadmap Step 1; verify against the code before relying on it. All functions are pure and live in `src/domain/`.
+
+## Calculation path
+
+1. **Stored inputs** (`types.ts`, `AppData`). Recurring sources (each with schedule versions, an active flag, end date and paused ranges) and stored records (one-time items, plus recurring occurrences a person has acted on). Amounts are integer cents; dates are `YYYY-MM-DD`.
+2. **Schedule dates** (`recurrence.ts`, `occurrenceDates`). Each version's rule produces dates from its start date. Every date is computed from the start, never chained, so date windows never duplicate or skip. Month days that don't exist clamp to the month's last day.
+3. **Generated occurrences** (`occurrences.ts`, `expandSource`). Each version covers its start date up to the next version's start. Dates on or after an inactive source's end date, or inside a paused range, are left out. Each occurrence's id is `<sourceId>@<originalDate>`.
+4. **Merging stored records** (`occurrences.ts`, `resolveOccurrences`). A stored record replaces the generated occurrence with the same id. One-time records are always included. A stored change to an unpaid recurring occurrence whose original date the schedule no longer produces is set aside (`isSuperseded`); recorded and canceled occurrences are always kept. `findOccurrence` follows the same rules for a single id.
+5. **Placing entries** (`forecast.ts`, `buildForecast`).
+   - Recorded: on the actual date, at the actual amount.
+   - Canceled: shown on its scheduled date, never counted.
+   - Outstanding: on its scheduled date at its scheduled amount; if overdue and dated before the forecast start, carried forward to the forecast start.
+   - The horizon is 400 days from today, extended to the end of any requested period (`through`).
+6. **Next payday and anchor** (`nextExpectedPayday`, `mainPaycheckId`). The main paycheck is the marked income, else the first active income. Next payday: its earliest outstanding occurrence (overdue included), or one received today. Canceled occurrences and ones received before today don't count. The anchor is the day before; the running total is $0 at its end.
+7. **Ordering** (`compareEntries`). Date, then income before expenses, then larger amounts first, then description, then id. The order never depends on how data is stored.
+8. **Running total** (`dailyTimeline`, `tallyOn`). From the forecast start, each day adds its counted income and subtracts its counted expenses. Days before the forecast start have no running total.
+9. **Derived views.**
+   - `periodKpis` and `totals`: cash flow for any date range (every counted entry in the range, before payday included).
+   - `periodPlan` (`plan.ts`): cash flow by kind and tag.
+   - `weekSummaries`, `monthWeekSummaries`, `paycheckCycles`, `lowestPoint`, `negativeStretches`, `timingGapsAhead` (90 days from the forecast start), `overdueEntries`.
+   - Screens read only these; none computes money itself.
+
+**What the inputs can't express.** No amount of cash on hand is stored, so the running total measures change from the payday anchor. Upcoming items before the next payday count in cash flow for their period but not in the running total, so a shortfall before payday can't be shown. Once such an item is overdue and still unrecorded, it's carried to payday.
+
+## Test matrix
+
+Files are in `src/domain/__tests__/`. "EV" is `engine-validation.test.ts`; "SC" is `saved-changes.test.ts`; "spec" is `spec-scenarios.test.ts`.
+
+| Behavior | Tests |
+| --- | --- |
+| Integer cents, parsing, no float drift | `dates-money` › money (all); EV › keeps exact cents over a long horizon |
+| Date-only values, time zones | `dates-money` › date-only handling; `forecast` › time zone independence |
+| Weekly / every 2 weeks | `recurrence` › weekly and every-two-weeks; EV › schedules across year ends |
+| Twice monthly | `recurrence` › twice monthly is distinct…, clamps to month end, does not duplicate…; SC › month-end schedules |
+| Monthly, month-end, leap years | `recurrence` › monthly on the 31st…; spec › L month-end and leap-year dates; SC › month-end schedules; EV › leap year case |
+| Custom intervals | `recurrence` › custom intervals; EV › every 3 months from Nov 30 |
+| Year boundaries | EV › schedules across year ends, crosses a year end… |
+| Adjacent windows never duplicate or skip | `recurrence` › adjacent windows…; spec › L split date ranges… |
+| Running total arithmetic | EV › applies every income and expense…, period cash flow equals the change…; spec › A, J |
+| Same-day events (order and totals) | `forecast` › nets several transactions on the same day…; spec › L several income schedules…; EV › events on the same day |
+| Totals through zero and below | `forecast` › finds the lowest point and negative stretches; spec › B; `one-time-and-gaps` › treats exactly $0 as not a gap |
+| Period boundaries and horizon | EV › includes events on the first and last day…, extends the forecast…; `forecast` › custom ranges carry the tally… |
+| Main paycheck anchor | `forecast` › anchors at $0…, anchors on the main paycheck…; EV › anchor cases; SC › a moved paycheck the schedule has replaced… |
+| Pay periods (back-to-back, several paydays in a week) | `forecast` › paycheck-to-paycheck cycles; EV › several paydays in one week |
+| Spending before payday | `forecast` › upcoming items before the next payday…, overdue items dated before the forecast start…; EV › spending before the next payday |
+| Timing gaps and 90-day lookahead | `one-time-and-gaps` › timing gaps ahead |
+| Actuals (late, early, different amount) | `forecast` › expected vs actual outcomes; spec › C, D, E |
+| Paying a bill: once only, correction, undo | `forecast` › rejects duplicate completion…, corrects a recorded actual…, undoing a recorded outcome…; SC › marking a bill paid |
+| Rescheduling and canceling | `forecast` › overdue, rescheduled, and canceled occurrences; spec › H, I; SC › a moved occurrence |
+| Schedule changes and effective dates | `forecast` › recurring schedule changes; spec › F; SC › D1 |
+| Turning items off and on | `forecast` › deactivating stops future occurrences…; SC › D2, items that are turned off |
+| Stored records never double count | SC › D1, D2, never list the same occurrence twice; `forecast` › KPIs use actual outcomes… |
+| History preserved | SC › recorded history after later changes; spec › F |
+| Repeatable, order-independent, no mutation | SC › repeated forecasts, building a forecast; EV › gives the same order and totals however the data is stored |
+| One-time items | `one-time-and-gaps` › one-time income and expenses…; spec › G |
+| Cash flow by kind and tag | `plan` (all) |

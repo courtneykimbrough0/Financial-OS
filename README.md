@@ -76,7 +76,7 @@ Every dashboard element (calendar, KPIs, summaries, timeline, cycles) reads from
 
 ### Data model
 
-- **RecurringSource**: description, kind (`income` / `expense` / `liability`), category, active flag, and a list of **schedule versions** (`startDate`, `amountCents`, `rule`). Editing the amount or schedule adds a version that starts on an effective date (today or later). Earlier occurrences keep the expectation they had.
+- **RecurringSource**: description, kind (`income`, `bill`, `subscription`, `liability` or `savings`; every kind except income is an expense), optional tags the person creates, a liability type (card, loan, or line of credit) for liability payments, an optional main-paycheck flag on income, an active flag with an end date and earlier paused ranges, and a list of **schedule versions** (`startDate`, `amountCents`, `rule`). Editing the amount or schedule adds a version that starts on an effective date (today or later). Earlier occurrences keep the expectation they had.
 - **OccurrenceRecord**: one dated transaction. One-time transactions always have a record. Recurring occurrences are generated on demand and only get stored once you act on them. Each has a stable id (`<sourceId>@<originalDate>`), so a stored record replaces exactly one generated occurrence. A record holds:
   - `expectedDate` / `expectedAmountCents`: the original prediction. This never changes after creation.
   - `scheduledDate` / `scheduledAmountCents`: the latest expectation for an outstanding item (after a reschedule).
@@ -110,7 +110,7 @@ Setup steps for the Firebase project are in [AI_STUDIO_TASKS.md](AI_STUDIO_TASKS
 
 ## Forecast rules
 
-These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tests__/forecast.test.ts` cover them.
+These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tests__/forecast.test.ts` cover them. [FINANCIAL_ENGINE.md](FINANCIAL_ENGINE.md) traces the calculation step by step and maps each behavior to its tests.
 
 **Sign convention.** Income adds to the tally. Expenses and liability payments subtract from it. All amounts are integer cents.
 
@@ -152,12 +152,15 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 - Recording an actual for an item that is already completed is rejected, which covers double taps and retried saves. To change a recorded actual, use "Fix what was paid".
 - Actual dates can't be in the future.
 - Rescheduling replaces the scheduled date, so the item is never counted on both dates.
+- A schedule change or turning a source off replaces the occurrences from its date on. An occurrence that was rescheduled but is still outstanding stops counting once its original date is no longer in the schedule; its record is kept, and it counts again if a later schedule brings that date back. Recorded and canceled occurrences are history and stay as they are.
 - Turning a source off stops future occurrences. Turning it back on starts at a new next date and leaves the turned-off stretch empty, so no backlog of overdue items appears.
 
 ## Tests
 
 - `src/domain/__tests__/spec-scenarios.test.ts`: the specification's scenarios A–M (basic projection, timing gap, actual income and expenses that differ from expectations, late liability payment, schedule change, one-time transaction, rescheduling, cancellation, dashboard consistency, view changes, date boundaries, persistence).
 - `forecast.test.ts`, `recurrence.test.ts`, `dates-money.test.ts`: engine edge cases, including time-zone independence checked across five zones.
+- `engine-validation.test.ts`: hand-computed running totals in cents, spending before payday, same-day events, period and year boundaries, several paydays in one week, and the payday anchor after payments, moves and cancellations.
+- `saved-changes.test.ts`: rescheduled, recorded and canceled occurrences after a later schedule change or turning an item off, paying a moved bill, the next payday after a schedule change, repeated forecasts that never change stored data, and month-end schedules.
 - `sample.test.ts`: checks that the sample data shows each behavior it is meant to demonstrate, with the sample built on several different "today" dates.
 - `src/state/__tests__`: storage round-trips, damaged data handling, the separation between sample and real data, background saving, backups, and account storage (offline changes, sending them later, conflicts that set changes aside, refused saves).
 - `src/state/__tests__/firestore.rules.test.ts` (`npm run test:rules`): every guarantee in `security_spec.md`, checked against the real rules in the Firestore emulator, plus the app's Firestore storage code.

@@ -253,11 +253,21 @@ Only if the product owner authorizes implementation.
 
 ---
 
-## Open items at the time of writing
+## Status
 
-- **Unpushed AI Studio changes.** AI Studio reported changes to `src/state/store.tsx` (keeping data on screen during background loads), `src/state/firebase.ts` (sign-out guard, cached storage connection) and `src/state/account.tsx` that hadn't reached GitHub. Step 0 must get them pushed and reviewed. The store change in particular must never let stale data be saved over newer data.
+- **Step 0: complete with follow-ups** (October 2026). Baseline: commit `5fc80fb`, all six checks in AGENTS.md section H passing. The GitHub branch is the working baseline; AI Studio changes that never reached GitHub are set aside, to be handled only if a concrete defect points to them. A defect found during the baseline (unpaid moved occurrences still counted after a schedule change or turning an item off, which could also set the wrong payday) is fixed, with tests in `saved-changes.test.ts`.
+- **Step 1: complete with follow-ups.** Calculation path and test matrix: [FINANCIAL_ENGINE.md](FINANCIAL_ENGINE.md). Validation tests: `engine-validation.test.ts`. No further engine defects found.
+
+## Open items
+
+- **Cash before payday is unknown.** The running total starts at $0 the day before the next payday, so a shortfall caused by spending before that payday can't be shown. A product decision (for example, an optional "cash available now" amount); see FINANCIAL_ENGINE.md.
+- **For the UI review** (calculations are consistent; how they are presented needs a look):
+  - An early payment followed by a schedule change: both the payment and the new schedule's first payment count.
+  - A schedule change whose start date falls after the next payment keeps that payment under the old schedule.
+  - A canceled occurrence stays canceled while the new schedule's payment counts.
+  - Deleting an item whose only saved change has been set aside is refused with a message about history that isn't visible.
+- **Rare:** "twice a month" on two days that both fall on Feb 28 or 29 gives one February payment (deliberate, tested).
 - **No CI.** Checks run only when an agent runs them.
-- **README data model line is out of date.** It lists source kinds as `income` / `expense` / `liability` and mentions a category field. The code has income, bill, subscription, liability, and savings kinds, with tags and no category.
 - **Console setup** in [AI_STUDIO_TASKS.md](AI_STUDIO_TASKS.md) is partly done: Cloud Run deploy with `server.mjs`, OAuth redirect URIs, API-key restrictions, App Check, and backups remain.
 
 ---
