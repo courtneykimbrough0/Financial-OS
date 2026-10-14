@@ -37,7 +37,20 @@ export function TimingGapsBanner({ gaps, from, horizonEnd }: { gaps: GapExplanat
 }
 
 /** Sheet explaining one or more timing gaps, each from the forecast's own entries and running totals. */
-export function GapsSheet({ gaps, horizonEnd, note, onClose }: { gaps: GapExplanation[]; horizonEnd: DateStr; note?: string; onClose: () => void }) {
+export function GapsSheet({
+  gaps,
+  horizonEnd,
+  note,
+  onClose,
+  onWhatIf,
+}: {
+  gaps: GapExplanation[];
+  horizonEnd: DateStr;
+  note?: string;
+  onClose: () => void;
+  /** When given, outstanding entries offer "What if…" to preview a change to them. */
+  onWhatIf?: (occurrenceId: string) => void;
+}) {
   return (
     <Modal title={countLabel(gaps.length)} onClose={onClose}>
       <div className="stack">
@@ -58,7 +71,7 @@ export function GapsSheet({ gaps, horizonEnd, note, onClose }: { gaps: GapExplan
                     Down to <strong>{formatMoney(g.lowestCents)}</strong> on {formatShort(g.lowestDate)}
                   </span>
                 </summary>
-                <GapDetail gap={g} horizonEnd={horizonEnd} />
+                <GapDetail gap={g} horizonEnd={horizonEnd} onWhatIf={onWhatIf} />
               </details>
             </li>
           ))}
@@ -71,7 +84,7 @@ export function GapsSheet({ gaps, horizonEnd, note, onClose }: { gaps: GapExplan
   );
 }
 
-function GapDetail({ gap, horizonEnd }: { gap: GapExplanation; horizonEnd: DateStr }) {
+function GapDetail({ gap, horizonEnd, onWhatIf }: { gap: GapExplanation; horizonEnd: DateStr; onWhatIf?: (id: string) => void }) {
   const toLowest = [...gap.outflows, ...gap.inflows].sort(compareEntries);
   return (
     <div className="gap-explain stack-sm">
@@ -81,7 +94,7 @@ function GapDetail({ gap, horizonEnd }: { gap: GapExplanation; horizonEnd: DateS
       </p>
 
       <h3 className="gap-step">Leading to the lowest point</h3>
-      <EntryLines entries={toLowest} />
+      <EntryLines entries={toLowest} onWhatIf={onWhatIf} />
       <p className="gap-total">
         <span>Running total, {formatShort(gap.lowestDate)}</span>
         <strong className="negative-text">{formatMoney(gap.lowestCents)}</strong>
@@ -90,14 +103,14 @@ function GapDetail({ gap, horizonEnd }: { gap: GapExplanation; horizonEnd: DateS
       {gap.afterLowest.length > 0 && (
         <>
           <h3 className="gap-step">While still below $0</h3>
-          <EntryLines entries={gap.afterLowest} />
+          <EntryLines entries={gap.afterLowest} onWhatIf={onWhatIf} />
         </>
       )}
 
       <h3 className="gap-step">Back to $0 or more</h3>
       {gap.recoversOn && gap.recoveryCents !== null ? (
         <>
-          <EntryLines entries={gap.recoveryEntries} />
+          <EntryLines entries={gap.recoveryEntries} onWhatIf={onWhatIf} />
           <p className="gap-total">
             <span>Running total, {formatShort(gap.recoversOn)}</span>
             <strong>{formatMoney(gap.recoveryCents)}</strong>
@@ -110,7 +123,7 @@ function GapDetail({ gap, horizonEnd }: { gap: GapExplanation; horizonEnd: DateS
   );
 }
 
-function EntryLines({ entries }: { entries: ForecastEntry[] }) {
+function EntryLines({ entries, onWhatIf }: { entries: ForecastEntry[]; onWhatIf?: (id: string) => void }) {
   if (entries.length === 0) return <p className="hint">Nothing scheduled.</p>;
   return (
     <ul className="gap-entries">
@@ -119,6 +132,16 @@ function EntryLines({ entries }: { entries: ForecastEntry[] }) {
           <span className="gap-entry-date">{formatShort(e.date)}</span>
           <span className="gap-entry-name">{e.occurrence.description}</span>
           <FlowAmount kind={e.occurrence.kind} cents={e.amountCents} />
+          {onWhatIf && e.occurrence.status === 'scheduled' && (
+            <button
+              type="button"
+              className="button small link gap-whatif"
+              onClick={() => onWhatIf(e.occurrence.id)}
+              aria-label={`What if: ${e.occurrence.description}, ${formatShort(e.date)}`}
+            >
+              What if…
+            </button>
+          )}
         </li>
       ))}
     </ul>

@@ -351,8 +351,25 @@ try {
   await firstGap.locator('summary').focus();
   await page.keyboard.press('Enter');
   assert.equal(await firstGap.getAttribute('open'), null);
-  await page.keyboard.press('Escape');
-  assert.equal(await gapSheet.count(), 0);
+  // What if… from the explanation: preview, then apply after confirming.
+  await page.keyboard.press('Enter');
+  await firstGap.getByRole('button', { name: /^What if: Car repair/ }).click();
+  const whatIf = page.getByRole('dialog', { name: 'What if…' });
+  // Choose "Skip this one" from the keyboard.
+  await whatIf.getByRole('radio', { name: 'Skip this one' }).focus();
+  await page.keyboard.press('Space');
+  assert.equal(await whatIf.getByRole('radio', { name: 'Skip this one' }).isChecked(), true);
+  await whatIf.getByText('The timing gap Nov 5 – 9 would be gone.').waitFor();
+  await whatIf.getByRole('radio', { name: 'Move date' }).check();
+  await whatIf.getByLabel('New date').fill('2026-11-10');
+  await whatIf.getByText('The timing gap Nov 5 – 9 would be gone.').waitFor();
+  await shot('11c-what-if');
+  await whatIf.getByRole('button', { name: 'Apply change…' }).click();
+  await whatIf.getByText('Move Car repair from Nov 5, 2026 to Nov 10, 2026.').waitFor();
+  await whatIf.getByRole('button', { name: 'Apply change', exact: true }).click();
+  await page.getByText('Moved Car repair to Nov 10, 2026.').waitFor();
+  assert.equal(await page.getByRole('dialog').count(), 0);
+  assert.equal(await page.getByText('Timing gap ahead').count(), 0);
   // Late paycheck: actual recorded, next one still scheduled.
   await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Income' }).click();
   await page.getByRole('button', { name: 'See dates' }).click();

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { buildForecast, explainTimingGaps, lowestPoint, dailyTimeline, tallyOn } from '../forecast';
+import { findOccurrence } from '../occurrences';
 import * as ops from '../operations';
-import { previewChange, type ChangePreview, type ProposedChange } from '../preview';
+import { applyPreviewedChange, previewChange, type ChangePreview, type ProposedChange } from '../preview';
 import type { AppData } from '../types';
 import { clockAt, source, unwrap, usd } from './helpers';
 
@@ -217,5 +218,42 @@ describe('previews', () => {
       expect(side.lowest).toEqual(lowestPoint(dailyTimeline(f, p.window.start, p.window.end)));
       expect(side.gaps).toEqual(explainTimingGaps(f));
     }
+  });
+});
+
+describe('applying a previewed change', () => {
+  const rent = () => source(paid(), TODAY, 'bill', 'Rent', 1200, '2026-10-20', { type: 'monthly' }, 'rent');
+
+  it.each([
+    { change: { kind: 'move', occurrenceId: 'rent@2026-10-20', date: '2026-10-30' }, expected: { status: 'scheduled', scheduledDate: '2026-10-30', scheduledAmountCents: usd(1200) } },
+    { change: { kind: 'amount', occurrenceId: 'rent@2026-10-20', amountCents: usd(1000) }, expected: { status: 'scheduled', scheduledDate: '2026-10-20', scheduledAmountCents: usd(1000) } },
+    { change: { kind: 'skip', occurrenceId: 'rent@2026-10-20' }, expected: { status: 'canceled', cancelNote: 'Skipped after a what-if preview' } },
+  ] as { change: ProposedChange; expected: object }[])('$change.kind changes exactly that one occurrence, keeping its original prediction', ({ change, expected }) => {
+    const before = rent();
+    const after = unwrap(applyPreviewedChange(before, before, change, clock));
+    expect(after.records).toHaveLength(1);
+    expect(after.records[0]).toMatchObject({ id: 'rent@2026-10-20', expectedDate: '2026-10-20', expectedAmountCents: usd(1200), ...expected });
+    expect(after.sources).toEqual(before.sources);
+    expect(findOccurrence(after, 'rent@2026-11-20', TODAY)).toMatchObject({ virtual: true, scheduledAmountCents: usd(1200) });
+    // The applied forecast is the one the preview showed.
+    const p = preview(before, change);
+    const applied = buildForecast(after, TODAY);
+    expect(p.proposed.tallies.map((t) => tallyOn(applied, t.date))).toEqual(p.proposed.tallies.map((t) => t.cents));
+  });
+
+  it('refuses a preview made on data that has changed since', () => {
+    const previewedOn = rent();
+    const changed = unwrap(ops.addOneTime(previewedOn, { kind: 'bill', description: 'Vet', amountCents: usd(90), date: '2026-10-22' }, clock));
+    expect(applyPreviewedChange(changed, previewedOn, { kind: 'move', occurrenceId: 'rent@2026-10-20', date: '2026-10-30' }, clock)).toEqual({
+      ok: false,
+      error: 'Your forecast changed after this preview. Check the updated preview before applying.',
+    });
+  });
+
+  it('refuses a preview that can’t be compared, and a recorded payment', () => {
+    const d = rent();
+    expect(applyPreviewedChange(d, d, { kind: 'move', occurrenceId: 'pay@2026-10-15', date: '2026-10-16' }, clock)).toMatchObject({ ok: false, error: /can’t be compared/ });
+    const paidRent = unwrap(ops.recordActual(d, 'rent@2026-10-20', { amountCents: usd(1200), date: TODAY }, clock));
+    expect(applyPreviewedChange(paidRent, paidRent, { kind: 'amount', occurrenceId: 'rent@2026-10-20', amountCents: usd(1) }, clock)).toMatchObject({ ok: false });
   });
 });

@@ -2445,3 +2445,27 @@ button.callout.gap-line:focus-visible {
 .gap-total strong {
   white-space: nowrap;
 }
+
+/* ---------- What if ---------- */
+
+.gap-entries li:has(.gap-whatif) {
+  flex-wrap: wrap;
+}
+.gap-whatif {
+  margin-left: auto;
+  min-height: var(--tap);
+  padding-right: 0;
+}
+.whatif-headline {
+  margin: 0;
+  font-weight: 650;
+}
+.whatif-change {
+  margin: 0;
+}
+.whatif-compare {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.whatif-result .callout {
+  margin: 0;
+}

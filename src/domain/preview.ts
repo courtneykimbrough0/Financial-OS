@@ -48,6 +48,8 @@ export interface ChangePreview {
    */
   comparable: boolean;
   limitation: string | null;
+  /** Why the forecasts aren't compared, for wording in the interface; null when they are. */
+  reason: 'no-forecast' | 'anchor-changed' | 'before-payday' | null;
   /** True when the next main payday, and so the running total's starting point, differs. */
   anchorChanged: boolean;
   /** Proposed lowest running total minus the current one. */
@@ -69,8 +71,9 @@ export interface ChangePreview {
 
 export type PreviewResult = { ok: true; preview: ChangePreview } | { ok: false; error: string };
 
-function applyChange(data: AppData, change: ProposedChange, clock: ops.Clock): ops.Result {
-  if (change.kind === 'skip') return ops.cancelOccurrence(data, change.occurrenceId, '', clock);
+/** The change applied with the ordinary operations: to that one occurrence only. */
+export function applyProposedChange(data: AppData, change: ProposedChange, clock: ops.Clock, note = ''): ops.Result {
+  if (change.kind === 'skip') return ops.cancelOccurrence(data, change.occurrenceId, note, clock);
   const o = findOccurrence(data, change.occurrenceId, clock.today);
   if (!o) return { ok: false, error: 'That transaction could not be found.' };
   return change.kind === 'move'
@@ -94,7 +97,7 @@ const overlaps = (a: { start: DateStr; end: DateStr }, b: { start: DateStr; end:
 
 /** Previews `change` without saving it. Rejected with the operation's own message when the change isn't allowed. */
 export function previewChange(data: AppData, change: ProposedChange, clock: ops.Clock): PreviewResult {
-  const applied = applyChange(data, change, clock);
+  const applied = applyProposedChange(data, change, clock);
   if (!applied.ok) return applied;
   const before = buildForecast(data, clock.today);
   const after = buildForecast(applied.data, clock.today);
@@ -107,7 +110,7 @@ export function previewChange(data: AppData, change: ProposedChange, clock: ops.
   const base = { change, window, current, proposed, anchorChanged };
 
   if (!before.forecastStart || !after.forecastStart) {
-    return { ok: true, preview: { ...base, comparable: false, limitation: 'There is no upcoming main payday to start a running total from, so the two forecasts can’t be compared.', lowestChangeCents: null, target: null, newGaps: [], worsenedGaps: [] } };
+    return { ok: true, preview: { ...base, comparable: false, reason: 'no-forecast', limitation: 'There is no upcoming main payday to start a running total from, so the two forecasts can’t be compared.', lowestChangeCents: null, target: null, newGaps: [], worsenedGaps: [] } };
   }
   if (anchorChanged) {
     return {
@@ -115,6 +118,7 @@ export function previewChange(data: AppData, change: ProposedChange, clock: ops.
       preview: {
         ...base,
         comparable: false,
+        reason: 'anchor-changed',
         limitation: `This change moves the next main payday from ${before.forecastStart} to ${after.forecastStart}, so the running totals start from different days and can’t be compared directly.`,
         lowestChangeCents: null,
         target: null,
@@ -134,6 +138,7 @@ export function previewChange(data: AppData, change: ProposedChange, clock: ops.
       preview: {
         ...base,
         comparable: false,
+        reason: 'before-payday',
         limitation: `The new date is before the next payday (${after.forecastStart}), when the running total starts, so the payment would simply drop out of it. The forecast can’t show whether money on hand covers it.`,
         lowestChangeCents: null,
         target: null,
@@ -171,10 +176,30 @@ export function previewChange(data: AppData, change: ProposedChange, clock: ops.
       ...base,
       comparable: true,
       limitation: null,
+      reason: null,
       lowestChangeCents: current.lowest && proposed.lowest ? proposed.lowest.tallyCents - current.lowest.tallyCents : null,
       target,
       newGaps,
       worsenedGaps,
     },
   };
+}
+
+/** Same sources and records, regardless of when or where they were saved. */
+function sameFinancialData(a: AppData, b: AppData): boolean {
+  return a === b || JSON.stringify([a.sources, a.records]) === JSON.stringify([b.sources, b.records]);
+}
+
+/**
+ * Makes a previewed change real, after the person confirms it. Refused when
+ * the data has changed since the preview was made (`previewedOn`), so a stale
+ * preview is never applied, or when the preview couldn't be compared.
+ * Changes only that one occurrence; a skip is recorded as a cancellation.
+ */
+export function applyPreviewedChange(data: AppData, previewedOn: AppData, change: ProposedChange, clock: ops.Clock): ops.Result {
+  if (!sameFinancialData(data, previewedOn)) return { ok: false, error: 'Your forecast changed after this preview. Check the updated preview before applying.' };
+  const preview = previewChange(data, change, clock);
+  if (!preview.ok) return preview;
+  if (!preview.preview.comparable) return { ok: false, error: 'This preview can’t be compared with your forecast, so it can’t be applied from here.' };
+  return applyProposedChange(data, change, clock, change.kind === 'skip' ? 'Skipped after a what-if preview' : '');
 }

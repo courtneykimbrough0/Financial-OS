@@ -54,6 +54,7 @@ import { EmptyState, FlowAmount, Icon, KindAvatar, KindTag, Modal, SectionLabel,
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 import { ReviewSheet } from '../components/ReviewSheet';
 import { GapsSheet } from '../components/gaps';
+import { WhatIfSheet } from '../components/WhatIfSheet';
 import { PeriodBreakdown, TagBreakdown } from '../components/plan';
 import { navigate } from '../router';
 
@@ -408,8 +409,10 @@ function PeriodGapsSheet({ forecast, range, onClose }: { forecast: Forecast; ran
     const days = Math.max(GAP_LOOKAHEAD_DAYS, diffDays(forecast.forecastStart, end) + 1);
     return explainTimingGaps(forecast, days).filter((g) => g.end >= start && g.start <= end);
   }, [forecast, start, end]);
+  const [whatIf, setWhatIf] = useState<string | null>(null);
+  if (whatIf) return <WhatIfSheet occurrenceId={whatIf} onBack={() => setWhatIf(null)} onDone={onClose} />;
   if (gaps.length === 0) return null;
-  return <GapsSheet gaps={gaps} horizonEnd={forecast.horizonEnd} onClose={onClose} />;
+  return <GapsSheet gaps={gaps} horizonEnd={forecast.horizonEnd} onClose={onClose} onWhatIf={setWhatIf} />;
 }
 
 /**

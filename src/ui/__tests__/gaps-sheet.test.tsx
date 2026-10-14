@@ -18,11 +18,11 @@ const paid = () => source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1000, '2
 const oneTime = (d: AppData, description: string, dollars: number, date: string, kind: 'bill' | 'income' = 'bill') =>
   unwrap(ops.addOneTime(d, { kind, description, amountCents: usd(dollars), date }, clock, `one-${description.toLowerCase().replace(/ /g, '-')}`));
 
-function show(d: AppData) {
+function show(d: AppData, onWhatIf?: (id: string) => void) {
   const f = buildForecast(d, TODAY);
   const gaps = explainTimingGaps(f);
   let closed = false;
-  render(<GapsSheet gaps={gaps} horizonEnd={f.horizonEnd} onClose={() => (closed = true)} />);
+  render(<GapsSheet gaps={gaps} horizonEnd={f.horizonEnd} onClose={() => (closed = true)} onWhatIf={onWhatIf} />);
   return { gaps, closed: () => closed };
 }
 
@@ -111,6 +111,28 @@ describe('GapsSheet', () => {
     expect(groups[1]).toHaveAttribute('open');
     await user.keyboard('{Escape}');
     expect(closed()).toBe(true);
+  });
+
+  it('offers “What if…” on each outstanding entry, when asked to', async () => {
+    const user = userEvent.setup();
+    let d = source(paid(), TODAY, 'bill', 'Rent', 1200, '2026-10-19', { type: 'monthly' }, 'rent');
+    d = oneTime(d, 'Phone', 60, '2026-10-24');
+    // A recorded payment (dated today or earlier) never sits in a future gap; the what-if sheet refuses those itself.
+    const asked: string[] = [];
+    show(d, (id) => asked.push(id));
+    const [gap] = screen.getAllByRole('group');
+    expect(within(gap!).getAllByRole('button', { name: /^What if/ }).map((b) => b.getAttribute('aria-label'))).toEqual([
+      'What if: Rent, Oct 19',
+      'What if: Phone, Oct 24',
+      'What if: Paycheck, Oct 29',
+    ]);
+    await user.click(within(gap!).getByRole('button', { name: 'What if: Phone, Oct 24' }));
+    expect(asked).toEqual(['one-phone']);
+  });
+
+  it('has no “What if…” without a handler (as at the end of setup)', () => {
+    show(source(paid(), TODAY, 'bill', 'Rent', 1200, '2026-10-19', { type: 'monthly' }, 'rent'));
+    expect(screen.queryByRole('button', { name: /^What if/ })).toBeNull();
   });
 
   it('matches the forecast for every figure shown', () => {
