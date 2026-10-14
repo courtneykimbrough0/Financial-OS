@@ -20,6 +20,8 @@ How stored data becomes the forecast, and which tests prove each behavior. Writt
    - `periodKpis` and `totals`: cash flow for any date range (every counted entry in the range, before payday included).
    - `periodPlan` (`plan.ts`): cash flow by kind and tag.
    - `explainTimingGaps`: each timing gap with the running total going in, the money out and in from its first day to its lowest day, what happens after the lowest day while it is still below $0, and every entry on the day it is back to $0 or more (or no recovery within the forecast). It reports what the forecast shows rather than naming one cause, and always satisfies before + in − out = lowest, and lowest + after-lowest + recovery day = the running total on recovery.
+   - `previewChange` (`preview.ts`): a what-if for one outstanding occurrence (move it, change its amount, or leave it out), applied to a copy with the ordinary operations and forecast with the same engine; nothing is saved. Compares the current and proposed forecasts over the current 90-day warning window: lowest running total, the gap the occurrence is in (or, for income, the gap it ends) and whether it is eliminated, reduced, unchanged or worsened, new gaps, and deeper gaps elsewhere. Not compared when the next main payday moves (the running totals would start on different days) or when a payment would move to before the next payday (where the running total doesn't reach).
+     One change moves money in one direction: moving a payment later only raises the running total between the two dates, so it can't create a shortfall; moving a payment earlier, moving income later, or a larger amount can, and the preview reports it.
    - `reviewEntries`: outstanding items due today or earlier, then the rest of the week.
    - `variance` (`occurrences.ts`): a recorded outcome against its original prediction, in cents and days.
    - `weekSummaries`, `monthWeekSummaries`, `paycheckCycles`, `lowestPoint`, `negativeStretches`, `timingGapsAhead` (90 days from the forecast start), `overdueEntries`.
@@ -50,6 +52,7 @@ Files are in `src/domain/__tests__/`. "EV" is `engine-validation.test.ts`; "SC" 
 | Spending before payday | `forecast` › upcoming items before the next payday…, overdue items dated before the forecast start…; EV › spending before the next payday |
 | Timing gaps and 90-day lookahead | `one-time-and-gaps` › timing gaps ahead |
 | Timing-gap explanations (1, 4, 8+ weeks; timing vs. spending; consistency) | `gap-explanations` (all) |
+| What-if previews (move, amount, skip; new and deeper gaps; anchor changes; no saving) | `preview` (all) |
 | Actuals (late, early, different amount) | `forecast` › expected vs actual outcomes; spec › C, D, E |
 | Paying a bill: once only, correction, undo | `forecast` › rejects duplicate completion…, corrects a recorded actual…, undoing a recorded outcome…; SC › marking a bill paid; `history` › paying a bill, correcting a payment, undoing a payment or cancellation |
 | Variance (actual vs. original prediction) | `history` › paying a bill |

@@ -167,6 +167,7 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 - `forecast.test.ts`, `recurrence.test.ts`, `dates-money.test.ts`: engine edge cases, including time-zone independence checked across five zones.
 - `engine-validation.test.ts`: hand-computed running totals in cents, spending before payday, same-day events, period and year boundaries, several paydays in one week, and the payday anchor after payments, moves and cancellations.
 - `src/ui/__tests__/gaps-sheet.test.tsx`: the timing-gap explanation sheet (sections, several gaps, no recovery, keyboard).
+- `preview.test.ts`: what-if previews for one occurrence (move, change amount, leave out), compared with the current forecast, without saving.
 - `gap-explanations.test.ts`: what the forecast shows about each timing gap (payments and income from its start to its lowest point, and the income that ends it), checked in cents against the running totals.
 - `review.test.ts` and `src/ui/__tests__/review-sheet.test.tsx`: what to review, marking several done or moving them (only the selected items change), undoing a batch exactly, and a failed save during a batch.
 - `history.test.ts` and `src/state/__tests__/history-roundtrip.test.ts`: the original prediction, the latest expectation and the actual stay distinct through paying, correcting, undoing, canceling and schedule changes, including on the device and in backups; variance values.
