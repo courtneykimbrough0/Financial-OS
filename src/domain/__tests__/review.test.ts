@@ -122,16 +122,59 @@ describe('undoing a batch', () => {
     const before = unwrap(ops.rescheduleOccurrence(data(), WATER, { date: '2026-10-22', amountCents: usd(32) }, clock));
     const selected = [PAY, CAR, WATER];
     const after = act(before, selected);
-    const undone = unwrap(ops.undoBatch(after, before, selected));
+    const undone = unwrap(ops.undoBatch(after, before, after, selected));
     expect(undone).toEqual(before);
     expect(buildForecast(undone, TODAY)).toEqual(buildForecast(before, TODAY));
   });
 
   it('leaves changes to other items made after the batch alone', () => {
     const before = data();
-    let d = unwrap(ops.recordAsExpected(before, [PAY, CAR], clock));
-    d = unwrap(ops.recordActual(d, GYM, { amountCents: usd(40), date: TODAY }, clock));
-    d = unwrap(ops.undoBatch(d, before, [PAY, CAR]));
+    const after = unwrap(ops.recordAsExpected(before, [PAY, CAR], clock));
+    let d = unwrap(ops.recordActual(after, GYM, { amountCents: usd(40), date: TODAY }, clock));
+    d = unwrap(ops.undoBatch(d, before, after, [PAY, CAR]));
     expect(d.records.map((r) => [r.id, r.status])).toEqual([[GYM, 'completed']]);
+  });
+});
+
+describe('undoing a batch after later changes', () => {
+  const before = data();
+  const selected = [PAY, CAR, WATER];
+  const after = unwrap(ops.recordAsExpected(before, selected, clock));
+  const later = clockAt('2026-10-22');
+
+  it.each([
+    { name: 'a selected payment was corrected', change: (d: AppData) => unwrap(ops.correctActual(d, CAR, { amountCents: usd(360), date: '2026-10-20' }, later)) },
+    { name: 'a selected payment was undone on its own', change: (d: AppData) => unwrap(ops.restoreOccurrence(d, WATER, later)) },
+    {
+      name: 'a selected item was undone and moved',
+      change: (d: AppData) => unwrap(ops.rescheduleOccurrence(unwrap(ops.restoreOccurrence(d, WATER, later)), WATER, { date: '2026-10-30', amountCents: usd(30) }, later)),
+    },
+  ])('is refused when $name, and nothing changes', ({ change }) => {
+    const changed = change(after);
+    expectError(ops.undoBatch(changed, before, after, selected), /changed since/);
+  });
+
+  it('refuses rather than undoing only the unchanged items', () => {
+    const changed = unwrap(ops.correctActual(after, CAR, { amountCents: usd(360), date: '2026-10-20' }, later));
+    const result = ops.undoBatch(changed, before, after, selected);
+    expect(result.ok).toBe(false);
+    // The correction and the other two payments are all still there.
+    expect(changed.records.map((r) => [r.id, r.status, r.actualAmountCents])).toEqual([
+      [PAY, 'completed', usd(1800)],
+      [CAR, 'completed', usd(360)],
+      [WATER, 'completed', usd(30)],
+    ]);
+  });
+
+  it('still works when only unrelated items changed', () => {
+    const changed = unwrap(ops.recordActual(after, GYM, { amountCents: usd(40), date: TODAY }, clock));
+    const undone = unwrap(ops.undoBatch(changed, before, after, selected));
+    expect(undone.records.map((r) => r.id)).toEqual([GYM]);
+    expect(findOccurrence(undone, CAR, TODAY)).toMatchObject({ status: 'scheduled', virtual: true, expectedAmountCents: usd(350) });
+  });
+
+  it('works only once', () => {
+    const undone = unwrap(ops.undoBatch(after, before, after, selected));
+    expectError(ops.undoBatch(undone, before, after, selected), /changed since/);
   });
 });

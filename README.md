@@ -44,7 +44,7 @@ It also has a subscription and a savings item.
 
 Tap any transaction to mark it received/paid, change its date or amount, cancel it, undo, or fix a recorded actual. For a recurring item, “Change just this one” moves only that occurrence; “Change this and later ones” opens the item’s screen to change its schedule from a date on.
 
-**Review.** The overdue banner (or **Review this week** when nothing is overdue) opens a review list: items due today or earlier first, then the rest of the week through Saturday. Select several and **Mark done** (each at its expected amount and date, or today for items not yet due) or **Move to a date**, in one step. **Undo** reverses the whole batch exactly. Nothing is marked done unless it is selected; tap an item to record a different amount or date.
+**Review.** The overdue banner (or **Review this week** when nothing is overdue) opens a review list: items due today or earlier first, then the rest of the week through Saturday. Select several and **Mark done** (each at its expected amount and date, or today for items not yet due) or **Move to a date**, in one step. **Undo** reverses the whole batch exactly; if any of those items was changed after the batch, Undo is refused rather than overwriting that change. Nothing is marked done unless it is selected; tap an item to record a different amount or date.
 
 ## Architecture
 
@@ -90,7 +90,7 @@ Every dashboard element (calendar, KPIs, summaries, timeline, cycles) reads from
 Data is one versioned JSON document per user (`schemaVersion: 2`), stored on the device in `localStorage`, or in the user's account when accounts are on (below). All storage goes through the asynchronous `StorageAdapter` interface (`src/state/storage.ts`), so the forecast engine and UI are the same either way.
 
 - **Revisions.** Each save increments `revision`. A save is accepted only if it's based on the revision currently stored. Otherwise it is rejected as a conflict, so a stale copy (another tab, later another device) can't overwrite newer data. When that happens, the app shows "Your data was changed somewhere else" with a **Reload** button.
-- **Background saving.** Changes appear on screen immediately and save in the background, one save at a time. Changes made while a save is running are folded into the next save. A failed save keeps the change on screen and shows **Try again**. The page warns before closing if a change is still unsaved. The app shows a loading state until data has loaded.
+- **Background saving.** Changes appear on screen immediately and save in the background, one save at a time. Changes made while a save is running are folded into the next save. A failed save keeps the change on screen and shows **Try again**. The page warns before closing if a change is still unsaved. The app shows a loading state until data has loaded. Loading again (after a conflict, or when signing in or out) waits for a save that is still on its way, and a save result that arrives after a newer load is ignored, so it can't change or overwrite what was loaded.
 - **Backups.** **Download backup** (on the Settings page) saves a dated JSON file. **Restore from backup** (there and on the setup welcome screen) validates the file the same way saved data is validated, then replaces the current data after the user confirms.
 - If saved data can't be read, a copy is set aside under a separate key instead of being discarded.
 

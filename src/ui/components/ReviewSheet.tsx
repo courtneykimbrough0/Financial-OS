@@ -11,6 +11,7 @@ import { Field, FlowAmount, FormError, Icon, KindAvatar, Modal, SectionLabel, us
 /** The last batch, kept so it can be undone as one step. */
 interface Batch {
   before: AppData;
+  after: AppData;
   ids: string[];
   message: string;
 }
@@ -67,7 +68,7 @@ export function ReviewSheet({ forecast, title, onOpen, onClose }: { forecast: Fo
     setError(null);
     setPicked(new Set());
     setMoving(false);
-    setBatch({ before: before!, ids, message });
+    setBatch({ before: before!, after: result.data, ids, message });
     toast(message);
   };
 
@@ -79,9 +80,13 @@ export function ReviewSheet({ forecast, title, onOpen, onClose }: { forecast: Fo
   };
   const undo = () => {
     if (!batch) return;
-    const result = run((d) => ops.undoBatch(d, batch.before, batch.ids));
-    if (!result.ok) return setError(result.error);
+    const result = run((d) => ops.undoBatch(d, batch.before, batch.after, batch.ids));
+    if (!result.ok) {
+      setBatch(null);
+      return setError(result.error);
+    }
     setBatch(null);
+    setError(null);
     toast(`Undone: ${items(batch.ids.length)} back to how they were.`);
   };
 

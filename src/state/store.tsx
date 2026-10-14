@@ -72,33 +72,44 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
   const saving = useRef(false);
   /** Why saving is paused, if it is. */
   const blocked = useRef<'error' | 'conflict' | null>(null);
+  /** Counts loads; a save result from before the latest load belongs to data no longer on screen. */
+  const loadGen = useRef(0);
+  /** The save currently on its way, if any; a load waits for it so it reads the saved result. */
+  const inFlight = useRef<Promise<unknown> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    loadGen.current += 1;
     setData(null);
     setLoadError(null);
-    adapter.load().then(
-      (loaded) => {
-        if (cancelled) return;
-        dataRef.current = loaded;
-        savedRevision.current = loaded.revision;
-        dirty.current = false;
-        blocked.current = null;
-        setSaveStatus('idle');
-        setSaveMessage(null);
-        setRecoveredCopy(adapter.recoveredCopy?.() ?? null);
-        setData(loaded);
-        if (adapter.hasUnsavedChanges?.()) {
-          dirty.current = true;
-          void flushRef.current();
-        }
-      },
-      (err: unknown) => {
+    void (async () => {
+      // Let a save that is still on its way finish first, so the load includes it.
+      await inFlight.current?.catch(() => {});
+      if (cancelled) return;
+      let loaded: AppData;
+      try {
+        loaded = await adapter.load();
+      } catch (err) {
         if (cancelled) return;
         console.error(err);
         setLoadError('Your data could not be loaded.');
-      },
-    );
+        return;
+      }
+      if (cancelled) return;
+      dataRef.current = loaded;
+      savedRevision.current = loaded.revision;
+      dirty.current = false;
+      saving.current = false;
+      blocked.current = null;
+      setSaveStatus('idle');
+      setSaveMessage(null);
+      setRecoveredCopy(adapter.recoveredCopy?.() ?? null);
+      setData(loaded);
+      if (adapter.hasUnsavedChanges?.()) {
+        dirty.current = true;
+        void flushRef.current();
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -109,10 +120,20 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
     if (saving.current || blocked.current || !dirty.current || !dataRef.current) return;
     saving.current = true;
     setSaveStatus('saving');
+    const gen = loadGen.current;
     while (dirty.current && dataRef.current && !blocked.current) {
       dirty.current = false;
       const snapshot = dataRef.current;
-      const result = await adapter.save(snapshot, savedRevision.current);
+      const pending = adapter.save(snapshot, savedRevision.current);
+      inFlight.current = pending;
+      let result: Awaited<typeof pending>;
+      try {
+        result = await pending;
+      } finally {
+        if (inFlight.current === pending) inFlight.current = null;
+      }
+      // Data was loaded again meanwhile: this result belongs to what was on screen before, so it changes nothing now.
+      if (gen !== loadGen.current) return;
       if (result.ok) {
         savedRevision.current = result.revision;
         continue;

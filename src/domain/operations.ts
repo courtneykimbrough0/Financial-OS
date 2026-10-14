@@ -468,13 +468,26 @@ export function rescheduleSelected(data: AppData, ids: string[], date: DateStr, 
   });
 }
 
+/** Compares two records field by field, regardless of key order. */
+function sameRecord(a: OccurrenceRecord | undefined, b: OccurrenceRecord | undefined): boolean {
+  if (!a || !b) return a === b;
+  const keys = Object.keys(a).sort();
+  return JSON.stringify(a, keys) === JSON.stringify(b, Object.keys(b).sort());
+}
+
 /**
  * Undoes a batch: puts the records of the given occurrences back exactly as
  * they were in `before` (removing any that didn't exist then). Every other
- * record and every source stays as it is now.
+ * record and every source stays as it is now. Refused, with nothing changed,
+ * if any of those records differs from how the batch left it (`after`), so a
+ * later correction is never silently overwritten.
  */
-export function undoBatch(data: AppData, before: AppData, ids: string[]): Result {
+export function undoBatch(data: AppData, before: AppData, after: AppData, ids: string[]): Result {
   const selected = new Set(ids);
+  const find = (d: AppData, id: string) => d.records.find((r) => r.id === id);
+  if ([...selected].some((id) => !sameRecord(find(data, id), find(after, id)))) {
+    return fail('Some of these items have changed since, so they can’t be undone together. Open each one to change it.');
+  }
   const previous = before.records.filter((r) => selected.has(r.id));
   const kept = data.records.filter((r) => !selected.has(r.id));
   return ok({ ...data, records: [...kept, ...previous] });

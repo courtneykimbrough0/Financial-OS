@@ -2,7 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { buildForecast } from '../../domain/forecast';
-import { addSource, emptyData } from '../../domain/operations';
+import { addSource, correctActual, emptyData } from '../../domain/operations';
 import type { AppData, RecurrenceRule, TransactionKind } from '../../domain/types';
 import { MemoryAdapter } from '../../state/storage';
 import { StoreProvider, useStore } from '../../state/store';
@@ -94,6 +94,27 @@ describe('ReviewSheet', () => {
     const undone = await adapter.load();
     expect({ ...undone, revision: original.revision }).toEqual(original);
     expect(check(/^Select Car loan/)).not.toBeChecked();
+  });
+
+  it('refuses an undo that would overwrite a later change, and keeps that change', async () => {
+    const user = userEvent.setup();
+    const adapter = new MemoryAdapter(seed());
+    await renderReview(adapter);
+    await user.click(check(/^Select Paycheck/));
+    await user.click(check(/^Select Car loan/));
+    await user.click(screen.getByRole('button', { name: 'Mark 2 items done' }));
+    // The car loan payment is corrected after the batch (as from its own sheet).
+    act(() => {
+      store.run((d, c) => correctActual(d, 'car@2026-10-20', { amountCents: 36000, date: '2026-10-20' }, c));
+    });
+    await user.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(screen.getByText(/have changed since, so they can’t be undone together/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(store.data.records.map((r) => [r.id, r.status, r.actualAmountCents])).toEqual([
+      ['pay@2026-10-15', 'completed', 180000],
+      ['car@2026-10-20', 'completed', 36000],
+    ]);
+    await waitFor(async () => expect((await adapter.load()).records.find((r) => r.id === 'car@2026-10-20')?.actualAmountCents).toBe(36000));
   });
 
   it('selects a whole group, and moves the selection to a new date', async () => {
