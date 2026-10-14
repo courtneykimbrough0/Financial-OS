@@ -37,6 +37,8 @@ import {
   negativeStretches,
   overdueEntries,
   reviewEntries,
+  explainTimingGaps,
+  GAP_LOOKAHEAD_DAYS,
   paycheckCycles,
   weekSummaries,
   type DayRow,
@@ -51,6 +53,7 @@ import { useStore } from '../../state/store';
 import { EmptyState, FlowAmount, Icon, KindAvatar, KindTag, Modal, SectionLabel, StatusBadge } from '../components/common';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 import { ReviewSheet } from '../components/ReviewSheet';
+import { GapsSheet } from '../components/gaps';
 import { PeriodBreakdown, TagBreakdown } from '../components/plan';
 import { navigate } from '../router';
 
@@ -368,7 +371,7 @@ function PeriodBody({
 
   return (
     <>
-      <CashFlowHero forecast={forecast} plan={plan} low={low} negatives={negatives} today={today} onInfo={() => onInfo('about-tally')} />
+      <CashFlowHero forecast={forecast} plan={plan} low={low} negatives={negatives} range={range} today={today} onInfo={() => onInfo('about-tally')} />
 
       <div className="calendar-card">
         <Calendar rows={rows} start={start} end={end} today={today} selected={selected} lowDate={low?.date ?? null} onSelect={onDay} />
@@ -397,6 +400,18 @@ function PeriodBody({
   );
 }
 
+/** Explains every timing gap that overlaps the period in view. */
+function PeriodGapsSheet({ forecast, range, onClose }: { forecast: Forecast; range: [DateStr, DateStr]; onClose: () => void }) {
+  const [start, end] = range;
+  const gaps = useMemo(() => {
+    if (!forecast.forecastStart) return [];
+    const days = Math.max(GAP_LOOKAHEAD_DAYS, diffDays(forecast.forecastStart, end) + 1);
+    return explainTimingGaps(forecast, days).filter((g) => g.end >= start && g.start <= end);
+  }, [forecast, start, end]);
+  if (gaps.length === 0) return null;
+  return <GapsSheet gaps={gaps} horizonEnd={forecast.horizonEnd} onClose={onClose} />;
+}
+
 /**
  * The headline card: cash flow (income minus expenses) for the period in view,
  * then the lowest running total, any timing gap, and the next expected payday.
@@ -406,6 +421,7 @@ function CashFlowHero({
   plan,
   low,
   negatives,
+  range,
   today,
   onInfo,
 }: {
@@ -413,9 +429,11 @@ function CashFlowHero({
   plan: PeriodPlan;
   low: LowPoint | null;
   negatives: NegativeStretch[];
+  range: [DateStr, DateStr];
   today: DateStr;
   onInfo: () => void;
 }) {
+  const [showGaps, setShowGaps] = useState(false);
   const payday = forecast.forecastStart;
   const daysToPayday = payday ? diffDays(today, payday) : 0;
   const worst = negatives.reduce<NegativeStretch | null>((w, n) => (w === null || n.lowestCents < w.lowestCents ? n : w), null);
@@ -452,14 +470,16 @@ function CashFlowHero({
           </div>
         )}
         {worst && (
-          <p className="callout callout-danger gap-line" role="note">
+          <button type="button" className="callout callout-danger gap-line" onClick={() => setShowGaps(true)} aria-haspopup="dialog">
             <Icon icon={TrendingDown} size={16} />
             <span>
               <strong>Timing gap ahead</strong> · {formatRange(worst.start, worst.end)}, by up to {formatMoney(-worst.lowestCents)}
               {negatives.length > 1 && ` (+${negatives.length - 1} more)`}
             </span>
-          </p>
+            <Icon icon={ChevronRight} size={16} />
+          </button>
         )}
+        {showGaps && <PeriodGapsSheet forecast={forecast} range={range} onClose={() => setShowGaps(false)} />}
         {low && !worst && (
           <p className="callout callout-ok gap-line">
             <Icon icon={Check} size={16} />

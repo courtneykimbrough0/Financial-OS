@@ -46,7 +46,8 @@ describe('timing gaps at the end of setup', () => {
 
     await user.click(screen.getByRole('button', { name: /2 timing gaps ahead/ }));
     const sheet = screen.getByRole('dialog', { name: '2 timing gaps ahead' });
-    const items = within(sheet).getAllByRole('listitem');
+    // One expandable section per gap.
+    const items = within(sheet).getAllByRole('group');
     expect(items).toHaveLength(2);
     expect(items[0]).toHaveTextContent('Oct 20 – 28 · 9 days');
     expect(items[0]).toHaveTextContent('Down to −$600.00 on Oct 20');

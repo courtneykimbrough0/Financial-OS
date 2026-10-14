@@ -33,6 +33,8 @@ function summary(x: GapExplanation) {
     out: x.outflowCents / 100,
     in: x.inflowCents / 100,
     recoversOn: x.recoversOn,
+    recovery: x.recoveryCents === null ? null : x.recoveryCents / 100,
+    afterLowest: rows(x.afterLowest),
     outflows: rows(x.outflows),
     inflows: rows(x.inflows),
     recoveryIncome: rows(x.recoveryIncome),
@@ -53,6 +55,8 @@ describe('explaining a timing gap', () => {
       out: 1200,
       in: 0,
       recoversOn: '2026-10-29',
+      recovery: 800,
+      afterLowest: [],
       outflows: [['Rent', '2026-10-19', 1200]],
       inflows: [],
       recoveryIncome: [['Paycheck', '2026-10-29', 1000]],
@@ -71,6 +75,8 @@ describe('explaining a timing gap', () => {
         out: 2600,
         in: 0,
         recoversOn: '2026-11-12',
+        recovery: 400,
+        afterLowest: [],
         outflows: [['Insurance', '2026-11-09', 2600]],
         inflows: [],
         recoveryIncome: [['Paycheck', '2026-11-12', 1000]],
@@ -90,6 +96,8 @@ describe('explaining a timing gap', () => {
       out: 4500,
       in: 0,
       recoversOn: '2026-12-10',
+      recovery: 500,
+      afterLowest: [],
       outflows: [['Tuition', '2026-12-09', 4500]],
       inflows: [],
       recoveryIncome: [['Paycheck', '2026-12-10', 1000]],
@@ -137,6 +145,8 @@ describe('several payments and several gaps', () => {
       out: 1610,
       in: 100,
       recoversOn: '2026-10-29',
+      recovery: 490,
+      afterLowest: [],
       outflows: [
         ['Rent', '2026-10-19', 1200],
         ['Phone', '2026-10-20', 60],
@@ -171,13 +181,83 @@ describe('several payments and several gaps', () => {
       expect(g.beforeCents).toBe(tallyOn(f, addDays(g.start, -1)));
       expect(g.lowestCents).toBe(tallyOn(f, g.lowestDate));
       expect(g.beforeCents + g.inflowCents - g.outflowCents).toBe(g.lowestCents);
-      expect(tallyOn(f, g.recoversOn!)!).toBeGreaterThanOrEqual(0);
+      expect(tallyOn(f, g.recoversOn!)).toBe(g.recoveryCents);
+      expect(g.recoveryCents!).toBeGreaterThanOrEqual(0);
+      for (const e of g.afterLowest) expect(tallyOn(f, e.date)!).toBeLessThan(0);
+      const net = (entries: ForecastEntry[]) => entries.reduce((sum, e) => sum + e.signedCents, 0);
+      expect(g.lowestCents + net(g.afterLowest) + net(g.recoveryEntries)).toBe(g.recoveryCents);
       for (const e of [...g.outflows, ...g.inflows]) {
         expect(f.entries).toContain(e);
         expect(e.counts).toBe(true);
         expect(e.date >= g.start && e.date <= g.lowestDate).toBe(true);
       }
     }
+  });
+});
+
+describe('after the lowest point', () => {
+  it('lists what happens while the total is still below $0, separately from what led to the low', () => {
+    // Rent $1,200 Oct 19 (low −$200), side job +$150 Oct 21 (−$50), phone $60 Oct 24 (−$110), paycheck Oct 29 (+$890).
+    let d = source(paid(), TODAY, 'bill', 'Rent', 1200, '2026-10-19', { type: 'monthly' }, 'rent');
+    d = oneTime(d, 'Side job', 150, '2026-10-21', 'income');
+    d = oneTime(d, 'Phone', 60, '2026-10-24');
+    const [gap] = explainTimingGaps(buildForecast(d, TODAY));
+    expect(summary(gap!)).toMatchObject({
+      start: '2026-10-19',
+      end: '2026-10-28',
+      lowest: ['2026-10-19', -200],
+      outflows: [['Rent', '2026-10-19', 1200]],
+      inflows: [],
+      afterLowest: [
+        ['Side job', '2026-10-21', 150],
+        ['Phone', '2026-10-24', 60],
+      ],
+      recoversOn: '2026-10-29',
+      recovery: 890,
+    });
+  });
+
+  it('lists every entry on the recovery day, so the lines add up to the running total shown', () => {
+    // Rent $1,200 Oct 19 (−$200); on Oct 29 the paycheck (+$1,000) and a $60 phone bill: −$200 + $1,000 − $60 = $740.
+    let d = source(paid(), TODAY, 'bill', 'Rent', 1200, '2026-10-19', { type: 'monthly' }, 'rent');
+    d = oneTime(d, 'Phone', 60, '2026-10-29');
+    const [gap] = explainTimingGaps(buildForecast(d, TODAY));
+    expect(rows(gap!.recoveryIncome)).toEqual([['Paycheck', '2026-10-29', 1000]]);
+    expect(rows(gap!.recoveryEntries)).toEqual([
+      ['Paycheck', '2026-10-29', 1000],
+      ['Phone', '2026-10-29', 60],
+    ]);
+    expect(gap!.recoveryCents).toBe(usd(740));
+  });
+
+  it('says there is no recovery when the total stays below $0 through the forecast', () => {
+    // Paid $1,000 on the 15th; rent of $2,100 on the 20th: each month ends $1,100 lower.
+    let d = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1000, '2026-10-15', { type: 'monthly' }, 'pay');
+    d = source(d, TODAY, 'bill', 'Rent', 2100, '2026-10-20', { type: 'monthly' }, 'rent');
+    const gaps = explainTimingGaps(buildForecast(d, TODAY));
+    expect(gaps).toHaveLength(1);
+    expect(summary(gaps[0]!)).toEqual({
+      start: '2026-10-20',
+      end: '2027-01-12', // the last day of the 90-day lookahead
+      days: 85,
+      lowest: ['2026-12-20', -3300],
+      before: 1000,
+      out: 6300,
+      in: 2000,
+      recoversOn: null,
+      recovery: null,
+      afterLowest: [],
+      outflows: [
+        ['Rent', '2026-10-20', 2100],
+        ['Rent', '2026-11-20', 2100],
+        ['Rent', '2026-12-20', 2100],
+      ],
+      inflows: [
+        ['Paycheck', '2026-11-15', 1000],
+        ['Paycheck', '2026-12-15', 1000],
+      ],
+      recoveryIncome: [],
+    });
   });
 });
 

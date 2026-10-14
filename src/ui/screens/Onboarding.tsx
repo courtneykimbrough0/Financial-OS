@@ -1,7 +1,7 @@
 import { AlertCircle, Banknote, CalendarClock, ChevronRight, Info, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { diffDays, formatMedium, formatShort } from '../../domain/dates';
-import { buildForecast, dailyTimeline, lowestPoint, paycheckCycles, timingGapsAhead } from '../../domain/forecast';
+import { buildForecast, dailyTimeline, explainTimingGaps, lowestPoint, paycheckCycles } from '../../domain/forecast';
 import { formatMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { periodPlan } from '../../domain/plan';
@@ -317,7 +317,7 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
         </section>
       )}
 
-      {payday && <TimingGapsBanner gaps={timingGapsAhead(forecast)} from={payday} />}
+      {payday && <TimingGapsBanner gaps={explainTimingGaps(forecast)} from={payday} horizonEnd={forecast.horizonEnd} />}
 
       {plan && <PeriodBreakdown plan={plan} title="First pay period" />}
       {plan && <TagBreakdown plan={plan} />}

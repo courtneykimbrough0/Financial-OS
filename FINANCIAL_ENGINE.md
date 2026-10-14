@@ -19,7 +19,7 @@ How stored data becomes the forecast, and which tests prove each behavior. Writt
 9. **Derived views.**
    - `periodKpis` and `totals`: cash flow for any date range (every counted entry in the range, before payday included).
    - `periodPlan` (`plan.ts`): cash flow by kind and tag.
-   - `explainTimingGaps`: each timing gap with the running total going in, the money out and in from its first day to its lowest day, and the day and income that bring it back to $0 or more. It reports what the forecast shows rather than naming one cause, and always satisfies before + in − out = lowest.
+   - `explainTimingGaps`: each timing gap with the running total going in, the money out and in from its first day to its lowest day, what happens after the lowest day while it is still below $0, and every entry on the day it is back to $0 or more (or no recovery within the forecast). It reports what the forecast shows rather than naming one cause, and always satisfies before + in − out = lowest, and lowest + after-lowest + recovery day = the running total on recovery.
    - `reviewEntries`: outstanding items due today or earlier, then the rest of the week.
    - `variance` (`occurrences.ts`): a recorded outcome against its original prediction, in cents and days.
    - `weekSummaries`, `monthWeekSummaries`, `paycheckCycles`, `lowestPoint`, `negativeStretches`, `timingGapsAhead` (90 days from the forecast start), `overdueEntries`.

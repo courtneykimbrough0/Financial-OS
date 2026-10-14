@@ -2127,13 +2127,13 @@ li.negative .tl-tally {
   margin: 0;
   padding: 0;
 }
-.gap-list li {
+.gap-list > li {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 12px 0;
 }
-.gap-list li + li {
+.gap-list > li + li {
   border-top: 1px solid var(--color-border);
 }
 .gap-dates {
@@ -2346,4 +2346,102 @@ li.negative .tl-tally {
 }
 .review-start {
   align-self: flex-start;
+}
+
+/* ---------- Timing gap explanations ---------- */
+
+button.callout.gap-line {
+  width: 100%;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.callout.gap-line > span {
+  flex: 1;
+}
+button.callout.gap-line:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.gap-list > li:has(> .gap-detail) {
+  padding: 0;
+}
+.gap-detail > summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: var(--tap);
+  padding: 12px 28px 12px 0;
+  list-style: none;
+  cursor: pointer;
+  position: relative;
+}
+.gap-detail > summary::-webkit-details-marker {
+  display: none;
+}
+.gap-detail > summary::after {
+  content: '';
+  position: absolute;
+  right: 6px;
+  top: 20px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--color-text-secondary);
+  border-bottom: 2px solid var(--color-text-secondary);
+  transform: rotate(45deg);
+}
+.gap-detail[open] > summary::after {
+  transform: rotate(-135deg);
+  top: 24px;
+}
+.gap-detail > summary:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.gap-explain {
+  padding: 0 0 var(--space-4);
+}
+.gap-step {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-caption);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+}
+.gap-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.gap-entries li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: 6px 0;
+}
+.gap-entry-date {
+  flex-shrink: 0;
+  width: 4.5em;
+  color: var(--color-text-secondary);
+  font-size: var(--text-small);
+}
+.gap-entry-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.gap-total {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0;
+  padding-top: 6px;
+  border-top: 1px dashed var(--color-border);
+  font-size: var(--text-small);
+}
+.gap-total strong {
+  white-space: nowrap;
 }

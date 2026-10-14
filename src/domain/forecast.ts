@@ -308,10 +308,20 @@ export interface GapExplanation extends TimingGap {
   /** Counted money in over the same days. */
   inflows: ForecastEntry[];
   inflowCents: Cents;
+  /**
+   * Counted money in and out after the lowest day while the running total is
+   * still below $0: through the day before `recoversOn`, or through `end`
+   * when there is no recovery within the forecast.
+   */
+  afterLowest: ForecastEntry[];
   /** First day after the gap with a running total of $0 or more, or null if none within the forecast. */
   recoversOn: DateStr | null;
   /** Counted income on `recoversOn`. */
   recoveryIncome: ForecastEntry[];
+  /** Every counted entry on `recoversOn` (income and money out), so the day's lines add up to `recoveryCents`. */
+  recoveryEntries: ForecastEntry[];
+  /** Running total at the end of `recoversOn`, or null without a recovery. */
+  recoveryCents: Cents | null;
 }
 
 /** `timingGapsAhead`, with each gap explained from the same forecast. */
@@ -321,6 +331,7 @@ export function explainTimingGaps(forecast: Forecast, days = GAP_LOOKAHEAD_DAYS)
     const outflows = during.filter((e) => e.signedCents < 0);
     const inflows = during.filter((e) => e.signedCents > 0);
     const after = dailyTimeline(forecast, addDays(gap.end, 1), forecast.horizonEnd).find((r) => r.tallyCents !== null && r.tallyCents >= 0) ?? null;
+    const stillBelow = after ? addDays(after.date, -1) : gap.end;
     return {
       ...gap,
       beforeCents: tallyOn(forecast, addDays(gap.start, -1)) ?? 0,
@@ -328,8 +339,11 @@ export function explainTimingGaps(forecast: Forecast, days = GAP_LOOKAHEAD_DAYS)
       outflowCents: outflows.reduce((sum, e) => sum - e.signedCents, 0),
       inflows,
       inflowCents: inflows.reduce((sum, e) => sum + e.signedCents, 0),
+      afterLowest: stillBelow > gap.lowestDate ? entriesInRange(forecast, addDays(gap.lowestDate, 1), stillBelow).filter((e) => e.counts) : [],
       recoversOn: after?.date ?? null,
       recoveryIncome: after ? after.entries.filter((e) => e.counts && e.signedCents > 0) : [],
+      recoveryEntries: after ? after.entries.filter((e) => e.counts) : [],
+      recoveryCents: after?.tallyCents ?? null,
     };
   });
 }

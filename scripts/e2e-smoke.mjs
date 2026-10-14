@@ -341,6 +341,18 @@ try {
   await page.getByText('Timing gap ahead').waitFor();
   assert.match(await page.locator('.callout-danger').innerText(), /Nov 5 – 9, by up to \$600\.00/);
   await shot('11-sample-data');
+  // The warning opens an explanation from the same forecast: what leads to the low point and what ends it.
+  await page.locator('.callout-danger').click();
+  const gapSheet = page.getByRole('dialog', { name: /timing gaps? ahead/ });
+  const firstGap = gapSheet.getByRole('group').first();
+  assert.match(await firstGap.innerText(), /Nov 5 – 9[\s\S]*Down to −\$600\.00[\s\S]*Leading to the lowest point[\s\S]*Back to \$0 or more/i);
+  await shot('11b-gap-explanation');
+  // Each gap opens and closes from the keyboard.
+  await firstGap.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await firstGap.getAttribute('open'), null);
+  await page.keyboard.press('Escape');
+  assert.equal(await gapSheet.count(), 0);
   // Late paycheck: actual recorded, next one still scheduled.
   await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Income' }).click();
   await page.getByRole('button', { name: 'See dates' }).click();
