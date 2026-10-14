@@ -5,7 +5,7 @@
  * applies), forecast with the same engine, and then discarded. Nothing is
  * saved; making a change real is a separate, explicit action.
  */
-import { addDays, diffDays, type DateStr } from './dates';
+import { addDays, diffDays, maxDate, type DateStr } from './dates';
 import { buildForecast, dailyTimeline, explainTimingGaps, GAP_LOOKAHEAD_DAYS, lowestPoint, type Forecast, type GapExplanation, type LowPoint } from './forecast';
 import type { Cents } from './money';
 import { findOccurrence } from './occurrences';
@@ -35,7 +35,7 @@ export type GapOutcome = 'eliminated' | 'reduced' | 'unchanged' | 'worsened';
 
 export interface ChangePreview {
   change: ProposedChange;
-  /** Both forecasts are measured over these dates: the current forecast's 90-day warning window. */
+  /** Both forecasts are measured over these dates: the current forecast's 90-day warning window, or through `options.through` if later. */
   window: { start: DateStr; end: DateStr };
   current: ForecastSnapshot;
   proposed: ForecastSnapshot;
@@ -96,14 +96,15 @@ function snapshot(f: Forecast, window: { start: DateStr; end: DateStr }): Foreca
 const overlaps = (a: { start: DateStr; end: DateStr }, b: { start: DateStr; end: DateStr }) => a.start <= b.end && b.start <= a.end;
 
 /** Previews `change` without saving it. Rejected with the operation's own message when the change isn't allowed. */
-export function previewChange(data: AppData, change: ProposedChange, clock: ops.Clock): PreviewResult {
+export function previewChange(data: AppData, change: ProposedChange, clock: ops.Clock, options: { through?: DateStr } = {}): PreviewResult {
   const applied = applyProposedChange(data, change, clock);
   if (!applied.ok) return applied;
-  const before = buildForecast(data, clock.today);
-  const after = buildForecast(applied.data, clock.today);
+  const before = buildForecast(data, clock.today, { through: options.through });
+  const after = buildForecast(applied.data, clock.today, { through: options.through });
 
   const start = before.forecastStart ?? clock.today;
-  const window = { start, end: addDays(start, GAP_LOOKAHEAD_DAYS - 1) };
+  // The 90-day warning window, or longer to cover a period being viewed further out.
+  const window = { start, end: maxDate(addDays(start, GAP_LOOKAHEAD_DAYS - 1), options.through ?? start) };
   const current = snapshot(before, window);
   const proposed = snapshot(after, window);
   const anchorChanged = before.forecastStart !== after.forecastStart;
@@ -185,6 +186,9 @@ export function previewChange(data: AppData, change: ProposedChange, clock: ops.
   };
 }
 
+/** Kept on a skipped occurrence, so its record says what the cancellation was. */
+export const SKIP_NOTE = 'Left out of the forecast in a what-if preview. Nothing changed outside Financial OS.';
+
 /** Same sources and records, regardless of when or where they were saved. */
 function sameFinancialData(a: AppData, b: AppData): boolean {
   return a === b || JSON.stringify([a.sources, a.records]) === JSON.stringify([b.sources, b.records]);
@@ -201,5 +205,5 @@ export function applyPreviewedChange(data: AppData, previewedOn: AppData, change
   const preview = previewChange(data, change, clock);
   if (!preview.ok) return preview;
   if (!preview.preview.comparable) return { ok: false, error: 'This preview can’t be compared with your forecast, so it can’t be applied from here.' };
-  return applyProposedChange(data, change, clock, change.kind === 'skip' ? 'Skipped after a what-if preview' : '');
+  return applyProposedChange(data, change, clock, change.kind === 'skip' ? SKIP_NOTE : '');
 }

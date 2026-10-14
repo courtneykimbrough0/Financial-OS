@@ -4,7 +4,7 @@ import type { GapExplanation } from '../../domain/forecast';
 import { formatMoney, parseMoney } from '../../domain/money';
 import { findOccurrence } from '../../domain/occurrences';
 import { applyPreviewedChange, previewChange, type ChangePreview, type ProposedChange } from '../../domain/preview';
-import type { AppData } from '../../domain/types';
+import { LIABILITY_TYPE_LABEL, type AppData, type Occurrence } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { Field, FormError, KindAvatar, Modal, MoneyInput, useToast } from './common';
 
@@ -21,7 +21,7 @@ const KINDS: { kind: Kind; label: string }[] = [
  * calculated by `previewChange` on a copy; nothing is saved unless the person
  * confirms Apply, and then only this one occurrence changes.
  */
-export function WhatIfSheet({ occurrenceId, onBack, onDone }: { occurrenceId: string; onBack: () => void; onDone: () => void }) {
+export function WhatIfSheet({ occurrenceId, through, onBack, onDone }: { occurrenceId: string; through?: DateStr; onBack: () => void; onDone: () => void }) {
   const { data, today, run } = useStore();
   const toast = useToast();
   const o = findOccurrence(data, occurrenceId, today);
@@ -38,7 +38,7 @@ export function WhatIfSheet({ occurrenceId, onBack, onDone }: { occurrenceId: st
     const cents = parseMoney(amount);
     return cents === null ? null : { kind, occurrenceId, amountCents: cents };
   }, [kind, date, amount, occurrenceId]);
-  const result = useMemo(() => (change ? previewChange(data, change, { today, now: `${today}T00:00:00.000Z` }) : null), [data, change, today]);
+  const result = useMemo(() => (change ? previewChange(data, change, { today, now: `${today}T00:00:00.000Z` }, { through }) : null), [data, change, today, through]);
 
   if (!o || o.status !== 'scheduled') {
     return (
@@ -77,8 +77,9 @@ export function WhatIfSheet({ occurrenceId, onBack, onDone }: { occurrenceId: st
           <div className="stack-sm" role="group" aria-labelledby={`${pillsId}-confirm`}>
             <h3 id={`${pillsId}-confirm`}>Apply this change?</h3>
             <p>{describeChange(o.description, confirming.change, o.scheduledDate, false)}</p>
+            {confirming.change.kind === 'skip' && <p className="callout callout-info">{skipNote(o, data)}</p>}
             <p className="hint">
-              {o.sourceId ? `Only this ${formatMedium(o.scheduledDate)} payment changes; later ones keep their schedule. ` : ''}
+              {o.sourceId ? `Only this one on ${formatMedium(o.scheduledDate)} changes; later ones keep their schedule. ` : ''}
               This updates your Financial OS forecast. It doesn’t change any payment arrangement outside the app.
             </p>
             <div className="form-actions">
@@ -107,7 +108,7 @@ export function WhatIfSheet({ occurrenceId, onBack, onDone }: { occurrenceId: st
               <Field label="New date">{(p) => <input {...p} type="date" min={today} value={date} onChange={(e) => setDate(e.target.value)} />}</Field>
             )}
             {kind === 'amount' && <Field label="New amount">{(p) => <MoneyInput {...p} value={amount} onChange={setAmount} />}</Field>}
-            {kind === 'skip' && <p className="hint">Shows the forecast without this one payment. It doesn’t mean it’s canceled, waived, or paid.</p>}
+            {kind === 'skip' && <p className="hint">{skipNote(o, data)}</p>}
 
             <section aria-live="polite" aria-label="Preview">
               {result && !result.ok && <p className="field-error">{result.error}</p>}
@@ -142,6 +143,17 @@ export function WhatIfSheet({ occurrenceId, onBack, onDone }: { occurrenceId: st
       </div>
     </Modal>
   );
+}
+
+/** What skipping means for this kind of item: only the forecast changes. */
+function skipNote(o: Occurrence, data: AppData): string {
+  if (o.kind === 'income') return 'Shows your forecast without this income. It doesn’t change what you’re owed.';
+  if (o.kind === 'liability') {
+    const type = data.sources.find((s) => s.id === o.sourceId)?.liabilityType;
+    const what = type ? LIABILITY_TYPE_LABEL[type].toLowerCase() : 'debt';
+    return `Shows your forecast without this payment. Your ${what} and the payment you owe don’t change; Financial OS just leaves this one out.`;
+  }
+  return 'Shows your forecast without this payment. It doesn’t cancel, waive, or pay it.';
 }
 
 function describeChange(name: string, change: ProposedChange, from: DateStr, done: boolean): string {

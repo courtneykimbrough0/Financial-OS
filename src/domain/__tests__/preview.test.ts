@@ -227,7 +227,7 @@ describe('applying a previewed change', () => {
   it.each([
     { change: { kind: 'move', occurrenceId: 'rent@2026-10-20', date: '2026-10-30' }, expected: { status: 'scheduled', scheduledDate: '2026-10-30', scheduledAmountCents: usd(1200) } },
     { change: { kind: 'amount', occurrenceId: 'rent@2026-10-20', amountCents: usd(1000) }, expected: { status: 'scheduled', scheduledDate: '2026-10-20', scheduledAmountCents: usd(1000) } },
-    { change: { kind: 'skip', occurrenceId: 'rent@2026-10-20' }, expected: { status: 'canceled', cancelNote: 'Skipped after a what-if preview' } },
+    { change: { kind: 'skip', occurrenceId: 'rent@2026-10-20' }, expected: { status: 'canceled', cancelNote: 'Left out of the forecast in a what-if preview. Nothing changed outside Financial OS.' } },
   ] as { change: ProposedChange; expected: object }[])('$change.kind changes exactly that one occurrence, keeping its original prediction', ({ change, expected }) => {
     const before = rent();
     const after = unwrap(applyPreviewedChange(before, before, change, clock));
@@ -255,5 +255,29 @@ describe('applying a previewed change', () => {
     expect(applyPreviewedChange(d, d, { kind: 'move', occurrenceId: 'pay@2026-10-15', date: '2026-10-16' }, clock)).toMatchObject({ ok: false, error: /can’t be compared/ });
     const paidRent = unwrap(ops.recordActual(d, 'rent@2026-10-20', { amountCents: usd(1200), date: TODAY }, clock));
     expect(applyPreviewedChange(paidRent, paidRent, { kind: 'amount', occurrenceId: 'rent@2026-10-20', amountCents: usd(1) }, clock)).toMatchObject({ ok: false });
+  });
+});
+
+describe('a shortfall beyond the 90-day warning window', () => {
+  // Nine $1,000 paychecks by Feb 4 ($9,000); taxes of $9,500 on Feb 10, 2027 → −$500 until Feb 18 ($500).
+  const taxes = () => oneTime(paid(), 'Taxes', 9500, '2027-02-10');
+  const move: ProposedChange = { kind: 'move', occurrenceId: 'one-taxes', date: '2027-02-18' };
+
+  it('is compared when the preview covers the period being viewed', () => {
+    const r = previewChange(taxes(), move, clock, { through: '2027-02-28' });
+    if (!r.ok) throw new Error(r.error);
+    expect(r.preview.window).toEqual({ start: '2026-10-15', end: '2027-02-28' });
+    expect(gapList(r.preview.current.gaps)).toEqual([['2027-02-10', '2027-02-17', -500, '2027-02-18']]);
+    expect(r.preview.target).toMatchObject({ outcome: 'eliminated' });
+    expect(r.preview.proposed.lowest).toEqual({ date: '2027-02-18', tallyCents: usd(500) }); // $10,000 − $9,500
+    expect(r.preview.lowestChangeCents).toBe(usd(1000));
+  });
+
+  it('is outside the default window, which never shrinks below 90 days', () => {
+    const p = preview(taxes(), move);
+    expect(p.window.end).toBe('2027-01-12');
+    expect(p.current.gaps).toEqual([]);
+    const shorter = previewChange(taxes(), move, clock, { through: '2026-11-01' });
+    expect(shorter.ok && shorter.preview.window.end).toBe('2027-01-12');
   });
 });

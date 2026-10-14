@@ -355,6 +355,9 @@ try {
   await page.keyboard.press('Enter');
   await firstGap.getByRole('button', { name: /^What if: Car repair/ }).click();
   const whatIf = page.getByRole('dialog', { name: 'What if…' });
+  // Back returns to the explanation, unchanged.
+  await whatIf.getByRole('button', { name: 'Back' }).click();
+  await gapSheet.getByRole('group').first().getByRole('button', { name: /^What if: Car repair/ }).click();
   // Choose "Skip this one" from the keyboard.
   await whatIf.getByRole('radio', { name: 'Skip this one' }).focus();
   await page.keyboard.press('Space');

@@ -27,19 +27,19 @@ function seed(): AppData {
 let store: ReturnType<typeof useStore>;
 let done = 0;
 let back = 0;
-function Harness({ id }: { id: string }) {
+function Harness({ id, through }: { id: string; through?: string }) {
   store = useStore();
-  return <WhatIfSheet occurrenceId={id} onBack={() => back++} onDone={() => done++} />;
+  return <WhatIfSheet occurrenceId={id} through={through} onBack={() => back++} onDone={() => done++} />;
 }
 
-async function open(id = 'repair', data = seed()) {
+async function open(id = 'repair', data = seed(), through?: string) {
   done = 0;
   back = 0;
   const adapter = new MemoryAdapter(data);
   render(
     <StoreProvider adapter={adapter} today={TODAY}>
       <ToastProvider>
-        <Harness id={id} />
+        <Harness id={id} through={through} />
       </ToastProvider>
     </StoreProvider>,
   );
@@ -116,7 +116,7 @@ describe('WhatIfSheet', () => {
     expect(preview()).toHaveTextContent('The timing gap Oct 20 – 28 would be gone.');
     await user.click(screen.getByRole('button', { name: 'Apply change…' }));
     await user.click(screen.getByRole('button', { name: 'Apply change' }));
-    expect(store.data.records.find((r) => r.id === 'repair')).toMatchObject({ status: 'canceled', cancelNote: 'Skipped after a what-if preview' });
+    expect(store.data.records.find((r) => r.id === 'repair')).toMatchObject({ status: 'canceled', cancelNote: 'Left out of the forecast in a what-if preview. Nothing changed outside Financial OS.' });
   });
 
   it('refuses to apply a preview when the data changed after it was made', async () => {
@@ -162,5 +162,55 @@ describe('WhatIfSheet', () => {
     await user.click(screen.getByRole('button', { name: 'Back' }));
     expect(back).toBe(1);
     expect(store.data).toBe(before);
+  });
+});
+
+describe('skipping, in plain words', () => {
+  function withLoan(): AppData {
+    let d = seed();
+    d = unwrap(ops.addSource(d, { kind: 'liability', description: 'Car loan', amountCents: usd(350), startDate: '2026-10-22', rule: { type: 'monthly' }, liabilityType: 'loan' }, clock, 'car'));
+    return d;
+  }
+
+  it('a liability payment: says the loan and what is owed are unchanged, before and at confirmation', async () => {
+    const { user } = await open('car@2026-10-22', withLoan());
+    await user.click(screen.getByRole('radio', { name: 'Skip this one' }));
+    const note = 'Shows your forecast without this payment. Your loan and the payment you owe don’t change; Financial OS just leaves this one out.';
+    expect(screen.getByText(note)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Apply change…' }));
+    const confirm = screen.getByRole('group', { name: 'Apply this change?' });
+    expect(confirm).toHaveTextContent('Leave Car loan on Oct 22, 2026 out of your forecast.');
+    expect(confirm).toHaveTextContent(note);
+    expect(confirm).toHaveTextContent('Only this one on Oct 22, 2026 changes; later ones keep their schedule.');
+    await user.click(screen.getByRole('button', { name: 'Apply change' }));
+    expect(store.data.records.find((r) => r.id === 'car@2026-10-22')).toMatchObject({
+      status: 'canceled',
+      cancelNote: 'Left out of the forecast in a what-if preview. Nothing changed outside Financial OS.',
+    });
+    expect(store.data.sources.find((s) => s.id === 'car')).toMatchObject({ active: true, liabilityType: 'loan' });
+  });
+
+  it('income: talks about income, not a payment', async () => {
+    const { user } = await open('pay@2026-10-29');
+    await user.click(screen.getByRole('radio', { name: 'Skip this one' }));
+    expect(screen.getByText('Shows your forecast without this income. It doesn’t change what you’re owed.')).toBeInTheDocument();
+    expect(screen.queryByText(/without this payment/)).toBeNull();
+  });
+
+  it('a bill: says it isn’t canceled, waived, or paid', async () => {
+    const { user } = await open();
+    await user.click(screen.getByRole('radio', { name: 'Skip this one' }));
+    expect(screen.getByText('Shows your forecast without this payment. It doesn’t cancel, waive, or pay it.')).toBeInTheDocument();
+  });
+});
+
+describe('a shortfall further out than 90 days', () => {
+  it('is previewed over the period being viewed', async () => {
+    // Taxes of $9,500 on Feb 10, 2027 after nine $1,000 paychecks: −$500 until Feb 18.
+    const paidOnly = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1000, '2026-10-15', { type: 'biweekly' }, 'pay');
+    const data = unwrap(ops.addOneTime(paidOnly, { kind: 'bill', description: 'Taxes', amountCents: usd(9500), date: '2027-02-10' }, clock, 'taxes'));
+    const { user } = await open('taxes', data, '2027-02-28');
+    await setDate(user, '2027-02-18');
+    expect(preview()).toHaveTextContent('The timing gap Feb 10 – 17 would be gone.');
   });
 });

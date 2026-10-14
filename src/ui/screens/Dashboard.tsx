@@ -410,7 +410,7 @@ function PeriodGapsSheet({ forecast, range, onClose }: { forecast: Forecast; ran
     return explainTimingGaps(forecast, days).filter((g) => g.end >= start && g.start <= end);
   }, [forecast, start, end]);
   const [whatIf, setWhatIf] = useState<string | null>(null);
-  if (whatIf) return <WhatIfSheet occurrenceId={whatIf} onBack={() => setWhatIf(null)} onDone={onClose} />;
+  if (whatIf) return <WhatIfSheet occurrenceId={whatIf} through={end} onBack={() => setWhatIf(null)} onDone={onClose} />;
   if (gaps.length === 0) return null;
   return <GapsSheet gaps={gaps} horizonEnd={forecast.horizonEnd} onClose={onClose} onWhatIf={setWhatIf} />;
 }
