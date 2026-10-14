@@ -425,6 +425,61 @@ export function restoreOccurrence(data: AppData, id: string, clock: Clock): Resu
   return unchanged ? ok({ ...result.data, records: result.data.records.filter((x) => x.id !== id) }) : result;
 }
 
+// ---------------------------------------------------------------------------
+// Batches: several selected occurrences changed, and undone, as one step
+// ---------------------------------------------------------------------------
+
+/** Applies `fn` to each selected occurrence in turn; all succeed or nothing changes. */
+function forEachSelected(data: AppData, ids: string[], today: DateStr, fn: (d: AppData, id: string) => Result): Result {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return fail('Select at least one transaction.');
+  let next = data;
+  for (const id of unique) {
+    const r = fn(next, id);
+    if (!r.ok) {
+      const name = findOccurrence(next, id, today)?.description;
+      return fail(name ? `${name}: ${r.error}` : r.error);
+    }
+    next = r.data;
+  }
+  return ok(next);
+}
+
+/**
+ * Marks each selected outstanding occurrence done exactly as expected: its
+ * scheduled amount, on its scheduled date (or today, if that is still ahead).
+ * Only the selected occurrences change. To record a different amount or date,
+ * use `recordActual` on that one.
+ */
+export function recordAsExpected(data: AppData, ids: string[], clock: Clock): Result {
+  return forEachSelected(data, ids, clock.today, (d, id) => {
+    const o = findOccurrence(d, id, clock.today);
+    if (!o) return fail('That transaction could not be found.');
+    return recordActual(d, id, { amountCents: o.scheduledAmountCents, date: defaultActualDate(o.scheduledDate, clock.today) }, clock);
+  });
+}
+
+/** Moves each selected outstanding occurrence to `date`, keeping its amount. */
+export function rescheduleSelected(data: AppData, ids: string[], date: DateStr, clock: Clock): Result {
+  return forEachSelected(data, ids, clock.today, (d, id) => {
+    const o = findOccurrence(d, id, clock.today);
+    if (!o) return fail('That transaction could not be found.');
+    return rescheduleOccurrence(d, id, { date, amountCents: o.scheduledAmountCents }, clock);
+  });
+}
+
+/**
+ * Undoes a batch: puts the records of the given occurrences back exactly as
+ * they were in `before` (removing any that didn't exist then). Every other
+ * record and every source stays as it is now.
+ */
+export function undoBatch(data: AppData, before: AppData, ids: string[]): Result {
+  const selected = new Set(ids);
+  const previous = before.records.filter((r) => selected.has(r.id));
+  const kept = data.records.filter((r) => !selected.has(r.id));
+  return ok({ ...data, records: [...kept, ...previous] });
+}
+
 export function completeOnboarding(data: AppData): Result {
   return ok({ ...data, onboardingComplete: true });
 }

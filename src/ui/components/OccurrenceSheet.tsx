@@ -4,9 +4,13 @@ import { diffDays, formatLong, formatMedium, type DateStr } from '../../domain/d
 import { centsToInput, formatMoney, formatSignedMoney, parseMoney } from '../../domain/money';
 import { findOccurrence } from '../../domain/occurrences';
 import * as ops from '../../domain/operations';
-import { doneVerb as kindDoneVerb, KIND_LABEL, type Occurrence } from '../../domain/types';
+import { doneVerb as kindDoneVerb, KIND_LABEL, type Occurrence, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
+import { navigate, type Route } from '../router';
 import { Field, FlowAmount, FormError, Icon, KindAvatar, Modal, MoneyInput, StatusBadge, useToast } from './common';
+
+/** The screen where a recurring item's schedule is edited. */
+const SOURCE_ROUTE: Record<TransactionKind, Route> = { income: 'income', bill: 'expenses', subscription: 'expenses', liability: 'liabilities', savings: 'savings' };
 
 type Mode = 'view' | 'record' | 'correct' | 'reschedule' | 'cancel' | 'delete';
 
@@ -137,7 +141,7 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
                 Mark {doneVerb(o)}
               </button>
               <button type="button" className="button secondary" onClick={() => open('reschedule')}>
-                Change date or amount
+                {o.sourceId ? 'Change just this one' : 'Change date or amount'}
               </button>
               <button type="button" className="button secondary" onClick={() => open('cancel')}>
                 Cancel this one
@@ -164,7 +168,23 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
               Delete this one-time {o.kind}
             </button>
           )}
-          {o.sourceId !== null && outstanding && <p className="hint">Only this {formatMedium(o.scheduledDate)} occurrence changes. Future ones keep their schedule.</p>}
+          {o.sourceId !== null && outstanding && (
+            <>
+              <button
+                type="button"
+                className="button link"
+                onClick={() => {
+                  onClose();
+                  navigate(SOURCE_ROUTE[o.kind]);
+                }}
+              >
+                Change this and later ones
+              </button>
+              <p className="hint">
+                “Just this one” changes only the {formatMedium(o.scheduledDate)} occurrence. To change the amount or schedule from a date on, edit {o.description} on its screen.
+              </p>
+            </>
+          )}
         </div>
       )}
 

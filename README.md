@@ -42,7 +42,9 @@ It also has a subscription and a savings item.
 | Liabilities | Recurring payments on a **card**, **loan**, or **line of credit**. Choosing one of the three is required. Each payment counts once, as money out. |
 | Settings | The gear in the top bar. Account (signed-in email, sign out, delete account), backups (download, restore), and sample data. |
 
-Tap any transaction to mark it received/paid, change its date or amount, cancel it, undo, or fix a recorded actual.
+Tap any transaction to mark it received/paid, change its date or amount, cancel it, undo, or fix a recorded actual. For a recurring item, “Change just this one” moves only that occurrence; “Change this and later ones” opens the item’s screen to change its schedule from a date on.
+
+**Review.** The overdue banner (or **Review this week** when nothing is overdue) opens a review list: items due today or earlier first, then the rest of the week through Saturday. Select several and **Mark done** (each at its expected amount and date, or today for items not yet due) or **Move to a date**, in one step. **Undo** reverses the whole batch exactly. Nothing is marked done unless it is selected; tap an item to record a different amount or date.
 
 ## Architecture
 
@@ -162,6 +164,7 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 - `src/domain/__tests__/spec-scenarios.test.ts`: the specification's scenarios A–M (basic projection, timing gap, actual income and expenses that differ from expectations, late liability payment, schedule change, one-time transaction, rescheduling, cancellation, dashboard consistency, view changes, date boundaries, persistence).
 - `forecast.test.ts`, `recurrence.test.ts`, `dates-money.test.ts`: engine edge cases, including time-zone independence checked across five zones.
 - `engine-validation.test.ts`: hand-computed running totals in cents, spending before payday, same-day events, period and year boundaries, several paydays in one week, and the payday anchor after payments, moves and cancellations.
+- `review.test.ts` and `src/ui/__tests__/review-sheet.test.tsx`: what to review, marking several done or moving them (only the selected items change), undoing a batch exactly, and a failed save during a batch.
 - `history.test.ts` and `src/state/__tests__/history-roundtrip.test.ts`: the original prediction, the latest expectation and the actual stay distinct through paying, correcting, undoing, canceling and schedule changes, including on the device and in backups; variance values.
 - `saved-changes.test.ts`: rescheduled, recorded and canceled occurrences after a later schedule change or turning an item off, paying a moved bill, the next payday after a schedule change, repeated forecasts that never change stored data, and month-end schedules.
 - `sample.test.ts`: checks that the sample data shows each behavior it is meant to demonstrate, with the sample built on several different "today" dates.

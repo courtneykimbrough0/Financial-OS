@@ -19,6 +19,7 @@ How stored data becomes the forecast, and which tests prove each behavior. Writt
 9. **Derived views.**
    - `periodKpis` and `totals`: cash flow for any date range (every counted entry in the range, before payday included).
    - `periodPlan` (`plan.ts`): cash flow by kind and tag.
+   - `reviewEntries`: outstanding items due today or earlier, then the rest of the week.
    - `variance` (`occurrences.ts`): a recorded outcome against its original prediction, in cents and days.
    - `weekSummaries`, `monthWeekSummaries`, `paycheckCycles`, `lowestPoint`, `negativeStretches`, `timingGapsAhead` (90 days from the forecast start), `overdueEntries`.
    - Screens read only these; none computes money itself.
@@ -50,6 +51,7 @@ Files are in `src/domain/__tests__/`. "EV" is `engine-validation.test.ts`; "SC" 
 | Actuals (late, early, different amount) | `forecast` › expected vs actual outcomes; spec › C, D, E |
 | Paying a bill: once only, correction, undo | `forecast` › rejects duplicate completion…, corrects a recorded actual…, undoing a recorded outcome…; SC › marking a bill paid; `history` › paying a bill, correcting a payment, undoing a payment or cancellation |
 | Variance (actual vs. original prediction) | `history` › paying a bill |
+| Batch review: only selected items change, batch undo is exact | `review` (all); `ui/review-sheet` |
 | Rescheduling and canceling | `forecast` › overdue, rescheduled, and canceled occurrences; spec › H, I; SC › a moved occurrence |
 | Schedule changes and effective dates | `forecast` › recurring schedule changes; spec › F; SC › D1 |
 | Turning items off and on | `forecast` › deactivating stops future occurrences…; SC › D2, items that are turned off |

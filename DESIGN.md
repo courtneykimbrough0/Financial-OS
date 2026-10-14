@@ -86,6 +86,7 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
 - **Totals strip / sheet stats:** three centered label-over-value columns, with values aligned on one baseline.
 - **Callouts:** soft-tinted rounded blocks (info, warn, danger, ok) that always lead with an icon or a bold phrase.
 - **Switch:** a pill track that turns green when on, built on a native checkbox with `role="switch"`.
+- **Selection checkbox:** a native checkbox in a 44px tap target, to the left of an entry row, for picking several items (the review list). The row itself still opens the item. Batch actions sit in a sticky bar at the bottom of the sheet and appear only when something is selected.
 - **Toasts:** light pills with an icon at the top of the screen, so they never cover sheet or step buttons. They are announced through a live region.
 
 ## Layout pattern: summary on the page, details in sheets

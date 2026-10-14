@@ -357,3 +357,23 @@ export function overdueEntries(forecast: Forecast): ForecastEntry[] {
     .filter((e) => e.occurrence.displayStatus === 'overdue')
     .sort((a, b) => (a.occurrence.scheduledDate < b.occurrence.scheduledDate ? -1 : a.occurrence.scheduledDate > b.occurrence.scheduledDate ? 1 : compareEntries(a, b)));
 }
+
+export interface ReviewGroups {
+  /** Outstanding items whose date has passed or is today: these need an update. */
+  attention: ForecastEntry[];
+  /** Outstanding items due after today through the end of this week (Saturday). */
+  upcoming: ForecastEntry[];
+}
+
+/** Outstanding items to review, oldest first: what needs attention, then the rest of this week. */
+export function reviewEntries(forecast: Forecast): ReviewGroups {
+  const { today } = forecast;
+  const weekEnd = endOfWeek(today);
+  const outstanding = forecast.entries
+    .filter((e) => e.occurrence.status === 'scheduled' && e.occurrence.scheduledDate <= weekEnd)
+    .sort((a, b) => (a.occurrence.scheduledDate < b.occurrence.scheduledDate ? -1 : a.occurrence.scheduledDate > b.occurrence.scheduledDate ? 1 : compareEntries(a, b)));
+  return {
+    attention: outstanding.filter((e) => e.occurrence.scheduledDate <= today),
+    upcoming: outstanding.filter((e) => e.occurrence.scheduledDate > today),
+  };
+}

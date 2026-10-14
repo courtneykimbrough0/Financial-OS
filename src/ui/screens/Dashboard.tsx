@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   AlertCircle,
   Banknote,
@@ -36,6 +36,7 @@ import {
   lowestPoint,
   negativeStretches,
   overdueEntries,
+  reviewEntries,
   paycheckCycles,
   weekSummaries,
   type DayRow,
@@ -46,10 +47,10 @@ import {
 } from '../../domain/forecast';
 import { formatCompact, formatMoney, formatSignedMoney } from '../../domain/money';
 import { periodPlan, type PeriodPlan } from '../../domain/plan';
-import { doneVerb } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { EmptyState, FlowAmount, Icon, KindAvatar, KindTag, Modal, SectionLabel, StatusBadge } from '../components/common';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
+import { ReviewSheet } from '../components/ReviewSheet';
 import { PeriodBreakdown, TagBreakdown } from '../components/plan';
 import { navigate } from '../router';
 
@@ -79,7 +80,7 @@ function tallyText(cents: number | null): string {
  */
 type Sheet =
   | { kind: 'day'; date: DateStr }
-  | { kind: 'overdue' }
+  | { kind: 'review'; title: string; closeIfEmpty?: boolean }
   | { kind: 'occurrence'; id: string; back: Sheet | null }
   | { kind: 'about-tally' }
   | { kind: 'calendar-key' };
@@ -114,6 +115,12 @@ export function Dashboard() {
   const range: [DateStr, DateStr] | null = view === 'cycle' ? (cycle ? [cycle.start, cycle.end] : null) : fixedRange;
 
   const overdue = overdueEntries(forecast);
+  const overdueTitle = overdue.length === 1 ? '1 transaction needs an update' : `${overdue.length} transactions need an update`;
+  const review = reviewEntries(forecast);
+  const toReview = review.attention.length + review.upcoming.length;
+  useEffect(() => {
+    if (sheet?.kind === 'review' && sheet.closeIfEmpty && toReview === 0) setSheet(null);
+  }, [sheet, toReview]);
   const openOccurrence = (id: string, back: Sheet | null = null) => setSheet({ kind: 'occurrence', id, back });
   const openDay = (date: DateStr) => {
     setSelected(date);
@@ -130,12 +137,18 @@ export function Dashboard() {
       </header>
 
       {forecast.issue && <IssueCard forecast={forecast} />}
-      {overdue.length > 0 && (
-        <button type="button" className="overdue-banner" onClick={() => setSheet({ kind: 'overdue' })}>
+      {overdue.length > 0 ? (
+        <button type="button" className="overdue-banner" onClick={() => setSheet({ kind: 'review', title: overdueTitle })}>
           <Icon icon={AlertCircle} size={20} />
-          <span>{overdue.length === 1 ? '1 transaction needs an update' : `${overdue.length} transactions need an update`}</span>
+          <span>{overdueTitle}</span>
           <Icon icon={ChevronRight} size={18} />
         </button>
+      ) : (
+        toReview > 0 && (
+          <button type="button" className="button small secondary review-start" onClick={() => setSheet({ kind: 'review', title: 'Review this week' })}>
+            Review this week · {toReview}
+          </button>
+        )
       )}
 
       <div className="segmented" role="tablist" aria-label="Dashboard view">
@@ -234,14 +247,20 @@ export function Dashboard() {
         )}
       </section>
 
-      {sheet?.kind === 'occurrence' && <OccurrenceSheet occurrenceId={sheet.id} onClose={() => setSheet(sheet.back)} />}
+      {sheet?.kind === 'occurrence' && (
+        // Back to the review list after handling an item, unless that left nothing to review.
+        <OccurrenceSheet occurrenceId={sheet.id} onClose={() => setSheet(sheet.back?.kind === 'review' ? { ...sheet.back, closeIfEmpty: true } : sheet.back)} />
+      )}
       {sheet?.kind === 'day' && (
         <DaySheet forecast={forecast} date={sheet.date} onClose={() => setSheet(null)} onOpen={(id) => openOccurrence(id, sheet)} />
       )}
-      {sheet?.kind === 'overdue' && (
-        <Modal title={overdue.length === 1 ? '1 transaction needs an update' : `${overdue.length} transactions need an update`} onClose={() => setSheet(null)}>
-          <OverdueList entries={overdue} onOpen={(id) => openOccurrence(id, overdue.length > 1 ? sheet : null)} />
-        </Modal>
+      {sheet?.kind === 'review' && !(sheet.closeIfEmpty && toReview === 0) && (
+        <ReviewSheet
+          forecast={forecast}
+          title={sheet.title}
+          onOpen={(id) => openOccurrence(id, sheet)}
+          onClose={() => setSheet(null)}
+        />
       )}
       {sheet?.kind === 'about-tally' && forecast.anchor && forecast.forecastStart && (
         <Modal title="How cash flow and the running total work" onClose={() => setSheet(null)}>
@@ -285,34 +304,6 @@ function IssueCard({ forecast }: { forecast: Forecast }) {
           Go to Income
         </button>
       </div>
-    </div>
-  );
-}
-
-function OverdueList({ entries, onOpen }: { entries: ForecastEntry[]; onOpen: (id: string) => void }) {
-  return (
-    <div className="stack">
-      <p className="muted">These dates have passed. Record what happened, or change the expected date. They stay in your forecast until you do.</p>
-      <ul className="entry-list overdue-list">
-        {entries.map((e) => (
-          <li key={e.occurrence.id}>
-            <button type="button" className="entry" onClick={() => onOpen(e.occurrence.id)}>
-              <KindAvatar kind={e.occurrence.kind} />
-              <span className="entry-main">
-                <span className="entry-title">{e.occurrence.description}</span>
-                <span className="entry-sub">Expected {formatMedium(e.occurrence.scheduledDate)}</span>
-              </span>
-              <span className="entry-side">
-                <FlowAmount kind={e.occurrence.kind} cents={e.amountCents} />
-                <span className="entry-action">
-                  Mark {doneVerb(e.occurrence.kind)}
-                  <Icon icon={ChevronRight} size={14} />
-                </span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

@@ -2291,3 +2291,59 @@ li.negative .tl-tally {
 .week-list > li.open > .week-row {
   padding-bottom: var(--space-2);
 }
+
+/* ---------- Review sheet ---------- */
+
+.review-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.review-row .entry {
+  flex: 1;
+  min-width: 0;
+}
+.review-check {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: var(--tap);
+  height: var(--tap);
+  cursor: pointer;
+}
+.review-check input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+.review-check input:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+.review-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) 0 var(--space-1);
+  background: var(--color-sheet);
+}
+.review-actions > .button {
+  flex: 1 1 140px;
+}
+.review-actions > .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+.review-undo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.review-start {
+  align-self: flex-start;
+}

@@ -301,7 +301,31 @@ try {
   assert.match(await page.locator('.source-card').innerText(), /Paycheck[\s\S]*Next: Oct 29, 2026/);
   await page.goto(`${BASE}#/settings`);
 
-  // The clock still reads Oct 16 here, so sample dates are relative to Oct 16.
+  step('review: mark several items done in one step, then undo them together');
+  await page.clock.setFixedTime(new Date(2026, 9, 27, 9, 0));
+  await page.goto(`${BASE}#/dashboard`);
+  await page.reload();
+  // Tue Oct 27: the car loan (Oct 20) and phone (Oct 25) are overdue; the paycheck is due Thursday.
+  await page.getByRole('button', { name: '2 transactions need an update' }).click();
+  const review = page.getByRole('dialog', { name: '2 transactions need an update' });
+  const needs = review.getByRole('region', { name: 'Needs an update' });
+  assert.equal(await needs.getByRole('checkbox').count(), 2);
+  assert.equal(await review.getByRole('region', { name: 'Later this week' }).getByRole('checkbox').count(), 1);
+  await needs.getByRole('button', { name: 'Select all' }).click();
+  await shot('08b-review-selected');
+  await review.getByRole('button', { name: 'Mark 2 items done' }).click();
+  await review.locator('.review-undo').getByText('Marked 2 items done as expected.').waitFor();
+  assert.equal(await review.getByRole('region', { name: 'Needs an update' }).count(), 0);
+  await review.getByRole('button', { name: 'Undo' }).click();
+  await page.getByText('Undone: 2 items back to how they were.').waitFor();
+  assert.equal(await review.getByRole('region', { name: 'Needs an update' }).getByRole('checkbox').count(), 2);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: '2 transactions need an update' }).waitFor();
+  await page.clock.setFixedTime(new Date(2026, 9, 16, 9, 0));
+  await page.goto(`${BASE}#/settings`);
+  await page.reload();
+
+  // The clock reads Oct 16 again here, so sample dates are relative to Oct 16.
   step('sample data: separate from real data, shows the three checkpoint behaviors');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Explore with sample data' }).click();
