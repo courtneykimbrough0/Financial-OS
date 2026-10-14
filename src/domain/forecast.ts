@@ -290,6 +290,50 @@ export function timingGapsAhead(forecast: Forecast, days = GAP_LOOKAHEAD_DAYS): 
   });
 }
 
+/**
+ * What the forecast shows about a timing gap, using its own numbers. It lists
+ * what happens, not why: the money in and out from the first day of the gap
+ * through its lowest day, and the income that brings the running total back.
+ * A gap is often a matter of timing (a bill due before the next paycheck)
+ * rather than of spending, so no single entry is singled out as its cause.
+ *
+ * Always: beforeCents + inflowCents − outflowCents = lowestCents.
+ */
+export interface GapExplanation extends TimingGap {
+  /** Running total at the end of the day before the gap ($0 when the gap starts on the first forecast day). */
+  beforeCents: Cents;
+  /** Counted money out from `start` through `lowestDate`, in forecast order. */
+  outflows: ForecastEntry[];
+  outflowCents: Cents;
+  /** Counted money in over the same days. */
+  inflows: ForecastEntry[];
+  inflowCents: Cents;
+  /** First day after the gap with a running total of $0 or more, or null if none within the forecast. */
+  recoversOn: DateStr | null;
+  /** Counted income on `recoversOn`. */
+  recoveryIncome: ForecastEntry[];
+}
+
+/** `timingGapsAhead`, with each gap explained from the same forecast. */
+export function explainTimingGaps(forecast: Forecast, days = GAP_LOOKAHEAD_DAYS): GapExplanation[] {
+  return timingGapsAhead(forecast, days).map((gap) => {
+    const during = entriesInRange(forecast, gap.start, gap.lowestDate).filter((e) => e.counts);
+    const outflows = during.filter((e) => e.signedCents < 0);
+    const inflows = during.filter((e) => e.signedCents > 0);
+    const after = dailyTimeline(forecast, addDays(gap.end, 1), forecast.horizonEnd).find((r) => r.tallyCents !== null && r.tallyCents >= 0) ?? null;
+    return {
+      ...gap,
+      beforeCents: tallyOn(forecast, addDays(gap.start, -1)) ?? 0,
+      outflows,
+      outflowCents: outflows.reduce((sum, e) => sum - e.signedCents, 0),
+      inflows,
+      inflowCents: inflows.reduce((sum, e) => sum + e.signedCents, 0),
+      recoversOn: after?.date ?? null,
+      recoveryIncome: after ? after.entries.filter((e) => e.counts && e.signedCents > 0) : [],
+    };
+  });
+}
+
 export interface WeekSummary extends PeriodKpis {
   start: DateStr;
   end: DateStr;

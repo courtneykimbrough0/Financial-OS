@@ -19,6 +19,7 @@ How stored data becomes the forecast, and which tests prove each behavior. Writt
 9. **Derived views.**
    - `periodKpis` and `totals`: cash flow for any date range (every counted entry in the range, before payday included).
    - `periodPlan` (`plan.ts`): cash flow by kind and tag.
+   - `explainTimingGaps`: each timing gap with the running total going in, the money out and in from its first day to its lowest day, and the day and income that bring it back to $0 or more. It reports what the forecast shows rather than naming one cause, and always satisfies before + in − out = lowest.
    - `reviewEntries`: outstanding items due today or earlier, then the rest of the week.
    - `variance` (`occurrences.ts`): a recorded outcome against its original prediction, in cents and days.
    - `weekSummaries`, `monthWeekSummaries`, `paycheckCycles`, `lowestPoint`, `negativeStretches`, `timingGapsAhead` (90 days from the forecast start), `overdueEntries`.
@@ -48,6 +49,7 @@ Files are in `src/domain/__tests__/`. "EV" is `engine-validation.test.ts`; "SC" 
 | Pay periods (back-to-back, several paydays in a week) | `forecast` › paycheck-to-paycheck cycles; EV › several paydays in one week |
 | Spending before payday | `forecast` › upcoming items before the next payday…, overdue items dated before the forecast start…; EV › spending before the next payday |
 | Timing gaps and 90-day lookahead | `one-time-and-gaps` › timing gaps ahead |
+| Timing-gap explanations (1, 4, 8+ weeks; timing vs. spending; consistency) | `gap-explanations` (all) |
 | Actuals (late, early, different amount) | `forecast` › expected vs actual outcomes; spec › C, D, E |
 | Paying a bill: once only, correction, undo | `forecast` › rejects duplicate completion…, corrects a recorded actual…, undoing a recorded outcome…; SC › marking a bill paid; `history` › paying a bill, correcting a payment, undoing a payment or cancellation |
 | Variance (actual vs. original prediction) | `history` › paying a bill |
