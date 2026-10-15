@@ -33,6 +33,7 @@ How stored data becomes the forecast, and which tests prove each behavior. Writt
 ## Review rhythm (`cadence.ts`)
 
 - **Periods.** Weekly: Sunday to Saturday. Monthly: the calendar month. Payday: from the latest main-paycheck date on or before today (the counted entry date, so a late paycheck counts on the day it arrived) to the day before the next one; other income never starts a review.
+- **Switching.** Choosing a different rhythm (or Off) clears the latest handling, so the new rhythm's current period is due right away; choosing the same rhythm again changes nothing.
 - **Due.** A rhythm is off until chosen. The current period is due until a review is completed or skipped on or after its start (`handledOn`); only the latest handling is kept, so periods missed while away never pile up. `nextDue` is the current period's start while it is due, otherwise the next period's start.
 - **Summary** (`reviewSummary`): for a period, the forecast's counted entries split into expected income, expected money out, and recorded; every overdue item; `periodKpis` for cash flow; and the explained timing gaps overlapping the period. Build the forecast through the period's end.
 

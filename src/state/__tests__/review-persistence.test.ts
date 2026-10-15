@@ -31,15 +31,25 @@ describe('the review rhythm is kept', () => {
     expect(reviewStatus(loaded, '2026-10-17').due).toBe(false);
   });
 
-  it('in the account and its copy on the device, including when reopened offline', async () => {
+  it('in the account and its copy on the device, including when reopened offline, once accounts accept it', async () => {
     const server = new FakeServer();
-    const adapter = new CloudAdapter(server, 'user-1', localStorage);
+    const adapter = new CloudAdapter(server, 'user-1', localStorage, true);
     await adapter.load();
     await adapter.save(reviewed(), 0);
     expect((server.row!.data as AppData).review).toEqual(reviewed().review);
     server.offline = true;
-    const reopened = await new CloudAdapter(server, 'user-1', localStorage).load();
+    const reopened = await new CloudAdapter(server, 'user-1', localStorage, true).load();
     expect(reopened.review).toEqual(reviewed().review);
+  });
+
+  it('left out of account saves until the live rules accept it, so nothing else stops saving', async () => {
+    const server = new FakeServer();
+    const adapter = new CloudAdapter(server, 'user-1', localStorage);
+    await adapter.load();
+    // For example, device data with a rhythm moved into an account, or a backup restored while signed in.
+    expect(await adapter.save(reviewed(), 0)).toEqual({ ok: true, revision: 1 });
+    expect(server.row!.data).not.toHaveProperty('review');
+    expect((server.row!.data as AppData).records.map((r) => r.description)).toEqual(['Rent']);
   });
 
   it('in a backup file', () => {

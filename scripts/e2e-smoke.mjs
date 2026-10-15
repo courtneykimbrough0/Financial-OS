@@ -325,6 +325,29 @@ try {
   await page.goto(`${BASE}#/settings`);
   await page.reload();
 
+  step('review rhythm: choose weekly, review from the dashboard, mark it done');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('heading', { name: 'Review rhythm' }).waitFor();
+  assert.equal(await page.getByRole('radio', { name: /^Off/ }).isChecked(), true);
+  // Choose with the keyboard: Off → Weekly.
+  await page.getByRole('radio', { name: /^Off/ }).focus();
+  await page.keyboard.press('ArrowDown');
+  assert.equal(await page.getByRole('radio', { name: /^Weekly/ }).isChecked(), true);
+  await page.goto(`${BASE}#/dashboard`);
+  await page.getByRole('button', { name: 'Your weekly review is ready' }).click();
+  const weekly = page.getByRole('dialog', { name: 'Weekly review' });
+  assert.match(await weekly.innerText(), /Oct 11 – 17[\s\S]*Cash flow[\s\S]*Expected income[\s\S]*Recorded[\s\S]*Paycheck[\s\S]*Received Oct 16, 2026/i);
+  await shot('08c-weekly-review');
+  // Closing without choosing leaves it due.
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Your weekly review is ready' }).click();
+  await weekly.getByRole('button', { name: 'Mark review done' }).click();
+  await page.getByText('Review done.').waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Your weekly review is ready' }).count(), 0);
+  // Back to reviews off, as before this step.
+  await page.goto(`${BASE}#/settings`);
+  await page.getByRole('radio', { name: /^Off/ }).check();
+
   // The clock reads Oct 16 again here, so sample dates are relative to Oct 16.
   step('sample data: separate from real data, shows the three checkpoint behaviors');
   await page.setViewportSize({ width: 390, height: 844 });

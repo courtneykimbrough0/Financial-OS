@@ -53,6 +53,11 @@ import { useStore } from '../../state/store';
 import { EmptyState, FlowAmount, Icon, KindAvatar, KindTag, Modal, SectionLabel, StatusBadge } from '../components/common';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 import { ReviewSheet } from '../components/ReviewSheet';
+import { PeriodReviewSheet } from '../components/PeriodReviewSheet';
+import { CADENCE_LABEL } from '../components/rhythm';
+import { reviewStatus } from '../../domain/cadence';
+import { useAccount } from '../../state/account';
+import { REVIEW_RHYTHM_IN_ACCOUNTS } from '../../state/features';
 import { GapsSheet } from '../components/gaps';
 import { WhatIfSheet } from '../components/WhatIfSheet';
 import { PeriodBreakdown, TagBreakdown } from '../components/plan';
@@ -85,6 +90,7 @@ function tallyText(cents: number | null): string {
 type Sheet =
   | { kind: 'day'; date: DateStr }
   | { kind: 'review'; title: string; closeIfEmpty?: boolean }
+  | { kind: 'period-review' }
   | { kind: 'occurrence'; id: string; back: Sheet | null }
   | { kind: 'about-tally' }
   | { kind: 'calendar-key' };
@@ -121,6 +127,9 @@ export function Dashboard() {
   const overdue = overdueEntries(forecast);
   const overdueTitle = overdue.length === 1 ? '1 transaction needs an update' : `${overdue.length} transactions need an update`;
   const review = reviewEntries(forecast);
+  const account = useAccount();
+  // Reviews only where the rhythm can be chosen and saved (see REVIEW_RHYTHM_IN_ACCOUNTS).
+  const rhythm = !account || data.isSample || REVIEW_RHYTHM_IN_ACCOUNTS ? reviewStatus(data, today, forecast) : null;
   const toReview = review.attention.length + review.upcoming.length;
   useEffect(() => {
     if (sheet?.kind === 'review' && sheet.closeIfEmpty && toReview === 0) setSheet(null);
@@ -148,11 +157,19 @@ export function Dashboard() {
           <Icon icon={ChevronRight} size={18} />
         </button>
       ) : (
-        toReview > 0 && (
+        toReview > 0 &&
+        !rhythm?.due && (
           <button type="button" className="button small secondary review-start" onClick={() => setSheet({ kind: 'review', title: 'Review this week' })}>
             Review this week · {toReview}
           </button>
         )
+      )}
+
+      {rhythm?.due && (
+        <button type="button" className="rhythm-entry" onClick={() => setSheet({ kind: 'period-review' })} aria-haspopup="dialog">
+          <span>Your {CADENCE_LABEL[rhythm.cadence].toLowerCase()} review is ready</span>
+          <Icon icon={ChevronRight} size={18} />
+        </button>
       )}
 
       <div className="segmented" role="tablist" aria-label="Dashboard view">
@@ -258,6 +275,7 @@ export function Dashboard() {
       {sheet?.kind === 'day' && (
         <DaySheet forecast={forecast} date={sheet.date} onClose={() => setSheet(null)} onOpen={(id) => openOccurrence(id, sheet)} />
       )}
+      {sheet?.kind === 'period-review' && <PeriodReviewSheet onOpen={(id) => openOccurrence(id, sheet)} onClose={() => setSheet(null)} />}
       {sheet?.kind === 'review' && !(sheet.closeIfEmpty && toReview === 0) && (
         <ReviewSheet
           forecast={forecast}

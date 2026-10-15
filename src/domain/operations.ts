@@ -498,10 +498,16 @@ export function undoBatch(data: AppData, before: AppData, after: AppData, ids: s
 // Review rhythm
 // ---------------------------------------------------------------------------
 
-/** Chooses how often to review. Keeps the latest handling, so a period already reviewed isn't due again. */
+/**
+ * Chooses how often to review. A different rhythm (or turning reviews off)
+ * starts fresh: its own current period is due right away. Choosing the
+ * rhythm already in use changes nothing.
+ */
 export function setReviewCadence(data: AppData, cadence: ReviewCadence): Result {
   if (!REVIEW_CADENCES.includes(cadence)) return fail('Choose how often to review.');
-  return ok({ ...data, review: { ...(data.review ?? DEFAULT_REVIEW), cadence } });
+  const current = data.review ?? DEFAULT_REVIEW;
+  if (current.cadence === cadence) return ok(data);
+  return ok({ ...data, review: { cadence, handledOn: null, outcome: null } });
 }
 
 function handleReview(data: AppData, outcome: 'completed' | 'skipped', clock: Clock): Result {

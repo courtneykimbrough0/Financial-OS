@@ -116,6 +116,8 @@ describe('accounts', () => {
     await user.click(screen.getByRole('link', { name: 'Settings' }));
     expect(await screen.findByText(/saved to your Financial OS account/)).toBeInTheDocument();
     expect(screen.getByText(/Signed in as/)).toHaveTextContent('alex@example.com');
+    // The review rhythm stays device-only until the live Firestore rules accept it (REVIEW_RHYTHM_IN_ACCOUNTS).
+    expect(screen.queryByRole('heading', { name: 'Review rhythm' })).toBeNull();
   });
 
   it('offers to move a forecast saved on this device into a new, empty account', async () => {

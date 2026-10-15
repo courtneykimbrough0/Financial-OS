@@ -139,11 +139,30 @@ describe('completing and skipping', () => {
     expectError(ops.completeReview(caughtUp, clockAt('2026-11-21')), /no review due/);
   });
 
-  it('changing the rhythm keeps the latest review, so it isn’t asked for again right away', () => {
+  it('switching to a different rhythm starts fresh: its own current period is due', () => {
     let d = unwrap(ops.completeReview(withCadence(data(), 'weekly'), clockAt('2026-10-14')));
     d = withCadence(d, 'monthly');
-    expect(status(d, '2026-10-20')).toEqual({ period: ['2026-10-01', '2026-10-31'], due: false, nextDue: '2026-11-01' });
+    expect(d.review).toEqual({ cadence: 'monthly', handledOn: null, outcome: null });
+    expect(status(d, '2026-10-20')).toEqual({ period: ['2026-10-01', '2026-10-31'], due: true, nextDue: '2026-10-01' });
+    // A weekly review done this week doesn't count for payday either.
+    const payday = withCadence(unwrap(ops.completeReview(withCadence(data(), 'weekly'), clockAt('2026-10-16'))), 'payday');
+    expect(status(payday, '2026-10-16')).toEqual({ period: ['2026-10-15', '2026-10-28'], due: true, nextDue: '2026-10-15' });
     expectError(ops.setReviewCadence(d, 'daily' as ReviewCadence), /how often/);
+  });
+
+  it('choosing the rhythm already in use changes nothing', () => {
+    const d = unwrap(ops.completeReview(withCadence(data(), 'weekly'), clockAt('2026-10-14')));
+    expect(withCadence(d, 'weekly')).toBe(d);
+    expect(status(withCadence(d, 'weekly'), '2026-10-17').due).toBe(false);
+  });
+
+  it('turning reviews off removes them; turning them back on starts fresh', () => {
+    let d = unwrap(ops.completeReview(withCadence(data(), 'weekly'), clockAt('2026-10-14')));
+    d = withCadence(d, 'off');
+    expect(status(d, '2026-10-20')).toEqual({ period: null, due: false, nextDue: null });
+    d = withCadence(d, 'weekly');
+    expect(status(d, '2026-10-20')).toEqual({ period: ['2026-10-18', '2026-10-24'], due: true, nextDue: '2026-10-18' });
+    expect(d.review).toEqual({ cadence: 'weekly', handledOn: null, outcome: null });
   });
 });
 

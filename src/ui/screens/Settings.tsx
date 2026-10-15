@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useAccount } from '../../state/account';
+import { REVIEW_RHYTHM_IN_ACCOUNTS } from '../../state/features';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
 import { AccountActions } from '../components/account';
 import { DownloadBackupButton, RestoreBackupButton } from '../components/backup';
 import { Modal } from '../components/common';
+import { ReviewRhythmSettings } from '../components/rhythm';
 import { navigate } from '../router';
 
 /** Account, backups, and sample data, in one place instead of the bottom of every screen. */
@@ -21,6 +23,8 @@ export function Settings() {
       </header>
 
       <AccountActions />
+
+      {(!account || data.isSample || REVIEW_RHYTHM_IN_ACCOUNTS) && <ReviewRhythmSettings />}
 
       <section className="card settings-card" aria-labelledby="settings-data">
         <h2 id="settings-data">Your data</h2>

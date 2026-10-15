@@ -2469,3 +2469,67 @@ button.callout.gap-line:focus-visible {
 .whatif-result .callout {
   margin: 0;
 }
+
+/* ---------- Review rhythm ---------- */
+
+.rhythm-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.rhythm-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  cursor: pointer;
+}
+.rhythm-option.selected {
+  box-shadow: inset 0 0 0 1.5px var(--color-text);
+}
+.rhythm-option input {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
+}
+.rhythm-option input:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+.rhythm-option > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rhythm-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 16px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rhythm-entry:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.review-gap-lines {
+  margin: 0;
+  padding-left: 1.1em;
+}

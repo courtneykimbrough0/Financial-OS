@@ -12,6 +12,7 @@
  */
 import { emptyData } from '../domain/operations';
 import type { AppData } from '../domain/types';
+import { REVIEW_RHYTHM_IN_ACCOUNTS } from './features';
 import { migrate, type SaveResult, type StorageAdapter } from './storage';
 
 /**
@@ -56,6 +57,8 @@ export class CloudAdapter implements StorageAdapter {
     private readonly backend: CloudBackend,
     private readonly userId: string,
     private readonly storage: Storage = window.localStorage,
+    /** Whether saves include the review rhythm; see REVIEW_RHYTHM_IN_ACCOUNTS. */
+    private readonly includeReview: boolean = REVIEW_RHYTHM_IN_ACCOUNTS,
   ) {}
 
   private readCopy(): DeviceCopy | null {
@@ -122,7 +125,9 @@ export class CloudAdapter implements StorageAdapter {
   }
 
   async save(data: AppData, baseRevision: number): Promise<SaveResult> {
-    const { isSample: _sample, ...doc } = data;
+    const { isSample: _sample, review, ...rest } = data;
+    // See REVIEW_RHYTHM_IN_ACCOUNTS: the field stays out of account saves until the live rules accept it.
+    const doc = review && this.includeReview ? { ...rest, review } : rest;
     this.writeCopy({ data: { ...doc, revision: baseRevision }, pending: true });
     let revision: number | null;
     try {
