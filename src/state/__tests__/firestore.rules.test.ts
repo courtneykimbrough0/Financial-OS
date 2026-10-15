@@ -106,6 +106,23 @@ describe('firestore.rules', () => {
     await denied(setDoc(ref(alice, 'alice'), forecast('alice', 1, { onboardingComplete: 'yes' })));
   });
 
+  it('accepts an optional review rhythm of the right shape, and nothing else under that name', async () => {
+    const review = { cadence: 'weekly', handledOn: '2026-10-14', outcome: 'completed' };
+    await allowed(setDoc(ref(alice, 'alice'), forecast('alice', 1, { review })));
+    await allowed(setDoc(ref(alice, 'alice'), forecast('alice', 2, { review: { cadence: 'off', handledOn: null, outcome: null } })));
+    for (const bad of [
+      { ...review, cadence: 'daily' },
+      { ...review, outcome: 'done' },
+      { ...review, handledOn: 20261014 },
+      { ...review, handledOn: '2026-10-14T00:00:00Z' },
+      { cadence: 'weekly', handledOn: null },
+      { ...review, extra: true },
+      'weekly',
+    ]) {
+      await denied(setDoc(ref(alice, 'alice'), forecast('alice', 3, { review: bad })));
+    }
+  });
+
   it('requires the first save to be revision 1', async () => {
     await denied(setDoc(ref(alice, 'alice'), forecast('alice', 2)));
     await denied(setDoc(ref(alice, 'alice'), forecast('alice', 0)));
@@ -150,6 +167,15 @@ describe('firebaseBackend against the rules', () => {
     expect((stored?.data as { records: { description: string }[] }).records.map((r) => r.description)).toEqual(['B']);
     await backend.remove();
     expect(await backend.fetch()).toBeNull();
+  });
+
+  it('saves the review rhythm once chosen, and leaves it out until then', async () => {
+    const backend = firebaseBackend(alice, 'alice');
+    await backend.save(withBill('A'), 0);
+    expect((await backend.fetch())?.data).not.toHaveProperty('review');
+    const review = { cadence: 'payday' as const, handledOn: '2026-10-15', outcome: 'skipped' as const };
+    expect(await backend.save({ ...withBill('A'), review }, 1)).toBe(2);
+    expect((await backend.fetch())?.data).toMatchObject({ review });
   });
 
   it('reports a refused request as an access error, not as offline', async () => {

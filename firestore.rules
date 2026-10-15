@@ -10,11 +10,22 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == userId;
     }
 
+    // The optional review rhythm: three fields, each from a fixed set.
+    function isValidReview(r) {
+      return r is map
+        && r.keys().hasAll(['cadence', 'handledOn', 'outcome'])
+        && r.keys().hasOnly(['cadence', 'handledOn', 'outcome'])
+        && r.cadence in ['off', 'weekly', 'payday', 'monthly']
+        && (r.handledOn == null || (r.handledOn is string && r.handledOn.size() == 10))
+        && (r.outcome == null || r.outcome in ['completed', 'skipped']);
+    }
+
     // The document the app writes: these fields only, with the right types.
     function isValidForecast(userId) {
       let d = request.resource.data;
       return d.keys().hasAll(['userId', 'schemaVersion', 'revision', 'onboardingComplete', 'sources', 'records', 'updatedAt'])
-        && d.keys().hasOnly(['userId', 'schemaVersion', 'revision', 'onboardingComplete', 'sources', 'records', 'updatedAt'])
+        && d.keys().hasOnly(['userId', 'schemaVersion', 'revision', 'onboardingComplete', 'sources', 'records', 'updatedAt', 'review'])
+        && (!('review' in d) || isValidReview(d.review))
         && d.userId == userId
         && d.schemaVersion is int
         && d.revision is int

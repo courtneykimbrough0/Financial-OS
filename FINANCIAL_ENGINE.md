@@ -30,6 +30,12 @@ How stored data becomes the forecast, and which tests prove each behavior. Writt
 
 **What the inputs can't express.** No amount of cash on hand is stored, so the running total measures change from the payday anchor. Upcoming items before the next payday count in cash flow for their period but not in the running total, so a shortfall before payday can't be shown. Once such an item is overdue and still unrecorded, it's carried to payday.
 
+## Review rhythm (`cadence.ts`)
+
+- **Periods.** Weekly: Sunday to Saturday. Monthly: the calendar month. Payday: from the latest main-paycheck date on or before today (the counted entry date, so a late paycheck counts on the day it arrived) to the day before the next one; other income never starts a review.
+- **Due.** A rhythm is off until chosen. The current period is due until a review is completed or skipped on or after its start (`handledOn`); only the latest handling is kept, so periods missed while away never pile up. `nextDue` is the current period's start while it is due, otherwise the next period's start.
+- **Summary** (`reviewSummary`): for a period, the forecast's counted entries split into expected income, expected money out, and recorded; every overdue item; `periodKpis` for cash flow; and the explained timing gaps overlapping the period. Build the forecast through the period's end.
+
 ## Test matrix
 
 Files are in `src/domain/__tests__/`. "EV" is `engine-validation.test.ts`; "SC" is `saved-changes.test.ts`; "spec" is `spec-scenarios.test.ts`.
@@ -58,6 +64,7 @@ Files are in `src/domain/__tests__/`. "EV" is `engine-validation.test.ts`; "SC" 
 | Paying a bill: once only, correction, undo | `forecast` › rejects duplicate completion…, corrects a recorded actual…, undoing a recorded outcome…; SC › marking a bill paid; `history` › paying a bill, correcting a payment, undoing a payment or cancellation |
 | Variance (actual vs. original prediction) | `history` › paying a bill |
 | Batch review: only selected items change, batch undo is exact | `review` (all); `ui/review-sheet` |
+| Review rhythm (periods, due, complete/skip, summary, persistence) | `cadence` (all); `state/review-persistence`; rules test › optional review rhythm |
 | Rescheduling and canceling | `forecast` › overdue, rescheduled, and canceled occurrences; spec › H, I; SC › a moved occurrence |
 | Schedule changes and effective dates | `forecast` › recurring schedule changes; spec › F; SC › D1 |
 | Turning items off and on | `forecast` › deactivating stops future occurrences…; SC › D2, items that are turned off |

@@ -11,7 +11,17 @@
         "onboardingComplete": { "type": "boolean", "description": "Whether guided setup is finished" },
         "sources": { "type": "array", "description": "Recurring income, expense, liability and savings items" },
         "records": { "type": "array", "description": "Dated occurrences: one-time items and recurring ones the user acted on" },
-        "updatedAt": { "type": "timestamp", "description": "Server time of the last save" }
+        "updatedAt": { "type": "timestamp", "description": "Server time of the last save" },
+        "review": {
+          "type": "object",
+          "description": "Optional review rhythm, present once the user chooses one",
+          "properties": {
+            "cadence": { "type": "string", "enum": ["off", "weekly", "payday", "monthly"] },
+            "handledOn": { "type": ["string", "null"], "description": "YYYY-MM-DD the latest review was completed or skipped" },
+            "outcome": { "type": ["string", "null"], "enum": ["completed", "skipped", null] }
+          },
+          "required": ["cadence", "handledOn", "outcome"]
+        }
       },
       "required": ["userId", "schemaVersion", "revision", "onboardingComplete", "sources", "records", "updatedAt"]
     }

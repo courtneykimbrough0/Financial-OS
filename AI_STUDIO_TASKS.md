@@ -31,6 +31,8 @@ Firebase project: `financial-os-505002`. Firestore database: `ai-studio-financia
 - [x] Checked `(default)` database: Verified that project `financial-os-505002` does not have a `(default)` database (returned `5 NOT_FOUND`); only the named database exists.
 - [ ] Confirm by signing in, adding an item, and reloading: the item is still there.
 
+- [ ] **Deploy again before the review rhythm appears in the app.** This version of `firestore.rules` accepts the optional `review` field. The app writes it only once someone chooses a review rhythm, so saves keep working until then, but a rhythm can't be saved to an account until these rules are live.
+
 ## 3. Turn on Google sign-in
 
 - [x] Firebase console → Authentication → Sign-in method: enable **Google**. (Done by AI Studio.)

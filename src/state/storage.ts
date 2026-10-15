@@ -6,7 +6,7 @@
  */
 import { isValidDateStr } from '../domain/dates';
 import { emptyData } from '../domain/operations';
-import { LIABILITY_TYPES, type AppData, type OccurrenceRecord, type RecurringSource, type TransactionKind } from '../domain/types';
+import { LIABILITY_TYPES, REVIEW_CADENCES, type AppData, type OccurrenceRecord, type RecurringSource, type ReviewCadence, type ReviewSettings, type TransactionKind } from '../domain/types';
 
 export type SaveResult =
   | { ok: true; revision: number }
@@ -72,6 +72,16 @@ function isRecord(r: unknown): r is OccurrenceRecord {
   );
 }
 
+/** A saved review rhythm, if it is well formed; anything else is dropped rather than failing the whole load. */
+function readReview(r: unknown): ReviewSettings | undefined {
+  if (!r || typeof r !== 'object') return undefined;
+  const v = r as Partial<ReviewSettings>;
+  if (!REVIEW_CADENCES.includes(v.cadence as ReviewCadence)) return undefined;
+  const handledOn = isValidDateStr(v.handledOn) ? v.handledOn : null;
+  const outcome = v.outcome === 'completed' || v.outcome === 'skipped' ? v.outcome : null;
+  return { cadence: v.cadence!, handledOn, outcome: handledOn ? outcome : null };
+}
+
 /** Validates and upgrades parsed JSON. Throws if the document is unusable. */
 export function migrate(raw: unknown): AppData {
   if (!raw || typeof raw !== 'object') throw new Error('Saved data is not an object.');
@@ -97,6 +107,7 @@ export function migrate(raw: unknown): AppData {
       endDate: s.endDate ?? null,
     })),
     records: records.map((r) => ({ ...r, kind: upgradeKind(r.kind), tags: Array.isArray(r.tags) ? r.tags : [] })),
+    ...(readReview(doc.review) ? { review: readReview(doc.review) } : {}),
   };
 }
 

@@ -14,9 +14,10 @@
  */
 import { isValidDateStr, type DateStr } from './dates';
 import type { Cents } from './money';
+import { DEFAULT_REVIEW, reviewStatus } from './cadence';
 import { findOccurrence } from './occurrences';
 import { validateRule } from './recurrence';
-import { LIABILITY_TYPES, type AppData, type LiabilityType, type OccurrenceRecord, type RecurrenceRule, type RecurringSource, type TransactionKind } from './types';
+import { LIABILITY_TYPES, REVIEW_CADENCES, type AppData, type ReviewCadence, type LiabilityType, type OccurrenceRecord, type RecurrenceRule, type RecurringSource, type TransactionKind } from './types';
 
 export type Result = { ok: true; data: AppData } | { ok: false; error: string };
 
@@ -491,6 +492,31 @@ export function undoBatch(data: AppData, before: AppData, after: AppData, ids: s
   const previous = before.records.filter((r) => selected.has(r.id));
   const kept = data.records.filter((r) => !selected.has(r.id));
   return ok({ ...data, records: [...kept, ...previous] });
+}
+
+// ---------------------------------------------------------------------------
+// Review rhythm
+// ---------------------------------------------------------------------------
+
+/** Chooses how often to review. Keeps the latest handling, so a period already reviewed isn't due again. */
+export function setReviewCadence(data: AppData, cadence: ReviewCadence): Result {
+  if (!REVIEW_CADENCES.includes(cadence)) return fail('Choose how often to review.');
+  return ok({ ...data, review: { ...(data.review ?? DEFAULT_REVIEW), cadence } });
+}
+
+function handleReview(data: AppData, outcome: 'completed' | 'skipped', clock: Clock): Result {
+  if (!reviewStatus(data, clock.today).due) return fail('There’s no review due right now.');
+  return ok({ ...data, review: { ...(data.review ?? DEFAULT_REVIEW), handledOn: clock.today, outcome } });
+}
+
+/** Marks the current review done until the next period. Changes nothing else. */
+export function completeReview(data: AppData, clock: Clock): Result {
+  return handleReview(data, 'completed', clock);
+}
+
+/** Skips the current review; the next period's review is due as usual. Changes nothing else. */
+export function skipReview(data: AppData, clock: Clock): Result {
+  return handleReview(data, 'skipped', clock);
 }
 
 export function completeOnboarding(data: AppData): Result {
