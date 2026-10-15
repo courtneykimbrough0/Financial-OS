@@ -7,6 +7,29 @@ import { CloudAdapter } from '../cloud';
 import { LocalStorageAdapter, migrate } from '../storage';
 import { FakeServer } from './fake-server';
 
+/** A separate device's storage. */
+class MemoryStorage implements Storage {
+  private m = new Map<string, string>();
+  get length() {
+    return this.m.size;
+  }
+  clear() {
+    this.m.clear();
+  }
+  getItem(k: string) {
+    return this.m.get(k) ?? null;
+  }
+  key(i: number) {
+    return [...this.m.keys()][i] ?? null;
+  }
+  removeItem(k: string) {
+    this.m.delete(k);
+  }
+  setItem(k: string, v: string) {
+    this.m.set(k, v);
+  }
+}
+
 const clock = { today: '2026-10-14', now: '2026-10-14T12:00:00Z' };
 const unwrap = (r: { ok: true; data: AppData } | { ok: false; error: string }) => {
   if (!r.ok) throw new Error(r.error);
@@ -54,6 +77,40 @@ describe('the review rhythm is kept', () => {
 
   it('in a backup file', () => {
     expect(readBackup(createBackup(reviewed()).text).data.review).toEqual(reviewed().review);
+  });
+});
+
+describe('accounts while the rhythm is left out of account saves', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('a rhythm already in the account (saved by a newer version) survives saves from a device that leaves it out', async () => {
+    const server = new FakeServer();
+    const newer = new CloudAdapter(server, 'user-1', localStorage, true);
+    await newer.load();
+    await newer.save(reviewed(), 0);
+    expect((server.row!.data as AppData).review).toEqual(reviewed().review);
+
+    // An older version on another device (field left out) loads and changes something unrelated.
+    const otherStorage = new MemoryStorage();
+    const older = new CloudAdapter(server, 'user-1', otherStorage);
+    const loaded = await older.load();
+    const changed = unwrap(addOneTime(loaded, { kind: 'bill', description: 'Phone', amountCents: 6000, date: '2026-10-25' }, clock, 'phone'));
+    expect(await older.save(changed, loaded.revision)).toEqual({ ok: true, revision: 2 });
+    expect((server.row!.data as AppData).review).toEqual(reviewed().review);
+    expect((server.row!.data as AppData).records.map((r) => r.description)).toEqual(['Rent', 'Phone']);
+  });
+
+  it('a rhythm that only exists on this device (moved in, or from a restored backup) stays out of the account', async () => {
+    const server = new FakeServer();
+    const adapter = new CloudAdapter(server, 'user-1', localStorage);
+    await adapter.load();
+    expect(await adapter.save(reviewed(), 0)).toEqual({ ok: true, revision: 1 });
+    expect(server.row!.data).not.toHaveProperty('review');
+    // Reopening shows the account as saved: financial data intact, no rhythm.
+    const reopened = await new CloudAdapter(server, 'user-1', localStorage).load();
+    expect(reopened.records.map((r) => r.description)).toEqual(['Rent']);
+    expect(reopened.review).toBeUndefined();
+    expect(reopened.revision).toBe(1);
   });
 });
 

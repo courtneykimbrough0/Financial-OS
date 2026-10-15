@@ -106,6 +106,9 @@ describe('the review', () => {
     expect(sheet).toHaveTextContent('Oct 11 – 17');
     expect(within(sheet).getByRole('region', { name: 'Expected income' })).toHaveTextContent('PaycheckExpected today+$1,800.00');
     expect(within(sheet).getByRole('region', { name: 'Recorded' })).toHaveTextContent('None.');
+    // Nothing goes out this week: an actual zero, without a minus sign.
+    expect(sheet).toHaveTextContent('Money out$0.00Cash flow+$1,800.00');
+    expect(sheet).not.toHaveTextContent('−$0.00');
     expect(sheet).toHaveTextContent('Marking the review done doesn’t record any payments or income.');
     await user.click(within(sheet).getByRole('button', { name: 'Mark review done' }));
     expect(screen.queryByRole('dialog')).toBeNull();

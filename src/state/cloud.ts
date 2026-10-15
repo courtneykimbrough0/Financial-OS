@@ -61,6 +61,9 @@ export class CloudAdapter implements StorageAdapter {
     private readonly includeReview: boolean = REVIEW_RHYTHM_IN_ACCOUNTS,
   ) {}
 
+  /** The review rhythm the account had when last loaded; kept on saves while `includeReview` is off. */
+  private accountReview: AppData['review'];
+
   private readCopy(): DeviceCopy | null {
     try {
       const text = this.storage.getItem(cloudCacheKey(this.userId));
@@ -98,6 +101,7 @@ export class CloudAdapter implements StorageAdapter {
       // Offline: open with the device copy. Its pending change is sent once the connection returns.
       if (copy) {
         this.pendingAfterLoad = copy.pending;
+        this.accountReview = copy.data.review;
         return copy.data;
       }
       throw err;
@@ -108,6 +112,7 @@ export class CloudAdapter implements StorageAdapter {
       if (copy.data.revision === remoteRevision) {
         // Nothing changed elsewhere since this device's change: send it now.
         this.pendingAfterLoad = true;
+        this.accountReview = remote ? migrate(remote.data).review : undefined;
         return copy.data;
       }
       this.setAside(copy.data);
@@ -115,6 +120,7 @@ export class CloudAdapter implements StorageAdapter {
 
     const data: AppData = remote ? { ...migrate(remote.data), revision: remoteRevision } : emptyData();
     this.pendingAfterLoad = false;
+    this.accountReview = data.review;
     if (remote) this.writeCopy({ data, pending: false });
     else this.storage.removeItem(cloudCacheKey(this.userId));
     return data;
@@ -126,8 +132,11 @@ export class CloudAdapter implements StorageAdapter {
 
   async save(data: AppData, baseRevision: number): Promise<SaveResult> {
     const { isSample: _sample, review, ...rest } = data;
-    // See REVIEW_RHYTHM_IN_ACCOUNTS: the field stays out of account saves until the live rules accept it.
-    const doc = review && this.includeReview ? { ...rest, review } : rest;
+    // See REVIEW_RHYTHM_IN_ACCOUNTS. While it is off, a rhythm from this device stays out of account saves
+    // (the live rules may refuse the field), but one the account already had is saved back unchanged
+    // (the rules accepted it, and leaving it out would erase it).
+    const kept = this.includeReview ? review : this.accountReview;
+    const doc = kept ? { ...rest, review: kept } : rest;
     this.writeCopy({ data: { ...doc, revision: baseRevision }, pending: true });
     let revision: number | null;
     try {

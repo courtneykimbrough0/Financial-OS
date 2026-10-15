@@ -35,6 +35,7 @@ Firebase project: `financial-os-505002`. Firestore database: `ai-studio-financia
   1. Deploy `firestore.rules` to the named database (only the rules).
   2. Check it: sign in, open the browser console on the app and confirm a normal change still saves; then in the Firebase console's Rules playground, simulate an update to `financialData/{your uid}` that includes `review: { cadence: 'weekly', handledOn: null, outcome: null }` and confirm it is allowed.
   3. Set `REVIEW_RHYTHM_IN_ACCOUNTS` to `true`, run the checks in AGENTS.md section H, and publish.
+  Rhythms chosen on a device before this aren't in the account; people choose one again once they're signed in.
 
 ## 3. Turn on Google sign-in
 

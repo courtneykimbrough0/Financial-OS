@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { reviewStatus, reviewSummary } from '../../domain/cadence';
 import { formatMedium, formatRange, formatShort } from '../../domain/dates';
 import { buildForecast, type ForecastEntry } from '../../domain/forecast';
-import { formatMoney, formatSignedMoney } from '../../domain/money';
+import { formatMoney, formatMoneyIn, formatMoneyOut, formatSignedMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { doneVerb } from '../../domain/types';
 import { useStore } from '../../state/store';
@@ -48,11 +48,11 @@ export function PeriodReviewSheet({ onOpen, onClose }: { onOpen: (occurrenceId: 
         <dl className="sheet-stats">
           <div>
             <dt>Money in</dt>
-            <dd className="amount-in">+{formatMoney(cashFlow.incomeCents)}</dd>
+            <dd className="amount-in">{formatMoneyIn(cashFlow.incomeCents)}</dd>
           </div>
           <div>
             <dt>Money out</dt>
-            <dd className="amount-out">−{formatMoney(cashFlow.outflowCents)}</dd>
+            <dd className="amount-out">{formatMoneyOut(cashFlow.outflowCents)}</dd>
           </div>
           <div>
             <dt>Cash flow</dt>

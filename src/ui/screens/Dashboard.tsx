@@ -47,7 +47,7 @@ import {
   type LowPoint,
   type NegativeStretch,
 } from '../../domain/forecast';
-import { formatCompact, formatMoney, formatSignedMoney } from '../../domain/money';
+import { formatCompact, formatMoney, formatMoneyIn, formatMoneyOut, formatSignedMoney } from '../../domain/money';
 import { periodPlan, type PeriodPlan } from '../../domain/plan';
 import { useStore } from '../../state/store';
 import { EmptyState, FlowAmount, Icon, KindAvatar, KindTag, Modal, SectionLabel, StatusBadge } from '../components/common';
@@ -475,7 +475,7 @@ function CashFlowHero({
           {formatSignedMoney(plan.cashFlowCents)}
         </p>
         <p className="hero-sub">
-          <span className="amount-in">+{formatMoney(plan.incomeCents)}</span> in · <span className="amount-out">−{formatMoney(plan.expensesCents)}</span> out
+          <span className="amount-in">{formatMoneyIn(plan.incomeCents)}</span> in · <span className="amount-out">{formatMoneyOut(plan.expensesCents)}</span> out
         </p>
         {payday && (
           <div className="hero-stat">
@@ -669,11 +669,11 @@ function WeekList({ forecast, start, end, lowDate, onDay }: { forecast: Forecast
                   <span className="week-nums">
                     <span>
                       <span className="sr-only">Income </span>
-                      <span className="amount amount-in">+{formatMoney(w.incomeCents)}</span>
+                      <span className="amount amount-in">{formatMoneyIn(w.incomeCents)}</span>
                     </span>
                     <span>
                       <span className="sr-only">Expenses </span>
-                      <span className="amount amount-out">−{formatMoney(w.outflowCents)}</span>
+                      <span className="amount amount-out">{formatMoneyOut(w.outflowCents)}</span>
                     </span>
                     <span className={w.netCents < 0 ? 'week-net negative' : 'week-net'}>Net {formatSignedMoney(w.netCents)}</span>
                     <span className={negative ? 'week-tally negative' : 'week-tally'}>
