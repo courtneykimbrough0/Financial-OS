@@ -1,7 +1,8 @@
 import { AlertCircle, Download, RefreshCw, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { formatMedium, todayLocal } from '../../domain/dates';
-import { createBackup, readBackup, type ParsedBackup } from '../../state/backup';
+import * as ops from '../../domain/operations';
+import { countItems, createBackup, readBackup, type ParsedBackup } from '../../state/backup';
 import { useStore } from '../../state/store';
 import { navigate } from '../router';
 import { Icon, Modal, useToast } from './common';
@@ -16,6 +17,41 @@ export function downloadFile(filename: string, text: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const itemsText = (n: number) => (n === 1 ? '1 item' : `${n} items`);
+
+/**
+ * Before anything replaces or erases the person's data: how much is there now,
+ * and a button to download it first. Shows nothing when there's nothing to lose.
+ */
+function KeepACopy() {
+  const { data } = useStore();
+  const [saved, setSaved] = useState<string | null>(null);
+  const count = countItems(data);
+  if (count === 0) return null;
+  return (
+    <div className="callout callout-info stack-sm keep-copy">
+      <p>
+        You have {itemsText(count)} now. To keep a copy, download a backup first. You can restore it later.
+      </p>
+      {saved ? (
+        <p role="status">Backup downloaded: {saved}</p>
+      ) : (
+        <button
+          type="button"
+          className="button small secondary"
+          onClick={() => {
+            const { filename, text } = createBackup(data);
+            downloadFile(filename, text);
+            setSaved(filename);
+          }}
+        >
+          <Icon icon={Download} size={16} /> Download a backup of your data
+        </button>
+      )}
+    </div>
+  );
 }
 
 export function DownloadBackupButton() {
@@ -78,6 +114,7 @@ export function RestoreBackupButton({ label = 'Restore from backup' }: { label?:
               {pending.exportedAt ? `, saved ${formatMedium(todayLocal(new Date(pending.exportedAt)))}` : ''}.
             </p>
             <p>Restoring replaces everything currently in the app with the backup.</p>
+            <KeepACopy />
             <div className="form-actions">
               <button type="button" className="button secondary" onClick={() => setPending(null)} data-autofocus>
                 Cancel
@@ -98,6 +135,51 @@ export function RestoreBackupButton({ label = 'Restore from backup' }: { label?:
             <div className="form-actions">
               <button type="button" className="button primary" onClick={() => setError(null)} data-autofocus>
                 OK
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+/**
+ * Start over: erase everything entered and go back to setup, after an
+ * explicit confirmation that offers a backup first. Cancel changes nothing.
+ */
+export function StartOverButton() {
+  const { data, run } = useStore();
+  const toast = useToast();
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const count = countItems(data);
+  const erase = () => {
+    const r = run((d) => ops.startOver(d));
+    if (!r.ok) return setError(r.error);
+    setConfirming(false);
+    toast('Your data was erased. Set up again whenever you’re ready.');
+    navigate('onboarding');
+  };
+  return (
+    <>
+      <button type="button" className="button small danger-link" onClick={() => setConfirming(true)}>
+        Start over
+      </button>
+      {confirming && (
+        <Modal title="Start over?" onClose={() => setConfirming(false)}>
+          <div className="stack">
+            <p>
+              This erases {count === 0 ? 'your setup' : `all ${itemsText(count)} you’ve entered, with everything recorded for them,`} and takes you back to setup. Your review rhythm stays.
+            </p>
+            <KeepACopy />
+            {error && <p className="form-error">{error}</p>}
+            <div className="form-actions">
+              <button type="button" className="button secondary" onClick={() => setConfirming(false)} data-autofocus>
+                Cancel
+              </button>
+              <button type="button" className="button danger" onClick={erase}>
+                Erase and start over
               </button>
             </div>
           </div>

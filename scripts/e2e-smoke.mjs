@@ -565,6 +565,47 @@ try {
   assert.match(await scenario.innerText(), /No changes yet\./);
   await page.keyboard.press('Escape');
 
+  step('start over: back up first, erase, quick setup to the review, then recover from the backup');
+  await page.goto(`${BASE}#/settings`);
+  const dataBeforeReset = JSON.parse(await page.evaluate(() => localStorage.getItem('financial-os:data')));
+  await page.getByRole('button', { name: 'Start over' }).click();
+  const startOver = page.getByRole('dialog', { name: 'Start over?' });
+  assert.match(await startOver.innerText(), /This erases all 3 items you’ve entered, with everything recorded for them, and takes you back to setup\. Your review rhythm stays\./);
+  const [resetDownload] = await Promise.all([page.waitForEvent('download'), startOver.getByRole('button', { name: 'Download a backup of your data' }).click()]);
+  const resetBackupPath = `${SHOTS}before-start-over.json`;
+  await resetDownload.saveAs(resetBackupPath);
+  await startOver.getByText('Backup downloaded: financial-os-backup-2026-10-16.json').waitFor();
+  await shot('14-start-over');
+  await startOver.getByRole('button', { name: 'Erase and start over' }).click();
+  await page.getByRole('heading', { name: 'See your cash flow ahead of time' }).waitFor();
+  assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('financial-os:data'))).sources, []);
+  // The shortest useful setup: one income, then straight to the review.
+  await page.getByRole('button', { name: 'Get started' }).click();
+  await page.getByRole('button', { name: 'Add income' }).click();
+  const quickIncome = page.getByRole('dialog', { name: 'Add income' });
+  await quickIncome.getByLabel('What is this income?').fill('Paycheck');
+  await quickIncome.getByLabel('Amount you expect to receive').fill('1000');
+  await quickIncome.getByLabel('How often?').selectOption('biweekly');
+  await quickIncome.getByLabel('Next payment date').fill('2026-10-23');
+  await quickIncome.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Skip to review' }).focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('heading', { name: 'Check everything over' }).waitFor();
+  assert.match(await page.locator('.review-hero').innerText(), /Oct 23\s*in 7 days/);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  // Changed their mind: reload to the welcome screen and restore the backup taken before starting over.
+  await page.reload();
+  await page.getByRole('heading', { name: 'See your cash flow ahead of time' }).waitFor();
+  await page.locator('input[aria-label="Backup file"]').setInputFiles(resetBackupPath);
+  const restoreAfterReset = page.getByRole('dialog', { name: 'Restore this backup?' });
+  assert.match(await restoreAfterReset.innerText(), /This backup has 3 items[\s\S]*You have 1 item now/);
+  await restoreAfterReset.getByRole('button', { name: 'Replace with backup' }).click();
+  await page.getByText('Backup restored.').waitFor();
+  const dataAfterRestore = JSON.parse(await page.evaluate(() => localStorage.getItem('financial-os:data')));
+  assert.deepEqual(dataAfterRestore.sources, dataBeforeReset.sources);
+  assert.deepEqual(dataAfterRestore.records, dataBeforeReset.records);
+
   assert.deepEqual(errors, [], `Console errors: ${errors.join('\n')}`);
   console.log('\nE2E smoke test passed.');
 } catch (err) {

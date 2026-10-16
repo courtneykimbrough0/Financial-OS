@@ -300,7 +300,7 @@ export function Dashboard() {
               The <strong>running total</strong> starts at $0 on {formatMedium(forecast.anchor)}, the day before your next expected payday ({formatMedium(forecast.forecastStart)}), and adds money in and subtracts money out
               day by day. It shows timing, separate from your bank balance. Below $0 means scheduled money out runs ahead of money in by that amount.
             </p>
-            <p className="hint">Days on or before {formatMedium(forecast.anchor)} show “—” in place of a running total.</p>
+            <p className="hint">Days on or before {formatMedium(forecast.anchor)} show “—” in place of a running total. Payments due before your next payday count in that period’s cash flow but aren’t in the running total, because the app doesn’t know how much money you have now.</p>
           </div>
         </Modal>
       )}

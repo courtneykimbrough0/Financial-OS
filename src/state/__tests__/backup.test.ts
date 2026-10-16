@@ -37,3 +37,28 @@ describe('backups', () => {
     expect(() => readBackup(JSON.stringify({ format: BACKUP_FORMAT, data: { schemaVersion: 2, sources: [{ id: 1 }], records: [] } }))).toThrow(/damaged/);
   });
 });
+
+describe('a backup reproduces the forecast', () => {
+  it('keeps schedule changes, recorded outcomes, one-time items, the review rhythm and estimate dismissals', async () => {
+    const { analyzeEstimate, dismissEstimate } = await import('../../domain/estimates');
+    const { buildForecast } = await import('../../domain/forecast');
+    const ops = await import('../../domain/operations');
+    const c = (today: string) => ({ today, now: `${today}T12:00:00Z` });
+    const u = (r: ReturnType<typeof ops.addSource>) => {
+      if (!r.ok) throw new Error(r.error);
+      return r.data;
+    };
+    let d = u(ops.addSource(emptyData(), { kind: 'income', description: 'Pay', amountCents: 100000, startDate: '2026-06-05', rule: { type: 'biweekly' } }, c('2026-06-01'), 'pay'));
+    d = u(ops.addSource(d, { kind: 'bill', description: 'Phone', amountCents: 6000, startDate: '2026-07-25', rule: { type: 'monthly' } }, c('2026-07-01'), 'phone'));
+    for (const date of ['2026-07-25', '2026-08-25', '2026-09-25']) d = u(ops.recordActual(d, `phone@${date}`, { amountCents: 6500, date }, c('2026-10-16')));
+    d = u(dismissEstimate(d, analyzeEstimate(d, 'phone', '2026-10-16').suggestion!, c('2026-10-16')));
+    d = u(ops.changeSourceSchedule(d, 'pay', { startDate: '2026-10-30', amountCents: 110000, rule: { type: 'biweekly' } }, c('2026-10-16')));
+    d = u(ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: 8000, date: '2026-11-03' }, c('2026-10-16'), 'rep'));
+    d = { ...u(ops.setReviewCadence(d, 'payday')), onboardingComplete: true, revision: 12 };
+    const restored = readBackup(createBackup(d).text).data;
+    expect(restored).toEqual(d);
+    expect(restored.sources.find((s) => s.id === 'phone')!.estimateDismissal).toEqual({ currentCents: 6000, proposedCents: 6500, through: '2026-09-25' });
+    expect(restored.review).toEqual({ cadence: 'payday', handledOn: null, outcome: null });
+    expect(buildForecast(restored, '2026-10-16')).toEqual(buildForecast(d, '2026-10-16'));
+  });
+});

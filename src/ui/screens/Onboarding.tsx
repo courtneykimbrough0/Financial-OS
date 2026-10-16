@@ -1,7 +1,7 @@
 import { AlertCircle, Banknote, CalendarClock, ChevronRight, Info, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { diffDays, formatMedium, formatShort } from '../../domain/dates';
-import { buildForecast, dailyTimeline, explainTimingGaps, lowestPoint, paycheckCycles } from '../../domain/forecast';
+import { buildForecast, dailyTimeline, entriesInRange, explainTimingGaps, lowestPoint, paycheckCycles } from '../../domain/forecast';
 import { formatMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { periodPlan } from '../../domain/plan';
@@ -43,19 +43,19 @@ const STEPS: StepDef[] = [
     name: 'Subscriptions',
     kinds: ['subscription'],
     title: 'What subscriptions renew?',
-    body: 'Streaming services, apps, and memberships that charge you on a schedule.',
+    body: 'Streaming services, apps, and memberships that charge you on a schedule. Optional: you can add them later.',
   },
   {
     name: 'Liabilities',
     kinds: ['liability'],
     title: 'What do you pay toward debts?',
-    body: 'Regular payments on a card, loan, or line of credit.',
+    body: 'Regular payments on a card, loan, or line of credit. Skip this if you have none.',
   },
   {
     name: 'Savings',
     kinds: ['savings'],
     title: 'What do you set aside?',
-    body: 'Money you move into savings on a schedule. It counts as an expense, so cash flow shows what’s left after it.',
+    body: 'Money you move into savings on a schedule. It counts as an expense, so cash flow shows what’s left after it. Optional: you can add it later.',
   },
   { name: 'Review', kinds: [], title: 'Check everything over', body: 'Tap anything to change it before you start.' },
 ];
@@ -268,6 +268,9 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
   const low = cycle ? lowestPoint(dailyTimeline(forecast, cycle.start, cycle.end)) : null;
   const payday = forecast.forecastStart;
   const days = payday ? diffDays(today, payday) : 0;
+  // Payments due before the running total starts: in cash flow, not in the running total.
+  const beforePayday = forecast.anchor && forecast.anchor >= today ? entriesInRange(forecast, today, forecast.anchor).filter((e) => e.counts && e.signedCents < 0) : [];
+  const beforeTotal = beforePayday.reduce((n, e) => n + e.amountCents, 0);
   const groups: [string, TransactionKind[]][] = [
     ['Income', ['income']],
     ['Bills', ['bill']],
@@ -317,6 +320,15 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
         </section>
       )}
 
+      {beforePayday.length > 0 && forecast.anchor && (
+        <p className="callout callout-info" role="note">
+          <Icon icon={Info} size={16} />
+          <span>
+            {beforePayday.length === 1 ? '1 payment' : `${beforePayday.length} payments`} ({formatMoney(beforeTotal)}) {beforePayday.length === 1 ? 'is' : 'are'} due before your next payday. The running total starts at $0 on {formatShort(forecast.anchor)}, so it doesn’t include {beforePayday.length === 1 ? 'it' : 'them'}. Make sure the money you have now covers {beforePayday.length === 1 ? 'it' : 'them'}.
+          </span>
+        </p>
+      )}
+
       {payday && <TimingGapsBanner gaps={explainTimingGaps(forecast)} from={payday} horizonEnd={forecast.horizonEnd} />}
 
       {plan && <PeriodBreakdown plan={plan} title="First pay period" />}
@@ -327,9 +339,9 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
         // One-time expenses are added on the Bills step, so they're listed there.
         const once = label === 'Income' ? oneTimes(data.records, true) : label === 'Bills' ? oneTimes(data.records, false) : [];
         return (
-          <section key={label} className="stack-sm" aria-labelledby={`review-${label}`}>
+          <section key={label} className="stack-sm" aria-labelledby={`review-${kinds[0]}`}>
             <SectionLabel
-              id={`review-${label}`}
+              id={`review-${kinds[0]}`}
               action={
                 <button type="button" className="button small link" onClick={() => goTo(STEP_OF[kinds[0]!])}>
                   <Icon icon={Plus} size={16} /> Add
@@ -365,6 +377,7 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
             <p>
               The running total starts at $0 on {formatMedium(forecast.anchor)}, the day before your next expected payday ({formatMedium(payday)}), and adds money in and subtracts money out day by day.
             </p>
+            <p>Anything due before then isn’t in the running total, because the app doesn’t know how much money you have now.</p>
             <p>It shows timing, separate from your bank balance.</p>
           </div>
         </Modal>
@@ -442,12 +455,12 @@ export function Onboarding() {
         <div className="stack">
           <ul className="card list-card checklist">
             <li>Add when you expect to get paid</li>
-            <li>Add your bills, subscriptions, loan payments, and savings</li>
+            <li>Add your main bills and loan payments. Subscriptions and savings can wait</li>
             <li>See your cash flow for each pay period and your running total day by day</li>
             <li>Record what actually happens, and the forecast updates</li>
           </ul>
           <p className="hint center">
-            Takes about 3 minutes. You enter everything yourself, and it’s saved {account ? 'to your account' : 'only on this device'}.
+            Your income is all you need to see a forecast. You enter everything yourself, and it’s saved {account ? 'to your account' : 'only on this device'}.
           </p>
           <button
             type="button"
@@ -477,6 +490,11 @@ export function Onboarding() {
         {step > 0 && (
           <button type="button" className="button secondary" onClick={() => setStep(step - 1)}>
             Back
+          </button>
+        )}
+        {step > STEP_OF.income && step < REVIEW && hasIncome && (
+          <button type="button" className="button link" onClick={() => setStep(REVIEW)}>
+            Skip to review
           </button>
         )}
         {step < REVIEW ? (

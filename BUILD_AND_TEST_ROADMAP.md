@@ -16,7 +16,7 @@ Each step lists:
 
 The product owner's architecture decisions are in [AGENTS.md](AGENTS.md) section C1: Supabase (PostgreSQL, and later authentication) for data, Vercel for hosting, an online-first PWA with no offline synchronization, and authentication deferred. Firebase/Firestore, Cloud Run hosting and offline synchronization are legacy, kept running until the migration removes them. Work in this order:
 
-1. Finish the core financial features: Steps 6–9.
+1. Finish the core financial features: Steps 6–9 (Step 8 is manual-first; imports are deferred).
 2. Finalize and verify the data architecture: Step 10a.
 3. Move persistence to Supabase: Step 10b.
 4. Remove offline synchronization: Step 10c.
@@ -174,25 +174,27 @@ Then validate with real users (Step 11) and keep release readiness (Step 12).
 **Exit criteria**
 - Scenarios use one engine, leave the baseline untouched, and surface every shortfall along the way.
 
-## Step 8: Improve onboarding, imports, and recovery
+## Step 8: Manual-first onboarding and recovery
+
+Revised (October 2026): the priority is a fast first forecast and safe recovery, not imports.
 
 **Inspect**
-- Guided setup (`Onboarding.tsx`), backup and restore (`backup.ts`), moving device data into an account (`DeviceDataOffer`; legacy Firebase accounts), and sample data (`mode.tsx`).
+- Guided setup (`Onboarding.tsx`), the item forms (`forms.tsx`), backup and restore (`backup.ts`, `components/backup.tsx`), and sample data (`mode.tsx`).
 
 **Build or correct**
-- Safe manual entry first. Optionally, spreadsheet import and user-initiated statement parsing with a preview step: validation, duplicate detection, recurring suggestions, transfers, refunds, card payments, and ambiguous items flagged for review.
-- Import batches can be cancelled before applying and undone after.
-- A safe reset and rebuild, with a backup offered first.
+- The shortest path to a useful forecast: the main income is enough; bills and debt payments next; subscriptions, savings and other details can wait. No exhaustive profile, history, balances or categories are required, and nothing missing is invented.
+- Say clearly that payments before the next payday aren't in the running total.
+- Restore shows what will be replaced and offers a backup of the current data first; a refused or canceled restore changes nothing.
+- A safe start-over: explicit confirmation, a backup offered first.
+
+**Deferred** (not planned until the product owner asks): spreadsheet import, statement or PDF parsing, automatic categorization, recurring-rule discovery from imported history, and import batches. No bank connections or Plaid, ever (AGENTS.md section E).
 
 **Tests**
-- Invalid files are rejected with plain messages; nothing is applied without confirmation.
-- Uncertain items are never created as confirmed records; missing dates are never invented.
-- Duplicates within a file and against existing data are detected.
-- Undoing an import removes exactly that batch.
-- Backup, restore, reset, and rebuild round trips.
+- Minimum setup to a forecast with exact running totals; skipped optional steps; corrections; main paycheck choice; timing gaps.
+- Backup round trips that reproduce the forecast, including review rhythm and estimate dismissals; damaged files; cancel; replacement with a copy offered; start over and recovery.
 
 **Exit criteria**
-- A person can get to a useful forecast quickly, and any import or reset can be reversed.
+- A person can reach a useful forecast with only their income (and ideally main bills), add the rest later, and recover from any replacement or reset with a backup.
 
 ## Step 9: Evaluate optional allocations and purpose-based accounts
 
@@ -314,6 +316,8 @@ Replaces the earlier plan to validate Firebase persistence and offline behavior.
   - Follow-ups: suggestions appear only on the item's card (no list across items, by design); the separate buffered planning estimate this step describes isn't built (suggestions only round up to a dollar); variable income.
 - **Step 7: complete with follow-ups.** Interface: **Explore a scenario** on the dashboard opens a sheet to add, edit and remove several changes (from existing payments where possible), compare the scenario with the forecast, see the first new or deeper shortfall even when the ending improves, and compare low, expected and high income. Nothing is saved; there's no way to apply a scenario. Tests: `ui/scenario-sheet`, an end-to-end step. Foundation: `evaluateScenario` applies several changes (one-time income and expenses, extra and higher liability payments, savings, moved dates, changed amounts, hypothetical recurring income) to a copy with the ordinary operations and compares it with the plan through `buildForecast`: assumptions, cash flow with hypothetical income separate, lowest and ending running totals, gaps with recovery dates, differences, and new or deeper shortfalls even when the ending improves. Changed paydays and moves before payday aren't compared. `evaluateIncomeCases` gives low, expected and high cases from amounts the person supplies. Tests: `scenarios`.
   - Follow-ups: applying a scenario to the plan; saving scenarios; scenarios can't change an item's schedule (only its amount from a date), turn an item off, or change a recurring item that already has a later change set; one-time liability items exist only inside scenarios.
+- **Step 8: complete (revised to manual-first).** Setup now says which steps are optional, offers **Skip to review** once there's income, and the review says when payments fall before the running total starts. Restore shows how many items will be replaced and offers a backup of the current data first. **Start over** (Settings) erases everything after confirmation, keeps the review rhythm, and offers a backup first (`startOver`). Fixed: the review's section labels used ids with spaces, so "Liability payments" had no accessible name. Imports are deferred. Tests: `onboarding`, `backup-restore`, `start-over`, `state/backup`, an end-to-end step.
+  - Follow-ups: a one-time item still has to be removed and added again to change it during setup; setup has no undo for a removed item.
 
 ## Open items
 

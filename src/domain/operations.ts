@@ -525,6 +525,17 @@ export function skipReview(data: AppData, clock: Clock): Result {
   return handleReview(data, 'skipped', clock);
 }
 
+/**
+ * Starting over: every recurring item, one-time item and recorded outcome is
+ * removed and setup starts again. The review rhythm (a preference, not
+ * financial data) and the revision (so the save is accepted) are kept. The
+ * interface offers a backup first; this never runs without the person's
+ * explicit confirmation.
+ */
+export function startOver(data: AppData): Result {
+  return ok({ ...emptyData(), revision: data.revision, ...(data.review ? { review: data.review } : {}) });
+}
+
 export function completeOnboarding(data: AppData): Result {
   return ok({ ...data, onboardingComplete: true });
 }

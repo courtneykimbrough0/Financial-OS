@@ -4,7 +4,7 @@ import { REVIEW_RHYTHM_IN_ACCOUNTS } from '../../state/features';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
 import { AccountActions } from '../components/account';
-import { DownloadBackupButton, RestoreBackupButton } from '../components/backup';
+import { DownloadBackupButton, RestoreBackupButton, StartOverButton } from '../components/backup';
 import { Modal } from '../components/common';
 import { ReviewRhythmSettings } from '../components/rhythm';
 import { navigate } from '../router';
@@ -36,10 +36,16 @@ export function Settings() {
         {data.isSample ? (
           <p className="hint">Backups are available for your own data. Leave the sample data to download or restore one.</p>
         ) : (
-          <div className="settings-actions">
-            <DownloadBackupButton />
-            <RestoreBackupButton />
-          </div>
+          <>
+            <div className="settings-actions">
+              <DownloadBackupButton />
+              <RestoreBackupButton />
+            </div>
+            <p className="hint">Entered something wrong from the start? Start over to erase everything and set up again. You can download a backup first.</p>
+            <div className="settings-actions">
+              <StartOverButton />
+            </div>
+          </>
         )}
       </section>
 
