@@ -68,6 +68,7 @@ Several hypothetical changes evaluated together, informational only. `evaluateSc
 - **Not compared** (cash flow only, with the reason): no upcoming main payday in either forecast, the next payday moves (`anchor-changed`), or a transaction moves from inside the running total to before the next payday (`before-payday`). An added item dated before the next payday counts in cash flow, is marked outside the running total, and is listed as a limitation.
 - **Variable income** (`evaluateIncomeCases`): the same scenario with low, expected and high amounts the person supplies (low may be $0, which adds nothing; low ≤ expected ≤ high), once or on a schedule. The income is hypothetical in every case and never added to the plan; nothing is inferred from history.
 - Hypothetical recurring income never becomes the main paycheck while the person has income of their own; without any, there's no running total to compare.
+- **For the interface.** `scenarioOptions` lists what can be changed without re-entering it: outstanding occurrences for the next 90 days, and liability payments (with no later change set) with their next six payment dates that keep the schedule. `firstShortfall` picks the shortfall to point out first: the earliest new or deeper gap by the day it reaches its lowest, and whether the scenario also ends higher or has more cash flow.
 
 ## Test matrix
 

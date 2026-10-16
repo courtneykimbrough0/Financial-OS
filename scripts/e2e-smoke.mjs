@@ -490,6 +490,81 @@ try {
   assert.deepEqual(savedAfter.sources.find((s) => s.id === 'elec').versions.map((v) => [v.startDate, v.amountCents]), [['2026-04-03', 18000], ['2026-11-03', 21500]]);
   assert.deepEqual(savedAfter.records.filter((r) => r.sourceId === 'elec').map((r) => [r.expectedAmountCents, r.actualAmountCents]), household.records.filter((r) => r.sourceId === 'elec').map((r) => [r.expectedAmountCents, r.actualAmountCents]));
 
+  step('scenario: combine changes, see a hidden shortfall, edit, remove, and leave the plan untouched');
+  // The plan from scenarios.test.ts: paid $1,000 every other Friday from Oct 23, rent $1,500 from Nov 1,
+  // car loan $300 on the 28th. The clock still reads Fri Oct 16.
+  const planPath = `${SHOTS}scenario-plan.json`;
+  writeFileSync(planPath, JSON.stringify({
+    format: 'financial-os-backup', exportedAt: '2026-10-16T09:00:00.000Z',
+    data: { schemaVersion: 2, revision: 0, onboardingComplete: true, records: [], sources: [
+      src('pay', 'income', 'Paycheck', 1000, '2026-10-23', { type: 'biweekly' }),
+      src('rent', 'bill', 'Rent', 1500, '2026-11-01', { type: 'monthly' }),
+      { ...src('loan', 'liability', 'Car loan', 300, '2026-10-28', { type: 'monthly' }), liabilityType: 'loan' },
+    ] },
+  }));
+  await page.goto(`${BASE}#/settings`);
+  await page.locator('input[aria-label="Backup file"]').setInputFiles(planPath);
+  await page.getByRole('dialog', { name: 'Restore this backup?' }).getByRole('button', { name: 'Replace with backup' }).click();
+  await page.getByText('Backup restored.').waitFor();
+  await page.goto(`${BASE}#/dashboard`);
+  const planBefore = await page.evaluate(() => localStorage.getItem('financial-os:data'));
+  // Open from the keyboard.
+  await page.getByRole('button', { name: 'Explore a scenario' }).focus();
+  await page.keyboard.press('Enter');
+  const scenario = page.getByRole('dialog', { name: 'Explore a scenario' });
+  const addChange = async (type, fill) => {
+    await scenario.getByRole('button', { name: 'Add a change' }).click();
+    await scenario.getByRole('button', { name: new RegExp(`^${type}`) }).click();
+    const form = scenario.getByRole('form', { name: type });
+    await fill(form);
+    await form.getByRole('button', { name: 'Add to scenario' }).click();
+  };
+  await addChange('Additional income', async (f) => {
+    await f.getByLabel('Name').fill('Tax refund');
+    await f.getByLabel('Amount').fill('2000');
+    await f.getByLabel('Date').fill('2027-01-10');
+  });
+  await addChange('Unexpected expense', async (f) => {
+    await f.getByLabel('Name').fill('Dentist');
+    await f.getByLabel('Amount').fill('900');
+    await f.getByLabel('Date').fill('2026-11-10');
+  });
+  const scenarioResult = scenario.getByRole('region', { name: 'Scenario comparison' });
+  assert.match(await scenarioResult.getByRole('status').innerText(), /Your projected ending total improves by \$1,100\.00, but this scenario creates a \$700\.00 shortfall on Nov 10, back to \$0 or more on Nov 20\./);
+  assert.match(await scenarioResult.getByRole('table').innerText(), /Cash flow\s+\+\$1,600\.00\s+\+\$2,700\.00[\s\S]*Lowest running total\s+−\$800\.00 on Nov 1\s+−\$1,500\.00 on Dec 1[\s\S]*Ending running total\s+\$1,600\.00\s+\$2,700\.00/);
+  assert.match(await scenarioResult.innerText(), /Includes \$2,000\.00 of hypothetical income\. Without it, cash flow would be \+\$700\.00\./);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  assert.equal(await scenario.evaluate((el) => el.scrollWidth <= el.clientWidth), true);
+  await scenarioResult.getByRole('status').scrollIntoViewIfNeeded();
+  await shot('13-scenario');
+  // Edit the dentist to $100, then remove it.
+  await scenario.getByRole('button', { name: 'Edit Dentist: −$900.00 on Nov 10, 2026' }).click();
+  await scenario.getByRole('form', { name: 'Unexpected expense' }).getByLabel('Amount').fill('100');
+  await scenario.getByRole('button', { name: 'Save change' }).click();
+  assert.match(await scenarioResult.getByRole('status').innerText(), /improves by \$1,900\.00, but this scenario deepens a shortfall to \$700\.00 on Dec 1/);
+  await scenario.getByRole('button', { name: 'Remove Dentist: −$100.00 on Nov 10, 2026' }).click();
+  assert.equal(await scenarioResult.getByRole('status').count(), 0);
+  // Variable income: three hypothetical cases side by side, on top of the $2,000 refund still in the scenario.
+  await addChange('Explore variable income', async (f) => {
+    await f.getByLabel('Name').fill('Delivery tips');
+    await f.getByLabel('Low').fill('0');
+    await f.getByLabel('Expected').fill('60');
+    await f.getByLabel('High').fill('120');
+    await f.getByLabel('How often').selectOption('weekly');
+    await f.getByLabel('First date').fill('2026-10-24');
+  });
+  const incomeCases = scenario.getByRole('region', { name: 'Income cases' });
+  assert.match(await incomeCases.getByRole('table').first().innerText(), /Hypothetical income\s+\$2,000\.00\s+\$2,780\.00\s+\$3,560\.00/);
+  await incomeCases.scrollIntoViewIfNeeded();
+  await shot('13b-scenario-income-cases');
+  // Escape closes; the plan and saved data are exactly as before.
+  await page.keyboard.press('Escape');
+  assert.equal(await page.getByRole('dialog').count(), 0);
+  assert.equal(await page.evaluate(() => localStorage.getItem('financial-os:data')), planBefore);
+  await page.getByRole('button', { name: 'Explore a scenario' }).click();
+  assert.match(await scenario.innerText(), /No changes yet\./);
+  await page.keyboard.press('Escape');
+
   assert.deepEqual(errors, [], `Console errors: ${errors.join('\n')}`);
   console.log('\nE2E smoke test passed.');
 } catch (err) {

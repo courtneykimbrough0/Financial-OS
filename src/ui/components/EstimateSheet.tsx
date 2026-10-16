@@ -1,12 +1,12 @@
 import { Lightbulb } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { formatMedium, formatRange, formatShort } from '../../domain/dates';
+import { formatMedium, formatShort } from '../../domain/dates';
 import { analyzeEstimate, approveEstimate, dismissEstimate, ESTIMATE_KINDS, previewEstimate, type EstimateObservation, type EstimatePreview, type EstimateSuggestion } from '../../domain/estimates';
-import type { GapExplanation } from '../../domain/forecast';
 import { formatMoney } from '../../domain/money';
 import type { AppData, RecurringSource } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { FormError, Icon, KindAvatar, Modal, SectionLabel, useToast } from './common';
+import { GapChanges, Money } from './comparison';
 
 /** The current estimate suggestion for a recurring bill, subscription or liability payment; null for any other item. */
 export function useEstimateSuggestion(source: RecurringSource): EstimateSuggestion | null {
@@ -245,14 +245,6 @@ export function EstimateSheet({ sourceId, onClose }: { sourceId: string; onClose
   );
 }
 
-/** An amount that never breaks across lines between its sign and its digits. */
-const Money = ({ cents }: { cents: number }) => <span className="nowrap">{formatMoney(cents)}</span>;
-const gapLine = (g: GapExplanation) => (
-  <>
-    {formatRange(g.start, g.end)}, down to <Money cents={g.lowestCents} />
-  </>
-);
-
 function EstimatePreviewView({ data, suggestion, today }: { data: AppData; suggestion: EstimateSuggestion; today: string }) {
   const result = useMemo(() => previewEstimate(data, suggestion, { today, now: `${today}T00:00:00.000Z` }), [data, suggestion, today]);
   if (!result.ok) return <p className="field-error">{result.error}</p>;
@@ -294,30 +286,7 @@ function EstimatePreviewView({ data, suggestion, today }: { data: AppData; sugge
             : 'There’s no upcoming payday to start a running total from, so only the payment amounts are shown.'}
         </p>
       )}
-      {p.newGaps.map((g) => (
-        <p key={`new-${g.start}`} className="callout callout-warn">
-          New timing gap: {gapLine(g)}
-          {g.recoversOn ? `, back to $0 or more on ${formatShort(g.recoversOn)}` : ''}.
-        </p>
-      ))}
-      {p.worsenedGaps.map((g) => (
-        <p key={`worse-${g.start}`} className="callout callout-warn">
-          Deeper timing gap: {gapLine(g)}.
-        </p>
-      ))}
-      {p.reducedGaps.map((g) => (
-        <p key={`less-${g.start}`} className="callout callout-ok">
-          Smaller timing gap: {gapLine(g)}.
-        </p>
-      ))}
-      {p.resolvedGaps.map((g) => (
-        <p key={`gone-${g.start}`} className="callout callout-ok">
-          The timing gap {formatRange(g.start, g.end)} would be gone.
-        </p>
-      ))}
-      {p.comparable && p.newGaps.length + p.worsenedGaps.length + p.reducedGaps.length + p.resolvedGaps.length === 0 && (
-        <p className="hint">{p.proposed.gaps.length === 0 ? 'No timing gaps either way.' : 'Your timing gaps stay as they are.'}</p>
-      )}
+      {p.comparable && <GapChanges newGaps={p.newGaps} worsenedGaps={p.worsenedGaps} reducedGaps={p.reducedGaps} resolvedGaps={p.resolvedGaps} proposedGaps={p.proposed.gaps} />}
       <p className="hint">
         {p.continuesAfter ? `Compared through ${formatMedium(p.continuesAfter)}; the new estimate also applies to later payments. ` : ''}
         Nothing is saved until you approve.

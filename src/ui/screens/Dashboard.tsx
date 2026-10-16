@@ -54,6 +54,7 @@ import { EmptyState, FlowAmount, Icon, KindAvatar, KindTag, Modal, SectionLabel,
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 import { ReviewSheet } from '../components/ReviewSheet';
 import { PeriodReviewSheet } from '../components/PeriodReviewSheet';
+import { ScenarioSheet } from '../components/ScenarioSheet';
 import { CADENCE_LABEL } from '../components/rhythm';
 import { reviewStatus } from '../../domain/cadence';
 import { useAccount } from '../../state/account';
@@ -93,7 +94,8 @@ type Sheet =
   | { kind: 'period-review' }
   | { kind: 'occurrence'; id: string; back: Sheet | null }
   | { kind: 'about-tally' }
-  | { kind: 'calendar-key' };
+  | { kind: 'calendar-key' }
+  | { kind: 'scenario' };
 
 export function Dashboard() {
   const { data, today } = useStore();
@@ -171,6 +173,10 @@ export function Dashboard() {
           <Icon icon={ChevronRight} size={18} />
         </button>
       )}
+
+      <button type="button" className="button small secondary scenario-entry" onClick={() => setSheet({ kind: 'scenario' })} aria-haspopup="dialog">
+        Explore a scenario
+      </button>
 
       <div className="segmented" role="tablist" aria-label="Dashboard view">
         {VIEWS.map((v) => (
@@ -298,6 +304,7 @@ export function Dashboard() {
           </div>
         </Modal>
       )}
+      {sheet?.kind === 'scenario' && <ScenarioSheet onClose={() => setSheet(null)} />}
       {sheet?.kind === 'calendar-key' && (
         <Modal title="Calendar key" onClose={() => setSheet(null)}>
           <CalendarKey />

@@ -2503,6 +2503,105 @@ button.callout.gap-line:focus-visible {
   color: var(--color-text-secondary);
 }
 
+/* ---------- Scenarios ---------- */
+
+.scenario-entry {
+  align-self: flex-start;
+}
+.scenario-types,
+.scenario-changes,
+.scenario-assumptions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.scenario-type {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 14px;
+  text-align: left;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  color: inherit;
+  cursor: pointer;
+}
+.scenario-type:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.scenario-type:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.scenario-change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 0 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+.scenario-change.invalid {
+  border-color: var(--color-neg);
+}
+.scenario-change-label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.scenario-change-actions {
+  display: flex;
+}
+.scenario-change-error {
+  flex-basis: 100%;
+  margin: 0;
+  padding-right: 12px;
+}
+.scenario-assumptions li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.scenario-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+}
+.scenario-table th,
+.scenario-table td {
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: right;
+  vertical-align: top;
+}
+.scenario-table th[scope='row'],
+.scenario-table thead th:first-child {
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+.scenario-table thead th {
+  font-weight: 650;
+}
+.scenario-shortfall {
+  font-weight: 600;
+}
+.scenario-cases-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
 /* ---------- Review rhythm ---------- */
 
 .rhythm-options {

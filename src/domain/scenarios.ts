@@ -400,3 +400,46 @@ function baselineOnly(data: AppData, clock: ops.Clock, options: { through?: Date
   };
 }
 
+
+// ---------------------------------------------------------------------------
+// For choosing and summarizing
+// ---------------------------------------------------------------------------
+
+/** What a scenario can change without the person re-entering it: upcoming payments, and liability payments with their next dates. */
+export interface ScenarioOptions {
+  /** Outstanding occurrences from today through `end`, in forecast order. */
+  occurrences: { id: string; description: string; kind: TransactionKind; date: DateStr; amountCents: Cents }[];
+  /** Active liability payments with no later change set, and the dates a new amount could start from. */
+  liabilities: { sourceId: string; description: string; amountCents: Cents; dates: DateStr[] }[];
+}
+
+export function scenarioOptions(data: AppData, today: DateStr, end: DateStr = addDays(today, 90)): ScenarioOptions {
+  const f = buildForecast(data, today);
+  const occurrences = f.entries
+    .filter((e) => e.occurrence.status === 'scheduled' && e.occurrence.scheduledDate >= today && e.date <= end)
+    .map((e) => ({ id: e.occurrence.id, description: e.occurrence.description, kind: e.occurrence.kind, date: e.occurrence.scheduledDate, amountCents: e.amountCents }));
+  const liabilities = data.sources
+    .filter((s) => s.kind === 'liability' && s.active && !s.versions.slice(1).some((v) => v.startDate > today))
+    .flatMap((s) => {
+      const version = [...s.versions].sort((a, b) => (a.startDate < b.startDate ? -1 : 1)).at(-1)!;
+      const dates = expandSource(s, today, addDays(today, 400))
+        .filter((g) => data.records.find((r) => r.id === g.id)?.status !== 'completed' && startKeepsDates(version.rule, version.startDate, g.expectedDate))
+        .slice(0, 6)
+        .map((g) => g.expectedDate);
+      return dates.length ? [{ sourceId: s.id, description: s.description, amountCents: version.amountCents, dates }] : [];
+    });
+  return { occurrences, liabilities };
+}
+
+/**
+ * The shortfall to point out first: the earliest new or deeper timing gap,
+ * by the day it reaches its lowest point. `despiteGain` when the scenario
+ * also ends higher or has more cash flow, so the better number isn't read
+ * as safe. Null when the scenario creates or deepens no gap.
+ */
+export function firstShortfall(r: ScenarioResult): { gap: GapExplanation; created: boolean; despiteGain: boolean } | null {
+  const candidates = [...r.newGaps.map((gap) => ({ gap, created: true })), ...r.worsenedGaps.map((gap) => ({ gap, created: false }))];
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => (a.gap.lowestDate < b.gap.lowestDate ? -1 : a.gap.lowestDate > b.gap.lowestDate ? 1 : 0));
+  return { ...candidates[0]!, despiteGain: r.shortfallDespiteGain };
+}

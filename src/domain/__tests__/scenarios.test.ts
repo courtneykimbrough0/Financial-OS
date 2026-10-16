@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { dismissEstimate, analyzeEstimate } from '../estimates';
 import { buildForecast, dailyTimeline, explainTimingGaps, lowestPoint, periodKpis, tallyOn } from '../forecast';
 import * as ops from '../operations';
-import { evaluateIncomeCases, evaluateScenario, type ScenarioChange, type ScenarioResult } from '../scenarios';
+import { evaluateIncomeCases, evaluateScenario, firstShortfall, scenarioOptions, type ScenarioChange, type ScenarioResult } from '../scenarios';
 import type { AppData } from '../types';
 import { clockAt, source, unwrap, usd } from './helpers';
 
@@ -379,5 +379,43 @@ describe('invalid assumptions', () => {
     expect(err([{ kind: 'recurring-amount', sourceId: 'loan', amountCents: 100, from: '2026-11-28' }], pending)).toBe('Car loan already has a change set for Dec 28, 2026, so a scenario can’t change its amount yet.');
     const noPay = source(unwrap(ops.completeOnboarding(ops.emptyData())), TODAY, 'bill', 'Rent', 1500, '2026-11-01', { type: 'monthly' }, 'rent');
     expect(err([{ kind: 'recurring-savings', description: 'Savings', amountCents: 100, schedule: 'each-paycheck' }], noPay)).toBe('There’s no main paycheck to follow. Choose dates instead.');
+  });
+});
+
+describe('choosing and summarizing', () => {
+  it('lists upcoming payments and liability dates to choose from', () => {
+    const o = scenarioOptions(plan(), TODAY);
+    // Through Jan 14, 2027 (90 days from today), in forecast order.
+    expect(o.occurrences.map((x) => [x.id, x.date, x.amountCents])).toEqual([
+      ['pay@2026-10-23', '2026-10-23', 100000],
+      ['loan@2026-10-28', '2026-10-28', 30000],
+      ['rent@2026-11-01', '2026-11-01', 150000],
+      ['pay@2026-11-06', '2026-11-06', 100000],
+      ['pay@2026-11-20', '2026-11-20', 100000],
+      ['loan@2026-11-28', '2026-11-28', 30000],
+      ['rent@2026-12-01', '2026-12-01', 150000],
+      ['pay@2026-12-04', '2026-12-04', 100000],
+      ['pay@2026-12-18', '2026-12-18', 100000],
+      ['loan@2026-12-28', '2026-12-28', 30000],
+      ['pay@2027-01-01', '2027-01-01', 100000],
+      ['rent@2027-01-01', '2027-01-01', 150000],
+    ]);
+    expect(o.liabilities).toEqual([{ sourceId: 'loan', description: 'Car loan', amountCents: 30000, dates: ['2026-10-28', '2026-11-28', '2026-12-28', '2027-01-28', '2027-02-28', '2027-03-28'] }]);
+    // A liability with a change already set can't be changed in a scenario, so it isn't offered.
+    const pending = unwrap(ops.changeSourceSchedule(plan(), 'loan', { startDate: '2026-12-28', amountCents: usd(350), rule: { type: 'monthly' } }, clock));
+    expect(scenarioOptions(pending, TODAY).liabilities).toEqual([]);
+  });
+
+  it('points to the earliest new or deeper shortfall, and whether the ending still looks better', () => {
+    const better = run([
+      { kind: 'one-time-income', description: 'Tax refund', amountCents: usd(2000), date: '2027-01-10' },
+      { kind: 'one-time-expense', description: 'Dentist', amountCents: usd(900), date: '2026-11-10' },
+    ]);
+    expect(firstShortfall(better)).toMatchObject({ gap: { start: '2026-11-10', lowestDate: '2026-11-10', lowestCents: -70000 }, created: true, despiteGain: true });
+    const repair = run([{ kind: 'one-time-expense', description: 'Car repair', amountCents: usd(800), date: '2026-11-10' }]);
+    expect(firstShortfall(repair)).toMatchObject({ gap: { start: '2026-11-10', lowestCents: -60000 }, created: true, despiteGain: false });
+    const deeper = run([{ kind: 'occurrence-amount', occurrenceId: 'rent@2026-12-01', amountCents: usd(1700) }]);
+    expect(firstShortfall(deeper)).toMatchObject({ gap: { start: '2026-12-01', lowestCents: -80000 }, created: false, despiteGain: false });
+    expect(firstShortfall(run([{ kind: 'one-time-income', description: 'Bonus', amountCents: usd(500), date: '2026-11-01' }]))).toBeNull();
   });
 });
