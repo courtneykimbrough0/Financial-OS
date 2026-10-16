@@ -37,6 +37,25 @@ How stored data becomes the forecast, and which tests prove each behavior. Writt
 - **Due.** A rhythm is off until chosen. The current period is due until a review is completed or skipped on or after its start (`handledOn`); only the latest handling is kept, so periods missed while away never pile up. `nextDue` is the current period's start while it is due, otherwise the next period's start.
 - **Summary** (`reviewSummary`): for a period, the forecast's counted entries split into expected income, expected money out, and recorded; every overdue item; `periodKpis` for cash flow; and the explained timing gaps overlapping the period. Build the forecast through the period's end.
 
+## Adaptive estimates (`estimates.ts`)
+
+Compares a recurring bill, subscription or liability payment's recorded payments with its current estimate, and suggests a new estimate only when they clearly differ. It reads only; nothing changes until the person approves.
+
+- **Payments used.** Recorded payments of the item, by their original date (an early, late or moved payment counts once, for its own occurrence), since its amount last changed (a schedule change that keeps the amount keeps earlier payments), at most the latest 12. Fewer than 3: no suggestion.
+- **Rules, in order.**
+  1. *Seasonal* (monthly items with 12 payments): at least 3 of the last 12 are more than 25% from their median. The next payment is suggested at the same month's amount in the last two years (averaged, rounded up to a dollar), for that payment only.
+  2. *Steady:* the latest 3 or more payments were exactly equal. Suggests that amount.
+  3. *Rising or falling:* each of the latest 4 was higher (or lower) than the one before, by at most 25%. Suggests the latest amount (rounded up to a dollar), never an extrapolation.
+  4. *Variable:* the latest 6, leaving out any more than 25% from their median, averaged and rounded up to a dollar. Suggested only when the current estimate is outside the range of the payments counted. Fewer than 3 left: no suggestion ("inconsistent").
+- **Worth suggesting.** At least $5 and 5% from the current estimate.
+- **Confidence.** "Limited" with fewer than 6 counted payments (or one earlier year for a seasonal month), and the limitations are listed: few payments, payments left out as unusual, rounding, payments before the latest amount change, "this payment only".
+- **When it starts.** The first outstanding payment from today whose date a new schedule version keeps exactly (so a month-end schedule never drifts). No suggestion while a change the person already set is still to come.
+- **Approve** (`approveEstimate`): a schedule version from that date at the new amount (`changeSourceSchedule`), or, for a seasonal one, that one payment's expected amount (`rescheduleOccurrence`). Earlier occurrences, recorded payments and original predictions are untouched. Refused if the data changed since the suggestion.
+- **Dismiss** (`dismissEstimate`): the estimate and forecast stay exactly as they are; the item keeps `estimateDismissal` (the estimate, the amount suggested, the latest payment's date). The same suggestion is held back until the estimate changes, the suggested amount moves by at least the minimum change, or 3 newer payments are recorded.
+- **Review later** is doing neither: nothing changes and the suggestion stays available.
+
+**Income is not estimated.** Recorded income could show, per income item, the typical amount received, its range and lowest amount, and how early or late it tends to arrive (`variance`), and for tips, commissions or gig work, how much arrives over a period. None of that is used yet. Uncertain income never counts as confirmed: the forecast counts only income the person has entered as expected or has recorded, and history never adds income to the running total. A later variable-income task could show history-based income as a separate, unconfirmed range outside the running total, or offer a cautious estimate (for example the lowest recent amount) for the person to approve. Savings deposits aren't estimated either; their amount is the person's choice.
+
 ## Test matrix
 
 Files are in `src/domain/__tests__/`. "EV" is `engine-validation.test.ts`; "SC" is `saved-changes.test.ts`; "spec" is `spec-scenarios.test.ts`.
@@ -66,6 +85,7 @@ Files are in `src/domain/__tests__/`. "EV" is `engine-validation.test.ts`; "SC" 
 | Variance (actual vs. original prediction) | `history` › paying a bill |
 | Batch review: only selected items change, batch undo is exact | `review` (all); `ui/review-sheet` |
 | Review rhythm (periods, due, complete/skip, summary, persistence) | `cadence` (all); `state/review-persistence`; rules test › optional review rhythm |
+| Adaptive estimates (steady, rising, falling, variable, seasonal; unusual payments; too little history; rate and schedule changes; approve, dismiss, repeat; income not estimated; exact cents) | `estimates` (all); `state/estimate-persistence` |
 | Rescheduling and canceling | `forecast` › overdue, rescheduled, and canceled occurrences; spec › H, I; SC › a moved occurrence |
 | Schedule changes and effective dates | `forecast` › recurring schedule changes; spec › F; SC › D1 |
 | Turning items off and on | `forecast` › deactivating stops future occurrences…; SC › D2, items that are turned off |

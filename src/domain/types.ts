@@ -86,8 +86,20 @@ export interface RecurringSource {
   endDate: DateStr | null;
   /** Earlier inactive stretches: no occurrences in [from, until). */
   pausedRanges: { from: DateStr; until: DateStr }[];
+  /** The latest estimate suggestion the person dismissed (see `estimates.ts`). Absent otherwise. */
+  estimateDismissal?: EstimateDismissal;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A dismissed estimate suggestion: the estimate it was compared with, the
+ * amount suggested, and the original date of the latest payment it used.
+ */
+export interface EstimateDismissal {
+  currentCents: Cents;
+  proposedCents: Cents;
+  through: DateStr;
 }
 
 /** Stored lifecycle status. "overdue" is derived at read time, never stored. */

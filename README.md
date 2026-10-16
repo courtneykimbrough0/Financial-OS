@@ -64,6 +64,7 @@ src/
     occurrences.ts Merges generated occurrences with stored records
     forecast.ts    Anchor, running tally, daily rows, KPIs, week summaries, paycheck cycles
     operations.ts  Every state change (pure functions returning a new state or an error)
+    estimates.ts   Estimate suggestions from recorded payments; approve and dismiss
     sample.ts      Synthetic demonstration data
   state/
     storage.ts     StorageAdapter interface; localStorage implementation with validation
@@ -91,6 +92,7 @@ Every dashboard element (calendar, KPIs, summaries, timeline, cycles) reads from
   - `actualDate` / `actualAmountCents`: what you reported.
   - `status`: `scheduled`, `completed`, or `canceled`. **Overdue** is derived (scheduled and the date has passed) and is never stored.
 
+- **Estimate dismissal** (`estimateDismissal`, optional, on a recurring item): the latest estimate suggestion the person dismissed (the estimate, the amount suggested, the latest payment's date), so it doesn't return right away.
 - **Review rhythm** (`review`, optional): `cadence` (`off` by default, `weekly`, `payday` or `monthly`), and the day the latest review was completed or skipped (`handledOn`, `outcome`). Written only once a rhythm is chosen.
 
 ### Persistence
@@ -177,6 +179,7 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 - `preview.test.ts`: what-if previews for one occurrence (move, change amount, leave out), compared with the current forecast, without saving.
 - `gap-explanations.test.ts`: what the forecast shows about each timing gap (payments and income from its start to its lowest point, and the income that ends it), checked in cents against the running totals.
 - `src/ui/__tests__/period-review.test.tsx`: choosing a rhythm (all four, keyboard, reload), the dashboard entry, the review summary, done, skip, closing, payday and overdue items, and a refused save.
+- `estimates.test.ts` and `src/state/__tests__/estimate-persistence.test.ts`: estimate suggestions from recorded payments (steady, rising, falling, variable and seasonal amounts, unusual payments, too little history, rate and schedule changes, minimum change), approving and dismissing, income left out, and keeping dismissals on the device, in backups and in account saves.
 - `cadence.test.ts` and `src/state/__tests__/review-persistence.test.ts`: review rhythm periods across week, month, year and daylight-saving boundaries, paydays from the main paycheck, completing and skipping without a backlog, the review summary, and saving, backups and migration.
 - `review.test.ts` and `src/ui/__tests__/review-sheet.test.tsx`: what to review, marking several done or moving them (only the selected items change), undoing a batch exactly, and a failed save during a batch.
 - `history.test.ts` and `src/state/__tests__/history-roundtrip.test.ts`: the original prediction, the latest expectation and the actual stay distinct through paying, correcting, undoing, canceling and schedule changes, including on the device and in backups; variance values.

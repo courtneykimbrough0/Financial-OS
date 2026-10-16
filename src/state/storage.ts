@@ -6,7 +6,7 @@
  */
 import { isValidDateStr } from '../domain/dates';
 import { emptyData } from '../domain/operations';
-import { LIABILITY_TYPES, REVIEW_CADENCES, type AppData, type OccurrenceRecord, type RecurringSource, type ReviewCadence, type ReviewSettings, type TransactionKind } from '../domain/types';
+import { LIABILITY_TYPES, REVIEW_CADENCES, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type ReviewCadence, type ReviewSettings, type TransactionKind } from '../domain/types';
 
 export type SaveResult =
   | { ok: true; revision: number }
@@ -82,6 +82,15 @@ function readReview(r: unknown): ReviewSettings | undefined {
   return { cadence: v.cadence!, handledOn, outcome: handledOn ? outcome : null };
 }
 
+/** A saved estimate dismissal, if it is well formed; anything else is dropped (the suggestion may simply return). */
+function readDismissal(d: unknown): EstimateDismissal | undefined {
+  if (!d || typeof d !== 'object') return undefined;
+  const v = d as Partial<EstimateDismissal>;
+  const cents = (x: unknown) => Number.isSafeInteger(x) && (x as number) > 0;
+  if (!cents(v.currentCents) || !cents(v.proposedCents) || !isValidDateStr(v.through)) return undefined;
+  return { currentCents: v.currentCents!, proposedCents: v.proposedCents!, through: v.through };
+}
+
 /** Validates and upgrades parsed JSON. Throws if the document is unusable. */
 export function migrate(raw: unknown): AppData {
   if (!raw || typeof raw !== 'object') throw new Error('Saved data is not an object.');
@@ -96,12 +105,13 @@ export function migrate(raw: unknown): AppData {
     revision,
     onboardingComplete: Boolean(doc.onboardingComplete),
     ...(doc.isSample ? { isSample: true } : {}),
-    sources: sources.map(({ category: _oldCategory, liabilityType, mainPaycheck, ...s }: RecurringSource & { category?: unknown }) => ({
+    sources: sources.map(({ category: _oldCategory, liabilityType, mainPaycheck, estimateDismissal, ...s }: RecurringSource & { category?: unknown }) => ({
       ...s,
       kind: upgradeKind(s.kind),
       // Keep a liability type only when it is one of the three allowed values; the edit form asks for it otherwise.
       ...(s.kind === 'liability' && liabilityType && LIABILITY_TYPES.includes(liabilityType) ? { liabilityType } : {}),
       ...(s.kind === 'income' && mainPaycheck === true ? { mainPaycheck: true } : {}),
+      ...(readDismissal(estimateDismissal) ? { estimateDismissal: readDismissal(estimateDismissal) } : {}),
       tags: Array.isArray(s.tags) ? s.tags : [],
       pausedRanges: s.pausedRanges ?? [],
       endDate: s.endDate ?? null,

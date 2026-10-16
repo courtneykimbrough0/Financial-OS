@@ -78,7 +78,7 @@ Preserve the existing architecture; don't rebuild it without a reason the produc
 | Area | Where | Notes |
 | --- | --- | --- |
 | Stack | TypeScript (strict), React 19, Vite, vite-plugin-pwa | npm only; `package-lock.json` is committed |
-| Domain logic | `src/domain/` | Pure TypeScript, no React. `dates.ts`, `money.ts`, `types.ts`, `recurrence.ts`, `occurrences.ts`, `forecast.ts` (`buildForecast` and everything derived from it), `operations.ts` (every state change), `plan.ts` (cash flow per period), `sample.ts` |
+| Domain logic | `src/domain/` | Pure TypeScript, no React. `dates.ts`, `money.ts`, `types.ts`, `recurrence.ts`, `occurrences.ts`, `forecast.ts` (`buildForecast` and everything derived from it), `operations.ts` (every state change), `plan.ts` (cash flow per period), `preview.ts` (what-if previews), `cadence.ts` (review rhythm), `estimates.ts` (estimate suggestions), `sample.ts` |
 | State and persistence | `src/state/` | `storage.ts` (`StorageAdapter`, validation, `migrate`), `store.tsx` (applies operations, background saving, conflicts), `cloud.ts` (account storage with an on-device copy; legacy), `firebase.ts` (Google sign-in and Firestore, loaded on demand; legacy), `account.tsx`, `backup.ts`, `mode.tsx` (sample vs real data) |
 | UI | `src/ui/` | `screens/`, `components/`, a hash router (`router.ts`) |
 | Hosting (legacy) | `server.mjs`, `Dockerfile` | Cloud Run serves the built app and forwards Firebase sign-in pages through its own address. To be replaced by Vercel |
