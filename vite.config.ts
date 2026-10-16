@@ -44,7 +44,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
-    // Security rule tests need the Firestore emulator: `npm run test:rules`.
-    exclude: ['**/node_modules/**', '**/dist/**', '**/*.rules.test.ts'],
+    // Security rule tests need the Firestore emulator (`npm run test:rules`);
+    // database tests need PostgreSQL (`npm run test:db`).
+    exclude: ['**/node_modules/**', '**/dist/**', '**/*.rules.test.ts', '**/*.db.test.ts'],
   },
 });
