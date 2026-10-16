@@ -106,6 +106,24 @@ export function compareForecasts(before: Forecast, after: Forecast, today: DateS
   return { window, current: snapshot(before, window), proposed: snapshot(after, window), anchorChanged: before.forecastStart !== after.forecastStart };
 }
 
+/** How the proposed timing gaps differ from the current ones, by overlapping dates. */
+export function gapChanges(currentGaps: GapExplanation[], proposedGaps: GapExplanation[]) {
+  const overlapping = (g: GapExplanation, list: GapExplanation[]) => list.filter((c) => overlaps(c, g));
+  return {
+    /** Proposed gaps on dates with no gap now. */
+    newGaps: proposedGaps.filter((g) => overlapping(g, currentGaps).length === 0),
+    /** Proposed gaps that go lower than a current gap they overlap. */
+    worsenedGaps: proposedGaps.filter((g) => overlapping(g, currentGaps).some((c) => g.lowestCents < c.lowestCents)),
+    /** Proposed gaps that stay above every current gap they overlap. */
+    reducedGaps: proposedGaps.filter((g) => {
+      const c = overlapping(g, currentGaps);
+      return c.length > 0 && c.every((x) => g.lowestCents > x.lowestCents);
+    }),
+    /** Current gaps with no proposed gap on those dates. */
+    resolvedGaps: currentGaps.filter((c) => overlapping(c, proposedGaps).length === 0),
+  };
+}
+
 /** Previews `change` without saving it. Rejected with the operation's own message when the change isn't allowed. */
 export function previewChange(data: AppData, change: ProposedChange, clock: ops.Clock, options: { through?: DateStr } = {}): PreviewResult {
   const applied = applyProposedChange(data, change, clock);

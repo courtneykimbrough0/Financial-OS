@@ -58,6 +58,17 @@ Compares a recurring bill, subscription or liability payment's recorded payments
 
 **Income is not estimated.** Recorded income could show, per income item, the typical amount received, its range and lowest amount, and how early or late it tends to arrive (`variance`), and for tips, commissions or gig work, how much arrives over a period. None of that is used yet. Uncertain income never counts as confirmed: the forecast counts only income the person has entered as expected or has recorded, and history never adds income to the running total. A later variable-income task could show history-based income as a separate, unconfirmed range outside the running total, or offer a cautious estimate (for example the lowest recent amount) for the person to approve. Savings deposits aren't estimated either; their amount is the person's choice.
 
+## Scenarios (`scenarios.ts`)
+
+Several hypothetical changes evaluated together, informational only. `evaluateScenario(data, changes, clock, { through })` applies the changes in order to a copy with the ordinary operations, forecasts the copy with `buildForecast`, and compares it with the plan over the same window as every preview (`compareForecasts`: 90 days from the next payday, or longer). Nothing is saved and there is no way to apply a scenario yet.
+
+- **Changes.** One-time income (always hypothetical) and one-time expenses (`addOneTime`); an extra payment on a liability (a one-time money-out item; the app has no one-time liability items, so only the copy's record takes the liability kind); a different amount or date for one outstanding occurrence (`rescheduleOccurrence`); a recurring item's amount from one of its payment dates on (`changeSourceSchedule`, refused when the date isn't one of its payments, would drift a month-end schedule, or a change is already set for later); recurring savings and hypothetical recurring income (`addSource`), on chosen dates or on each main payday from the next one. Hypothetical changes need today or later; each occurrence and each recurring amount is changed at most once per scenario; an invalid change is refused with its number.
+- **Assumptions.** Each change is listed with a plain label, money in or out, its amount, one-time or recurring, the dates it lands on in the period, whether its income is hypothetical (added by the scenario) or confirmed (entered by the person), and whether all its dates are in the running total.
+- **Comparison.** For the plan and the scenario: cash flow from today to the end of the period, with confirmed and hypothetical income separate (and cash flow without the hypothetical income), the lowest running total and its date, the running total at the end, and every timing gap with its recovery date. Differences, and new, deeper, smaller and resolved gaps (`gapChanges`, shared with estimate previews). `shortfallDespiteGain` is set when the scenario ends higher or has more cash flow yet creates or deepens a gap, so the ending number never hides a shortfall.
+- **Not compared** (cash flow only, with the reason): no upcoming main payday in either forecast, the next payday moves (`anchor-changed`), or a transaction moves from inside the running total to before the next payday (`before-payday`). An added item dated before the next payday counts in cash flow, is marked outside the running total, and is listed as a limitation.
+- **Variable income** (`evaluateIncomeCases`): the same scenario with low, expected and high amounts the person supplies (low may be $0, which adds nothing; low ≤ expected ≤ high), once or on a schedule. The income is hypothetical in every case and never added to the plan; nothing is inferred from history.
+- Hypothetical recurring income never becomes the main paycheck while the person has income of their own; without any, there's no running total to compare.
+
 ## Test matrix
 
 Files are in `src/domain/__tests__/`. "EV" is `engine-validation.test.ts`; "SC" is `saved-changes.test.ts`; "spec" is `spec-scenarios.test.ts`.
@@ -88,6 +99,7 @@ Files are in `src/domain/__tests__/`. "EV" is `engine-validation.test.ts`; "SC" 
 | Batch review: only selected items change, batch undo is exact | `review` (all); `ui/review-sheet` |
 | Review rhythm (periods, due, complete/skip, summary, persistence) | `cadence` (all); `state/review-persistence`; rules test › optional review rhythm |
 | Adaptive estimates (steady, rising, falling, variable, seasonal; unusual payments; too little history; rate and schedule changes; approve, dismiss, repeat; income not estimated; exact cents) | `estimates` (all); `state/estimate-persistence` |
+| Scenarios (one-time, several together, recurring, variable income, anchors, before payday, no stored changes, reconciliation, invalid input) | `scenarios` (all) |
 | Rescheduling and canceling | `forecast` › overdue, rescheduled, and canceled occurrences; spec › H, I; SC › a moved occurrence |
 | Schedule changes and effective dates | `forecast` › recurring schedule changes; spec › F; SC › D1 |
 | Turning items off and on | `forecast` › deactivating stops future occurrences…; SC › D2, items that are turned off |

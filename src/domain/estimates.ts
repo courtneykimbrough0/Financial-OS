@@ -32,8 +32,8 @@ import { formatMoney, type Cents } from './money';
 import { buildForecast, tallyOn, type GapExplanation } from './forecast';
 import { expandSource, findOccurrence } from './occurrences';
 import { changeSourceSchedule, rescheduleOccurrence, type Clock, type Result } from './operations';
-import { compareForecasts, overlaps, type ForecastSnapshot } from './preview';
-import { occurrenceDates } from './recurrence';
+import { compareForecasts, gapChanges, type ForecastSnapshot } from './preview';
+import { startKeepsDates } from './recurrence';
 import type { AppData, EstimateDismissal, OccurrenceRecord, RecurringSource, ScheduleVersion, TransactionKind } from './types';
 
 export type { EstimateDismissal } from './types';
@@ -167,13 +167,7 @@ function isMonthly(v: ScheduleVersion): boolean {
   return v.rule.type === 'monthly' || (v.rule.type === 'custom' && v.rule.unit === 'month' && v.rule.interval === 1);
 }
 
-/** Starting a new version on `start` keeps every later date the current version would give. */
-function keepsDates(version: ScheduleVersion, start: DateStr): boolean {
-  const end = addDays(start, 400);
-  const a = occurrenceDates(version.rule, start, start, end);
-  const b = occurrenceDates(version.rule, version.startDate, start, end);
-  return a.length === b.length && a.every((d, i) => d === b[i]);
-}
+const keepsDates = (version: ScheduleVersion, start: DateStr) => startKeepsDates(version.rule, version.startDate, start);
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -530,7 +524,6 @@ export function previewEstimate(data: AppData, suggestion: EstimateSuggestion, c
   if (!before.forecastStart || !after.forecastStart) return { ok: true, preview: { ...base, ...empty, comparable: false, reason: 'no-forecast' } };
   if (anchorChanged) return { ok: true, preview: { ...base, ...empty, comparable: false, reason: 'anchor-changed' } };
 
-  const overlapping = (g: GapExplanation, list: GapExplanation[]) => list.filter((c) => overlaps(c, g));
   return {
     ok: true,
     preview: {
@@ -538,13 +531,7 @@ export function previewEstimate(data: AppData, suggestion: EstimateSuggestion, c
       comparable: true,
       reason: null,
       lowestChangeCents: current.lowest && proposed.lowest ? proposed.lowest.tallyCents - current.lowest.tallyCents : null,
-      newGaps: proposed.gaps.filter((g) => overlapping(g, current.gaps).length === 0),
-      worsenedGaps: proposed.gaps.filter((g) => overlapping(g, current.gaps).some((c) => g.lowestCents < c.lowestCents)),
-      reducedGaps: proposed.gaps.filter((g) => {
-        const c = overlapping(g, current.gaps);
-        return c.length > 0 && c.every((x) => g.lowestCents > x.lowestCents);
-      }),
-      resolvedGaps: current.gaps.filter((c) => overlapping(c, proposed.gaps).length === 0),
+      ...gapChanges(current.gaps, proposed.gaps),
     },
   };
 }

@@ -67,6 +67,7 @@ src/
     forecast.ts    Anchor, running tally, daily rows, KPIs, week summaries, paycheck cycles
     operations.ts  Every state change (pure functions returning a new state or an error)
     estimates.ts   Estimate suggestions from recorded payments; approve and dismiss
+    scenarios.ts   Several hypothetical changes compared with the plan (no saving)
     sample.ts      Synthetic demonstration data
   state/
     storage.ts     StorageAdapter interface; localStorage implementation with validation
@@ -181,6 +182,7 @@ These rules live in `src/domain/forecast.ts`, and the tests in `src/domain/__tes
 - `preview.test.ts`: what-if previews for one occurrence (move, change amount, leave out), compared with the current forecast, without saving.
 - `gap-explanations.test.ts`: what the forecast shows about each timing gap (payments and income from its start to its lowest point, and the income that ends it), checked in cents against the running totals.
 - `src/ui/__tests__/period-review.test.tsx`: choosing a rhythm (all four, keyboard, reload), the dashboard entry, the review summary, done, skip, closing, payday and overdue items, and a refused save.
+- `scenarios.test.ts`: scenarios of one-time income and expenses, extra and higher liability payments, savings from each paycheck, moved dates and changed amounts, several changes together, low/expected/high income, confirmed vs. hypothetical income, a better ending that hides a shortfall, changed anchors, items before payday, recurring changes across month and year ends, no stored changes, exact reconciliation with `buildForecast`, and invalid input.
 - `src/ui/__tests__/estimate-sheet.test.tsx`: suggestions on bills, subscriptions and liability payments (none for income, savings or short history), the amounts, evidence, unusual payments, seasonal and limited-history wording, the forecast preview, approving with confirmation, a stale approval, dismissing, Not now, and keyboard use.
 - `estimates.test.ts` and `src/state/__tests__/estimate-persistence.test.ts`: estimate suggestions from recorded payments (steady, rising, falling, variable and seasonal amounts, unusual payments, too little history, rate and schedule changes, minimum change), approving and dismissing, income left out, and keeping dismissals on the device, in backups and in account saves.
 - `cadence.test.ts` and `src/state/__tests__/review-persistence.test.ts`: review rhythm periods across week, month, year and daylight-saving boundaries, paydays from the main paycheck, completing and skipping without a backlog, the review summary, and saving, backups and migration.

@@ -117,3 +117,16 @@ export function describeRule(rule: RecurrenceRule, start: DateStr): string {
     }
   }
 }
+
+/**
+ * True when the same rule started on `start` gives exactly the dates it gives
+ * from `anchor`, from `start` on (checked a little over a year ahead). A
+ * month-end date that was clamped (the 31st falling on Nov 30) fails, since
+ * a schedule started there would drift to the 30th.
+ */
+export function startKeepsDates(rule: RecurrenceRule, anchor: DateStr, start: DateStr): boolean {
+  const end = addDays(start, 400);
+  const a = occurrenceDates(rule, start, start, end);
+  const b = occurrenceDates(rule, anchor, start, end);
+  return a.length === b.length && a.every((d, i) => d === b[i]);
+}
