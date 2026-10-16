@@ -2470,6 +2470,39 @@ button.callout.gap-line:focus-visible {
   margin: 0;
 }
 
+/* ---------- Estimate suggestions ---------- */
+
+.estimate-callout {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.estimate-callout > span {
+  flex: 1;
+  min-width: 12em;
+}
+.estimate-limited {
+  margin-left: 8px;
+}
+.estimate-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.estimate-when {
+  margin: 0;
+  font-weight: 600;
+}
+.estimate-notes {
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--color-text-secondary);
+  font-size: var(--text-small);
+}
+.estimate-evidence .gap-entries li {
+  justify-content: space-between;
+}
+.estimate-excluded {
+  color: var(--color-text-secondary);
+}
+
 /* ---------- Review rhythm ---------- */
 
 .rhythm-options {
@@ -2532,4 +2565,8 @@ button.callout.gap-line:focus-visible {
 .review-gap-lines {
   margin: 0;
   padding-left: 1.1em;
+}
+
+.nowrap {
+  white-space: nowrap;
 }

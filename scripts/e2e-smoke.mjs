@@ -3,7 +3,7 @@
 // Walks through onboarding, then records a late, smaller paycheck and checks
 // the dashboard recalculates without changing the next scheduled paycheck.
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
 
@@ -407,6 +407,88 @@ try {
   assert.equal(await page.getByText('You’re exploring sample data.').count(), 0);
   await page.goto(`${BASE}#/income`);
   assert.match(await page.locator('.source-card').innerText(), /Paycheck[\s\S]*Next: Oct 29, 2026/);
+
+  step('estimate suggestion: see the evidence, preview the forecast, approve after confirming');
+  // A household with seven months of electricity bills above its $180 estimate, restored from a backup.
+  // The clock still reads Fri Oct 16. Paid $1,000 every other Friday from Oct 23; rent $1,500 from Nov 1;
+  // a one-time $940 car insurance bill on Jan 2. The last six bills average $214.17, so $215 from Nov 3.
+  const at = '2026-04-01T12:00:00.000Z';
+  const src = (id, kind, description, dollars, startDate, rule) => ({
+    id, kind, description, tags: [], versions: [{ id: `v-${id}`, startDate, amountCents: dollars * 100, rule }],
+    active: true, endDate: null, pausedRanges: [], createdAt: at, updatedAt: at,
+  });
+  const bill = (date, dollars) => ({
+    id: `elec@${date}`, sourceId: 'elec', kind: 'bill', description: 'Electricity', tags: [],
+    expectedDate: date, expectedAmountCents: 18000, scheduledDate: date, scheduledAmountCents: 18000,
+    status: 'completed', actualDate: date, actualAmountCents: dollars * 100, completedAt: `${date}T12:00:00.000Z`,
+    canceledAt: null, cancelNote: null, createdAt: `${date}T12:00:00.000Z`, updatedAt: `${date}T12:00:00.000Z`,
+  });
+  const household = {
+    schemaVersion: 2, revision: 0, onboardingComplete: true,
+    sources: [
+      src('pay', 'income', 'Paycheck', 1000, '2026-10-23', { type: 'biweekly' }),
+      src('rent', 'bill', 'Rent', 1500, '2026-11-01', { type: 'monthly' }),
+      src('elec', 'bill', 'Electricity', 180, '2026-04-03', { type: 'monthly' }),
+    ],
+    records: [
+      ...[['04', 210], ['05', 215], ['06', 220], ['07', 205], ['08', 225], ['09', 210], ['10', 210]].map(([m, d]) => bill(`2026-${m}-03`, d)),
+      { ...bill('2027-01-02', 940), id: 'ins', sourceId: null, description: 'Car insurance', expectedAmountCents: 94000, scheduledAmountCents: 94000,
+        status: 'scheduled', actualDate: null, actualAmountCents: null, completedAt: null },
+    ],
+  };
+  const householdPath = `${SHOTS}household-backup.json`;
+  writeFileSync(householdPath, JSON.stringify({ format: 'financial-os-backup', exportedAt: '2026-10-16T09:00:00.000Z', data: household }));
+  await page.goto(`${BASE}#/settings`);
+  await page.locator('input[aria-label="Backup file"]').setInputFiles(householdPath);
+  const restoreHousehold = page.getByRole('dialog', { name: 'Restore this backup?' });
+  assert.match(await restoreHousehold.innerText(), /This backup has 4 items/);
+  await restoreHousehold.getByRole('button', { name: 'Replace with backup' }).click();
+  await page.getByText('Backup restored.').waitFor();
+  await page.goto(`${BASE}#/expenses`);
+  const elecCard = page.locator('.source-card', { has: page.getByRole('heading', { name: 'Electricity' }) });
+  assert.match(await elecCard.locator('.estimate-callout').innerText(), /Suggested estimate: \$215\.00 instead of \$180\.00 from Nov 3\./);
+  assert.equal(await page.locator('.source-card', { has: page.getByRole('heading', { name: 'Rent' }) }).locator('.estimate-callout').count(), 0);
+  await page.getByRole('button', { name: 'Review the suggestion for Electricity' }).click();
+  const estimate = page.getByRole('dialog', { name: 'Suggestion for Electricity' });
+  const estimateText = await estimate.innerText();
+  assert.match(estimateText, /Average of recent payments/);
+  assert.match(estimateText, /Current estimate\s*\$180\.00\s*Suggested\s*\$215\.00\s*Change\s*\$35\.00 more/);
+  assert.match(estimateText, /From Nov 3, 2026 on/);
+  assert.match(estimateText, /Your last 6 Electricity payments averaged \$214\.17 and ranged from \$205\.00 to \$225\.00\./);
+  // The payments behind it open from the keyboard.
+  await estimate.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await estimate.locator('details').getAttribute('open'), '');
+  assert.equal(await estimate.getByRole('list', { name: 'Payments' }).getByRole('listitem').count(), 7);
+  assert.match(await estimate.getByRole('list', { name: 'Payments' }).innerText(), /Apr 3, 2026 · Not counted: older than the payments used\s*\$210\.00/);
+  await estimate.getByRole('button', { name: 'Preview your forecast' }).click();
+  const estimatePreview = estimate.getByRole('region', { name: 'Forecast preview' });
+  assert.match(await estimatePreview.innerText(), /Your lowest running total would drop from −\$680\.00 to −\$715\.00\./);
+  assert.match(await estimatePreview.innerText(), /New timing gap: Jan 3 – 14, down to −\$85\.00, back to \$0 or more on Jan 15\./);
+  assert.equal(await estimatePreview.getByRole('list', { name: 'Payments that change' }).getByRole('listitem').count(), 3);
+  // Fits a phone screen: nothing scrolls sideways.
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  assert.equal(await estimate.evaluate((el) => el.scrollWidth <= el.clientWidth), true);
+  await estimatePreview.scrollIntoViewIfNeeded();
+  await shot('12-estimate-suggestion');
+  // Nothing saved by looking and previewing.
+  const savedBefore = await page.evaluate(() => localStorage.getItem('financial-os:data'));
+  assert.equal(JSON.parse(savedBefore).sources.find((s) => s.id === 'elec').versions.length, 1);
+  await estimate.getByRole('button', { name: 'Approve…' }).click();
+  const approval = estimate.getByRole('group', { name: 'Approve this change?' });
+  assert.match(await approval.innerText(), /Change the Electricity estimate from \$180\.00 to \$215\.00, starting with the Nov 3, 2026 payment\./);
+  await shot('12b-estimate-confirm');
+  await approval.getByRole('button', { name: 'Approve change' }).click();
+  await page.getByText('Electricity is now expected at $215.00 from Nov 3, 2026.').waitFor();
+  assert.equal(await elecCard.locator('.estimate-callout').count(), 0);
+  assert.match(await elecCard.innerText(), /Scheduled change: \$215\.00, monthly on the 3rd, starting Nov 3, 2026\./);
+  // Saved, and still there after a reload; recorded payments untouched.
+  await page.reload();
+  await page.getByRole('heading', { name: 'Expenses', level: 1 }).waitFor();
+  assert.match(await elecCard.innerText(), /Scheduled change: \$215\.00/);
+  const savedAfter = JSON.parse(await page.evaluate(() => localStorage.getItem('financial-os:data')));
+  assert.deepEqual(savedAfter.sources.find((s) => s.id === 'elec').versions.map((v) => [v.startDate, v.amountCents]), [['2026-04-03', 18000], ['2026-11-03', 21500]]);
+  assert.deepEqual(savedAfter.records.filter((r) => r.sourceId === 'elec').map((r) => [r.expectedAmountCents, r.actualAmountCents]), household.records.filter((r) => r.sourceId === 'elec').map((r) => [r.expectedAmountCents, r.actualAmountCents]));
 
   assert.deepEqual(errors, [], `Console errors: ${errors.join('\n')}`);
   console.log('\nE2E smoke test passed.');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeEstimate, approveEstimate, dismissEstimate, estimateSuggestions, minimumChange, type EstimateSuggestion } from '../estimates';
+import { analyzeEstimate, approveEstimate, dismissEstimate, estimateSuggestions, minimumChange, previewEstimate, type EstimateSuggestion } from '../estimates';
 import { buildForecast, periodKpis } from '../forecast';
 import { findOccurrence, variance } from '../occurrences';
 import * as ops from '../operations';
@@ -29,8 +29,8 @@ function pay(d: AppData, id: string, payments: [string, number, string?][], toda
 const suggestion = (d: AppData, id = 'elec', today = TODAY) => analyzeEstimate(d, id, today).suggestion!;
 
 /** Electricity estimated at $180, paid Apr–Sep: 210, 215, 220, 205, 225, 210. */
-function electricity(estimate = 180): AppData {
-  return pay(item(estimate, '2026-01-03'), 'elec', [
+function electricity(estimate = 180, start = '2026-01-03'): AppData {
+  return pay(item(estimate, start), 'elec', [
     ['2026-04-03', 210],
     ['2026-05-03', 215],
     ['2026-06-03', 220],
@@ -290,8 +290,8 @@ describe('seasonal amounts', () => {
       differenceCents: 6000,
       confidence: 'limited',
       through: '2026-09-03',
-      explanation: 'Electricity changes with the season. Your November 2025 payment was $240.00. Your Nov 3, 2026 payment is expected at $180.00. Consider $240.00 for that payment.',
-      limitations: ['Based on one earlier November.', 'For this one payment only; later payments keep $180.00.'],
+      explanation: 'Electricity may change with the season. Your November 2025 payment was $240.00. Your Nov 3, 2026 payment is expected at $180.00. Consider $240.00 for that payment.',
+      limitations: ["Based on one earlier November; one year doesn't show a reliable yearly pattern.", 'For this one payment only; later payments keep $180.00.'],
     });
     expect(s.observations.filter((o) => o.counted).map((o) => o.originalDate)).toEqual(['2025-11-03']);
   });
@@ -310,7 +310,7 @@ describe('seasonal amounts', () => {
     d = unwrap(ops.rescheduleOccurrence(d, 'elec@2026-11-03', { date: '2026-11-06', amountCents: usd(180) }, clock));
     const s = suggestion(d);
     expect(s).toMatchObject({ occurrenceId: 'elec@2026-11-03', effectiveDate: '2026-11-06', currentCents: 18000, proposedCents: 24000 });
-    expect(s.explanation).toBe('Electricity changes with the season. Your November 2025 payment was $240.00. Your Nov 6, 2026 payment is expected at $180.00. Consider $240.00 for that payment.');
+    expect(s.explanation).toBe('Electricity may change with the season. Your November 2025 payment was $240.00. Your Nov 6, 2026 payment is expected at $180.00. Consider $240.00 for that payment.');
     const next = unwrap(approveEstimate(d, s, clock));
     expect(findOccurrence(next, 'elec@2026-11-03', TODAY)).toMatchObject({ expectedDate: '2026-11-03', scheduledDate: '2026-11-06', expectedAmountCents: 18000, scheduledAmountCents: 24000 });
   });
@@ -698,5 +698,142 @@ describe('repeatable and exact', () => {
     const s = suggestion(d);
     expect(s).toMatchObject({ proposedCents: 10100, averageCents: 10002, lowCents: 10001, highCents: 10004, differenceCents: 1100 });
     expect(s.explanation).toBe('Your last 3 Electricity payments averaged $100.02 and ranged from $100.01 to $100.04. Your current estimate is $90.00. Consider $101.00 from Nov 3, 2026.');
+  });
+});
+
+describe('why payments weren’t counted', () => {
+  it('marks unusual and older payments', () => {
+    const d = pay(item(120, '2026-01-03'), 'elec', [
+      ['2026-03-03', 148],
+      ['2026-04-03', 152],
+      ['2026-05-03', 150],
+      ['2026-06-03', 149],
+      ['2026-07-03', 151],
+      ['2026-08-03', 150],
+      ['2026-09-03', 400],
+    ]);
+    expect(suggestion(d).observations.map((o) => [o.originalDate, o.counted, o.excluded])).toEqual([
+      ['2026-03-03', false, 'earlier'],
+      ['2026-04-03', true, null],
+      ['2026-05-03', true, null],
+      ['2026-06-03', true, null],
+      ['2026-07-03', true, null],
+      ['2026-08-03', true, null],
+      ['2026-09-03', false, 'unusual'],
+    ]);
+  });
+});
+
+describe('previewing a suggestion', () => {
+  /*
+   * Paid $1,000 every other Friday from Oct 23 (the running total starts Oct
+   * 22); rent $1,500 on the 1st from Nov 1; a one-time $940 insurance bill on
+   * Jan 2; electricity as in `electricity()` but starting in April, so
+   * nothing is overdue, October paid $210. The suggestion is $215 from
+   * Nov 3. Running totals (now → with $215):
+   *   Nov 1 −500; Nov 3 −680 → −715; Nov 6 320 → 285
+   *   Dec 1 −180 → −215; Dec 3 −360 → −430; Dec 4 640 → 570
+   *   Jan 1 1,140 → 1,070; Jan 2 200 → 130; Jan 3 20 → −85; Jan 15 1,020 → 915
+   */
+  function outlook(): AppData {
+    let d = pay(electricity(180, '2026-04-03'), 'elec', [['2026-10-03', 210]]);
+    d = item(1000, '2026-10-23', { id: 'pay', name: 'Paycheck', kind: 'income', rule: { type: 'biweekly' } }, d);
+    d = item(1500, '2026-11-01', { id: 'rent', name: 'Rent' }, d);
+    return unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Car insurance', amountCents: usd(940), date: '2027-01-02' }, clock, 'ins'));
+  }
+
+  it('covers every later payment of a change from a date on, over the 90-day window, without saving', () => {
+    const d = outlook();
+    const before = JSON.stringify(d);
+    const s = suggestion(d);
+    expect([s.proposedCents, s.effectiveDate]).toEqual([21500, '2026-11-03']);
+    const r = previewEstimate(d, s, clock);
+    if (!r.ok) throw new Error(r.error);
+    const p = r.preview;
+    expect(JSON.stringify(d)).toBe(before);
+    expect(p).toMatchObject({ window: { start: '2026-10-23', end: '2027-01-20' }, comparable: true, reason: null, lowestChangeCents: -3500, continuesAfter: '2027-01-20' });
+    expect(p.payments).toEqual([
+      { occurrenceId: 'elec@2026-11-03', date: '2026-11-03', currentCents: 18000, proposedCents: 21500, inRunningTotal: true, currentTallyCents: -68000, proposedTallyCents: -71500 },
+      { occurrenceId: 'elec@2026-12-03', date: '2026-12-03', currentCents: 18000, proposedCents: 21500, inRunningTotal: true, currentTallyCents: -36000, proposedTallyCents: -43000 },
+      { occurrenceId: 'elec@2027-01-03', date: '2027-01-03', currentCents: 18000, proposedCents: 21500, inRunningTotal: true, currentTallyCents: 2000, proposedTallyCents: -8500 },
+    ]);
+    expect([p.current.lowest, p.proposed.lowest]).toEqual([
+      { date: '2026-11-03', tallyCents: -68000 },
+      { date: '2026-11-03', tallyCents: -71500 },
+    ]);
+    const gap = (g: { start: string; end: string; lowestCents: number }) => [g.start, g.end, g.lowestCents];
+    expect(p.newGaps.map(gap)).toEqual([['2027-01-03', '2027-01-14', -8500]]);
+    expect(p.worsenedGaps.map(gap)).toEqual([
+      ['2026-11-01', '2026-11-05', -71500],
+      ['2026-12-01', '2026-12-03', -43000],
+    ]);
+    expect([p.reducedGaps, p.resolvedGaps]).toEqual([[], []]);
+  });
+
+  it('a lower estimate shows gaps getting smaller or going away', () => {
+    // Electricity estimated at $250; the same payments suggest $215.
+    let d = pay(electricity(250, '2026-04-03'), 'elec', [['2026-10-03', 210]]);
+    d = item(1000, '2026-10-23', { id: 'pay', name: 'Paycheck', kind: 'income', rule: { type: 'biweekly' } }, d);
+    d = item(1500, '2026-11-01', { id: 'rent', name: 'Rent' }, d);
+    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Car insurance', amountCents: usd(940), date: '2027-01-02' }, clock, 'ins'));
+    const r = previewEstimate(d, suggestion(d), clock);
+    if (!r.ok) throw new Error(r.error);
+    // Running totals now → with $215: Nov 3 −750 → −715; Dec 3 −500 → −430; Jan 2 60 → 130; Jan 3 −190 → −85.
+    expect(r.preview.lowestChangeCents).toBe(3500);
+    expect(r.preview.reducedGaps.map((g) => [g.start, g.lowestCents])).toEqual([
+      ['2026-11-01', -71500],
+      ['2026-12-01', -43000],
+      ['2027-01-03', -8500],
+    ]);
+    expect(r.preview.newGaps).toEqual([]);
+    expect(r.preview.worsenedGaps).toEqual([]);
+  });
+
+  it('a payment before the next payday changes cash flow, not the running total', () => {
+    let d = pay(item(60, '2026-07-25', { id: 'phone', name: 'Phone' }), 'phone', [
+      ['2026-07-25', 65],
+      ['2026-08-25', 65],
+      ['2026-09-25', 65],
+    ]);
+    d = item(1000, '2026-10-30', { id: 'pay', name: 'Paycheck', kind: 'income', rule: { type: 'biweekly' } }, d);
+    const r = previewEstimate(d, suggestion(d, 'phone'), clock);
+    if (!r.ok) throw new Error(r.error);
+    // Running total from Oct 30: +1,000; Nov 13 +1,000 = 2,000; Nov 25 −65 instead of −60.
+    expect(r.preview.payments.slice(0, 2)).toEqual([
+      { occurrenceId: 'phone@2026-10-25', date: '2026-10-25', currentCents: 6000, proposedCents: 6500, inRunningTotal: false, currentTallyCents: null, proposedTallyCents: null },
+      { occurrenceId: 'phone@2026-11-25', date: '2026-11-25', currentCents: 6000, proposedCents: 6500, inRunningTotal: true, currentTallyCents: 194000, proposedTallyCents: 193500 },
+    ]);
+  });
+
+  it('a seasonal suggestion changes only its one payment', () => {
+    const d = pay(item(180, '2025-09-03'), 'elec', [
+      ['2025-09-03', 190],
+      ['2025-10-03', 160],
+      ['2025-11-03', 240],
+      ['2025-12-03', 270],
+      ['2026-01-03', 280],
+      ['2026-02-03', 250],
+      ['2026-03-03', 190],
+      ['2026-04-03', 150],
+      ['2026-05-03', 140],
+      ['2026-06-03', 170],
+      ['2026-07-03', 230],
+      ['2026-08-03', 240],
+      ['2026-09-03', 180],
+    ]);
+    const s = suggestion(d);
+    expect(s.observations.filter((o) => o.excluded === 'other-month').length).toBe(11);
+    const r = previewEstimate(d, s, clock);
+    if (!r.ok) throw new Error(r.error);
+    // No income, so no running total to compare.
+    expect(r.preview).toMatchObject({ comparable: false, reason: 'no-forecast', continuesAfter: null });
+    expect(r.preview.payments.map((p) => [p.date, p.currentCents, p.proposedCents, p.inRunningTotal])).toEqual([['2026-11-03', 18000, 24000, false]]);
+  });
+
+  it('is refused for an out-of-date suggestion', () => {
+    const d = electricity();
+    const s = suggestion(d);
+    const r = previewEstimate(pay(d, 'elec', [['2026-10-03', 230]]), s, clock);
+    expect(r).toEqual({ ok: false, error: 'This suggestion is out of date. Look at the latest one before choosing.' });
   });
 });

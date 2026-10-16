@@ -29,8 +29,10 @@
  */
 import { addDays, formatMedium, parts, type DateStr } from './dates';
 import { formatMoney, type Cents } from './money';
+import { buildForecast, tallyOn, type GapExplanation } from './forecast';
 import { expandSource, findOccurrence } from './occurrences';
 import { changeSourceSchedule, rescheduleOccurrence, type Clock, type Result } from './operations';
+import { compareForecasts, overlaps, type ForecastSnapshot } from './preview';
 import { occurrenceDates } from './recurrence';
 import type { AppData, EstimateDismissal, OccurrenceRecord, RecurringSource, ScheduleVersion, TransactionKind } from './types';
 
@@ -70,6 +72,13 @@ export interface EstimateObservation {
   actualAmountCents: Cents;
   /** Whether this payment counted toward the suggested amount. */
   counted: boolean;
+  /**
+   * Why a considered payment wasn't counted: more than 25% from the median
+   * (`unusual`), older than the payments the rule uses (`earlier`), or another
+   * month than the one a seasonal suggestion is for (`other-month`). Null when
+   * counted, or when no rule was applied (too little history).
+   */
+  excluded: 'unusual' | 'earlier' | 'other-month' | null;
 }
 
 export type EstimatePattern = 'steady' | 'rising' | 'falling' | 'variable' | 'seasonal';
@@ -176,10 +185,18 @@ interface Raw {
   all: EstimateObservation[];
 }
 
+function mark(considered: EstimateObservation[], counted: Set<string>, unusual: EstimateObservation[], pattern: EstimatePattern): EstimateObservation[] {
+  const odd = new Set(unusual.map((o) => o.occurrenceId));
+  return considered.map((o) => {
+    const c = counted.has(o.occurrenceId);
+    return { ...o, counted: c, excluded: c ? null : odd.has(o.occurrenceId) ? 'unusual' : pattern === 'seasonal' ? 'other-month' : 'earlier' };
+  });
+}
+
 const none = (reason: NoSuggestionReason, observations: EstimateObservation[] = [], all = observations): Raw => ({ suggestion: null, reason, observations, all });
 
 function observe(r: OccurrenceRecord): EstimateObservation {
-  return { occurrenceId: r.id, originalDate: r.expectedDate, actualDate: r.actualDate!, expectedAmountCents: r.expectedAmountCents, actualAmountCents: r.actualAmountCents!, counted: false };
+  return { occurrenceId: r.id, originalDate: r.expectedDate, actualDate: r.actualDate!, expectedAmountCents: r.expectedAmountCents, actualAmountCents: r.actualAmountCents!, counted: false, excluded: null };
 }
 
 function evaluate(data: AppData, source: RecurringSource, today: DateStr): Raw {
@@ -231,11 +248,12 @@ function evaluate(data: AppData, source: RecurringSource, today: DateStr): Raw {
     explain: (current: string, proposed: string, when: string) => string,
     extra: string[] = [],
     basis?: { confidence: EstimateSuggestion['confidence']; note: string | null },
+    unusual: EstimateObservation[] = [],
   ): Raw => {
     const ids = new Set(counted.map((o) => o.occurrenceId));
     // A schedule version starts on an original date; a single payment keeps the date it's expected on now.
     const effectiveDate = scope === 'one-payment' ? at.scheduledDate : at.expectedDate;
-    const observations = considered.map((o) => ({ ...o, counted: ids.has(o.occurrenceId) }));
+    const observations = mark(considered, ids, unusual, pattern);
     const differenceCents = proposedCents - currentCents;
     if (Math.abs(differenceCents) < minimumChange(currentCents)) return none('close-enough', observations, all);
     const values = counted.map((o) => o.actualAmountCents);
@@ -289,8 +307,11 @@ function evaluate(data: AppData, source: RecurringSource, today: DateStr): Raw {
             : `Your ${month} payments averaged ${formatMoney(roundAverage(sum, sameMonth.length))} over the last ${sameMonth.length} years.`;
         const extra = [`For this one payment only; later payments keep ${formatMoney(version.amountCents)}.`];
         if (proposed * sameMonth.length !== sum) extra.push('Rounded up to the next whole dollar.');
-        const basis = sameMonth.length < 2 ? { confidence: 'limited' as const, note: `Based on one earlier ${month}.` } : { confidence: 'established' as const, note: null };
-        return build('seasonal', sameMonth, considered, proposed, 'one-payment', target, target.scheduledAmountCents, (cur, prop, when) => `${name} changes with the season. ${history} Your ${when} payment is expected at ${cur}. Consider ${prop} for that payment.`, extra, basis);
+        const basis =
+          sameMonth.length < 2
+            ? { confidence: 'limited' as const, note: `Based on one earlier ${month}; one year doesn't show a reliable yearly pattern.` }
+            : { confidence: 'established' as const, note: null };
+        return build('seasonal', sameMonth, considered, proposed, 'one-payment', target, target.scheduledAmountCents, (cur, prop, when) => `${name} may change with the season. ${history} Your ${when} payment is expected at ${cur}. Consider ${prop} for that payment.`, extra, basis);
       }
     }
   }
@@ -329,17 +350,14 @@ function evaluate(data: AppData, source: RecurringSource, today: DateStr): Raw {
   const values = kept.map((o) => o.actualAmountCents);
   const low = Math.min(...values);
   const high = Math.max(...values);
-  if (current >= low && current <= high) {
-    const ids = new Set(kept.map((o) => o.occurrenceId));
-    return none('close-enough', window.map((o) => ({ ...o, counted: ids.has(o.occurrenceId) })), all);
-  }
+  if (current >= low && current <= high) return none('close-enough', mark(window, new Set(kept.map((o) => o.occurrenceId)), unusual, 'variable'), all);
   const sum = sumOf(values);
   const proposed = ceilDollarAverage(sum, kept.length);
   const extra: string[] = [];
   if (unusual.length > 0) extra.push(`Left out as unusual: ${unusual.map((o) => `${formatMoney(o.actualAmountCents)} (${formatMedium(o.originalDate)})`).join(', ')}.`);
   if (proposed * kept.length !== sum) extra.push('Rounded up to the next whole dollar.');
   const which = unusual.length > 0 ? `${kept.length} of your last ${recent.length} ${name} payments` : `Your last ${kept.length} ${name} payments`;
-  return build('variable', kept, window, proposed, 'from-date', rateTarget, current, (cur, prop, when) => `${which} averaged ${formatMoney(roundAverage(sum, kept.length))} and ranged from ${formatMoney(low)} to ${formatMoney(high)}. Your current estimate is ${cur}. Consider ${prop} from ${when}.`, extra);
+  return build('variable', kept, window, proposed, 'from-date', rateTarget, current, (cur, prop, when) => `${which} averaged ${formatMoney(roundAverage(sum, kept.length))} and ranged from ${formatMoney(low)} to ${formatMoney(high)}. Your current estimate is ${cur}. Consider ${prop} from ${when}.`, extra, undefined, unusual);
 }
 
 function isDismissed(source: RecurringSource, raw: Raw): boolean {
@@ -437,4 +455,96 @@ export function dismissEstimate(data: AppData, suggestion: EstimateSuggestion, c
   if (typeof found === 'string') return { ok: false, error: found };
   const dismissal: EstimateDismissal = { currentCents: suggestion.currentCents, proposedCents: suggestion.proposedCents, through: suggestion.through };
   return { ok: true, data: { ...data, sources: data.sources.map((s) => (s.id === found.source.id ? { ...s, estimateDismissal: dismissal } : s)) } };
+}
+
+// ---------------------------------------------------------------------------
+// Preview
+// ---------------------------------------------------------------------------
+
+/** One payment the suggestion would change, within the comparison. */
+export interface EstimatePreviewPayment {
+  occurrenceId: string;
+  /** The date it counts on in the forecast. */
+  date: DateStr;
+  currentCents: Cents;
+  proposedCents: Cents;
+  /** False before the next payday, where the running total doesn't reach. */
+  inRunningTotal: boolean;
+  /** Running total at the end of that day, now and with the suggestion; null outside the running total. */
+  currentTallyCents: Cents | null;
+  proposedTallyCents: Cents | null;
+}
+
+export interface EstimatePreview {
+  /** Both forecasts are measured over these dates (see `compareForecasts`). */
+  window: { start: DateStr; end: DateStr };
+  current: ForecastSnapshot;
+  proposed: ForecastSnapshot;
+  /** False when there's no running total to compare, or its starting payday would change. */
+  comparable: boolean;
+  reason: 'no-forecast' | 'anchor-changed' | null;
+  /** Proposed lowest running total minus the current one. */
+  lowestChangeCents: Cents | null;
+  /** Every payment of the item the suggestion changes, from today through the end of the comparison. */
+  payments: EstimatePreviewPayment[];
+  /** Proposed gaps on dates with no gap today. */
+  newGaps: GapExplanation[];
+  /** Proposed gaps that go lower than a current gap they overlap. */
+  worsenedGaps: GapExplanation[];
+  /** Proposed gaps that stay above a current gap they overlap. */
+  reducedGaps: GapExplanation[];
+  /** Current gaps with no gap on those dates under the suggestion. */
+  resolvedGaps: GapExplanation[];
+  /** For a change from a date on: the comparison ends here, and the new estimate keeps applying after it. */
+  continuesAfter: DateStr | null;
+}
+
+export type EstimatePreviewResult = { ok: true; preview: EstimatePreview } | { ok: false; error: string };
+
+/**
+ * The forecast with a suggestion approved, next to the forecast as it is.
+ * The approval runs on a copy with `approveEstimate` itself, so the preview
+ * covers exactly what approving would change: every later payment for a
+ * change from a date on, or the one payment for a seasonal suggestion.
+ * Nothing is saved. Refused, like approval, if the suggestion is out of date.
+ */
+export function previewEstimate(data: AppData, suggestion: EstimateSuggestion, clock: Clock, options: { through?: DateStr } = {}): EstimatePreviewResult {
+  const applied = approveEstimate(data, suggestion, clock);
+  if (!applied.ok) return applied;
+  const before = buildForecast(data, clock.today, { through: options.through });
+  const after = buildForecast(applied.data, clock.today, { through: options.through });
+  const { window, current, proposed, anchorChanged } = compareForecasts(before, after, clock.today, options.through);
+
+  const was = new Map(before.entries.map((e) => [e.occurrence.id, e]));
+  const payments: EstimatePreviewPayment[] = after.entries
+    .filter((e) => e.occurrence.sourceId === suggestion.sourceId && e.counts && e.date >= clock.today && e.date <= window.end)
+    .flatMap((e) => {
+      const b = was.get(e.occurrence.id);
+      if (!b || b.amountCents === e.amountCents) return [];
+      const inRunningTotal = after.forecastStart !== null && e.date >= after.forecastStart;
+      return [{ occurrenceId: e.occurrence.id, date: e.date, currentCents: b.amountCents, proposedCents: e.amountCents, inRunningTotal, currentTallyCents: inRunningTotal ? tallyOn(before, e.date) : null, proposedTallyCents: inRunningTotal ? tallyOn(after, e.date) : null }];
+    });
+
+  const base = { window, current, proposed, payments, continuesAfter: suggestion.scope === 'from-date' ? window.end : null };
+  const empty = { lowestChangeCents: null, newGaps: [], worsenedGaps: [], reducedGaps: [], resolvedGaps: [] };
+  if (!before.forecastStart || !after.forecastStart) return { ok: true, preview: { ...base, ...empty, comparable: false, reason: 'no-forecast' } };
+  if (anchorChanged) return { ok: true, preview: { ...base, ...empty, comparable: false, reason: 'anchor-changed' } };
+
+  const overlapping = (g: GapExplanation, list: GapExplanation[]) => list.filter((c) => overlaps(c, g));
+  return {
+    ok: true,
+    preview: {
+      ...base,
+      comparable: true,
+      reason: null,
+      lowestChangeCents: current.lowest && proposed.lowest ? proposed.lowest.tallyCents - current.lowest.tallyCents : null,
+      newGaps: proposed.gaps.filter((g) => overlapping(g, current.gaps).length === 0),
+      worsenedGaps: proposed.gaps.filter((g) => overlapping(g, current.gaps).some((c) => g.lowestCents < c.lowestCents)),
+      reducedGaps: proposed.gaps.filter((g) => {
+        const c = overlapping(g, current.gaps);
+        return c.length > 0 && c.every((x) => g.lowestCents > x.lowestCents);
+      }),
+      resolvedGaps: current.gaps.filter((c) => overlapping(c, proposed.gaps).length === 0),
+    },
+  };
 }

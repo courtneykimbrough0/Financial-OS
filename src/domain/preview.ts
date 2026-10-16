@@ -93,7 +93,18 @@ function snapshot(f: Forecast, window: { start: DateStr; end: DateStr }): Foreca
   };
 }
 
-const overlaps = (a: { start: DateStr; end: DateStr }, b: { start: DateStr; end: DateStr }) => a.start <= b.end && b.start <= a.end;
+export const overlaps = (a: { start: DateStr; end: DateStr }, b: { start: DateStr; end: DateStr }) => a.start <= b.end && b.start <= a.end;
+
+/**
+ * The current and proposed forecasts measured over the same dates: the
+ * current forecast's 90-day warning window from its start, or longer to
+ * cover `through`. Shared by every preview so they compare alike.
+ */
+export function compareForecasts(before: Forecast, after: Forecast, today: DateStr, through?: DateStr) {
+  const start = before.forecastStart ?? today;
+  const window = { start, end: maxDate(addDays(start, GAP_LOOKAHEAD_DAYS - 1), through ?? start) };
+  return { window, current: snapshot(before, window), proposed: snapshot(after, window), anchorChanged: before.forecastStart !== after.forecastStart };
+}
 
 /** Previews `change` without saving it. Rejected with the operation's own message when the change isn't allowed. */
 export function previewChange(data: AppData, change: ProposedChange, clock: ops.Clock, options: { through?: DateStr } = {}): PreviewResult {
@@ -102,12 +113,8 @@ export function previewChange(data: AppData, change: ProposedChange, clock: ops.
   const before = buildForecast(data, clock.today, { through: options.through });
   const after = buildForecast(applied.data, clock.today, { through: options.through });
 
-  const start = before.forecastStart ?? clock.today;
   // The 90-day warning window, or longer to cover a period being viewed further out.
-  const window = { start, end: maxDate(addDays(start, GAP_LOOKAHEAD_DAYS - 1), options.through ?? start) };
-  const current = snapshot(before, window);
-  const proposed = snapshot(after, window);
-  const anchorChanged = before.forecastStart !== after.forecastStart;
+  const { window, current, proposed, anchorChanged } = compareForecasts(before, after, clock.today, options.through);
   const base = { change, window, current, proposed, anchorChanged };
 
   if (!before.forecastStart || !after.forecastStart) {

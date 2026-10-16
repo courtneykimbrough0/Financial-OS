@@ -9,6 +9,7 @@ import { liabilityPrefix, mainPaycheckId, type AppData, type Occurrence, type Re
 import { useStore } from '../../state/store';
 import { EmptyState, FlowAmount, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
 import { KIND_COPY, MainPaycheckPicker, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm } from '../components/forms';
+import { EstimateCallout, EstimateSheet, useEstimateSuggestion } from '../components/EstimateSheet';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 
 const SCREEN_COPY: Record<
@@ -105,6 +106,8 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
   const [expanded, setExpanded] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
   const [reactivating, setReactivating] = useState(false);
+  const [reviewingEstimate, setReviewingEstimate] = useState(false);
+  const suggestion = useEstimateSuggestion(source);
   const current = source.versions[source.versions.length - 1]!;
   const occurrences = useMemo(() => (expanded ? sourceOccurrences(data, source, today) : []), [expanded, data, source, today]);
   const overdueCount = useMemo(
@@ -159,6 +162,7 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
           Scheduled change: {formatMoney(upcomingChange.amountCents)}, {describeRule(upcomingChange.rule, upcomingChange.startDate).toLowerCase()}, starting {formatMedium(upcomingChange.startDate)}.
         </p>
       )}
+      {suggestion && <EstimateCallout suggestion={suggestion} onOpen={() => setReviewingEstimate(true)} />}
       {overdueCount > 0 && (
         <p className="callout callout-warn small">
           <Icon icon={AlertCircle} size={16} /> 
@@ -222,6 +226,7 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
           </div>
         </Modal>
       )}
+      {reviewingEstimate && <EstimateSheet sourceId={source.id} onClose={() => setReviewingEstimate(false)} />}
       {reactivating && (
         <Modal title={`Turn on ${source.description}`} onClose={() => setReactivating(false)}>
           <ReactivateForm source={source} onDone={() => setReactivating(false)} />
