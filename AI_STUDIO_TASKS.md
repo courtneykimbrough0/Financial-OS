@@ -1,5 +1,7 @@
 # Firebase setup tasks for AI Studio
 
+> **Legacy infrastructure.** Firebase/Firestore and Cloud Run run the current version of Financial OS and will be replaced by Supabase and Vercel (see [AGENTS.md](AGENTS.md) section C1). These tasks are no longer a development priority. Keep the current version working and this page accurate, but don't deploy Firestore rules, turn on `REVIEW_RHYTHM_IN_ACCOUNTS`, add Firebase storage features or change Firebase sign-in unless the product owner asks.
+
 The app code for Firebase accounts is done and tested; see the "Accounts (Firebase)" section of README.md. What's left is setup in the Firebase and Google Cloud consoles that can't be done from the code. Work through these in order and check each one off.
 
 Firebase project: `financial-os-505002`. Firestore database: `ai-studio-financialos-de1b8680-2780-4a6a-8754-0c3455a5b5c8`.
@@ -31,7 +33,7 @@ Firebase project: `financial-os-505002`. Firestore database: `ai-studio-financia
 - [x] Checked `(default)` database: Verified that project `financial-os-505002` does not have a `(default)` database (returned `5 NOT_FOUND`); only the named database exists.
 - [ ] Confirm by signing in, adding an item, and reloading: the item is still there.
 
-- [ ] **Deploy again to turn on the review rhythm for accounts.** This version of `firestore.rules` accepts the optional `review` field. Until it is live, the app keeps the review rhythm off for signed-in people (`REVIEW_RHYTHM_IN_ACCOUNTS = false` in `src/state/features.ts`), so saves keep working. To turn it on:
+- [ ] **Deploy again to turn on the review rhythm for accounts.** (Not planned: Firebase is legacy, so signed-in review rhythms wait for the Supabase migration. Kept for reference.) This version of `firestore.rules` accepts the optional `review` field. Until it is live, the app keeps the review rhythm off for signed-in people (`REVIEW_RHYTHM_IN_ACCOUNTS = false` in `src/state/features.ts`), so saves keep working. To turn it on:
   1. Deploy `firestore.rules` to the named database (only the rules).
   2. Check it: sign in, open the browser console on the app and confirm a normal change still saves; then in the Firebase console's Rules playground, simulate an update to `financialData/{your uid}` that includes `review: { cadence: 'weekly', handledOn: null, outcome: null }` and confirm it is allowed.
   3. Set `REVIEW_RHYTHM_IN_ACCOUNTS` to `true`, run the checks in AGENTS.md section H, and publish.

@@ -1,5 +1,7 @@
 # Security Specification: Financial OS Firestore Rules
 
+These rules protect the current (legacy) Firebase version of Financial OS. Supabase will replace Firestore (AGENTS.md section C1); until then, keep these guarantees and their tests.
+
 `firestore.rules` is tested against the Firestore emulator by
 `src/state/__tests__/firestore.rules.test.ts` (`npm run test:rules`). Every
 statement below is one or more of those tests.

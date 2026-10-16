@@ -12,6 +12,19 @@ Each step lists:
 
 "Today" notes describe the code as of commit `957cdc2` (October 2026). Verify them; they will drift.
 
+## Development order (October 2026)
+
+The product owner's architecture decisions are in [AGENTS.md](AGENTS.md) section C1: Supabase (PostgreSQL, and later authentication) for data, Vercel for hosting, an online-first PWA with no offline synchronization, and authentication deferred. Firebase/Firestore, Cloud Run hosting and offline synchronization are legacy, kept running until the migration removes them. Work in this order:
+
+1. Finish the core financial features: Steps 6–9.
+2. Finalize and verify the data architecture: Step 10a.
+3. Move persistence to Supabase: Step 10b.
+4. Remove offline synchronization: Step 10c.
+5. Complete authentication and per-user data isolation: Step 10d.
+6. Deploy and test the finished application on Vercel: Step 10e.
+
+Then validate with real users (Step 11) and keep release readiness (Step 12).
+
 ---
 
 ## Step 0: Establish a trustworthy baseline
@@ -164,7 +177,7 @@ Each step lists:
 ## Step 8: Improve onboarding, imports, and recovery
 
 **Inspect**
-- Guided setup (`Onboarding.tsx`), backup and restore (`backup.ts`), moving device data into an account (`DeviceDataOffer`), and sample data (`mode.tsx`).
+- Guided setup (`Onboarding.tsx`), backup and restore (`backup.ts`), moving device data into an account (`DeviceDataOffer`; legacy Firebase accounts), and sample data (`mode.tsx`).
 
 **Build or correct**
 - Safe manual entry first. Optionally, spreadsheet import and user-initiated statement parsing with a preview step: validation, duplicate detection, recurring suggestions, transfers, refunds, card payments, and ambiguous items flagged for review.
@@ -200,24 +213,58 @@ Only if the product owner authorizes implementation.
 **Exit criteria**
 - Allocations are optional, explainable, and never double counted.
 
-## Step 10: Validate persistence, offline behavior, security, and the PWA
+## Step 10: Data architecture, Supabase, and deployment
+
+Replaces the earlier plan to validate Firebase persistence and offline behavior. Each stage is its own authorized task, in order.
+
+### 10a. Finalize and verify the data architecture
 
 **Inspect**
-- `storage.ts`, `store.tsx`, `cloud.ts`, `firebase.ts`, `firestore.rules`, `server.mjs`, `vite.config.ts` (service worker), and [AI_STUDIO_TASKS.md](AI_STUDIO_TASKS.md).
+- `types.ts`, `storage.ts` (`StorageAdapter`, `migrate`), `store.tsx`, `backup.ts`, and every persisted field, including ones added by Steps 6–9.
 
 **Build or correct**
-- Fix any gap found. Complete the console tasks in AI_STUDIO_TASKS.md (API-key restrictions, App Check, backups).
-
-**Tests**
-- Local and cloud saves, failed saves, conflicts (another device or tab), refused saves, and offline changes sent later.
-- Backup and restore validation; sample-data isolation; schema migrations.
-- Sign-in, sign-out with unsent changes, account deletion (confirm with Google first).
-- Firestore rules against the emulator (`npm run test:rules`).
-- Installability; the service worker never reloads mid-entry and never answers sign-in pages; offline start.
-- On a real iPhone, installed from Safari: sign in, reopen, offline change, reconnect.
+- A relational schema for sources, schedule versions, occurrence records and settings, with ownership on every row, and a mapping from today's JSON document. No code moves yet.
 
 **Exit criteria**
-- No known data-loss path; rules and security guarantees are tested; the installed app works on iPhone and Android.
+- The product owner approves the schema, the migration path for existing data, and how a refused or failed save is reported.
+
+### 10b. Move persistence to Supabase
+
+**Build or correct**
+- A Supabase `StorageAdapter`. The forecast engine and screens stay unchanged. Existing data (device copies, backups and Firestore documents) moves over safely.
+
+**Tests**
+- Saves, failed saves, refused saves and conflicts (another device or tab). The app never reports a save the backend didn't accept.
+- Data migration from each current source, with nothing lost or doubled.
+
+### 10c. Remove offline synchronization
+
+**Build or correct**
+- Remove the on-device copy, pending changes and set-aside recovery (`cloud.ts`), keeping in-memory editing, immediate forecasts, retry of a failed save, and clear unsaved-change messages.
+- Keep PWA installation and caching of the app's own files.
+
+**Tests**
+- Unsaved and failed-save states are always visible; the service worker never reloads mid-entry.
+
+### 10d. Authentication and data isolation
+
+**Build or correct**
+- Supabase sign-in, and row-level security so each person reaches only their own records. Remove Firebase sign-in, `firebase.ts`, `firestore.rules` and the Firestore tests once nothing depends on them.
+
+**Tests**
+- Access controls against a real Supabase instance (local or test project), including denied access to other people's data and signed-out access.
+- Sign-in, sign-out, and account deletion.
+
+### 10e. Deploy on Vercel
+
+**Build or correct**
+- Vercel hosting, replacing Cloud Run (`server.mjs`, `Dockerfile`) once nothing depends on them.
+
+**Tests**
+- Installability; on a real iPhone, installed from Safari: sign in, reopen, make a change, and see it saved.
+
+**Exit criteria (Step 10)**
+- No known data-loss path; access controls are tested against Supabase; the installed app works on iPhone and Android.
 
 ## Step 11: Validate with real users
 
@@ -261,8 +308,8 @@ Only if the product owner authorizes implementation.
 - **Step 3: complete.** A review list (overdue and due today first, then the rest of the week) with selection, **Mark done** as expected and **Move to a date** for several items at once, and **Undo** that reverses the whole batch exactly (`recordAsExpected`, `rescheduleSelected`, `undoBatch`, `reviewEntries`). The item sheet names the scope: “Change just this one” or “Change this and later ones”. Tests: `review.test.ts`, `ui/__tests__/review-sheet.test.tsx`, and a review step in the end-to-end test.
 - **Step 4: complete with follow-ups.** Dashboard warning → explanation of each timing gap (`explainTimingGaps`, `gaps.tsx`) → What if… for one outstanding item: move, change amount, or skip (`previewChange`, `WhatIfSheet.tsx`) → confirmation → the change applied to that one occurrence (`applyPreviewedChange`). Previews never save; Apply needs confirmation, is refused for stale previews and for previews that can't be compared (the next payday moves, or a payment moves to before it), and states it changes only the forecast. Skipping a liability payment says the debt and what is owed don't change. Previews cover the period being viewed, never less than 90 days. Tests: `gap-explanations`, `preview`, `gaps-sheet`, `whatif-sheet`, and an end-to-end step.
   - Follow-ups: one change at a time (no combined scenarios); the app doesn't suggest which change to try; the setup review's gap banner explains gaps but has no What if…; shortfalls before the next payday stay outside the running total (cash on hand is unknown).
-- **Step 5: complete for device storage; account mode waits on a rules deployment.** Review rhythm in Settings (off, weekly, on payday, monthly look-ahead), a quiet dashboard entry when a review is due, and a review sheet from `reviewSummary` with Mark review done and Skip (neither records payments; closing leaves it due; a different rhythm starts fresh). Nothing is sent outside the app. Tests: `cadence`, `review-persistence`, `period-review`, rules tests, and an end-to-end step.
-  - Blocker for accounts: the updated `firestore.rules` (optional `review` field) aren't confirmed deployed. Until they are, `REVIEW_RHYTHM_IN_ACCOUNTS` (`src/state/features.ts`) keeps the rhythm hidden when signed in and out of account saves, so no save is refused. After deploying and checking the rules, set it to true (see AI_STUDIO_TASKS.md).
+- **Step 5: complete for device storage.** Signed-in (Firebase) accounts keep it off; see below. Review rhythm in Settings (off, weekly, on payday, monthly look-ahead), a quiet dashboard entry when a review is due, and a review sheet from `reviewSummary` with Mark review done and Skip (neither records payments; closing leaves it due; a different rhythm starts fresh). Nothing is sent outside the app. Tests: `cadence`, `review-persistence`, `period-review`, rules tests, and an end-to-end step.
+  - Accounts: the updated `firestore.rules` (optional `review` field) aren't confirmed deployed, so `REVIEW_RHYTHM_IN_ACCOUNTS` (`src/state/features.ts`) keeps the rhythm hidden when signed in and out of account saves, so no save is refused. With Firebase now legacy, the rules won't be deployed and the flag stays false; signed-in review rhythms arrive with the Supabase migration (Step 10b).
 
 ## Open items
 
@@ -274,7 +321,7 @@ Only if the product owner authorizes implementation.
   - Deleting an item whose only saved change has been set aside is refused with a message about history that isn't visible.
 - **Rare:** "twice a month" on two days that both fall on Feb 28 or 29 gives one February payment (deliberate, tested).
 - **No CI.** Checks run only when an agent runs them.
-- **Console setup** in [AI_STUDIO_TASKS.md](AI_STUDIO_TASKS.md) is partly done: Cloud Run deploy with `server.mjs`, OAuth redirect URIs, API-key restrictions, App Check, and backups remain.
+- **Console setup** in [AI_STUDIO_TASKS.md](AI_STUDIO_TASKS.md) is partly done. It covers legacy Firebase and Cloud Run infrastructure and is no longer a development priority; only steps needed to keep the current version running apply.
 
 ---
 

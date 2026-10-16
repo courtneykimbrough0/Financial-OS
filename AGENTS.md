@@ -2,7 +2,7 @@
 
 This is the canonical source of project rules for Financial OS. Every agent (Claude Code, Gemini / AI Studio, Codex, or any other) reads this file in full before doing any work. `CLAUDE.md`, `GEMINI.md` and `CODEX.md` only point here; when they and this file differ, this file wins.
 
-Read next: [BUILD_AND_TEST_ROADMAP.md](BUILD_AND_TEST_ROADMAP.md) (the order of work and its test gates), [README.md](README.md) (architecture, forecast rules, data model), [DESIGN.md](DESIGN.md) (visual system), [security_spec.md](security_spec.md) (Firestore guarantees) and [AI_STUDIO_TASKS.md](AI_STUDIO_TASKS.md) (Firebase and Cloud Run setup).
+Read next: [BUILD_AND_TEST_ROADMAP.md](BUILD_AND_TEST_ROADMAP.md) (the order of work and its test gates), [README.md](README.md) (architecture, forecast rules, data model), [DESIGN.md](DESIGN.md) (visual system), [security_spec.md](security_spec.md) (Firestore guarantees) and [AI_STUDIO_TASKS.md](AI_STUDIO_TASKS.md) (Firebase and Cloud Run setup for the current, legacy infrastructure).
 
 ---
 
@@ -49,16 +49,40 @@ Never claim a test passed if it wasn't run. Never hide failing tests, skip or di
 
 ## C. Architecture rules
 
+### C1. Architecture direction (product-owner decision, October 2026)
+
+These decisions replace earlier infrastructure plans. Don't reopen them in a task; raise new evidence with the product owner instead.
+
+- **Supabase is the future backend.** Supabase PostgreSQL will hold the authoritative financial data, and Supabase will provide authentication and data-access controls once authentication is built. The reason is the app's relational data, maintainability and long-term architecture, not only hosting cost.
+- **Vercel will host the application.**
+- **Online-first.** Financial OS will be an online-first PWA. The backend is the source of truth for saved data. There is no parallel offline database, no later synchronization, and no permanent device-copy conflict reconciliation. Temporary in-memory state is fine for editing, showing an immediate forecast and retrying a failed save. People are always told when a change hasn't been saved, and the app never reports a save the backend refused or failed. Installing the PWA and caching the app's own files stay.
+- **Authentication is deferred** until the core financial features are finished. Deferring the sign-in screens never allows public access to financial records: once Supabase holds data, every record is limited to its owner.
+- **The forecast engine stays independent of storage.** `src/domain/` never imports a storage provider; persistence stays behind `StorageAdapter`.
+- **Firebase/Firestore, Cloud Run hosting and offline synchronization are legacy.** They keep the current version running and will be removed during the Supabase migration, not before. Until then: don't deploy Firestore rules, request Firebase credentials, turn on `REVIEW_RHYTHM_IN_ACCOUNTS`, add Firebase storage features or change Firebase sign-in. Keep the current app working, and keep the documentation needed to run it.
+
+**Development order:**
+
+1. Finish the core financial features (roadmap Steps 6–9).
+2. Finalize and verify the data architecture.
+3. Move persistence to Supabase.
+4. Remove offline synchronization.
+5. Complete authentication and per-user data isolation.
+6. Deploy and test the finished application on Vercel.
+
+The roadmap's Step 10 holds stages 2–6.
+
+### C2. Current implementation
+
 Preserve the existing architecture; don't rebuild it without a reason the product owner has agreed to. As of this writing (verify before relying on it):
 
 | Area | Where | Notes |
 | --- | --- | --- |
 | Stack | TypeScript (strict), React 19, Vite, vite-plugin-pwa | npm only; `package-lock.json` is committed |
 | Domain logic | `src/domain/` | Pure TypeScript, no React. `dates.ts`, `money.ts`, `types.ts`, `recurrence.ts`, `occurrences.ts`, `forecast.ts` (`buildForecast` and everything derived from it), `operations.ts` (every state change), `plan.ts` (cash flow per period), `sample.ts` |
-| State and persistence | `src/state/` | `storage.ts` (`StorageAdapter`, validation, `migrate`), `store.tsx` (applies operations, background saving, conflicts), `cloud.ts` (account storage with an on-device copy), `firebase.ts` (Google sign-in and Firestore, loaded on demand), `account.tsx`, `backup.ts`, `mode.tsx` (sample vs real data) |
+| State and persistence | `src/state/` | `storage.ts` (`StorageAdapter`, validation, `migrate`), `store.tsx` (applies operations, background saving, conflicts), `cloud.ts` (account storage with an on-device copy; legacy), `firebase.ts` (Google sign-in and Firestore, loaded on demand; legacy), `account.tsx`, `backup.ts`, `mode.tsx` (sample vs real data) |
 | UI | `src/ui/` | `screens/`, `components/`, a hash router (`router.ts`) |
-| Hosting | `server.mjs`, `Dockerfile` | Cloud Run serves the built app and forwards Firebase sign-in pages through its own address |
-| Data and sign-in | Firebase | Google sign-in; Firestore document `financialData/{uid}` in the named database; rules in `firestore.rules` |
+| Hosting (legacy) | `server.mjs`, `Dockerfile` | Cloud Run serves the built app and forwards Firebase sign-in pages through its own address. To be replaced by Vercel |
+| Data and sign-in (legacy) | Firebase | Google sign-in; Firestore document `financialData/{uid}` in the named database; rules in `firestore.rules`. To be replaced by Supabase |
 | Tests | Vitest + Testing Library (jsdom); Firestore emulator; Playwright | See section H |
 
 Rules:
@@ -68,7 +92,7 @@ Rules:
 - **Date-only values** (`YYYY-MM-DD` strings) with the conventions in `dates.ts`: UTC-midnight arithmetic, Sunday-start weeks, month-end clamping. Results must not depend on the host time zone.
 - **Deterministic and testable.** Domain calculations take "today" (and a clock, for operations) as inputs and never read the system clock themselves. The only clock reads in `src/domain/` are the `todayLocal()` helper the UI calls and ID generation.
 - **State changes go through `operations.ts`** as pure functions that return new data or a validation error.
-- **Before changing a persisted type or schema**, inspect and update together: validation and `migrate` in `storage.ts`, backups (`backup.ts`), the on-device copy (`cloud.ts`), Firestore writes (`firebase.ts`), `firestore.rules`, `security_spec.md`, `firebase-blueprint.json`, and the rules tests. Existing data must keep loading; add migration tests.
+- **Before changing a persisted type or schema**, inspect and update together (the Firebase items stay on this list while the current version runs on Firebase; keeping them correct isn't new Firebase work): validation and `migrate` in `storage.ts`, backups (`backup.ts`), the on-device copy (`cloud.ts`), Firestore writes (`firebase.ts`), `firestore.rules`, `security_spec.md`, `firebase-blueprint.json`, and the rules tests. Existing data must keep loading; add migration tests.
 - **Firebase imports only in `src/state/firebase.ts`**, so device-only builds never download Firebase.
 - **Keep the revision check** in both `firebaseBackend.save` (a transaction) and the rules (exactly +1). It stops a stale device from overwriting newer data.
 - **No personal data in errors or logs** (email, uid, provider details, financial values).
@@ -94,6 +118,8 @@ Rules:
 - A low or negative **running total** is a forecast condition to explain (a timing gap), not a data error.
 - Batch confirmation applies only to the selected records. An event is never marked actual merely because it was expected.
 - Undo, corrections, batch operations, imports, and resets never silently alter unrelated records.
+- **Uncertain future income is never counted as confirmed cash flow** just because past income suggests it may arrive. Income counts in the forecast only when the person has entered it as expected (a recurring or one-time item) or recorded it.
+- A calculated suggestion never replaces an approved forecast rule on its own. The person's current expectation stays in force until they approve a change.
 - Historical averages are estimates, not facts. Consider how much history exists, outliers, seasonality, known changes, and user-adjustable buffers.
 - Conservative forecasting (cautious income, buffered expenses) must follow an explainable rule the person can see and adjust. Never silently modify user-entered values or apply arbitrary percentages.
 - Scenarios use the same forecast engine as the baseline, never alter the baseline, and state their assumptions and limitations.
@@ -180,7 +206,7 @@ Check `package.json` before running anything; scripts can change. Currently:
 | `npm run lint` | `tsc -b` plus a syntax check of `firestore.rules` | |
 | `npm run build` | Type-check and production build | |
 | `npm run e2e` | Builds a device-only copy and drives it in Chromium through `server.mjs` | Needs Playwright with Chromium |
-| `npm run test:rules` | Runs `firestore.rules` in the Firestore emulator | Needs Java; the emulator is downloaded on first run |
+| `npm run test:rules` | Runs `firestore.rules` in the Firestore emulator | Needs Java; the emulator is downloaded on first run. Kept while the current version uses Firebase; passing it doesn't authorize Firebase work |
 
 For any coherent code change, run `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build` at minimum. Also run `npm run e2e` for user-facing flows, state changes, navigation, or persistence, and `npm run test:rules` for storage or security changes when the emulator can run. If a command can't be run, say so and why; never report it as passing.
 

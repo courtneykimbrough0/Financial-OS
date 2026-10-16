@@ -14,4 +14,4 @@ In practice:
 
 Do not add Plaid or any other direct bank-aggregation integration.
 
-For AI Studio specifically: pull the latest from GitHub (branch `ccr-12ec4965-6tzwgr`) before changing anything, push your commits there when done, and keep the Firebase and Cloud Run setup steps in [AI_STUDIO_TASKS.md](AI_STUDIO_TASKS.md) up to date.
+For AI Studio specifically: pull the latest from GitHub (branch `ccr-12ec4965-6tzwgr`) before changing anything, push your commits there when done, and keep [AI_STUDIO_TASKS.md](AI_STUDIO_TASKS.md) accurate. Firebase and Cloud Run are legacy (AGENTS.md section C1): don't deploy rules or add Firebase features unless the product owner asks.

@@ -4,6 +4,8 @@ A mobile-first Progressive Web App for planning cash flow. You enter the income,
 
 You enter everything by hand. Data is saved to the user's Financial OS account (Firebase) when accounts are turned on, or on the device otherwise. The app has no bank connections, no account balances, and no budgeting.
 
+**Architecture direction.** The current version stores data with Firebase (or on the device) and is hosted on Cloud Run, with offline changes synchronized later. Those parts are legacy: Financial OS is moving to Supabase PostgreSQL for data (and, later, authentication), Vercel for hosting, and an online-first design where the backend is the source of truth. The sections below describe how the current version works; [AGENTS.md](AGENTS.md) section C1 and the roadmap's Step 10 describe the plan.
+
 ## Quick start
 
 ```bash
@@ -100,13 +102,13 @@ Data is one versioned JSON document per user (`schemaVersion: 2`), stored on the
 - **Backups.** **Download backup** (on the Settings page) saves a dated JSON file. **Restore from backup** (there and on the setup welcome screen) validates the file the same way saved data is validated, then replaces the current data after the user confirms.
 - If saved data can't be read, a copy is set aside under a separate key instead of being discarded.
 
-### Accounts (Firebase)
+### Accounts (Firebase; legacy, to be replaced by Supabase)
 
 Accounts turn on when `firebase-applet-config.json` has a `projectId` and `apiKey`. Build with `VITE_ACCOUNTS=off` to run on device storage only (the e2e test does this). Firebase is loaded as a separate file, only in builds with accounts on.
 
 - **Sign-in** is with Google (Firebase Auth); the first sign-in creates the account.
 - **Storage.** Each user's whole forecast is one Firestore document at `financialData/{uid}`: the same JSON the app keeps on the device, plus a revision number. Saves run in a transaction that checks the revision, and `firestore.rules` independently requires every save to raise it by exactly one, so racing saves can't both succeed and a stale device can't overwrite newer data. `security_spec.md` lists the rules' guarantees.
-- **Offline.** Every change is written to an on-device copy first and marked pending, then sent to the account. The app opens from the device copy when offline, and pending changes are sent when the connection returns or the app next opens. If newer data reached the account from elsewhere in the meantime, the newer data is loaded and this device's unsent changes are offered as a file download, so neither version is lost.
+- **Offline** (legacy; to be removed in the move to an online-first design). Every change is written to an on-device copy first and marked pending, then sent to the account. The app opens from the device copy when offline, and pending changes are sent when the connection returns or the app next opens. If newer data reached the account from elsewhere in the meantime, the newer data is loaded and this device's unsent changes are offered as a file download, so neither version is lost.
 - **Refused saves.** If Firestore refuses a save (for example, rules not deployed), the app says so plainly instead of calling it a connection problem, and keeps the change on the device.
 - **First sign-in.** If the account is empty and the device already has a forecast, the app offers to move it into the account.
 - **Sign out** removes the account's data from the device (and warns first if changes haven't been sent yet). **Delete account** asks the person to confirm with Google first, then deletes their data and their account.
