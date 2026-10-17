@@ -2669,3 +2669,12 @@ button.callout.gap-line:focus-visible {
 .nowrap {
   white-space: nowrap;
 }
+
+/* Development builds on a local Supabase stack only (src/state/supabase/dev.tsx). */
+.dev-storage-note {
+  margin: 0;
+  padding: 6px 16px;
+  font-size: 0.8125rem;
+  text-align: center;
+  background: var(--color-warn-soft);
+}

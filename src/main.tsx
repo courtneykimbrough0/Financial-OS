@@ -1,7 +1,8 @@
-import { StrictMode, useEffect, useState } from 'react';
+import { lazy, StrictMode, Suspense, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import { AccountGate, useAccount, type AuthService } from './state/account';
+import type { StorageAdapter } from './state/storage';
 import { forwardedAuthDomain } from './state/auth-domain';
 import { DataModeProvider } from './state/mode';
 import { App } from './ui/App';
@@ -27,10 +28,18 @@ void navigator.storage?.persist?.().catch(() => undefined);
  */
 const accountsOn = import.meta.env.VITE_ACCOUNTS !== 'off' && Boolean(firebaseSettings.projectId && firebaseSettings.apiKey);
 
-function AppWithData() {
+/**
+ * Development only: Supabase storage on a local stack, chosen by building in
+ * the `supabase-dev` mode. `MODE` is fixed at build time, so in every other
+ * build this is null and the Supabase code isn't included at all.
+ */
+const SupabaseDevelopment =
+  import.meta.env.MODE === 'supabase-dev' ? lazy(() => import('./state/supabase/dev').then((m) => ({ default: m.SupabaseDevelopment }))) : null;
+
+function AppWithData({ adapter }: { adapter?: StorageAdapter }) {
   const account = useAccount();
   return (
-    <DataModeProvider adapter={account?.adapter}>
+    <DataModeProvider adapter={adapter ?? account?.adapter}>
       <ToastProvider>
         <App />
       </ToastProvider>
@@ -73,4 +82,16 @@ function WithAccounts() {
   );
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode>{accountsOn ? <WithAccounts /> : <AppWithData />}</StrictMode>);
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    {SupabaseDevelopment ? (
+      <Suspense fallback={null}>
+        <SupabaseDevelopment>{(adapter) => <AppWithData adapter={adapter} />}</SupabaseDevelopment>
+      </Suspense>
+    ) : accountsOn ? (
+      <WithAccounts />
+    ) : (
+      <AppWithData />
+    )}
+  </StrictMode>,
+);
