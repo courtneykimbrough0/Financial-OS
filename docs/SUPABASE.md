@@ -1,4 +1,4 @@
-# Supabase storage (Steps 10b-1 to 10b-3)
+# Supabase storage and accounts (Steps 10b-1 to 10b-3, 10d in development)
 
 The PostgreSQL storage for Financial OS, the storage adapter that uses it, and a development-only way to run the app on it. **The app itself still saves on the device or to Firebase.** Only a build in the `supabase-dev` mode uses Supabase, and only a local stack (see Development). Nothing here has been applied to a hosted Supabase project; the tests run against a throwaway local PostgreSQL and a local Supabase stack.
 
@@ -42,7 +42,7 @@ auth.users 1─1 workspaces 1─* sources 1─* schedule_versions
 
 ## Functions
 
-All three run with `search_path = ''`, name every object by schema, and can be called only by signed-in users (role `authenticated`).
+All four run with `search_path = ''`, name every object by schema, and can be called only by signed-in users (role `authenticated`).
 
 - **`create_workspace()`** returns the caller's workspace, creating it on first use. There is no way to name another owner.
 - **`load_plan()`** returns the caller's whole plan as one JSON value, read in a single statement (one consistent snapshot). It runs as the caller, so row-level security applies; it returns null without a workspace. Dates come back as `YYYY-MM-DD`; times as ISO-8601 UTC with milliseconds.
@@ -55,6 +55,12 @@ All three run with `search_path = ''`, name every object by schema, and can be c
   6. advances the revision once and records a receipt.
 
   Any error rolls everything back. Codes `PTxxx` become HTTP status `xxx` through Supabase's API.
+- **`delete_account()`** permanently deletes the caller's own account (migration `20261018000001_account_deletion.sql`). It takes no arguments, so it can't name another account. It requires:
+  - a signed-in caller (PT401);
+  - a session that still exists in Supabase Auth (PT401), so a token from a session that signed out can't use it;
+  - a password sign-in within the last 5 minutes (PT403). Supabase Auth checks the password and records the time in the token's `amr` claim, and refreshing a token keeps the original time.
+
+  Deleting the `auth.users` row removes, through foreign keys with ON DELETE CASCADE, the person's identities, sessions and refresh tokens, and their workspace with its sources, schedule versions, pauses, occurrence records and save receipts. An access token issued earlier still verifies until it expires (Supabase Auth tokens are self-contained), but it reaches nothing: no workspace, no rows, and `create_workspace` fails because the user no longer exists. It runs as the migration owner (`security definer`), so no privileged key is ever in the app. The alternative is an Edge Function calling the Auth admin API with the service-role key on the server; both keep the privilege server-side.
 
 ### Save modes
 
@@ -86,7 +92,7 @@ A timeout doesn't prove a save failed.
 - **Signed-out callers** (`anon`) can't read tables or call the functions.
 - **Ownership** comes from `auth.uid()`; requests carry no owner or workspace id, and any sent are ignored.
 - **Service-role keys never go in the browser.**
-- **Anonymous Supabase sign-in** may be used for isolated development only. It isn't recoverable and isn't for real users (see Step 10d).
+- **Accounts are email and password** (Supabase Auth), with email confirmation. The app never creates anonymous identities; one left by an earlier development build can be converted (see Development).
 
 ## Mapping (`src/state/supabase/rows.ts`)
 
@@ -98,7 +104,7 @@ A timeout doesn't prove a save failed.
 
 ## Adapter (`src/state/supabase/adapter.ts`)
 
-`SupabaseStorageAdapter` implements the app's `StorageAdapter` with a supabase-js client (only `client.rpc` is used). It is given an already signed-in client; signing in is Step 10d.
+`SupabaseStorageAdapter` implements the app's `StorageAdapter` with a supabase-js client (only `client.rpc` is used). It is given a signed-in client (see Development); each signed-in person gets their own adapter.
 
 - **Load:** `load_plan`. With no workspace yet, `create_workspace` once, then `load_plan` again (an empty plan in setup, revision 0). `fromRows` turns the result into AppData.
 - **Save:** `save(data, baseRevision, intent)` sends `toRows(data)` to `save_plan` with the intent as the mode: `update` (the default), `replace` for a restore, `reset` for start over. A save counts as done only when `save_plan` confirms it; the store keeps the change in memory until then.
@@ -136,8 +142,8 @@ Loading throws an Error with the same messages; the store shows its load-failure
 | Action | Today | With Supabase |
 | --- | --- | --- |
 | Clear the plan / start setup again | Start over (`reset` save) | Same |
-| Sign out | Firebase: forget the device copy (`forgetDevice`) | Nothing on the device but the session; sign-out arrives with Step 10d |
-| Delete the account and its data | Firebase `deleteAccount` | Not built. Deleting the `auth.users` row cascades to the workspace and every row; it needs a server-side function or the Auth admin API (never a key in the browser) and re-authentication first. Step 10d |
+| Sign out | Firebase: forget the device copy (`forgetDevice`) | Ends this device's session (`signOut({ scope: 'local' })`); the account and plan stay on the server |
+| Delete the account and its data | Firebase `deleteAccount` | `delete_account()` after a fresh password check (see Functions) |
 
 ### Retries in the adapter
 
@@ -147,18 +153,46 @@ Loading throws an Error with the same messages; the store shows its load-failure
 - **A different save after an unknown one** (the person kept editing): if it meets a conflict, the adapter re-sends the remembered save (same id) to ask whether it went through. If it did and nothing else followed, it saves the new edit on top of that revision; if newer saves followed, a "saved, but changed since" conflict; if it never arrived, a plain conflict. If that question gets no reply either, the save stays unknown and is reported as not saved.
 - **A refused save** (PT422, a check) is definite: nothing was applied, and the next save gets a new id.
 
-## Development (`src/state/supabase/dev.tsx`)
+## Development (`src/state/supabase/dev.tsx`, `session.tsx`, `src/ui/supabase/`)
 
-A build in the `supabase-dev` mode runs the app on a **local** Supabase stack:
+A build in the `supabase-dev` mode runs the app on a **local** Supabase stack, with email-and-password accounts:
 
 ```
+supabase start                     # from the repository (supabase/config.toml)
 VITE_SUPABASE_ANON_KEY=<anon or publishable key from supabase status> npm run dev:supabase
 ```
 
 - `VITE_SUPABASE_URL` defaults to `http://127.0.0.1:54321`. Anything other than this machine is refused, and so is any key but the public anon or publishable key.
-- **Identity:** a temporary anonymous Supabase identity (`signInAnonymously`; anonymous sign-ins must be on in the local stack's `supabase/config.toml`). The page says so: "Development storage: local Supabase, temporary anonymous identity. Not a real account; it can’t be recovered." Row-level security still limits the plan to that identity, and signed-out callers reach nothing.
-- **On the device:** only the Supabase session (`financial-os:supabase-dev-auth`). The plan is never stored there.
-- **Every other build is unchanged:** `import.meta.env.MODE` is fixed at build time, so the Supabase code is left out of the default build entirely. `npm run e2e:supabase` checks the built files contain no Supabase code and that the page never contacts it.
+- **Every other build is unchanged:** `import.meta.env.MODE` is fixed at build time, so the Supabase code is left out of the default build entirely. Settings and setup get the account controls through an account slot (`src/state/slots.tsx`) that only this build fills. `npm run e2e:supabase` checks the built files contain no Supabase code and that the page never contacts it.
+
+### Accounts
+
+- **Create an account:** an email and a password (at least 8 characters), nothing else. Supabase Auth emails a confirmation link; opening it in the same browser signs in, and setup starts on an empty plan. Signing in before confirming says so and offers to resend the link.
+- **Sign in:** a wrong password and an unknown email get the same message. "Already registered" on sign-up gets the same answer as a new sign-up, so the screens never say which emails have accounts.
+- **Recover a password:** "Forgot your password?" emails a link. It opens "Choose a new password", then the app.
+- **Links in emails** use PKCE: they return with a one-time code for the browser that asked, never with tokens in the address. Opened in another browser, the email is still confirmed, but the person then signs in there.
+- **Sessions** are supabase-js's: kept in this browser's storage (`financial-os:supabase-dev-auth`, tokens only), so reloading or reopening the app stays signed in. They're refreshed automatically, and the API checks them on every request. Nothing financial is stored on the device.
+- **Each person gets their own app** (keyed by user id) and their own adapter, so nothing in memory carries over to whoever signs in next on the device.
+- **Sign out** (Settings, or the setup welcome screen) ends this device's session; the account and plan stay. With an unsaved change it warns first and offers Try saving again and a backup.
+- **A session that ends while the app is open** (expired and couldn't be refreshed, or signed out everywhere): with nothing unsaved, back to sign-in. With unsaved changes, they stay on screen, and "Sign in again to save" asks for the same account's password and then saves. It also offers a backup, or leaving without saving.
+- **Offline:** the session is kept, and a change is shown as not saved until the connection returns and it's saved.
+- **Delete account** (Settings):
+  - explains that it's permanent and that Start over only clears the plan;
+  - offers a backup;
+  - is refused while a change is unsaved;
+  - requires the password. A wrong one deletes nothing; the right one signs in afresh, then calls `delete_account()`.
+
+### Temporary identities from earlier development builds
+
+The previous development build signed in with anonymous identities. Supabase supports converting one into a permanent account while keeping its id: `updateUser({ email })`, confirmed by a link, then `updateUser({ password })`. An anonymous session left in the browser opens its plan with "Keep this plan" in Settings: add an email, open the link, choose a password. The identity, and so the workspace and plan, stay the same, and the email and password then work on any device. Nothing is merged and no second workspace is made. A temporary identity that is signed out can't be reached again, so signing out of one warns and offers a backup; restoring that backup into an account is the fallback. This is a development path only, not an account-merging feature.
+
+### What a hosted project needs (not done here)
+
+- Email delivery: an SMTP provider. Locally, emails go to the stack's email-testing server.
+- Its site URL and redirect URLs (the app's address).
+- Email confirmation on, a password policy, and the default rate limits (the local config raises them for the tests).
+- Anonymous sign-ins off.
+- The migrations applied.
 
 ## Migration and rollback
 
@@ -190,27 +224,48 @@ It needs the PostgreSQL server binaries and `psql`. These tests run against plai
 `*.supabase.test.ts` run the adapter and the functions through a real Supabase stack: its auth server (real email sign-ups and sessions), API gateway and PostgREST. They cover signed-out and invalid-token callers, a new user's first load, exact round trips and identical forecasts, two people who can't reach each other's plans or write rows directly, a session that ends, two devices saving at once, replies lost after the database committed, an old save retried after newer ones, reused save ids, stale revisions, and the update, replace and reset modes.
 
 1. Install the Supabase CLI (not a project dependency) and Docker.
-2. In a scratch folder, run `supabase init`, copy `supabase/migrations` into it, and run `supabase start` (only the database, auth, API gateway and PostgREST are needed: `-x studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector,supavisor,mailpit,postgres-meta`).
-3. Run `SUPABASE_TEST_ANON_KEY=<anon or publishable key from supabase status> npm run test:supabase`. `SUPABASE_TEST_URL` defaults to `http://127.0.0.1:54321`.
+2. From the repository, run `supabase start`. It uses `supabase/config.toml` and applies `supabase/migrations`. Only the database, auth, API gateway, PostgREST and the email-testing server are needed: `-x studio,imgproxy,storage-api,realtime,edge-runtime,logflare,vector,supavisor,postgres-meta`.
+3. Run `SUPABASE_TEST_ANON_KEY=<anon or publishable key from supabase status> npm run test:supabase`. `SUPABASE_TEST_URL` defaults to `http://127.0.0.1:54321`, and `SUPABASE_TEST_MAIL_URL` (the email-testing server) to `http://127.0.0.1:54324`.
 
-The script refuses any address other than this machine, and refuses a service-role or secret key: the tests use only what a browser has. Each test signs up its own throwaway users. To run the database tests against the same stack's PostgreSQL: `PGHOST=127.0.0.1 PGPORT=54322 PGUSER=postgres PGPASSWORD=postgres npx vitest run --config vitest.db.config.ts`.
+The script refuses any address other than this machine, and refuses a service-role or secret key: the tests use only what a browser has. Each test signs up its own throwaway accounts and confirms them through their real emails.
 
-Last run (October 2026): Supabase CLI 2.121.0, Supabase Postgres 17.11.0.004, GoTrue 2.197.0, PostgREST 16.4; both migrations applied unchanged by `supabase start`.
+`auth.supabase.test.ts` covers accounts through the real auth server:
+- sign-up with email confirmation;
+- wrong credentials;
+- a returning account on another device;
+- password recovery by email (and an unknown email getting the same answer);
+- refresh, and sign-out revoking the refresh token;
+- deletion: cleanup, stale tokens, refusals, and only the caller deleted;
+- converting an anonymous identity, which keeps its id and plan. To run the database tests against the same stack's PostgreSQL: `PGHOST=127.0.0.1 PGPORT=54322 PGUSER=postgres PGPASSWORD=postgres npx vitest run --config vitest.db.config.ts`.
+
+Last run (October 2026): Supabase CLI 2.121.0, Supabase Postgres 17.11.0.004, GoTrue 2.197.0, PostgREST 16.4, Mailpit 1.31.3; all three migrations applied unchanged by `supabase start`.
 
 ## Browser tests (`npm run e2e:supabase`)
 
-`e2e/supabase.e2e.test.ts` drives built copies of the app in Chromium against a local stack (same requirements as `test:supabase`; `scripts/local-supabase.mjs` applies the same checks):
+`e2e/supabase.e2e.test.ts` drives built copies of the app in Chromium against a local stack. It has the same requirements as `test:supabase`, and `scripts/local-supabase.mjs` applies the same checks. Every test signs in through the app's sign-in screen.
 
 - **Setup and everyday use:** an empty workspace, setup (income, a bill, a one-time expense, a liability payment), a recorded payment, undo, a raise from a date, a moved occurrence, a review rhythm and a completed review, a restore, a dismissed estimate suggestion, and start over. After each one, Supabase holds exactly what's on screen, and a reload brings back the same plan, the same dashboard and identical forecasts. Every save is confirmed; all are `update` except one `replace` and one `reset`.
 - **Conflicts and retries:**
-  - two sessions of one identity: the second save gets a conflict and isn't shown as saved, the first is kept, the unsaved change can still be downloaded, and Reload shows the latest;
+  - two devices signed in to one account: the second save gets a conflict and isn't shown as saved, the first is kept, the unsaved change can still be downloaded, and Reload shows the latest;
   - a reply lost after commit: shown as not saved, warns before leaving, Try again reuses the save id and applies once;
   - a lost save, then more edits: saved on top;
   - a lost save retried after a newer save: recognized, no regression, asks for a reload;
-  - an expired session: shown as signed out, saved after signing in again;
+  - a token the API refuses: shown as signed out, saved once accepted;
   - a restore the database refuses: the saved plan stays;
   - a double-clicked restore: one save.
-- **Isolation:** two anonymous identities can't reach each other's plans.
+- **Accounts**, through the app's own screens:
+  - creating an account and confirming its email (and signing in before confirming);
+  - wrong credentials;
+  - reload, closing and reopening, and another device;
+  - password recovery;
+  - token refresh, and an expired session both on reopening and while open (sign in again to save);
+  - going offline;
+  - sign-out, with and without unsaved changes;
+  - switching accounts on one device, never showing the previous plan;
+  - start over keeping the account;
+  - account deletion (explained, password required, a wrong password, cleanup, a stale token, another account untouched), and deletion refused while unsaved;
+  - converting an earlier temporary identity.
+- **Isolation:** two accounts can't reach each other's plans, and signed-out callers reach nothing.
 - **Migration:** a plan from the device-storage app, downloaded with its backup button, restored into an empty Supabase workspace. `checkForMigration` passes first, and everything arrives exactly: ids, original predictions, current expectations, actuals, schedule versions, pauses, estimate dismissals, review settings, onboarding, forecasts and timing gaps. The Supabase copy's backup then restores into device storage again (rollback).
 - **The default build:** no Supabase code, no requests to it.
 

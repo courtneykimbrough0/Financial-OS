@@ -324,11 +324,18 @@ Replaces the earlier plan to validate Firebase persistence and offline behavior.
 - **Step 10b-2: storage adapter built; not connected.** `src/state/supabase/adapter.ts` implements `StorageAdapter` online-first (nothing on the device, no queue), with a save id per logical save, safe retries after a lost reply, and a check whether an earlier unconfirmed save went through before reporting a conflict. `StorageAdapter.save` takes an optional intent (`update`, `replace`, `reset`); the existing adapters ignore it. Tests: `adapter` (fake client, with the store), and `npm run test:supabase` through a local stack's Auth and API. See docs/SUPABASE.md.
 - **Step 10b-3: development integration verified; production unchanged.** Restore and start over are sent as `replace` and `reset` through `replacePlan`; with online-first storage they show only once confirmed, and Try again resends the same save. Ordinary changes stay `update`. The Supabase adapter's `clear()` rejects. `npm run dev:supabase` runs the app on a local stack as a temporary anonymous identity; other builds leave Supabase out. Tests: `supabase-intent`, `dev`, and `npm run e2e:supabase` (workflows with reloads, conflicts and retries, isolation, migration and rollback through backups, the default build). See docs/SUPABASE.md.
   - Follow-ups before replacing Firebase:
-    - Supabase sign-in, sign-out and account deletion (10d);
+    - Supabase sign-in, sign-out and account deletion (10d): built in development, see below;
     - a hosted test project and its configuration (10e);
     - moving real Firestore data (backups only so far);
     - removing offline sync (10c);
     - a conflicted change can be downloaded but not merged.
+- **Step 10d (development): recoverable accounts on the local stack; production unchanged.** Email-and-password accounts (Supabase Auth) in the supabase-dev build: sign-up with email confirmation, sign-in, password recovery, persistent and refreshed sessions, sign-out, and account deletion through `delete_account()` after a fresh password check. A session that ends with unsaved changes asks to sign in again. Earlier anonymous identities convert to accounts with the same identity. `supabase/config.toml` runs the local stack from the repository. Tests: `account.db`, `auth.supabase`, `session`, and the account tests in `npm run e2e:supabase`. See docs/SUPABASE.md.
+  - Follow-ups:
+    - a hosted test project: SMTP, redirect URLs, rate limits, anonymous sign-ins off;
+    - changing the email or password while signed in;
+    - signing out other devices;
+    - the production sign-in cutover from Firebase;
+    - removing offline sync (10c).
 
 ## Open items
 

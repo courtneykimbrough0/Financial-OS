@@ -19,7 +19,7 @@ npm run test:rules   # Firestore security rules, in the Firestore emulator (need
 npm run test:db      # Supabase migrations and database tests, in a throwaway local PostgreSQL (needs PostgreSQL)
 npm run test:supabase # Supabase integration tests through a local Supabase stack (see docs/SUPABASE.md)
 npm run e2e:supabase  # the app in Chromium on a local Supabase stack, plus checks that the default build never uses it
-npm run dev:supabase  # development only: the app on a local Supabase stack, as a temporary anonymous identity
+npm run dev:supabase  # development only: the app on a local Supabase stack (supabase start), with email-and-password accounts
 npm start            # production server (server.mjs) for the built app; used on Cloud Run
 ```
 
