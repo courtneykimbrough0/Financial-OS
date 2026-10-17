@@ -5,8 +5,10 @@
  *   E2E_SUPABASE_BASE  the development copy (`--mode supabase-dev`)
  *   E2E_DEFAULT_BASE   the default copy, as `npm run build` makes it
  *   E2E_LEGACY_BASE    a device-storage copy (as `npm run e2e` uses), for migration
- * What the app shows is read back through its own backup download; what
- * Supabase holds is read with the same anonymous identity's token.
+ * People sign in through the app's own sign-in screen, with accounts whose
+ * emails are confirmed through the stack's email-testing server. What the app
+ * shows is read back through its own backup download; what Supabase holds is
+ * read with the same session's token.
  */
 import { createClient } from '@supabase/supabase-js';
 import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -19,6 +21,7 @@ import { buildForecast, explainTimingGaps, paycheckCycles } from '../src/domain/
 import type { AppData } from '../src/domain/types';
 import { createBackup, readBackup } from '../src/state/backup';
 import { richPlan } from '../src/state/supabase/__tests__/fixtures';
+import { confirmedAccount, latestMail } from '../src/state/supabase/__tests__/local-auth';
 import { canonicalize, checkForMigration, fromRows, toRows, type LoadedPlan } from '../src/state/supabase/rows';
 
 const require = createRequire(import.meta.url);
@@ -53,21 +56,40 @@ afterAll(async () => {
   await browser?.close();
 });
 
-/** A browser session at a fixed time (the app's clock; Supabase keeps real time). `like` shares another session's identity. */
-async function open(base: string, at: Date, like?: Any) {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', acceptDownloads: true, ...(like ? { storageState: await like.context().storageState() } : {}) });
+type Account = Awaited<ReturnType<typeof confirmedAccount>>;
+/** A new account with a confirmed email (signed up through the API; the app's own sign-up is tested below). */
+const newAccount = () => confirmedAccount(createClient(URL, KEY, { auth: { persistSession: false, autoRefreshToken: false } }));
+
+/**
+ * A browser (its own device) at a fixed time: the app's clock; Supabase keeps
+ * real time. The development copy is signed in through its sign-in screen as
+ * `as` (a new account by default), unless `signIn` is false.
+ */
+async function open(base: string, at: Date, opts: { as?: Account; signIn?: boolean } = {}) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block', acceptDownloads: true });
   const page = await ctx.newPage();
   page.setDefaultTimeout(15000);
   await page.clock.setFixedTime(at);
   const saves = track(page);
   await page.goto(base);
-  if (base === DEV) await loaded(page);
-  return { page, saves };
+  const account = base === DEV && opts.signIn !== false ? (opts.as ?? (await newAccount())) : null;
+  if (account) await signIn(page, account.email, account.password);
+  return { page, saves, account: account! };
 }
 
+const signInForm = (page: Any) => page.getByRole('form', { name: 'Sign in to Financial OS' });
+async function signIn(page: Any, email: string, password: string) {
+  const form = signInForm(page);
+  await form.getByLabel('Email').fill(email);
+  await form.getByLabel('Password').fill(password);
+  await form.getByRole('button', { name: 'Sign in' }).click();
+  await loaded(page);
+}
+
+/** The app (not the sign-in screen) is open and its plan has loaded. */
 async function loaded(page: Any) {
   await page.getByRole('note').filter({ hasText: 'Development storage: local Supabase' }).waitFor();
-  await page.locator('.load-screen').waitFor({ state: 'detached' });
+  await page.waitForFunction(() => !document.querySelector('.load-screen') && document.querySelector('.app main#main:not(.sign-in)'));
 }
 
 /** Every save_plan request: [mode, base revision, HTTP status or 'failed'], and a wait for none in flight. */
@@ -104,7 +126,7 @@ function track(page: Any) {
   };
 }
 
-const sessionOf = async (page: Any) => JSON.parse(await page.evaluate((k: string) => localStorage.getItem(k), AUTH_KEY)) as { access_token: string; user: { id: string; is_anonymous?: boolean } };
+const sessionOf = async (page: Any) => JSON.parse(await page.evaluate((k: string) => localStorage.getItem(k), AUTH_KEY)) as { access_token: string; refresh_token: string; user: { id: string; email?: string; is_anonymous?: boolean } };
 const asUser = (token: string) => createClient(URL, KEY, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: { Authorization: `Bearer ${token}` } } });
 
 /** The plan Supabase holds for this page's identity. */
@@ -127,6 +149,8 @@ async function onScreen(page: Any, base = DEV): Promise<AppData> {
 }
 
 const plan = (d: AppData | null) => (d ? { ...d, revision: 0 } : d);
+/** `plan`, for tests with a local named plan. */
+const plan_ = plan;
 
 const DAYS = [0, 30, 90, 180, 365].map((n) => addDays('2026-10-16', n));
 function sameForecasts(a: AppData, b: AppData) {
@@ -234,21 +258,22 @@ describe('the default build', () => {
 });
 
 describe('the development copy on local Supabase', () => {
-  it('runs as a temporary anonymous identity whose plan only it can reach', async () => {
+  it('two accounts on two devices: each reaches only its own plan, and signed-out callers reach nothing', async () => {
     const a = await open(DEV, new Date(2026, 9, 16, 9, 0));
     const b = await open(DEV, new Date(2026, 9, 16, 9, 0));
     const sa = await sessionOf(a.page);
     const sb = await sessionOf(b.page);
-    expect(sa.user.is_anonymous).toBe(true);
+    expect([sa.user.is_anonymous, sa.user.email]).toEqual([false, a.account.email]);
     expect(sa.user.id).not.toBe(sb.user.id);
     await seed(a.page, richPlan());
-    // B is a different identity: an empty plan of its own, and nothing of A's through the API.
+    // B: an empty plan of its own, and nothing of A's through the API.
     expect(await stored(b.page)).toEqual({ schemaVersion: 2, revision: 0, onboardingComplete: false, sources: [], records: [] });
     const asB = asUser(sb.access_token);
     const wsA = (await asUser(sa.access_token).from('workspaces').select('id')).data![0]!.id;
     expect((await asB.from('workspaces').select('id').eq('id', wsA)).data).toEqual([]);
-    expect((await asB.from('sources').select('id').eq('workspace_id', wsA)).data).toEqual([]);
+    for (const t of ['sources', 'schedule_versions', 'source_pauses', 'occurrence_records']) expect([t, (await asB.from(t).select('*').eq('workspace_id', wsA)).data]).toEqual([t, []]);
     expect((await asB.from('sources').update({ description: 'x' }).eq('workspace_id', wsA)).error?.code).toBe('42501');
+    expect((await asB.from('sources').insert({ workspace_id: wsA, id: 'x', position: 0, kind: 'bill', description: 'x', active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })).error?.code).toBe('42501');
     // And signed-out callers reach nothing.
     const anon = createClient(URL, KEY, { auth: { persistSession: false } });
     expect((await anon.rpc('load_plan')).error?.code).toBe('42501');
@@ -431,6 +456,352 @@ describe('the development copy on local Supabase', () => {
   });
 });
 
+const TWO_HOURS = 2 * 3600 * 1000;
+const appText = (page: Any) => page.locator('body').innerText();
+/** Settings → Sign out → confirm. */
+async function signOutUi(page: Any, confirm = 'Sign out') {
+  await page.goto(`${DEV}#/settings`);
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.getByRole('dialog', { name: 'Sign out?' }).getByRole('button', { name: confirm, exact: true }).click();
+  await signInForm(page).waitFor();
+}
+
+describe('accounts in the development copy', () => {
+  const at = new Date(2026, 9, 16, 9, 0);
+
+  it('creating an account: confirm the email first, then setup starts on an empty plan', async () => {
+    const { page } = await open(DEV, at, { signIn: false });
+    const email = `e2e-${crypto.randomUUID()}@example.test`;
+    const password = 'a-long-password-1';
+    await signInForm(page).waitFor();
+    await page.getByRole('button', { name: 'Create an account' }).click();
+    const form = page.getByRole('form', { name: 'Create your account' });
+    await form.getByLabel('Email').fill(email);
+    await form.getByLabel('Password').fill('short');
+    await form.getByRole('button', { name: 'Create account' }).click();
+    expect(await form.getByRole('alert').innerText()).toBe('Choose a password with at least 8 characters.');
+    await form.getByLabel('Password').fill(password);
+    await form.getByRole('button', { name: 'Create account' }).click();
+    await page.getByRole('heading', { name: 'Check your email' }).waitFor();
+    expect(await page.getByRole('status').innerText()).toContain(`If ${email} can be used for a new account, we’ve sent a link to it.`);
+    // Signing in before confirming: told to confirm, with a way to resend.
+    await page.getByRole('button', { name: 'Back to sign in' }).click();
+    await signInForm(page).getByLabel('Email').fill(email);
+    await signInForm(page).getByLabel('Password').fill(password);
+    await signInForm(page).getByRole('button', { name: 'Sign in' }).click();
+    expect(await signInForm(page).getByRole('alert').innerText()).toBe('Confirm your email first: open the link we sent when you created your account.');
+    // The local auth server sends at most one email a second to an address.
+    await page.waitForTimeout(1100);
+    await signInForm(page).getByRole('button', { name: 'Send the confirmation link again' }).click();
+    await page.getByText('We sent the link again.').waitFor();
+    // The link from the email, opened in this browser, finishes sign-up and opens setup.
+    const mail = await latestMail(email);
+    expect(mail.subject).toBe('Confirm your email address');
+    await page.goto(mail.link);
+    await loaded(page);
+    await page.getByRole('heading', { name: 'See your cash flow ahead of time' }).waitFor();
+    expect(new globalThis.URL(page.url()).search).toBe('');
+    expect(await page.getByText(`Signed in as ${email}.`).count()).toBe(1);
+    expect(await stored(page)).toEqual({ schemaVersion: 2, revision: 0, onboardingComplete: false, sources: [], records: [] });
+    await page.context().close();
+  });
+
+  it('wrong credentials: one message for a wrong password or an unknown email, and no plan is shown', async () => {
+    const account = await newAccount();
+    const { page } = await open(DEV, at, { signIn: false });
+    for (const [email, password] of [[account.email, 'not-the-password'], [`nobody-${crypto.randomUUID()}@example.test`, 'not-the-password']]) {
+      await signInForm(page).getByLabel('Email').fill(email!);
+      await signInForm(page).getByLabel('Password').fill(password!);
+      await signInForm(page).getByRole('button', { name: 'Sign in' }).click();
+      await signInForm(page).getByRole('alert').waitFor();
+      expect(await signInForm(page).getByRole('alert').innerText()).toBe('That email and password don’t match an account. Check them and try again.');
+    }
+    expect(await page.locator('.app main#main.sign-in').count()).toBe(1);
+    await page.context().close();
+  });
+
+  it('a returning account finds its plan after a reload, after closing and reopening the app, and on another device', async () => {
+    const first = await open(DEV, at);
+    await seed(first.page, contested());
+    const plan = plan_(await onScreen(first.page));
+    await first.page.reload();
+    await loaded(first.page);
+    expect(plan_(await onScreen(first.page))).toEqual(plan);
+    // Close the app and open it again in the same browser: still signed in.
+    const ctx = first.page.context();
+    await first.page.close();
+    const reopened = await ctx.newPage();
+    await reopened.clock.setFixedTime(at);
+    await reopened.goto(DEV);
+    await loaded(reopened);
+    expect(plan_(await onScreen(reopened))).toEqual(plan);
+    // Another device: sign in, same plan, no setup to repeat.
+    const other = await open(DEV, at, { as: first.account });
+    await other.page.goto(`${DEV}#/dashboard`);
+    await other.page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
+    expect(plan_(await onScreen(other.page))).toEqual(plan);
+    await ctx.close();
+    await other.page.context().close();
+  });
+
+  it('password recovery: the emailed link opens “Choose a new password”; the new one works and the old one doesn’t', async () => {
+    const account = await newAccount();
+    const { page } = await open(DEV, at, { signIn: false });
+    await page.getByRole('button', { name: 'Forgot your password?' }).click();
+    const form = page.getByRole('form', { name: 'Reset your password' });
+    await form.getByLabel('Email').fill(account.email);
+    const sentAt = new Date().toISOString();
+    await form.getByRole('button', { name: 'Send the link' }).click();
+    await page.getByRole('heading', { name: 'Check your email' }).waitFor();
+    const mail = await latestMail(account.email, sentAt);
+    expect(mail.subject).toBe('Reset your password');
+    await page.goto(mail.link);
+    await page.getByRole('heading', { name: 'Choose a new password' }).waitFor();
+    const fresh = 'a-brand-new-password-2';
+    await page.getByRole('form', { name: 'Choose a password' }).getByLabel('New password').fill(fresh);
+    await page.getByRole('button', { name: 'Save password' }).click();
+    await loaded(page);
+    await signOutUi(page);
+    await signInForm(page).getByLabel('Email').fill(account.email);
+    await signInForm(page).getByLabel('Password').fill(account.password);
+    await signInForm(page).getByRole('button', { name: 'Sign in' }).click();
+    expect(await signInForm(page).getByRole('alert').innerText()).toBe('That email and password don’t match an account. Check them and try again.');
+    await signIn(page, account.email, fresh);
+    await page.context().close();
+  });
+
+  it('session refresh: reopened after the access token expired, the app refreshes it and keeps working', async () => {
+    const { page, saves } = await open(DEV, at);
+    await seed(page, contested());
+    const before = await sessionOf(page);
+    await page.clock.setFixedTime(new Date(Date.now() + TWO_HOURS));
+    await page.reload();
+    await loaded(page);
+    const after = await sessionOf(page);
+    expect(after.access_token).not.toBe(before.access_token);
+    expect(after.user.id).toBe(before.user.id);
+    await payPhone(page);
+    await saves.idle();
+    expect(phoneRecord(await stored(page))!.actualAmountCents).toBe(15000);
+    await page.context().close();
+  });
+
+  it('an expired session that can’t be refreshed: reopening shows sign-in, and no plan', async () => {
+    const { page, account } = await open(DEV, at);
+    await seed(page, contested());
+    // Signed out everywhere (its refresh tokens revoked), and the access token has since expired.
+    await revokeAll(page);
+    await page.clock.setFixedTime(new Date(Date.now() + TWO_HOURS));
+    await page.reload();
+    await signInForm(page).waitFor();
+    expect(await appText(page)).not.toContain('Phone');
+    await signIn(page, account.email, account.password);
+    expect(rentAmounts(await onScreen(page))).toEqual([150000]);
+    await page.context().close();
+  });
+
+  it('the session expires while the app is open: the save is refused, the change stays, and signing in again saves it', async () => {
+    const { page, account, saves } = await open(DEV, at);
+    await seed(page, contested());
+    const base = (await stored(page))!.revision;
+    await revokeAll(page);
+    await page.clock.setFixedTime(new Date(Date.now() + TWO_HOURS));
+    await payPhone(page);
+    const guard = page.getByRole('dialog', { name: 'Sign in again to save' });
+    await guard.waitFor();
+    expect(await guard.innerText()).toContain('Your session ended, so your latest changes aren’t saved yet. They’re still here.');
+    expect(await guard.innerText()).toContain(account.email);
+    expect(saves.log.at(-1)).toEqual(['update', base, 401]);
+    // Wrong password: still here, still unsaved.
+    await guard.getByLabel('Password').fill('not-the-password');
+    await guard.getByRole('button', { name: 'Sign in and save' }).click();
+    await guard.getByRole('alert').waitFor();
+    await guard.getByLabel('Password').fill(account.password);
+    await guard.getByRole('button', { name: 'Sign in and save' }).click();
+    await guard.waitFor({ state: 'detached' });
+    await saves.idle();
+    const db = await stored(page);
+    expect([db!.revision, phoneRecord(db)!.actualAmountCents]).toEqual([base + 1, 15000]);
+    await page.context().close();
+  });
+
+  it('offline while signed in: the change is kept and marked not saved; back online, Try again saves it, still signed in', async () => {
+    const { page, saves } = await open(DEV, at);
+    await seed(page, contested());
+    await page.context().setOffline(true);
+    await payPhone(page);
+    await statusBar(page).waitFor();
+    expect(await statusBar(page).innerText()).toContain(OFFLINE);
+    // Back online the app tries again by itself (the browser's online event); Try again is there too.
+    await page.context().setOffline(false);
+    await statusBar(page).getByRole('button', { name: 'Try again' }).click({ timeout: 2000 }).catch(() => undefined);
+    await statusBar(page).waitFor({ state: 'detached' });
+    await saves.idle();
+    expect(phoneRecord(await stored(page))!.actualAmountCents).toBe(15000);
+    expect(await signInForm(page).count()).toBe(0);
+    await page.context().close();
+  });
+
+  it('signing out keeps the plan on the server, and warns first when a change isn’t saved', async () => {
+    const { page, account, saves } = await open(DEV, at);
+    await seed(page, contested());
+    // An unsaved change (the save never arrives).
+    await page.route('**/rest/v1/rpc/save_plan', (route: Any) => route.abort('failed'));
+    await payPhone(page);
+    await statusBar(page).waitFor();
+    await page.goto(`${DEV}#/settings`);
+    await page.getByRole('button', { name: 'Sign out' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Sign out?' });
+    expect(await dialog.innerText()).toContain('Some of your changes aren’t saved yet.');
+    expect(await dialog.getByRole('button', { name: 'Download a backup' }).count()).toBe(1);
+    expect(await dialog.getByRole('button', { name: 'Sign out anyway' }).count()).toBe(1);
+    // Save it from here instead.
+    await page.unroute('**/rest/v1/rpc/save_plan');
+    await dialog.getByRole('button', { name: 'Try saving again' }).click();
+    await saves.idle();
+    await dialog.getByRole('button', { name: 'Sign out', exact: true }).waitFor();
+    await dialog.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await signInForm(page).waitFor();
+    expect(await appText(page)).not.toContain('Phone');
+    expect(await page.evaluate((k: string) => localStorage.getItem(k), AUTH_KEY)).toBeNull();
+    // Still there for the next sign-in.
+    await signIn(page, account.email, account.password);
+    expect(phoneRecord(await onScreen(page))!.actualAmountCents).toBe(15000);
+    await page.context().close();
+  });
+
+  it('switching accounts on one device never shows the previous account’s plan', async () => {
+    const a = await newAccount();
+    const b = await newAccount();
+    const { page } = await open(DEV, at, { as: a });
+    await seed(page, { ...contested(), sources: contested().sources.map((s) => (s.id === 'phone' ? { ...s, description: 'Alpha phone' } : s)) });
+    await page.goto(`${DEV}#/expenses`);
+    await page.getByText('Alpha phone').first().waitFor();
+    await signOutUi(page);
+    // Watch everything B's session renders, from sign-in to the loaded plan.
+    const seen: string[] = [];
+    const watch = setInterval(() => void appText(page).then((t: string) => seen.push(t)).catch(() => undefined), 20);
+    await signIn(page, b.email, b.password);
+    await page.waitForTimeout(500);
+    clearInterval(watch);
+    expect(seen.length).toBeGreaterThan(3);
+    expect(seen.filter((t) => t.includes('Alpha phone'))).toEqual([]);
+    expect(await onScreen(page)).toMatchObject({ sources: [], records: [] });
+    await page.context().close();
+  });
+
+  it('start over clears the plan and keeps the account', async () => {
+    const { page, account } = await open(DEV, at);
+    await seed(page, contested());
+    await page.goto(`${DEV}#/settings`);
+    await page.getByRole('button', { name: 'Start over' }).click();
+    await page.getByRole('dialog', { name: 'Start over?' }).getByRole('button', { name: 'Erase and start over' }).click();
+    await page.getByText('Your data was erased. Set up again whenever you’re ready.').waitFor();
+    await signOutUi(page);
+    await signIn(page, account.email, account.password);
+    await page.getByRole('heading', { name: 'See your cash flow ahead of time' }).waitFor();
+    expect(await stored(page)).toMatchObject({ onboardingComplete: false, sources: [], records: [] });
+    await page.context().close();
+  });
+
+  it('deleting the account: explained, a backup offered, the password required; a wrong one deletes nothing; the right one deletes everything', async () => {
+    const other = await open(DEV, at);
+    await seed(other.page, contested());
+    const otherPlan = await stored(other.page);
+    const { page, account } = await open(DEV, at);
+    await seed(page, richPlan());
+    const oldToken = (await sessionOf(page)).access_token;
+    await page.goto(`${DEV}#/settings`);
+    await page.getByRole('button', { name: 'Delete account' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Delete your account?' });
+    expect(await dialog.innerText()).toContain('This permanently deletes your account and everything in your plan');
+    expect(await dialog.innerText()).toContain('To only clear your plan and keep your account, use Start over instead.');
+    expect(await dialog.getByRole('button', { name: 'Download a backup first' }).count()).toBe(1);
+    const confirm = dialog.getByRole('button', { name: 'Delete account permanently' });
+    expect(await confirm.isDisabled()).toBe(true);
+    // A wrong password: nothing deleted.
+    await dialog.getByLabel('Enter your password to confirm').fill('not-the-password');
+    await confirm.click();
+    await dialog.getByRole('alert').waitFor();
+    expect(await dialog.getByRole('alert').innerText()).toBe('That password isn’t right. Nothing was deleted.');
+    expect((await stored(page))!.sources).toHaveLength(8);
+    // The right one.
+    await dialog.getByLabel('Enter your password to confirm').fill(account.password);
+    await confirm.click();
+    await signInForm(page).waitFor();
+    await page.getByText('Your account and everything in it were deleted.').waitFor();
+    expect(await appText(page)).not.toContain('Paycheck');
+    // Gone: the old token reaches nothing, and the account can't sign in.
+    const stale = asUser(oldToken);
+    expect((await stale.rpc('load_plan')).data).toBeNull();
+    expect((await stale.from('sources').select('id')).data).toEqual([]);
+    await signInForm(page).getByLabel('Email').fill(account.email);
+    await signInForm(page).getByLabel('Password').fill(account.password);
+    await signInForm(page).getByRole('button', { name: 'Sign in' }).click();
+    expect(await signInForm(page).getByRole('alert').innerText()).toBe('That email and password don’t match an account. Check them and try again.');
+    // Another account is untouched.
+    expect(await stored(other.page)).toEqual(otherPlan);
+    await page.context().close();
+    await other.page.context().close();
+  });
+
+  it('deleting is refused while a change isn’t saved', async () => {
+    const { page } = await open(DEV, at);
+    await seed(page, contested());
+    await page.route('**/rest/v1/rpc/save_plan', (route: Any) => route.abort('failed'));
+    await payPhone(page);
+    await statusBar(page).waitFor();
+    await page.goto(`${DEV}#/settings`);
+    await page.getByRole('button', { name: 'Delete account' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Delete your account?' });
+    expect(await dialog.innerText()).toContain('Some of your changes aren’t saved yet.');
+    expect(await dialog.getByLabel('Enter your password to confirm').count()).toBe(0);
+    expect(await dialog.getByRole('button', { name: 'Delete account permanently' }).isDisabled()).toBe(true);
+    await page.context().close();
+  });
+
+  it('a temporary identity from an earlier development build becomes an account, keeping the same identity and plan', async () => {
+    // What the earlier build left in this browser: an anonymous session with a plan.
+    const anon = createClient(URL, KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { data } = await anon.auth.signInAnonymously();
+    const id = data.user!.id;
+    const plan = contested();
+    await anon.rpc('create_workspace');
+    await anon.rpc('save_plan', { p_base_revision: 0, p_save_id: crypto.randomUUID(), p_mode: 'replace', p_plan: toRows(plan) });
+    const { page } = await open(DEV, at, { signIn: false });
+    await page.evaluate(([k, v]: string[]) => localStorage.setItem(k!, v!), [AUTH_KEY, JSON.stringify(data.session)]);
+    await page.reload();
+    await loaded(page);
+    await page.goto(`${DEV}#/settings`);
+    const keep = page.getByRole('form', { name: 'Keep this plan' });
+    const email = `kept-${crypto.randomUUID()}@example.test`;
+    await keep.getByLabel('Email').fill(email);
+    await keep.getByRole('button', { name: 'Add email' }).click();
+    await page.getByText(`We sent a link to ${email}.`).waitFor();
+    await page.goto((await latestMail(email)).link);
+    await page.getByRole('heading', { name: 'Choose a password' }).waitFor();
+    const password = 'a-kept-password-3';
+    await page.getByRole('form', { name: 'Choose a password' }).getByLabel('New password').fill(password);
+    await page.getByRole('button', { name: 'Save password' }).click();
+    await loaded(page);
+    const s = await sessionOf(page);
+    expect([s.user.id, s.user.email, s.user.is_anonymous]).toEqual([id, email, false]);
+    // Recoverable: another device signs in with the email and password and finds the same plan.
+    const device = await open(DEV, at, { as: { email, password } as Account });
+    expect((await sessionOf(device.page)).user.id).toBe(id);
+    expect(plan_(await onScreen(device.page))).toEqual(plan_(canonicalize(plan)));
+    await page.context().close();
+    await device.page.context().close();
+  });
+});
+
+/** Signs this page's account out everywhere: its refresh tokens stop working (its access token runs until it expires). */
+async function revokeAll(page: Any) {
+  const { access_token } = await sessionOf(page);
+  const res = await fetch(`${URL}/auth/v1/logout?scope=global`, { method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${access_token}` } });
+  expect(res.status).toBe(204);
+}
+
 /** A plan to argue over: paycheck, a $150 phone bill due Oct 15 (overdue on Oct 16), and rent (October's paid). */
 function contested(): AppData {
   const at = '2026-10-01T12:00:00.000Z';
@@ -481,13 +852,13 @@ const loseNextReply = (page: Any) =>
 const phoneRecord = (d: AppData | null) => d!.records.find((r) => r.id === 'phone@2026-10-15');
 const rentAmounts = (d: AppData | null) => d!.sources.find((s) => s.id === 'rent')!.versions.map((v) => v.amountCents);
 
-describe('two sessions of the same identity, and saves that go wrong', () => {
+describe('two devices signed in to one account, and saves that go wrong', () => {
   const at = new Date(2026, 9, 16, 9, 0);
 
   it('both on the same revision: the second save is a conflict, shown as not saved, and nothing is silently lost', async () => {
     const a = await open(DEV, at);
     await seed(a.page, contested());
-    const b = await open(DEV, at, a.page);
+    const b = await open(DEV, at, { as: a.account });
     expect((await sessionOf(b.page)).user.id).toBe((await sessionOf(a.page)).user.id);
     const base = (await stored(a.page))!.revision;
 
@@ -564,7 +935,7 @@ describe('two sessions of the same identity, and saves that go wrong', () => {
     await loseNextReply(a.page);
     await payPhone(a.page);
     await statusBar(a.page).waitFor();
-    const b = await open(DEV, at, a.page);
+    const b = await open(DEV, at, { as: a.account });
     await changeRent(b.page, '1,700');
     await b.saves.idle();
     expect((await stored(b.page))!.revision).toBe(base + 2);
@@ -579,11 +950,11 @@ describe('two sessions of the same identity, and saves that go wrong', () => {
     await b.page.context().close();
   });
 
-  it('the session ends while the app is open: the change stays on screen, marked not saved, and saves once signed in again', async () => {
+  it('the API refuses the session’s token: the change stays on screen, marked not saved, and saves once the token is accepted', async () => {
     const a = await open(DEV, at);
     await seed(a.page, contested());
     const base = (await stored(a.page))!.revision;
-    // An expired session: the API refuses the token.
+    // The real API refusing a token it can't verify (a real expiry, with the app's own handling, is tested under accounts).
     await a.page.route('**/rest/v1/rpc/save_plan', (route: Any) => route.continue({ headers: { ...route.request().headers(), authorization: 'Bearer expired' } }));
     await payPhone(a.page);
     await statusBar(a.page).waitFor();
