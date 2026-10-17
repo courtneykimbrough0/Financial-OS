@@ -322,7 +322,13 @@ Replaces the earlier plan to validate Firebase persistence and offline behavior.
 - **Step 10b-1: database foundation complete; not connected.** `supabase/migrations` (tables, checks, row-level security, `create_workspace`, `load_plan`, `save_plan` with update / replace / reset modes, revision checks and save receipts for retries), `src/state/supabase/rows.ts` (mapping and pre-migration check). Tests: `rows`, and `npm run test:db` against a local PostgreSQL (equivalence, persistence, integrity, security). See docs/SUPABASE.md.
   - Since run against a local Supabase stack too (Postgres 17.11): the database tests pass on its PostgreSQL without the shim.
 - **Step 10b-2: storage adapter built; not connected.** `src/state/supabase/adapter.ts` implements `StorageAdapter` online-first (nothing on the device, no queue), with a save id per logical save, safe retries after a lost reply, and a check whether an earlier unconfirmed save went through before reporting a conflict. `StorageAdapter.save` takes an optional intent (`update`, `replace`, `reset`); the existing adapters ignore it. Tests: `adapter` (fake client, with the store), and `npm run test:supabase` through a local stack's Auth and API. See docs/SUPABASE.md.
-  - Follow-ups before switching: the store passes `replace` for a restore and `reset` for start over; a signed-in supabase-js client (public key only) and a development-only way to choose this adapter; migration of existing data; then Steps 10c and 10d.
+- **Step 10b-3: development integration verified; production unchanged.** Restore and start over are sent as `replace` and `reset` through `replacePlan`; with online-first storage they show only once confirmed, and Try again resends the same save. Ordinary changes stay `update`. The Supabase adapter's `clear()` rejects. `npm run dev:supabase` runs the app on a local stack as a temporary anonymous identity; other builds leave Supabase out. Tests: `supabase-intent`, `dev`, and `npm run e2e:supabase` (workflows with reloads, conflicts and retries, isolation, migration and rollback through backups, the default build). See docs/SUPABASE.md.
+  - Follow-ups before replacing Firebase:
+    - Supabase sign-in, sign-out and account deletion (10d);
+    - a hosted test project and its configuration (10e);
+    - moving real Firestore data (backups only so far);
+    - removing offline sync (10c);
+    - a conflicted change can be downloaded but not merged.
 
 ## Open items
 

@@ -1,6 +1,6 @@
-# Supabase storage (Steps 10b-1 and 10b-2)
+# Supabase storage (Steps 10b-1 to 10b-3)
 
-The PostgreSQL storage for Financial OS and the storage adapter that uses it. **Not connected to the app yet.** The app still saves on the device or to Firebase; nothing constructs the Supabase adapter outside tests, and there is no switch to turn it on. Nothing here has been applied to a hosted Supabase project; the tests run against a throwaway local PostgreSQL and a local Supabase stack.
+The PostgreSQL storage for Financial OS, the storage adapter that uses it, and a development-only way to run the app on it. **The app itself still saves on the device or to Firebase.** Only a build in the `supabase-dev` mode uses Supabase, and only a local stack (see Development). Nothing here has been applied to a hosted Supabase project; the tests run against a throwaway local PostgreSQL and a local Supabase stack.
 
 - Migrations: `supabase/migrations/` (apply in file-name order).
 - Mapping between the app and the tables: `src/state/supabase/rows.ts`.
@@ -119,7 +119,25 @@ A timeout doesn't prove a save failed.
 
 Loading throws an Error with the same messages; the store shows its load-failure screen.
 
-**Before the app can use it:** the store calls `save(data, revision)` without an intent, so a restore or start over would go out as `update`, and the database would refuse one that removes items. Passing `replace` and `reset` from those two actions is part of connecting the adapter (Step 10b-2), along with creating a signed-in client.
+### Save intent in the app (`src/state/store.tsx`)
+
+- **Ordinary changes** (`run`), including undo and batches, are always saved as `update`.
+- **Restore a backup** and **Start over** use `replacePlan(op, 'replace' | 'reset')`. The adapter says it is online-first (`onlineFirst`), so the store:
+  1. runs it only when every earlier change is saved (otherwise: "Your latest change hasn’t been saved yet…"), and combines nothing into it;
+  2. keeps the saved plan on screen and other changes waiting until `save_plan` confirms it; the dialog shows Restoring… / Erasing… and its buttons are disabled, so a second click sends nothing;
+  3. on confirmation shows the new plan, closes the dialog and reports success;
+  4. otherwise keeps the dialog open with the reason ("The restore hasn’t been confirmed. …" / "Erasing hasn’t been confirmed. …"). **Try again** sends the same save (same intent, base revision and plan, so the same save id). **Cancel** drops it and reloads what is actually saved, because an unconfirmed save may have gone through. A conflict offers Reload.
+- With device or Firebase storage, `replacePlan` applies like `run`, as before.
+
+### `clear()`
+
+`StorageAdapter.clear()` has one caller: entering sample data clears the device's sample copy (a `LocalStorageAdapter` under its own key). It is never called on account or Supabase storage. The Supabase adapter's `clear()` **rejects** ("Supabase storage doesn’t erase a plan this way…") instead of reporting success, because nothing is kept on the device and erasing the plan is an explicit `reset` save. These are different actions:
+
+| Action | Today | With Supabase |
+| --- | --- | --- |
+| Clear the plan / start setup again | Start over (`reset` save) | Same |
+| Sign out | Firebase: forget the device copy (`forgetDevice`) | Nothing on the device but the session; sign-out arrives with Step 10d |
+| Delete the account and its data | Firebase `deleteAccount` | Not built. Deleting the `auth.users` row cascades to the workspace and every row; it needs a server-side function or the Auth admin API (never a key in the browser) and re-authentication first. Step 10d |
 
 ### Retries in the adapter
 
@@ -128,6 +146,19 @@ Loading throws an Error with the same messages; the store shows its load-failure
 - **Try again, same save:** `already_saved` with nothing newer is success at that revision; with newer saves since, it's a conflict saying the change was saved and asking for a reload. The revision never goes backwards and the newer data isn't overwritten.
 - **A different save after an unknown one** (the person kept editing): if it meets a conflict, the adapter re-sends the remembered save (same id) to ask whether it went through. If it did and nothing else followed, it saves the new edit on top of that revision; if newer saves followed, a "saved, but changed since" conflict; if it never arrived, a plain conflict. If that question gets no reply either, the save stays unknown and is reported as not saved.
 - **A refused save** (PT422, a check) is definite: nothing was applied, and the next save gets a new id.
+
+## Development (`src/state/supabase/dev.tsx`)
+
+A build in the `supabase-dev` mode runs the app on a **local** Supabase stack:
+
+```
+VITE_SUPABASE_ANON_KEY=<anon or publishable key from supabase status> npm run dev:supabase
+```
+
+- `VITE_SUPABASE_URL` defaults to `http://127.0.0.1:54321`. Anything other than this machine is refused, and so is any key but the public anon or publishable key.
+- **Identity:** a temporary anonymous Supabase identity (`signInAnonymously`; anonymous sign-ins must be on in the local stack's `supabase/config.toml`). The page says so: "Development storage: local Supabase, temporary anonymous identity. Not a real account; it can’t be recovered." Row-level security still limits the plan to that identity, and signed-out callers reach nothing.
+- **On the device:** only the Supabase session (`financial-os:supabase-dev-auth`). The plan is never stored there.
+- **Every other build is unchanged:** `import.meta.env.MODE` is fixed at build time, so the Supabase code is left out of the default build entirely. `npm run e2e:supabase` checks the built files contain no Supabase code and that the page never contacts it.
 
 ## Migration and rollback
 
@@ -165,6 +196,23 @@ It needs the PostgreSQL server binaries and `psql`. These tests run against plai
 The script refuses any address other than this machine, and refuses a service-role or secret key: the tests use only what a browser has. Each test signs up its own throwaway users. To run the database tests against the same stack's PostgreSQL: `PGHOST=127.0.0.1 PGPORT=54322 PGUSER=postgres PGPASSWORD=postgres npx vitest run --config vitest.db.config.ts`.
 
 Last run (October 2026): Supabase CLI 2.121.0, Supabase Postgres 17.11.0.004, GoTrue 2.197.0, PostgREST 16.4; both migrations applied unchanged by `supabase start`.
+
+## Browser tests (`npm run e2e:supabase`)
+
+`e2e/supabase.e2e.test.ts` drives built copies of the app in Chromium against a local stack (same requirements as `test:supabase`; `scripts/local-supabase.mjs` applies the same checks):
+
+- **Setup and everyday use:** an empty workspace, setup (income, a bill, a one-time expense, a liability payment), a recorded payment, undo, a raise from a date, a moved occurrence, a review rhythm and a completed review, a restore, a dismissed estimate suggestion, and start over. After each one, Supabase holds exactly what's on screen, and a reload brings back the same plan, the same dashboard and identical forecasts. Every save is confirmed; all are `update` except one `replace` and one `reset`.
+- **Conflicts and retries:**
+  - two sessions of one identity: the second save gets a conflict and isn't shown as saved, the first is kept, the unsaved change can still be downloaded, and Reload shows the latest;
+  - a reply lost after commit: shown as not saved, warns before leaving, Try again reuses the save id and applies once;
+  - a lost save, then more edits: saved on top;
+  - a lost save retried after a newer save: recognized, no regression, asks for a reload;
+  - an expired session: shown as signed out, saved after signing in again;
+  - a restore the database refuses: the saved plan stays;
+  - a double-clicked restore: one save.
+- **Isolation:** two anonymous identities can't reach each other's plans.
+- **Migration:** a plan from the device-storage app, downloaded with its backup button, restored into an empty Supabase workspace. `checkForMigration` passes first, and everything arrives exactly: ids, original predictions, current expectations, actuals, schedule versions, pauses, estimate dismissals, review settings, onboarding, forecasts and timing gaps. The Supabase copy's backup then restores into device storage again (rollback).
+- **The default build:** no Supabase code, no requests to it.
 
 ## Performance
 

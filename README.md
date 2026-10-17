@@ -4,7 +4,7 @@ A mobile-first Progressive Web App for planning cash flow. You enter the income,
 
 You enter everything by hand. Data is saved to the user's Financial OS account (Firebase) when accounts are turned on, or on the device otherwise. The app has no bank connections, no account balances, and no budgeting.
 
-**Architecture direction.** The current version stores data with Firebase (or on the device) and is hosted on Cloud Run, with offline changes synchronized later. Those parts are legacy: Financial OS is moving to Supabase PostgreSQL for data (and, later, authentication), Vercel for hosting, and an online-first design where the backend is the source of truth. The sections below describe how the current version works; [AGENTS.md](AGENTS.md) section C1 and the roadmap's Step 10 describe the plan. The Supabase database foundation and storage adapter are built and tested but not connected yet: [docs/SUPABASE.md](docs/SUPABASE.md).
+**Architecture direction.** The current version stores data with Firebase (or on the device) and is hosted on Cloud Run, with offline changes synchronized later. Those parts are legacy: Financial OS is moving to Supabase PostgreSQL for data (and, later, authentication), Vercel for hosting, and an online-first design where the backend is the source of truth. The sections below describe how the current version works; [AGENTS.md](AGENTS.md) section C1 and the roadmap's Step 10 describe the plan. The Supabase database foundation and storage adapter are built and tested; only a development build on a local stack uses them so far: [docs/SUPABASE.md](docs/SUPABASE.md).
 
 ## Quick start
 
@@ -18,6 +18,8 @@ npm run e2e          # end-to-end smoke test in Chromium (builds its own device-
 npm run test:rules   # Firestore security rules, in the Firestore emulator (needs Java)
 npm run test:db      # Supabase migrations and database tests, in a throwaway local PostgreSQL (needs PostgreSQL)
 npm run test:supabase # Supabase integration tests through a local Supabase stack (see docs/SUPABASE.md)
+npm run e2e:supabase  # the app in Chromium on a local Supabase stack, plus checks that the default build never uses it
+npm run dev:supabase  # development only: the app on a local Supabase stack, as a temporary anonymous identity
 npm start            # production server (server.mjs) for the built app; used on Cloud Run
 ```
 
