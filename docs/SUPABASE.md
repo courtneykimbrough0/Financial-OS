@@ -117,7 +117,7 @@ A timeout doesn't prove a save failed.
 | What happened | Result | Message |
 | --- | --- | --- |
 | Confirmed (`saved`, or `already_saved` with nothing newer) | `ok`, the new revision | |
-| No reply, a network failure, a gateway or server error (5xx), a timeout | error | Couldn’t reach the server, so this change isn’t saved yet. Check your connection and try again. |
+| No reply, a network failure, a gateway or server error (5xx), a timeout | error | Couldn’t reach the server, so this change isn’t confirmed yet. Check your connection and try again. |
 | Signed out or session expired (PT401, 401, 42501, PGRST301/302) | error | You’ve been signed out, so this change isn’t saved. Sign in again, then try again. |
 | The database refused the request (PT422) | error | This change couldn’t be saved: *the database's reason* |
 | A check or key refused the plan (SQLSTATE 22xxx, 23xxx) | error | …didn’t pass a safety check. Nothing was changed. |
@@ -180,7 +180,9 @@ VITE_SUPABASE_ANON_KEY=<anon or publishable key from supabase status> npm run de
   - The recovery panel ("Unsaved changes from another account") shows only that something was set aside and for which email, until that account's password is entered. A separate, in-memory session checks it, without touching the browser's session.
   - Unlocked, the changes can be saved into that account, but only on top of exactly the revision they were based on. If the account's plan is already the same, it says so. If the plan has moved on since, they aren't written over it ("…changed since these edits, so they weren’t saved over it. Download them to compare."), and they can be downloaded as a backup instead.
   - Discarding takes a second, explicit step, and leaving the page warns while anything is set aside.
-  - Limits: set-aside changes live only in that page, so closing it (after the warning) loses them. A save that was in flight as the account changed is sent with the right session and lands in its own account, but the set-aside copy can't then tell that save apart from a newer one made elsewhere. If the copy differs from the saved plan, it is refused and offered as a download. An unconfirmed restore or start over (its dialog still open) isn't captured; the backup file or the confirmation still has it.
+  - A restore or start over that was waiting for the server's answer is set aside too, with its intent. The panel says it "may or may not have been applied". Unlocked, it checks the account: applied (says so), still at the revision it started from (the person can finish it, as that account), or changed since (left alone). It is never sent again by itself.
+  - Limits: set-aside changes live only in that page, so closing it (after the warning) loses them. Ordinary changes that were in flight as the account changed are sent with the right session and land in their own account. But the set-aside copy can't then tell that save apart from a newer one made elsewhere: if the copy differs from the saved plan, it is refused and offered as a download.
+- **What the server enforces without the app's guard:** a token reaches only its own account's workspace. Requests sent with plain HTTP and no guard, using A's token while claiming B and carrying B's ids, can't read, write or link into B's workspace; a save lands in A's own (tested). What the server can't know is which account a plan was *meant* for: a request sent with B's valid token is B's request. Keeping one account's plan from being sent under another's session is therefore the client's job (`ownerGuardFetch`), and every plan request and the deletion request are bound.
 - **Sign out** (Settings, or the setup welcome screen) ends this device's session; the account and plan stay. With an unsaved change it warns first and offers Try saving again and a backup.
 - **A session that ends while the app is open** (expired and couldn't be refreshed, or signed out everywhere): with nothing unsaved, back to sign-in. With unsaved changes, they stay on screen, and "Sign in again to save" asks for the same account's password and then saves. It also offers a backup, or leaving without saving.
 - **Offline:** the session is kept, and a change is shown as not saved until the connection returns and it's saved.
@@ -189,6 +191,7 @@ VITE_SUPABASE_ANON_KEY=<anon or publishable key from supabase status> npm run de
   - offers a backup;
   - is refused while a change is unsaved;
   - requires the password. A wrong one deletes nothing; the right one signs in afresh, then calls `delete_account()`;
+  - is bound to its account like every plan request, so a session switched by another tab can't redirect it;
   - is shown as done only when the server confirms it. If the reply is lost (or the server fails), the app asks the auth server whether the account still exists. If it's gone, the app shows it as deleted and signs out; if it's still there, it says it wasn't deleted. If neither can be told, it signs out and says so. It never retries a deletion by itself.
 
 ### Temporary identities from earlier development builds

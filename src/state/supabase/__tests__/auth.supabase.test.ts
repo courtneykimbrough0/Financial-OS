@@ -250,6 +250,37 @@ describe('who can delete an account (audit)', () => {
   });
 });
 
+describe('with the app’s request guard bypassed, the server still keeps each account to its own workspace', () => {
+  it('raw requests with A’s token can’t read, write or link into B’s workspace; a save naming B lands in A’s own', async () => {
+    const a = client();
+    const b = client();
+    const aAccount = await confirmedAccount(a);
+    const bAccount = await confirmedAccount(b);
+    await store(a, smallPlan());
+    const bPlan = await (await store(b, richPlan())).load();
+    const aToken = (await a.auth.getSession()).data.session!.access_token;
+    const wsB = (await b.from('workspaces').select('id')).data![0]!.id as string;
+    // Plain HTTP, no supabase-js and no guard: the owner mark claims B, and the plan carries B's ids.
+    const raw = (path: string, body: unknown, method = 'POST') =>
+      fetch(`${URL}/rest/v1/${path}`, { method, headers: { apikey: KEY, Authorization: `Bearer ${aToken}`, 'Content-Type': 'application/json', 'x-financial-os-owner': bAccount.userId, Prefer: 'return=representation' }, body: JSON.stringify(body) });
+    const save = await raw('rpc/save_plan', { p_base_revision: 1, p_save_id: crypto.randomUUID(), p_mode: 'replace', p_plan: { ...toRows(smallPlan()), workspace_id: wsB, owner_id: bAccount.userId, review_cadence: 'weekly' } });
+    expect(save.status).toBe(200);
+    expect((await new SupabaseStorageAdapter(a).load()).review?.cadence).toBe('weekly');
+    expect(await new SupabaseStorageAdapter(b).load()).toEqual(bPlan);
+    // Reads and direct writes into B's workspace.
+    for (const t of TABLES) {
+      const res = await fetch(`${URL}/rest/v1/${t}?${t === 'workspaces' ? 'id' : 'workspace_id'}=eq.${wsB}`, { headers: { apikey: KEY, Authorization: `Bearer ${aToken}` } });
+      expect([t, res.status, await res.json()]).toEqual([t, 200, []]);
+    }
+    const insert = await raw('sources', { workspace_id: wsB, id: 'x', position: 0, kind: 'bill', description: 'x', active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    expect([insert.status, (await insert.json()).code]).toEqual([403, '42501']);
+    const update = await raw(`sources?workspace_id=eq.${wsB}`, { description: 'x' }, 'PATCH');
+    expect([update.status, (await update.json()).code]).toEqual([403, '42501']);
+    expect(await new SupabaseStorageAdapter(b).load()).toEqual(bPlan);
+    expect(aAccount.userId).not.toBe(bAccount.userId);
+  });
+});
+
 describe('a temporary development identity becomes a recoverable account', () => {
   it('adding a confirmed email and then a password keeps the same identity and the same plan', async () => {
     const anon = client();
