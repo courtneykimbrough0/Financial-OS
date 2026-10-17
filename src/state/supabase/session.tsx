@@ -23,7 +23,7 @@ import { forgetSampleData } from '../mode';
 import type { AppData } from '../../domain/types';
 import { AccountSlotContext, type AccountSlot } from '../slots';
 import type { StorageAdapter } from '../storage';
-import { ownerBound, SupabaseStorageAdapter } from './adapter';
+import { OWNER_HEADER, ownerBound, SupabaseStorageAdapter } from './adapter';
 
 export interface AccountUser {
   id: string;
@@ -243,7 +243,8 @@ export function SupabaseAccountGate({
       // A fresh password sign-in: the database requires one from the last 5 minutes.
       const check = await client.auth.signInWithPassword({ email: user.email, password });
       if (check.error) return check.error.code === 'invalid_credentials' ? 'That password isn’t right. Nothing was deleted.' : authMessage(check.error);
-      const { error, status } = await client.rpc('delete_account');
+      // Bound to this account: if another tab switched the browser's session in the meantime, this is stopped, not sent as someone else.
+      const { error, status } = await client.rpc('delete_account').setHeader(OWNER_HEADER, user.id);
       if (!error) {
         leave(DELETED);
         return null;
