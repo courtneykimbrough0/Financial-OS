@@ -60,6 +60,8 @@ All four run with `search_path = ''`, name every object by schema, and can be ca
   - a session that still exists in Supabase Auth (PT401), so a token from a session that signed out can't use it;
   - a password sign-in within the last 5 minutes (PT403). Supabase Auth checks the password and records the time in the token's `amr` claim, and refreshing a token keeps the original time.
 
+  Checked against the real auth server: a token refresh keeps the original sign-in time (only `iat` changes), so it never counts as a new password check. A token with edited claims is rejected by the API (PGRST301) before the function runs, so nothing the browser changes can satisfy the check. An anonymous identity's sign-in method is `anonymous` and is refused.
+
   Deleting the `auth.users` row removes, through foreign keys with ON DELETE CASCADE, the person's identities, sessions and refresh tokens, and their workspace with its sources, schedule versions, pauses, occurrence records and save receipts. An access token issued earlier still verifies until it expires (Supabase Auth tokens are self-contained), but it reaches nothing: no workspace, no rows, and `create_workspace` fails because the user no longer exists. It runs as the migration owner (`security definer`), so no privileged key is ever in the app. The alternative is an Edge Function calling the Auth admin API with the service-role key on the server; both keep the privilege server-side.
 
 ### Save modes
@@ -173,6 +175,12 @@ VITE_SUPABASE_ANON_KEY=<anon or publishable key from supabase status> npm run de
 - **Links in emails** use PKCE: they return with a one-time code for the browser that asked, never with tokens in the address. Opened in another browser, the email is still confirmed, but the person then signs in there.
 - **Sessions** are supabase-js's: kept in this browser's storage (`financial-os:supabase-dev-auth`, tokens only), so reloading or reopening the app stays signed in. They're refreshed automatically, and the API checks them on every request. Nothing financial is stored on the device.
 - **Each person gets their own app** (keyed by user id) and their own adapter, so nothing in memory carries over to whoever signs in next on the device.
+- **Requests are bound to their account.** The browser has one Supabase session shared by all its tabs, so another tab signing in as someone else changes the token every tab's requests carry. Each adapter therefore marks its requests with its owner (`ownerBound`). The client's fetch (`ownerGuardFetch`) stops a marked request whose token belongs to another account before it is sent (code FO401: "Another account signed in on this device, so this change wasn’t sent…"). Without this, a save still queued in one tab went out under the other account's session; in a reproduction, one account's plan landed in another's empty workspace.
+- **Another account signing in elsewhere sets changes aside.** When another tab signs in as someone else, this tab follows the browser's session to the new account. First, whatever the previous account hadn't confirmed is captured (`unsavedChanges()` in the store) and set aside in memory for that account. Nothing is merged, and nothing is ever shown as the new account's plan.
+  - The recovery panel ("Unsaved changes from another account") shows only that something was set aside and for which email, until that account's password is entered. A separate, in-memory session checks it, without touching the browser's session.
+  - Unlocked, the changes can be saved into that account, but only on top of exactly the revision they were based on. If the account's plan is already the same, it says so. If the plan has moved on since, they aren't written over it ("…changed since these edits, so they weren’t saved over it. Download them to compare."), and they can be downloaded as a backup instead.
+  - Discarding takes a second, explicit step, and leaving the page warns while anything is set aside.
+  - Limits: set-aside changes live only in that page, so closing it (after the warning) loses them. A save that was in flight as the account changed is sent with the right session and lands in its own account, but the set-aside copy can't then tell that save apart from a newer one made elsewhere. If the copy differs from the saved plan, it is refused and offered as a download. An unconfirmed restore or start over (its dialog still open) isn't captured; the backup file or the confirmation still has it.
 - **Sign out** (Settings, or the setup welcome screen) ends this device's session; the account and plan stay. With an unsaved change it warns first and offers Try saving again and a backup.
 - **A session that ends while the app is open** (expired and couldn't be refreshed, or signed out everywhere): with nothing unsaved, back to sign-in. With unsaved changes, they stay on screen, and "Sign in again to save" asks for the same account's password and then saves. It also offers a backup, or leaving without saving.
 - **Offline:** the session is kept, and a change is shown as not saved until the connection returns and it's saved.
@@ -180,7 +188,8 @@ VITE_SUPABASE_ANON_KEY=<anon or publishable key from supabase status> npm run de
   - explains that it's permanent and that Start over only clears the plan;
   - offers a backup;
   - is refused while a change is unsaved;
-  - requires the password. A wrong one deletes nothing; the right one signs in afresh, then calls `delete_account()`.
+  - requires the password. A wrong one deletes nothing; the right one signs in afresh, then calls `delete_account()`;
+  - is shown as done only when the server confirms it. If the reply is lost (or the server fails), the app asks the auth server whether the account still exists. If it's gone, the app shows it as deleted and signs out; if it's still there, it says it wasn't deleted. If neither can be told, it signs out and says so. It never retries a deletion by itself.
 
 ### Temporary identities from earlier development builds
 
@@ -264,7 +273,17 @@ Last run (October 2026): Supabase CLI 2.121.0, Supabase Postgres 17.11.0.004, Go
   - switching accounts on one device, never showing the previous plan;
   - start over keeping the account;
   - account deletion (explained, password required, a wrong password, cleanup, a stale token, another account untouched), and deletion refused while unsaved;
-  - converting an earlier temporary identity.
+  - converting an earlier temporary identity;
+  - a deletion whose reply is lost after it happened, and one that never reached the server.
+- **Two tabs on one device**, with real shared sessions:
+  - the same account in both;
+  - another account signing in with nothing unsaved;
+  - with an unsaved change after a server failure, and after a network failure;
+  - with a save in flight;
+  - with a save queued behind it (the case that used to land in the other account);
+  - a set-aside change that went stale;
+  - discarding and leaving the page;
+  - each account's confirmed plan intact afterwards.
 - **Isolation:** two accounts can't reach each other's plans, and signed-out callers reach nothing.
 - **Migration:** a plan from the device-storage app, downloaded with its backup button, restored into an empty Supabase workspace. `checkForMigration` passes first, and everything arrives exactly: ids, original predictions, current expectations, actuals, schedule versions, pauses, estimate dismissals, review settings, onboarding, forecasts and timing gaps. The Supabase copy's backup then restores into device storage again (rollback).
 - **The default build:** no Supabase code, no requests to it.

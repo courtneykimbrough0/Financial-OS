@@ -333,9 +333,11 @@ Replaces the earlier plan to validate Firebase persistence and offline behavior.
   - Follow-ups:
     - a hosted test project: SMTP, redirect URLs, rate limits, anonymous sign-ins off;
     - changing the email or password while signed in;
+    - set-aside changes from a tab whose account was switched live only in that page (see docs/SUPABASE.md);
     - signing out other devices;
     - the production sign-in cutover from Firebase;
     - removing offline sync (10c).
+- **Step 10d (development), account safety:** requests are bound to their account, so another tab switching accounts can't send one account's changes under another's session (reproduced, then fixed). Unconfirmed changes are set aside for their own account, unlocked with its password, and saved only on top of the revision they came from, or downloaded. A deletion whose reply was lost is checked with the auth server before it is reported. Deletion authorization was audited against the real stack with no weakness found. Tests: `owner-guard`, the audit tests in `auth.supabase`, and the two-tab and deletion tests in `npm run e2e:supabase`.
 
 ## Open items
 
