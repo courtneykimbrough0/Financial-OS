@@ -120,6 +120,7 @@ describe('each person reaches only their own plan', () => {
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' order by p.proname;`);
     expect(r.out.split('\n')).toEqual([
       'create_workspace|t|search_path=""|f|t',
+      'delete_account|t|search_path=""|f|t',
       'load_plan|f|search_path=""|f|t',
       'save_plan|t|search_path=""|f|t',
     ]);

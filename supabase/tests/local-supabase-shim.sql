@@ -2,7 +2,7 @@
 --
 -- A plain PostgreSQL cluster lacks what Supabase provides, so the database
 -- tests recreate the parts the migrations rely on, the way Supabase defines
--- them: the anon / authenticated / service_role roles, auth.users, and
+-- them: the anon / authenticated / service_role roles, auth.users, auth.sessions, and
 -- auth.uid() reading the signed-in user from the request's JWT claims. It also
 -- reproduces Supabase's default grants on the public schema (everything to
 -- anon and authenticated), so the tests prove the migrations revoke them.
@@ -13,6 +13,8 @@ create role service_role nologin noinherit bypassrls;
 
 create schema auth;
 create table auth.users (id uuid primary key);
+-- Supabase Auth's sessions, reduced to what delete_account() checks.
+create table auth.sessions (id uuid primary key, user_id uuid not null references auth.users (id) on delete cascade);
 
 create function auth.uid() returns uuid
 language sql stable
