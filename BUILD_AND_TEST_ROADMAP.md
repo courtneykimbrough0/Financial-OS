@@ -331,13 +331,14 @@ Replaces the earlier plan to validate Firebase persistence and offline behavior.
     - a conflicted change can be downloaded but not merged.
 - **Step 10d (development): recoverable accounts on the local stack; production unchanged.** Email-and-password accounts (Supabase Auth) in the supabase-dev build: sign-up with email confirmation, sign-in, password recovery, persistent and refreshed sessions, sign-out, and account deletion through `delete_account()` after a fresh password check. A session that ends with unsaved changes asks to sign in again. Earlier anonymous identities convert to accounts with the same identity. `supabase/config.toml` runs the local stack from the repository. Tests: `account.db`, `auth.supabase`, `session`, and the account tests in `npm run e2e:supabase`. See docs/SUPABASE.md.
   - Follow-ups:
-    - a hosted test project: SMTP, redirect URLs, rate limits, anonymous sign-ins off;
+    - a hosted test project: SMTP, redirect URLs, rate limits, anonymous sign-ins off (prepared: docs/SUPABASE-HOSTED.md);
     - changing the email or password while signed in;
     - set-aside changes from a tab whose account was switched live only in that page (see docs/SUPABASE.md);
     - signing out other devices;
     - the production sign-in cutover from Firebase;
     - removing offline sync (10c).
 - **Step 10d (development), account safety:** requests are bound to their account, so another tab switching accounts can't send one account's changes under another's session (reproduced, then fixed). Unconfirmed changes are set aside for their own account, unlocked with its password, and saved only on top of the revision they came from, or downloaded. A deletion whose reply was lost is checked with the auth server before it is reported. Deletion authorization was audited against the real stack with no weakness found. Tests: `owner-guard`, the audit tests in `auth.supabase`, and the two-tab and deletion tests in `npm run e2e:supabase`.
+- **Hosted test preparation: ready, not run.** An approved hosted test project can be selected deliberately, through an allowlist (empty until approved), an exact address, the `supabase-hosted-test` build mode, `SUPABASE_TEST_TARGET=hosted`, a destructive-test confirmation and an in-database marker. The suites run against it unchanged; email- and anonymous-dependent tests skip when the target can't support them, and test accounts are cleaned up. Setup steps, migrations and verification SQL: docs/SUPABASE-HOSTED.md. Tests: `target`.
 
 ## Open items
 

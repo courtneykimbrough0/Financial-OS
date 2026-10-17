@@ -21,7 +21,7 @@ import { buildForecast, explainTimingGaps, paycheckCycles } from '../src/domain/
 import type { AppData } from '../src/domain/types';
 import { createBackup, readBackup } from '../src/state/backup';
 import { richPlan } from '../src/state/supabase/__tests__/fixtures';
-import { confirmedAccount, latestMail } from '../src/state/supabase/__tests__/local-auth';
+import { ANONYMOUS_ON, confirmedAccount, deleteTestAccounts, HAS_MAIL, latestMail } from '../src/state/supabase/__tests__/local-auth';
 import { canonicalize, checkForMigration, fromRows, toRows, type LoadedPlan } from '../src/state/supabase/rows';
 
 const require = createRequire(import.meta.url);
@@ -54,6 +54,7 @@ beforeAll(async () => {
 });
 afterAll(async () => {
   await browser?.close();
+  await deleteTestAccounts(URL, KEY);
 });
 
 type Account = Awaited<ReturnType<typeof confirmedAccount>>;
@@ -93,7 +94,7 @@ async function signIn(page: Any, email: string, password: string) {
  * before that.
  */
 async function loaded(page: Any) {
-  await page.getByRole('note').filter({ hasText: 'Development storage: local Supabase' }).waitFor();
+  await page.getByRole('note').filter({ hasText: 'Development storage:' }).waitFor();
   await page.waitForFunction(() => !document.querySelector('.load-screen') && document.querySelector('.app main#main:not(.sign-in)') && window.location.hash.startsWith('#/'));
 }
 
@@ -474,7 +475,7 @@ async function signOutUi(page: Any, confirm = 'Sign out') {
 describe('accounts in the development copy', () => {
   const at = new Date(2026, 9, 16, 9, 0);
 
-  it('creating an account: confirm the email first, then setup starts on an empty plan', async () => {
+  it.skipIf(!HAS_MAIL)('creating an account: confirm the email first, then setup starts on an empty plan', async () => {
     const { page } = await open(DEV, at, { signIn: false });
     const email = `e2e-${crypto.randomUUID()}@example.test`;
     const password = 'a-long-password-1';
@@ -549,7 +550,7 @@ describe('accounts in the development copy', () => {
     await other.page.context().close();
   });
 
-  it('password recovery: the emailed link opens “Choose a new password”; the new one works and the old one doesn’t', async () => {
+  it.skipIf(!HAS_MAIL)('password recovery: the emailed link opens “Choose a new password”; the new one works and the old one doesn’t', async () => {
     const account = await newAccount();
     const { page } = await open(DEV, at, { signIn: false });
     await page.getByRole('button', { name: 'Forgot your password?' }).click();
@@ -818,7 +819,7 @@ describe('accounts in the development copy', () => {
     await page.context().close();
   });
 
-  it('a temporary identity from an earlier development build becomes an account, keeping the same identity and plan', async () => {
+  it.skipIf(!ANONYMOUS_ON || !HAS_MAIL)('a temporary identity from an earlier development build becomes an account, keeping the same identity and plan', async () => {
     // What the earlier build left in this browser: an anonymous session with a plan.
     const anon = createClient(URL, KEY, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data } = await anon.auth.signInAnonymously();

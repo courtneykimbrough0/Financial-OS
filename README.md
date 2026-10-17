@@ -20,6 +20,7 @@ npm run test:db      # Supabase migrations and database tests, in a throwaway lo
 npm run test:supabase # Supabase integration tests through a local Supabase stack (see docs/SUPABASE.md)
 npm run e2e:supabase  # the app in Chromium on a local Supabase stack, plus checks that the default build never uses it
 npm run dev:supabase  # development only: the app on a local Supabase stack (supabase start), with email-and-password accounts
+npm run build:hosted-test # development only: the Supabase build for an approved hosted test project (docs/SUPABASE-HOSTED.md)
 npm start            # production server (server.mjs) for the built app; used on Cloud Run
 ```
 

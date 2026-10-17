@@ -7,12 +7,12 @@
  * test:supabase`.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import type { AppData } from '../../../domain/types';
 import { SupabaseStorageAdapter } from '../adapter';
 import { canonicalize, toRows } from '../rows';
 import { richPlan, smallPlan } from './fixtures';
-import { confirmedAccount, latestMail, newEmail, newPassword, openLink } from './local-auth';
+import { ANONYMOUS_ON, confirmedAccount, deleteTestAccounts, HAS_MAIL, latestMail, newEmail, newPassword, openLink, TARGET } from './local-auth';
 
 const URL = process.env.SUPABASE_TEST_URL!;
 const KEY = process.env.SUPABASE_TEST_ANON_KEY!;
@@ -21,6 +21,7 @@ const REDIRECT = 'http://localhost:4183/';
 const client = () => createClient(URL, KEY, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
 const withToken = (token: string) => createClient(URL, KEY, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: { Authorization: `Bearer ${token}` } } });
 const TABLES = ['workspaces', 'sources', 'schedule_versions', 'source_pauses', 'occurrence_records'];
+afterAll(() => deleteTestAccounts(URL, KEY));
 
 async function store(sb: SupabaseClient, plan: AppData) {
   const adapter = new SupabaseStorageAdapter(sb);
@@ -32,7 +33,7 @@ async function store(sb: SupabaseClient, plan: AppData) {
 const fromRedirect = (location: string) => Object.fromEntries(new URLSearchParams(location.split('#')[1] ?? ''));
 
 describe('creating an account and signing in', () => {
-  it('sign-up sends a confirmation email; signing in waits for it; after confirming, sign-in works and the plan starts empty', async () => {
+  it.skipIf(!HAS_MAIL)('sign-up sends a confirmation email; signing in waits for it; after confirming, sign-in works and the plan starts empty', async () => {
     const sb = client();
     const email = newEmail();
     const password = newPassword();
@@ -73,7 +74,7 @@ describe('creating an account and signing in', () => {
 });
 
 describe('password recovery', () => {
-  it('the recovery email’s link signs in to set a new password; the old one stops working, the plan is kept', async () => {
+  it.skipIf(!HAS_MAIL)('the recovery email’s link signs in to set a new password; the old one stops working, the plan is kept', async () => {
     const sb = client();
     const { email, password } = await confirmedAccount(sb);
     await store(sb, smallPlan());
@@ -96,7 +97,7 @@ describe('password recovery', () => {
     expect((await new SupabaseStorageAdapter(back).load()).sources.map((s) => s.id)).toEqual(['pay', 'rent']);
   });
 
-  it('asking to recover an unknown email answers the same way and sends nothing', async () => {
+  it.skipIf(!HAS_MAIL)('asking to recover an unknown email answers the same way and sends nothing', async () => {
     const email = newEmail();
     expect((await client().auth.resetPasswordForEmail(email, { redirectTo: REDIRECT })).error).toBeNull();
     await expect(latestMail(email)).rejects.toThrow(`no email to ${email}`);
@@ -215,7 +216,7 @@ describe('who can delete an account (audit)', () => {
     expect((await client().auth.signInWithPassword({ email, password })).error).toBeNull();
   });
 
-  it('a temporary (anonymous) identity has no password sign-in, so it can’t delete', async () => {
+  it.skipIf(!ANONYMOUS_ON)('a temporary (anonymous) identity has no password sign-in, so it can’t delete', async () => {
     const anon = client();
     await anon.auth.signInAnonymously();
     await store(anon, smallPlan());
@@ -281,8 +282,15 @@ describe('with the app’s request guard bypassed, the server still keeps each a
   });
 });
 
+describe('a hosted test project’s settings', () => {
+  it.skipIf(TARGET !== 'hosted')('anonymous sign-ins are off', async () => {
+    const r = await client().auth.signInAnonymously();
+    expect([r.error?.code, r.data.session]).toEqual(['anonymous_provider_disabled', null]);
+  });
+});
+
 describe('a temporary development identity becomes a recoverable account', () => {
-  it('adding a confirmed email and then a password keeps the same identity and the same plan', async () => {
+  it.skipIf(!ANONYMOUS_ON || !HAS_MAIL)('adding a confirmed email and then a password keeps the same identity and the same plan', async () => {
     const anon = client();
     const signedIn = await anon.auth.signInAnonymously();
     expect(signedIn.data.user!.is_anonymous).toBe(true);

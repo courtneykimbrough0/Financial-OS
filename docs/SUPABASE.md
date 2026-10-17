@@ -198,13 +198,9 @@ VITE_SUPABASE_ANON_KEY=<anon or publishable key from supabase status> npm run de
 
 The previous development build signed in with anonymous identities. Supabase supports converting one into a permanent account while keeping its id: `updateUser({ email })`, confirmed by a link, then `updateUser({ password })`. An anonymous session left in the browser opens its plan with "Keep this plan" in Settings: add an email, open the link, choose a password. The identity, and so the workspace and plan, stay the same, and the email and password then work on any device. Nothing is merged and no second workspace is made. A temporary identity that is signed out can't be reached again, so signing out of one warns and offers a backup; restoring that backup into an account is the fallback. This is a development path only, not an account-merging feature.
 
-### What a hosted project needs (not done here)
+### Hosted test projects
 
-- Email delivery: an SMTP provider. Locally, emails go to the stack's email-testing server.
-- Its site URL and redirect URLs (the app's address).
-- Email confirmation on, a password policy, and the default rate limits (the local config raises them for the tests).
-- Anonymous sign-ins off.
-- The migrations applied.
+An approved, isolated hosted test project can be used deliberately: through an allowlist, an exact address, its own build mode (`npm run build:hosted-test`), an explicit test target, a destructive-test confirmation and an in-database marker. See [SUPABASE-HOSTED.md](SUPABASE-HOSTED.md) for the guards and the setup steps.
 
 ## Migration and rollback
 

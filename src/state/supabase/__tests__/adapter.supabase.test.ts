@@ -8,7 +8,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { usd, unwrap } from '../../../domain/__tests__/helpers';
 import { addDays } from '../../../domain/dates';
 import { buildForecast, explainTimingGaps, paycheckCycles } from '../../../domain/forecast';
@@ -17,7 +17,7 @@ import type { AppData } from '../../../domain/types';
 import { SupabaseStorageAdapter } from '../adapter';
 import { canonicalize, toRows } from '../rows';
 import { clock, richPlan, smallPlan, TODAY } from './fixtures';
-import { confirmedAccount } from './local-auth';
+import { confirmedAccount, deleteTestAccounts } from './local-auth';
 
 const URL = process.env.SUPABASE_TEST_URL!;
 const KEY = process.env.SUPABASE_TEST_ANON_KEY!;
@@ -28,6 +28,7 @@ const CONFLICT = 'Your data was changed somewhere else, such as another device. 
 const SAVED_BUT_NEWER = 'Your change was saved, but your data has changed somewhere else since. Reload to see the latest version.';
 
 const TABLES = ['workspaces', 'sources', 'schedule_versions', 'source_pauses', 'occurrence_records'];
+afterAll(() => deleteTestAccounts(URL, KEY));
 
 /**
  * A client whose next save_plan reply can be lost after the server answered:

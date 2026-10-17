@@ -29,12 +29,13 @@ void navigator.storage?.persist?.().catch(() => undefined);
 const accountsOn = import.meta.env.VITE_ACCOUNTS !== 'off' && Boolean(firebaseSettings.projectId && firebaseSettings.apiKey);
 
 /**
- * Development only: Supabase storage on a local stack, chosen by building in
- * the `supabase-dev` mode. `MODE` is fixed at build time, so in every other
- * build this is null and the Supabase code isn't included at all.
+ * Development only: Supabase storage on a local stack (the `supabase-dev`
+ * mode) or on an approved hosted test project (the `supabase-hosted-test`
+ * mode). `MODE` is fixed at build time, so in every other build this is null
+ * and the Supabase code isn't included at all.
  */
 const SupabaseDevelopment =
-  import.meta.env.MODE === 'supabase-dev' ? lazy(() => import('./state/supabase/dev').then((m) => ({ default: m.SupabaseDevelopment }))) : null;
+  import.meta.env.MODE === 'supabase-dev' || import.meta.env.MODE === 'supabase-hosted-test' ? lazy(() => import('./state/supabase/dev').then((m) => ({ default: m.SupabaseDevelopment }))) : null;
 
 function AppWithData({ adapter }: { adapter?: StorageAdapter }) {
   const account = useAccount();
