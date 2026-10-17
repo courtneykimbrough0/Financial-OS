@@ -86,10 +86,15 @@ async function signIn(page: Any, email: string, password: string) {
   await loaded(page);
 }
 
-/** The app (not the sign-in screen) is open and its plan has loaded. */
+/**
+ * The app (not the sign-in screen) is open, its plan has loaded, and it has
+ * set its route: opened at the bare address it moves to the dashboard or
+ * setup just after its first render, which would undo a navigation made
+ * before that.
+ */
 async function loaded(page: Any) {
   await page.getByRole('note').filter({ hasText: 'Development storage: local Supabase' }).waitFor();
-  await page.waitForFunction(() => !document.querySelector('.load-screen') && document.querySelector('.app main#main:not(.sign-in)'));
+  await page.waitForFunction(() => !document.querySelector('.load-screen') && document.querySelector('.app main#main:not(.sign-in)') && window.location.hash.startsWith('#/'));
 }
 
 /** Every save_plan request: [mode, base revision, HTTP status or 'failed'], and a wait for none in flight. */
@@ -927,10 +932,17 @@ describe('two tabs on one device', () => {
     await switchTo(tab2.page, b);
     // This tab now shows B's plan (the browser has one session), and never A's.
     await expect.poll(async () => (await sessionOf(a.page)).user.id).toBe(b.userId);
+    // This tab follows the other tab's sign-in on its own schedule: wait until it shows B's app, then look.
+    await a.page.getByText('1 transaction needs an update').waitFor();
+    await loaded(a.page);
     await a.page.goto(`${DEV}#/expenses`);
     await a.page.getByRole('heading', { name: 'Phone' }).waitFor();
     expect(await appText(a.page)).not.toContain('Alpha phone');
     expect(await recoveryPanel(a.page).count()).toBe(0);
+    // Tab A leaving A's ended session never signs out B, who is signed in now.
+    await a.page.waitForTimeout(500);
+    expect((await sessionOf(tab2.page)).user.id).toBe(b.userId);
+    expect(await signInForm(tab2.page).count()).toBe(0);
     await a.page.context().close();
   });
 

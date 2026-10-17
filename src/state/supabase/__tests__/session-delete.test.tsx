@@ -20,6 +20,7 @@ describe('deleting an account', () => {
         },
         signInWithPassword: vi.fn(async () => ({ data: { user: { id: 'user-a' } }, error: null })),
         signOut: vi.fn(async () => ({ error: null })),
+        getSession: vi.fn(async () => ({ data: { session: { user: { id: 'user-a' } } }, error: null })),
       },
       rpc: (fn: string) => ({
         setHeader(name: string, value: string) {

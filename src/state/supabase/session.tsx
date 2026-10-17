@@ -127,6 +127,8 @@ export function SupabaseAccountGate({
   /** Bumped to load the app again (after a set-aside change was saved into the account on screen). */
   const [generation, setGeneration] = useState(0);
   const capture = useRef<(() => Unsaved | null) | null>(null);
+  /** Whose session the browser holds, as last reported (null: none). Read when an account leaves, which must never undo someone else's arrival. */
+  const sessionUser = useRef<string | null>(null);
   const leaving = useRef(false);
   /** Set from the link in a recovery email (see the sign-in screen). */
   const recovering = useRef(new URLSearchParams(window.location.search).get('recovery') === '1');
@@ -144,6 +146,7 @@ export function SupabaseAccountGate({
     const linkFailed = new URLSearchParams(window.location.search).has('code') || new URLSearchParams(window.location.search).has('error');
 
     const { data } = client.auth.onAuthStateChange((event, session) => {
+      sessionUser.current = session?.user.id ?? null;
       const current = phaseRef.current;
       if (event === 'PASSWORD_RECOVERY') recovering.current = true;
       if (!session) {
@@ -205,14 +208,29 @@ export function SupabaseAccountGate({
     capture.current = read;
   }, []);
 
-  const leave = useCallback((notice: string) => {
-    leaving.current = true;
-    forgetSampleData();
-    window.location.hash = '';
-    setSessionEnded(false);
-    setPhase({ kind: 'signed-out', notice });
-    void client.auth.signOut({ scope: 'local' }).catch(() => undefined);
-  }, [client]);
+  /**
+   * `owner` leaves for the sign-in screen. If another account's session has
+   * arrived meanwhile (another tab signed in), the gate is already moving to
+   * them: leaving then does nothing, so it can't undo their arrival or sign
+   * them out.
+   */
+  const leaveAs = useCallback(
+    (owner: string, notice: string) => {
+      if (sessionUser.current !== null && sessionUser.current !== owner) return;
+      leaving.current = true;
+      forgetSampleData();
+      window.location.hash = '';
+      setSessionEnded(false);
+      setPhase((p) => (p.kind === 'signed-in' && p.user.id !== owner ? p : { kind: 'signed-out', notice }));
+      // End the browser's session only if it is still this account's.
+      void client.auth
+        .getSession()
+        .then(({ data }) => (data.session && data.session.user.id === owner ? client.auth.signOut({ scope: 'local' }) : undefined))
+        .catch(() => undefined);
+    },
+    [client],
+  );
+  const leave = useCallback((notice: string) => user && leaveAs(user.id, notice), [leaveAs, user]);
 
   const signOut = useCallback(async () => {
     leaving.current = true;
