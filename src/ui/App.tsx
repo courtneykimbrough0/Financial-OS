@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { CreditCard, HandCoins, LayoutGrid, Receipt, RefreshCw, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
 import { useDataMode } from '../state/mode';
+import { useAccountSlot } from '../state/slots';
 import { useStore } from '../state/store';
 import { DeviceDataOffer, RecoveredChangesNotice } from './components/account';
 import { SaveStatusBar } from './components/backup';
@@ -25,6 +26,7 @@ const navRoute = (r: Route): Route => (r === 'savings' ? 'expenses' : r);
 export function App() {
   const { data } = useStore();
   const hashRoute = useRoute();
+  const slot = useAccountSlot();
   const route: Route = hashRoute ?? (data.onboardingComplete ? 'dashboard' : 'onboarding');
 
   useEffect(() => {
@@ -73,6 +75,7 @@ export function App() {
       </header>
       <main id="main" className={showNav ? 'with-nav' : ''}>
         <SaveStatusBar />
+        {slot && <slot.Guard />}
         <UpdateBanner />
         {data.isSample && <SampleBanner />}
         {route === 'onboarding' && <Onboarding />}

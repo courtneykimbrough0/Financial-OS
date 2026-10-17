@@ -1,17 +1,21 @@
 /**
- * Development only: the app on a local Supabase stack, with a temporary
- * anonymous identity. Loaded only by a build in the `supabase-dev` mode
+ * Development only: the app on a local Supabase stack, with email-and-password
+ * accounts (Supabase Auth). Loaded only by a build in the `supabase-dev` mode
  * (`npm run dev:supabase`, or `vite build --mode supabase-dev`); every other
  * build leaves this file out entirely (see main.tsx). See docs/SUPABASE.md.
  *
- * Anonymous identities are for isolated development: they can't be signed back
- * into from another browser and aren't accounts. The plan is still protected
- * by row-level security: only that identity can read or save it.
+ * Each account's plan is protected by row-level security: only that account
+ * can read or save it. New anonymous identities are never created; one left in
+ * this browser by an earlier development build can be turned into an account
+ * (Settings) without changing its identity or plan.
  */
 import { createClient } from '@supabase/supabase-js';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type { StorageAdapter } from '../storage';
-import { SupabaseStorageAdapter } from './adapter';
+import { AccountCard, AccountLine, SessionGuard } from '../../ui/supabase/AccountControls';
+import { NewPasswordScreen, SignedOutScreen } from '../../ui/supabase/AuthScreens';
+import type { AccountSlot } from '../slots';
+import { SupabaseAccountGate } from './session';
 
 const LOOPBACK = ['127.0.0.1', 'localhost', '[::1]'];
 
@@ -42,50 +46,39 @@ export function devConfigProblem(url: string | undefined, key: string | undefine
 /** Where supabase-js keeps the development session (tokens only; the plan itself is never stored on the device). */
 export const DEV_AUTH_KEY = 'financial-os:supabase-dev-auth';
 
-async function start(url: string, key: string): Promise<StorageAdapter> {
-  const client = createClient(url, key, { auth: { storageKey: DEV_AUTH_KEY, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
-  const { data } = await client.auth.getSession();
-  if (!data.session) {
-    const { error } = await client.auth.signInAnonymously();
-    if (error) throw new Error(`Couldn’t start a development session (${error.message}). Anonymous sign-ins must be on in the local stack’s supabase/config.toml.`);
-  }
-  return new SupabaseStorageAdapter(client);
-}
+const slot: AccountSlot = {
+  Card: AccountCard,
+  Line: AccountLine,
+  Guard: SessionGuard,
+  dataNote: 'Your data is saved to your account as you make changes, and nothing financial is kept on this device. A change counts as saved only once the server confirms it.',
+};
 
-/** Starts the development session, then renders the app with Supabase storage and a notice saying so. */
+/** Development storage: email-and-password accounts on a local Supabase stack, then the app with that account's plan. */
 export function SupabaseDevelopment({ children }: { children: (adapter: StorageAdapter) => ReactNode }) {
   const url = import.meta.env.VITE_SUPABASE_URL ?? 'http://127.0.0.1:54321';
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
   const problem = devConfigProblem(url, key);
-  const [adapter, setAdapter] = useState<StorageAdapter | null>(null);
-  const [error, setError] = useState<string | null>(problem);
+  // PKCE: links in emails return with a one-time code for the browser that asked, never with tokens in the address.
+  const client = useMemo(
+    () => (problem ? null : createClient(url, key!, { auth: { storageKey: DEV_AUTH_KEY, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' } })),
+    [problem, url, key],
+  );
 
-  useEffect(() => {
-    if (problem) return;
-    start(url, key!).then(setAdapter, (err: unknown) => setError(err instanceof Error ? err.message : String(err)));
-  }, [problem, url, key]);
-
-  if (error) {
+  if (!client) {
     return (
       <div className="load-screen" role="alert">
-        <p>Development storage couldn’t start. {error}</p>
-      </div>
-    );
-  }
-  if (!adapter) {
-    return (
-      <div className="load-screen" role="status" aria-live="polite">
-        <span className="spinner" aria-hidden="true" />
-        <p>Opening Financial OS…</p>
+        <p>Development storage couldn’t start. {problem}</p>
       </div>
     );
   }
   return (
     <>
       <p className="dev-storage-note" role="note">
-        Development storage: local Supabase, temporary anonymous identity. Not a real account; it can’t be recovered.
+        Development storage: local Supabase. For testing only; not for real financial data.
       </p>
-      {children(adapter)}
+      <SupabaseAccountGate client={client} screens={{ SignedOut: SignedOutScreen, NewPassword: NewPasswordScreen }} slot={slot}>
+        {children}
+      </SupabaseAccountGate>
     </>
   );
 }

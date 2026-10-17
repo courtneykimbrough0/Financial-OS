@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAccount } from '../../state/account';
+import { useAccountSlot } from '../../state/slots';
 import { REVIEW_RHYTHM_IN_ACCOUNTS } from '../../state/features';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
@@ -13,6 +14,7 @@ import { navigate } from '../router';
 export function Settings() {
   const { data } = useStore();
   const account = useAccount();
+  const slot = useAccountSlot();
   const { enterSample } = useDataMode();
   const [confirming, setConfirming] = useState(false);
 
@@ -22,13 +24,15 @@ export function Settings() {
         <h1>Settings</h1>
       </header>
 
-      <AccountActions />
+      {slot ? <slot.Card /> : <AccountActions />}
 
       {(!account || data.isSample || REVIEW_RHYTHM_IN_ACCOUNTS) && <ReviewRhythmSettings />}
 
       <section className="card settings-card" aria-labelledby="settings-data">
         <h2 id="settings-data">Your data</h2>
-        {account ? (
+        {slot ? (
+          <p>{slot.dataNote}</p>
+        ) : account ? (
           <p>Your data is saved to your Financial OS account, with a copy on this device so it opens offline. Changes made offline are saved to your account when you reconnect.</p>
         ) : (
           <p>Your data is saved in this browser on this device. Clearing your browser’s site data removes it, so download a backup to keep a copy or to move it to another device.</p>

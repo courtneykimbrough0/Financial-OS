@@ -14,6 +14,7 @@ import { FlowAmount, Icon, KindAvatar, Modal, SectionLabel, TagList, useToast } 
 import { KIND_COPY, MainPaycheckPicker, OneTimeForm, SourceForm } from '../components/forms';
 import { TimingGapsBanner } from '../components/gaps';
 import { CashFlowBanner, PeriodBreakdown, TagBreakdown } from '../components/plan';
+import { useAccountSlot } from '../../state/slots';
 import { SignedInLine } from '../components/account';
 import { RestoreBackupButton } from '../components/backup';
 import { navigate } from '../router';
@@ -387,6 +388,7 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
 }
 
 export function Onboarding() {
+  const slot = useAccountSlot();
   const { data, run, today } = useStore();
   const { enterSample } = useDataMode();
   const account = useAccount();
@@ -474,7 +476,7 @@ export function Onboarding() {
           <div className="center">
             <RestoreBackupButton label="Have a backup? Restore it" />
           </div>
-          <SignedInLine />
+          {slot ? <slot.Line /> : <SignedInLine />}
         </div>
       )}
       {def.kinds.length > 0 && <KindStep key={step} kind={def.kinds[0]!} onSheet={setSheet} />}
