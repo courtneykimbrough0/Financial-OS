@@ -14,6 +14,13 @@ export type SaveResult =
   | { ok: false; reason: 'error'; message: string };
 
 /**
+ * What a save is for. Ordinary changes are updates; restoring a backup
+ * replaces the whole plan; starting over resets it. Storage that can tell
+ * them apart (Supabase) checks each accordingly; device storage ignores it.
+ */
+export type SaveIntent = 'update' | 'replace' | 'reset';
+
+/**
  * Where data lives. Asynchronous so a server-backed implementation (e.g.
  * Firebase) can replace the device one without changing the app.
  */
@@ -24,7 +31,7 @@ export interface StorageAdapter {
    * revision is still `baseRevision`. Otherwise returns a conflict and
    * changes nothing.
    */
-  save(data: AppData, baseRevision: number): Promise<SaveResult>;
+  save(data: AppData, baseRevision: number, intent?: SaveIntent): Promise<SaveResult>;
   /** Removes all stored data for this adapter. */
   clear(): Promise<void>;
   /** True when the data just loaded includes changes that haven't been saved yet (e.g. made offline). */

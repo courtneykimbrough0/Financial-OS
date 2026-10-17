@@ -208,6 +208,7 @@ Check `package.json` before running anything; scripts can change. Currently:
 | `npm run build` | Type-check and production build | |
 | `npm run e2e` | Builds a device-only copy and drives it in Chromium through `server.mjs` | Needs Playwright with Chromium |
 | `npm run test:db` | Applies `supabase/migrations` to a throwaway local PostgreSQL and runs the database tests (`*.db.test.ts`) | Needs the PostgreSQL server binaries and `psql`. Plain PostgreSQL with a stand-in for Supabase's auth schema; see docs/SUPABASE.md |
+| `npm run test:supabase` | Runs the Supabase integration tests (`*.supabase.test.ts`) through a local Supabase stack's Auth and API | Needs a running local stack (`supabase start`) and `SUPABASE_TEST_ANON_KEY`; refuses non-local URLs and service-role keys. See docs/SUPABASE.md |
 | `npm run test:rules` | Runs `firestore.rules` in the Firestore emulator | Needs Java; the emulator is downloaded on first run. Kept while the current version uses Firebase; passing it doesn't authorize Firebase work |
 
 For any coherent code change, run `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build` at minimum. Also run `npm run e2e` for user-facing flows, state changes, navigation, or persistence, and `npm run test:rules` for storage or security changes when the emulator can run. If a command can't be run, say so and why; never report it as passing.

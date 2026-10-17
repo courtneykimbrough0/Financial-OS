@@ -320,7 +320,9 @@ Replaces the earlier plan to validate Firebase persistence and offline behavior.
   - Follow-ups: a one-time item still has to be removed and added again to change it during setup; setup has no undo for a removed item.
 - **Step 10a: design approved.** Five financial tables with workspace ownership, the app's own ids, whole-plan saves through one function, row-level security.
 - **Step 10b-1: database foundation complete; not connected.** `supabase/migrations` (tables, checks, row-level security, `create_workspace`, `load_plan`, `save_plan` with update / replace / reset modes, revision checks and save receipts for retries), `src/state/supabase/rows.ts` (mapping and pre-migration check). Tests: `rows`, and `npm run test:db` against a local PostgreSQL (equivalence, persistence, integrity, security). See docs/SUPABASE.md.
-  - Follow-ups: run the database tests against a real Supabase stack (local `supabase start` or a test project) before production; Step 10b-2 connects the app.
+  - Since run against a local Supabase stack too (Postgres 17.11): the database tests pass on its PostgreSQL without the shim.
+- **Step 10b-2: storage adapter built; not connected.** `src/state/supabase/adapter.ts` implements `StorageAdapter` online-first (nothing on the device, no queue), with a save id per logical save, safe retries after a lost reply, and a check whether an earlier unconfirmed save went through before reporting a conflict. `StorageAdapter.save` takes an optional intent (`update`, `replace`, `reset`); the existing adapters ignore it. Tests: `adapter` (fake client, with the store), and `npm run test:supabase` through a local stack's Auth and API. See docs/SUPABASE.md.
+  - Follow-ups before switching: the store passes `replace` for a restore and `reset` for start over; a signed-in supabase-js client (public key only) and a development-only way to choose this adapter; migration of existing data; then Steps 10c and 10d.
 
 ## Open items
 

@@ -14,11 +14,13 @@
     "test:watch": "vitest",
     "e2e": "VITE_ACCOUNTS=off vite build --outDir dist-e2e && node scripts/e2e-smoke.mjs dist-e2e",
     "test:db": "node scripts/test-db.mjs",
+    "test:supabase": "node scripts/test-supabase.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-financial-os \"vitest run --config vitest.rules.config.ts\"",
     "start": "node server.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
+    "@supabase/supabase-js": "^2.118.0",
     "firebase": "^13.0.0",
     "lucide-react": "^1.55.0",
     "react": "^19.3.0",
