@@ -243,9 +243,20 @@ export function SupabaseAccountGate({
       // A fresh password sign-in: the database requires one from the last 5 minutes.
       const check = await client.auth.signInWithPassword({ email: user.email, password });
       if (check.error) return check.error.code === 'invalid_credentials' ? 'That password isn’t right. Nothing was deleted.' : authMessage(check.error);
-      const { error } = await client.rpc('delete_account');
-      if (error) return `Your account wasn’t deleted. ${error.message}`;
-      leave(DELETED);
+      const { error, status } = await client.rpc('delete_account');
+      if (!error) {
+        leave(DELETED);
+        return null;
+      }
+      if (status !== 0 && status < 500) return `Your account wasn’t deleted. ${error.message}`;
+      // No reply: the deletion may or may not have happened. Ask the auth server whether the account is still there; never delete again on a guess.
+      const still = await client.auth.getUser();
+      if (still.data.user?.id === user.id) return 'Your account wasn’t deleted: the server didn’t answer. Try again.';
+      if (still.error?.code === 'user_not_found') {
+        leave(DELETED);
+        return null;
+      }
+      leave('We couldn’t confirm whether your account was deleted, so you’ve been signed out. Sign in again to check: if it was deleted, the sign-in won’t find it.');
       return null;
     },
     [client, user, leave],

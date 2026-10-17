@@ -189,6 +189,67 @@ describe('deleting an account', () => {
   });
 });
 
+const claimsOf = (token: string) => JSON.parse(Buffer.from(token.split('.')[1]!, 'base64url').toString()) as { sub: string; iat: number; amr: { method: string; timestamp: number }[]; session_id: string };
+
+describe('who can delete an account (audit)', () => {
+  it('a token refresh is not a new password check: it keeps the original sign-in time', async () => {
+    const sb = client();
+    const { session } = await confirmedAccount(sb);
+    await new Promise((r) => setTimeout(r, 1100));
+    const refreshed = (await sb.auth.refreshSession()).data.session!;
+    const [before, after] = [claimsOf(session.access_token), claimsOf(refreshed.access_token)];
+    expect(after.iat).toBeGreaterThan(before.iat);
+    expect(after.amr).toEqual(before.amr);
+    expect(after.amr.map((a) => a.method)).toEqual(['password']);
+  });
+
+  it('a token with its claims edited in the browser (a fresh password time) is rejected before the function runs', async () => {
+    const sb = client();
+    const { email, password } = await confirmedAccount(sb);
+    const token = (await sb.auth.getSession()).data.session!.access_token;
+    const [header, , signature] = token.split('.');
+    const edited = { ...claimsOf(token), amr: [{ method: 'password', timestamp: Math.floor(Date.now() / 1000) + 60 }] };
+    const forged = `${header}.${Buffer.from(JSON.stringify(edited)).toString('base64url')}.${signature}`;
+    const r = await withToken(forged).rpc('delete_account');
+    expect([r.status, r.error?.code]).toEqual([401, 'PGRST301']);
+    expect((await client().auth.signInWithPassword({ email, password })).error).toBeNull();
+  });
+
+  it('a temporary (anonymous) identity has no password sign-in, so it can’t delete', async () => {
+    const anon = client();
+    await anon.auth.signInAnonymously();
+    await store(anon, smallPlan());
+    const r = await anon.rpc('delete_account');
+    expect([r.status, r.error?.code]).toEqual([403, 'PT403']);
+    expect((await new SupabaseStorageAdapter(anon).load()).sources).toHaveLength(2);
+  });
+
+  it('after deletion, a token issued before it can’t read, write, create a workspace, or delete anything', async () => {
+    const sb = client();
+    const { email, password } = await confirmedAccount(sb);
+    await store(sb, richPlan());
+    const other = client();
+    const otherAccount = await confirmedAccount(other);
+    const otherPlan = await (await store(other, smallPlan())).load();
+    const stale = (await sb.auth.getSession()).data.session!.access_token;
+    await sb.auth.signInWithPassword({ email, password });
+    expect((await sb.rpc('delete_account')).error).toBeNull();
+
+    const old = withToken(stale);
+    expect((await old.rpc('load_plan')).data).toBeNull();
+    for (const t of TABLES) expect([t, (await old.from(t).select('*')).data]).toEqual([t, []]);
+    expect((await old.rpc('create_workspace')).error?.code).toBe('23503');
+    expect((await old.rpc('save_plan', { p_base_revision: 0, p_save_id: crypto.randomUUID(), p_mode: 'replace', p_plan: toRows(smallPlan()) })).error?.code).toBe('PT404');
+    expect((await old.from('workspaces').insert({ owner_id: claimsOf(stale).sub })).error?.code).toBe('42501');
+    expect((await old.from('sources').insert({ workspace_id: crypto.randomUUID(), id: 'x', position: 0, kind: 'bill', description: 'x', active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })).error?.code).toBe('42501');
+    // Its session is gone, so it can't delete (and it could only ever delete itself).
+    expect((await old.rpc('delete_account')).error?.code).toBe('PT401');
+    expect((await old.auth.getUser(stale)).error?.code).toBe('user_not_found');
+    expect(await new SupabaseStorageAdapter(other).load()).toEqual(otherPlan);
+    expect((await client().auth.signInWithPassword({ email: otherAccount.email, password: otherAccount.password })).error).toBeNull();
+  });
+});
+
 describe('a temporary development identity becomes a recoverable account', () => {
   it('adding a confirmed email and then a password keeps the same identity and the same plan', async () => {
     const anon = client();

@@ -745,6 +745,59 @@ describe('accounts in the development copy', () => {
     await other.page.context().close();
   });
 
+  it('deleting when the reply is lost after the server deleted: checked with the auth server, shown as deleted only then, signed out, nothing shown', async () => {
+    const { page, account } = await open(DEV, at);
+    await seed(page, contested());
+    const oldToken = (await sessionOf(page)).access_token;
+    await page.route(
+      '**/rest/v1/rpc/delete_account',
+      async (route: Any) => {
+        await route.fetch();
+        await route.abort('failed');
+      },
+      { times: 1 },
+    );
+    await page.goto(`${DEV}#/settings`);
+    await page.getByRole('button', { name: 'Delete account' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Delete your account?' });
+    await dialog.getByLabel('Enter your password to confirm').fill(account.password);
+    await dialog.getByRole('button', { name: 'Delete account permanently' }).click();
+    await signInForm(page).waitFor();
+    await page.getByText('Your account and everything in it were deleted.').waitFor();
+    expect(await appText(page)).not.toContain('Phone');
+    expect(await page.evaluate((k: string) => localStorage.getItem(k), AUTH_KEY)).toBeNull();
+    expect((await asUser(oldToken).rpc('load_plan')).data).toBeNull();
+    await page.context().close();
+  });
+
+  it('deleting when the request never reached the server: not shown as deleted, nothing deleted, and it isn’t retried by itself', async () => {
+    const { page, account } = await open(DEV, at);
+    await seed(page, contested());
+    let attempts = 0;
+    await page.route('**/rest/v1/rpc/delete_account', (route: Any) => {
+      attempts++;
+      return route.abort('failed');
+    });
+    await page.goto(`${DEV}#/settings`);
+    await page.getByRole('button', { name: 'Delete account' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Delete your account?' });
+    await dialog.getByLabel('Enter your password to confirm').fill(account.password);
+    await dialog.getByRole('button', { name: 'Delete account permanently' }).click();
+    await dialog.getByRole('alert').waitFor();
+    expect(await dialog.getByRole('alert').innerText()).toBe('Your account wasn’t deleted: the server didn’t answer. Try again.');
+    expect(attempts).toBe(1);
+    expect(phoneRecord(await stored(page))).toBeUndefined();
+    expect((await stored(page))!.sources).toHaveLength(3);
+    // A server error that never ran the deletion: also not shown as deleted.
+    await page.unroute('**/rest/v1/rpc/delete_account');
+    await page.route('**/rest/v1/rpc/delete_account', (route: Any) => route.fulfill({ status: 503, body: '{}' }), { times: 1 });
+    await dialog.getByLabel('Enter your password to confirm').fill(account.password);
+    await dialog.getByRole('button', { name: 'Delete account permanently' }).click();
+    await expect.poll(async () => dialog.getByRole('alert').innerText()).toBe('Your account wasn’t deleted: the server didn’t answer. Try again.');
+    expect((await stored(page))!.sources).toHaveLength(3);
+    await page.context().close();
+  });
+
   it('deleting is refused while a change isn’t saved', async () => {
     const { page } = await open(DEV, at);
     await seed(page, contested());
