@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { todayLocal, type DateStr } from '../domain/dates';
 import type { Clock, Result } from '../domain/operations';
 import type { AppData } from '../domain/types';
-import type { StorageAdapter } from './storage';
+import type { SaveIntent, StorageAdapter } from './storage';
 
 /**
  * idle: everything on screen is saved.
@@ -24,6 +24,19 @@ interface Store {
    * save outcome, which is reported through `saveStatus`.
    */
   run: (op: (data: AppData, clock: Clock) => Result) => Result;
+  /**
+   * Restoring a backup (`replace`) or starting over (`reset`): the whole plan
+   * at once, saved with that intent. Runs only when every earlier change is
+   * saved, and on its own: nothing else is combined into it. With online-first
+   * storage the new plan appears only once the save is confirmed; until then
+   * the screen keeps the saved plan and other changes wait. If it fails,
+   * `retryReplace` sends the same save again and `cancelReplace` drops it and
+   * reloads what is actually saved. With device-backed storage it applies
+   * like `run`.
+   */
+  replacePlan: (op: (data: AppData, clock: Clock) => Result, intent: Exclude<SaveIntent, 'update'>) => Promise<ReplaceOutcome>;
+  retryReplace: () => Promise<ReplaceOutcome>;
+  cancelReplace: () => void;
   saveStatus: SaveStatus;
   saveMessage: string | null;
   /** Try the last failed save again. */
@@ -34,6 +47,13 @@ interface Store {
   recoveredCopy: { data: AppData; savedAt: string } | null;
   dismissRecoveredCopy: () => void;
 }
+
+/** `canRetry`: the same restore or start over can be sent again (its outcome isn't known or it failed to send). */
+export type ReplaceOutcome = { ok: true } | { ok: false; error: string; canRetry: boolean };
+
+const BUSY = 'Your latest change hasn’t been saved yet. Wait for it to save, or use Try again, then do this again.';
+const CONFLICTED = 'Reload to see the latest version before making changes.';
+const REPLACING = 'Wait until this finishes saving, or cancel it.';
 
 const StoreContext = createContext<Store | null>(null);
 
@@ -76,6 +96,8 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
   const loadGen = useRef(0);
   /** The save currently on its way, if any; a load waits for it so it reads the saved result. */
   const inFlight = useRef<Promise<unknown> | null>(null);
+  /** A restore or start over not yet confirmed by online-first storage: not on screen, and nothing else runs meanwhile. */
+  const replacing = useRef<{ data: AppData; intent: Exclude<SaveIntent, 'update'> } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,6 +123,7 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
       dirty.current = false;
       saving.current = false;
       blocked.current = null;
+      replacing.current = null;
       setSaveStatus('idle');
       setSaveMessage(null);
       setRecoveredCopy(adapter.recoveredCopy?.() ?? null);
@@ -117,14 +140,15 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
 
   /** Saves the newest data, one save at a time; changes made meanwhile are coalesced into the next save. */
   const flush = useCallback(async () => {
-    if (saving.current || blocked.current || !dirty.current || !dataRef.current) return;
+    if (saving.current || blocked.current || replacing.current || !dirty.current || !dataRef.current) return;
     saving.current = true;
     setSaveStatus('saving');
     const gen = loadGen.current;
     while (dirty.current && dataRef.current && !blocked.current) {
       dirty.current = false;
       const snapshot = dataRef.current;
-      const pending = adapter.save(snapshot, savedRevision.current);
+      // Ordinary changes are always updates; a restore or start over goes through replacePlan.
+      const pending = adapter.save(snapshot, savedRevision.current, 'update');
       inFlight.current = pending;
       let result: Awaited<typeof pending>;
       try {
@@ -155,7 +179,8 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
   const run = useCallback<Store['run']>(
     (op) => {
       if (!dataRef.current) return { ok: false, error: 'Still loading. Try again in a moment.' };
-      if (blocked.current === 'conflict') return { ok: false, error: 'Reload to see the latest version before making changes.' };
+      if (blocked.current === 'conflict') return { ok: false, error: CONFLICTED };
+      if (replacing.current) return { ok: false, error: REPLACING };
       const result = op(dataRef.current, { today: todayRef.current, now: new Date().toISOString() });
       if (!result.ok) return result;
       dataRef.current = result.data;
@@ -166,6 +191,74 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
     },
     [flush],
   );
+
+  /** Sends the unconfirmed restore or start over (the same one each time, so a retry is recognized). */
+  const sendReplace = useCallback(async (): Promise<ReplaceOutcome> => {
+    const pend = replacing.current;
+    if (!pend) return { ok: false, error: 'There’s nothing to save.', canRetry: false };
+    if (saving.current) return { ok: false, error: REPLACING, canRetry: false };
+    saving.current = true;
+    setSaveStatus('saving');
+    setSaveMessage(null);
+    const gen = loadGen.current;
+    const pending = adapter.save(pend.data, savedRevision.current, pend.intent);
+    inFlight.current = pending;
+    let result: Awaited<typeof pending>;
+    try {
+      result = await pending;
+    } finally {
+      if (inFlight.current === pending) inFlight.current = null;
+    }
+    if (gen !== loadGen.current) return { ok: false, error: 'Your data was reloaded first. Check it, then try again.', canRetry: false };
+    saving.current = false;
+    if (result.ok) {
+      replacing.current = null;
+      savedRevision.current = result.revision;
+      const saved = { ...pend.data, revision: result.revision };
+      dataRef.current = saved;
+      setData(saved);
+      setSaveStatus('idle');
+      return { ok: true };
+    }
+    if (result.reason === 'conflict') {
+      // Newer data elsewhere: nothing is replaced; reload to continue.
+      replacing.current = null;
+      blocked.current = 'conflict';
+      setSaveStatus('conflict');
+      setSaveMessage(result.message);
+      return { ok: false, error: result.message, canRetry: false };
+    }
+    // Not confirmed. The screen still shows the saved plan; the same save can be sent again.
+    setSaveStatus('idle');
+    return { ok: false, error: result.message, canRetry: true };
+  }, [adapter]);
+
+  const replacePlan = useCallback<Store['replacePlan']>(
+    async (op, intent) => {
+      if (!adapter.onlineFirst) {
+        const r = run(op);
+        return r.ok ? { ok: true } : { ok: false, error: r.error, canRetry: false };
+      }
+      if (!dataRef.current) return { ok: false, error: 'Still loading. Try again in a moment.', canRetry: false };
+      if (blocked.current === 'conflict') return { ok: false, error: CONFLICTED, canRetry: false };
+      if (replacing.current) return { ok: false, error: REPLACING, canRetry: false };
+      if (saving.current || dirty.current || blocked.current) return { ok: false, error: BUSY, canRetry: false };
+      const r = op(dataRef.current, { today: todayRef.current, now: new Date().toISOString() });
+      if (!r.ok) return { ok: false, error: r.error, canRetry: false };
+      replacing.current = { data: r.data, intent };
+      return sendReplace();
+    },
+    [adapter, run, sendReplace],
+  );
+
+  const retryReplace = useCallback(() => sendReplace(), [sendReplace]);
+
+  /** Drops an unconfirmed restore or start over. Its outcome may be unknown, so load what is actually saved. */
+  const cancelReplace = useCallback(() => {
+    if (!replacing.current || saving.current) return;
+    replacing.current = null;
+    setLoadCount((n) => n + 1);
+  }, []);
 
   const retrySave = useCallback(() => {
     if (blocked.current !== 'error') return;
@@ -189,7 +282,7 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
   // Warn before closing the page while a change is unsaved.
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (dirty.current || saving.current) {
+      if (dirty.current || saving.current || replacing.current) {
         e.preventDefault();
         e.returnValue = '';
       }
@@ -199,8 +292,8 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
   }, []);
 
   const value = useMemo(
-    () => (data ? { data, today, run, saveStatus, saveMessage, retrySave, reload, recoveredCopy, dismissRecoveredCopy } : null),
-    [data, today, run, saveStatus, saveMessage, retrySave, reload, recoveredCopy, dismissRecoveredCopy],
+    () => (data ? { data, today, run, replacePlan, retryReplace, cancelReplace, saveStatus, saveMessage, retrySave, reload, recoveredCopy, dismissRecoveredCopy } : null),
+    [data, today, run, replacePlan, retryReplace, cancelReplace, saveStatus, saveMessage, retrySave, reload, recoveredCopy, dismissRecoveredCopy],
   );
 
   if (loadError) {

@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { formatMedium, todayLocal } from '../../domain/dates';
 import * as ops from '../../domain/operations';
 import { countItems, createBackup, readBackup, type ParsedBackup } from '../../state/backup';
-import { useStore } from '../../state/store';
+import { useStore, type ReplaceOutcome } from '../../state/store';
 import { navigate } from '../router';
 import { Icon, Modal, useToast } from './common';
 
@@ -72,13 +72,57 @@ export function DownloadBackupButton() {
   );
 }
 
+/**
+ * A restore or start over in progress: busy while it saves, and when it isn't
+ * confirmed, the reason and whether the same save can be tried again. Only a
+ * confirmed save closes the dialog and reports success.
+ */
+function useReplace(onDone: () => void) {
+  const { replacePlan, retryReplace, cancelReplace } = useStore();
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<{ error: string; canRetry: boolean } | null>(null);
+  const settle = (r: ReplaceOutcome) => {
+    setBusy(false);
+    if (r.ok) {
+      setFailure(null);
+      onDone();
+    } else setFailure({ error: r.error, canRetry: r.canRetry });
+  };
+  return {
+    busy,
+    failure,
+    start: async (...args: Parameters<typeof replacePlan>) => {
+      if (busy) return;
+      setBusy(true);
+      settle(await replacePlan(...args));
+    },
+    retry: async () => {
+      if (busy) return;
+      setBusy(true);
+      settle(await retryReplace());
+    },
+    /** Closes without replacing; an unconfirmed save is dropped and what's saved is loaded again. */
+    cancel: () => {
+      if (busy) return false;
+      if (failure?.canRetry) cancelReplace();
+      setFailure(null);
+      return true;
+    },
+  };
+}
+
 /** Pick a backup file, confirm, then replace the app's data with it. */
 export function RestoreBackupButton({ label = 'Restore from backup' }: { label?: string }) {
-  const { run } = useStore();
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<ParsedBackup | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const replace = useReplace(() => {
+    const restored = pending!;
+    setPending(null);
+    toast('Backup restored.');
+    navigate(restored.data.onboardingComplete ? 'dashboard' : 'onboarding');
+  });
 
   const onFile = async (file: File | undefined) => {
     if (!file) return;
@@ -93,12 +137,9 @@ export function RestoreBackupButton({ label = 'Restore from backup' }: { label?:
 
   const restore = () => {
     if (!pending) return;
-    const result = run((current) => ({ ok: true, data: { ...pending.data, revision: current.revision } }));
-    setPending(null);
-    if (!result.ok) return setError(result.error);
-    toast('Backup restored.');
-    navigate(pending.data.onboardingComplete ? 'dashboard' : 'onboarding');
+    void replace.start((current) => ({ ok: true, data: { ...pending.data, revision: current.revision } }), 'replace');
   };
+  const close = () => replace.cancel() && setPending(null);
 
   return (
     <>
@@ -107,7 +148,7 @@ export function RestoreBackupButton({ label = 'Restore from backup' }: { label?:
       </button>
       <input ref={input} type="file" accept="application/json,.json" className="sr-only" tabIndex={-1} aria-label="Backup file" onChange={(e) => void onFile(e.target.files?.[0])} />
       {pending && (
-        <Modal title="Restore this backup?" onClose={() => setPending(null)}>
+        <Modal title="Restore this backup?" onClose={close}>
           <div className="stack">
             <p>
               This backup has {pending.itemCount === 1 ? '1 item' : `${pending.itemCount} items`}
@@ -115,13 +156,20 @@ export function RestoreBackupButton({ label = 'Restore from backup' }: { label?:
             </p>
             <p>Restoring replaces everything currently in the app with the backup.</p>
             <KeepACopy />
+            {replace.failure && (
+              <p className="form-error" role="alert">
+                The restore hasn’t been confirmed. {replace.failure.error}
+              </p>
+            )}
             <div className="form-actions">
-              <button type="button" className="button secondary" onClick={() => setPending(null)} data-autofocus>
+              <button type="button" className="button secondary" onClick={close} disabled={replace.busy} data-autofocus>
                 Cancel
               </button>
-              <button type="button" className="button primary" onClick={restore}>
-                Replace with backup
-              </button>
+              {replace.failure && !replace.failure.canRetry ? null : (
+                <button type="button" className="button primary" onClick={replace.failure ? () => void replace.retry() : restore} disabled={replace.busy}>
+                  {replace.busy ? 'Restoring…' : replace.failure ? 'Try again' : 'Replace with backup'}
+                </button>
+              )}
             </div>
           </div>
         </Modal>
@@ -149,38 +197,43 @@ export function RestoreBackupButton({ label = 'Restore from backup' }: { label?:
  * explicit confirmation that offers a backup first. Cancel changes nothing.
  */
 export function StartOverButton() {
-  const { data, run } = useStore();
+  const { data } = useStore();
   const toast = useToast();
   const [confirming, setConfirming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const count = countItems(data);
-  const erase = () => {
-    const r = run((d) => ops.startOver(d));
-    if (!r.ok) return setError(r.error);
+  const replace = useReplace(() => {
     setConfirming(false);
     toast('Your data was erased. Set up again whenever you’re ready.');
     navigate('onboarding');
-  };
+  });
+  const erase = () => void replace.start((d) => ops.startOver(d), 'reset');
+  const close = () => replace.cancel() && setConfirming(false);
   return (
     <>
       <button type="button" className="button small danger-link" onClick={() => setConfirming(true)}>
         Start over
       </button>
       {confirming && (
-        <Modal title="Start over?" onClose={() => setConfirming(false)}>
+        <Modal title="Start over?" onClose={close}>
           <div className="stack">
             <p>
               This erases {count === 0 ? 'your setup' : `all ${itemsText(count)} you’ve entered, with everything recorded for them,`} and takes you back to setup. Your review rhythm stays.
             </p>
             <KeepACopy />
-            {error && <p className="form-error">{error}</p>}
+            {replace.failure && (
+              <p className="form-error" role="alert">
+                Erasing hasn’t been confirmed. {replace.failure.error}
+              </p>
+            )}
             <div className="form-actions">
-              <button type="button" className="button secondary" onClick={() => setConfirming(false)} data-autofocus>
+              <button type="button" className="button secondary" onClick={close} disabled={replace.busy} data-autofocus>
                 Cancel
               </button>
-              <button type="button" className="button danger" onClick={erase}>
-                Erase and start over
-              </button>
+              {replace.failure && !replace.failure.canRetry ? null : (
+                <button type="button" className="button danger" onClick={replace.failure ? () => void replace.retry() : erase} disabled={replace.busy}>
+                  {replace.busy ? 'Erasing…' : replace.failure ? 'Try again' : 'Erase and start over'}
+                </button>
+              )}
             </div>
           </div>
         </Modal>

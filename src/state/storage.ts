@@ -32,8 +32,18 @@ export interface StorageAdapter {
    * changes nothing.
    */
   save(data: AppData, baseRevision: number, intent?: SaveIntent): Promise<SaveResult>;
-  /** Removes all stored data for this adapter. */
+  /**
+   * Removes all stored data for this adapter. Used only for the device's
+   * sample data; account storage that can't erase this way rejects instead
+   * of reporting success.
+   */
   clear(): Promise<void>;
+  /**
+   * True when nothing is kept on the device: a change the backend hasn't
+   * confirmed isn't saved anywhere. The store then shows a restore or start
+   * over only once it is confirmed (see `replacePlan`).
+   */
+  readonly onlineFirst?: boolean;
   /** True when the data just loaded includes changes that haven't been saved yet (e.g. made offline). */
   hasUnsavedChanges?(): boolean;
   /** Changes that couldn't be combined with newer data from elsewhere, kept so the user can download them. */

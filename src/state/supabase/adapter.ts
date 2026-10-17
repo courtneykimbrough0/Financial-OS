@@ -76,7 +76,11 @@ let counter = 0;
 const newSaveId = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `00000000-0000-4000-8000-${(Date.now() + counter++).toString(16).padStart(12, '0').slice(-12)}`;
 
+export const CLEAR_UNSUPPORTED =
+  'Supabase storage doesn’t erase a plan this way. To clear the plan, start over (a reset save); deleting an account and its data is part of sign-in (Step 10d).';
+
 export class SupabaseStorageAdapter implements StorageAdapter {
+  readonly onlineFirst = true;
   /** The latest save whose outcome is unknown, if any. */
   private unknown: Unknown | null = null;
 
@@ -162,7 +166,12 @@ export class SupabaseStorageAdapter implements StorageAdapter {
     return result.data as T;
   }
 
+  /**
+   * Refuses: nothing is kept on the device to remove, and erasing the plan is
+   * an explicit save (start over sends `reset`), never a side effect. Reporting
+   * success here would tell a caller its data was removed when it wasn't.
+   */
   async clear(): Promise<void> {
-    // Nothing is kept on the device. Erasing the plan is a save (Start over), never a side effect.
+    throw new Error(CLEAR_UNSUPPORTED);
   }
 }
