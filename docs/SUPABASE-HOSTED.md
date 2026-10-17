@@ -33,9 +33,21 @@ Every test account needs its confirmation email, and the password-recovery tests
 
 1. **Automated runs read emails from a test outbox** (`supabase/hosted-test/test-outbox.sql`, test project only). Supabase's **Send Email** auth hook hands each email to a database function instead of sending it, and the function stores that email's token. The test runner reads the tokens back through a function that answers only with its secret, `SUPABASE_TEST_OUTBOX_SECRET`.
    - Confirmation is still required and still checked by Supabase Auth; only the delivery changes.
-   - Verified against the real local auth server: with the hook on, every sign-up, resend, recovery and email change went through the outbox, and both full suites passed. A wrong secret or the unchanged placeholder is refused, the table can't be read directly, and no email was sent.
+   - Who can do what:
+     - the captured emails and the secret: no direct access for signed-out or signed-in users (row-level security, no policies, no table privileges);
+     - the capture hook: only Supabase Auth's role can run it;
+     - the reader: only signed-out callers holding the secret (32+ characters, changed from the placeholder). Anything else gets the same refusal, with no contents.
+   - Captured tokens are kept one hour; the links expire by then. `teardown-outbox.sql` removes it all.
+   - The file refuses to install unless `marker.sql` has marked the project as the test project, so it can't be added to production by mistake. It is never a migration.
+   - Verified against the real local auth server:
+     - with the hook on, every sign-up, resend, recovery and email change went through the outbox, both full suites passed, and no email was sent;
+     - every access rule above was probed through the API;
+     - `verify-outbox.sql` flagged deliberately broken privileges;
+     - the outbox secret appeared in no build or log, and no link or token appeared in any log.
    - If your plan doesn't offer auth hooks, use a test SMTP inbox with a Mailpit-compatible API (`SUPABASE_TEST_MAIL_URL`) instead. Otherwise the email-dependent part stays manual and *not yet verified*.
-2. **Real delivery is checked once by hand**, with the hook turned off and your SMTP provider on (procedure below). Until it's done, report email delivery as *not yet verified*, whatever the automated runs say.
+2. **Real delivery is checked once by hand**, with the hook turned off and your SMTP provider on (procedure below). Automated runs through the outbox are not evidence that real emails arrive: until the manual check is done, report email delivery as *not yet verified*.
+
+Never install the outbox, or turn on this hook, in a production project.
 
 ## Setting up the test project (product owner)
 
@@ -65,7 +77,13 @@ Do these in order; each step says where in the Supabase dashboard (supabase.com/
    - no direct writes;
    - save receipts hidden.
 5. **Mark it as the test project.** Open `supabase/hosted-test/marker.sql`, replace `YOUR_PROJECT_REF` with the ref from step 2, and run it. Only in this project.
-6. **Install the test outbox.** Open `supabase/hosted-test/test-outbox.sql`. Replace `CHANGE_ME_TO_A_LONG_RANDOM_SECRET` *in the `insert` line* with a long random value (32+ characters, from your password manager's generator), and run it. Keep that value only in your local environment, as `SUPABASE_TEST_OUTBOX_SECRET`.
+6. **Install the test outbox.**
+   1. Open `supabase/hosted-test/test-outbox.sql`.
+   2. Replace `CHANGE_ME_TO_A_LONG_RANDOM_SECRET` *in the `insert` line only* with a long random value (at least 32 characters, from your password manager's generator).
+   3. Run it. It refuses to install unless step 5 was done.
+   4. Run `supabase/hosted-test/verify-outbox.sql`: all 13 rows must read `ok`.
+
+   Keep the secret only in your local environment, as `SUPABASE_TEST_OUTBOX_SECRET`.
 7. **Authentication → Sign In / Providers:**
    - Email provider on.
    - **Confirm email: on.**
@@ -159,6 +177,8 @@ Record each step as passed or failed:
 7. **A link in another browser:** the email is confirmed, but that browser shows sign-in. This is expected, because links work in the browser that asked.
 
 Then turn the hook back on before any automated run. Until this check is done and recorded, real email delivery is *not yet verified*.
+
+When testing is finished, turn the hook off and run `supabase/hosted-test/teardown-outbox.sql`, or simply delete the test project.
 
 ## Not done here
 

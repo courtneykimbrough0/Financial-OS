@@ -13,11 +13,36 @@
 -- delivery changes. Real delivery (SMTP, a real inbox, the link's redirect) is
 -- checked by hand with the hook turned off (docs/SUPABASE-HOSTED.md).
 --
--- Before running: replace CHANGE_ME_TO_A_LONG_RANDOM_SECRET below with a long
--- random value (for example from a password manager's generator, 32+
--- characters). Keep it only in your local environment as
+-- Before running: run marker.sql first (this file refuses to install without
+-- it), and replace CHANGE_ME_TO_A_LONG_RANDOM_SECRET in the insert line below
+-- with a long random value (at least 32 characters, for example from a
+-- password manager's generator). Keep it only in your local environment as
 -- SUPABASE_TEST_OUTBOX_SECRET. It is not a Supabase key and grants nothing
 -- beyond reading this test outbox.
+--
+-- Who can do what (check with verify-outbox.sql):
+--   - the captured emails: nobody directly (row-level security with no
+--     policies, and no table privileges for anon or signed-in users);
+--   - financial_os_test_send_email: Supabase Auth's role only;
+--   - financial_os_test_read_outbox: signed-out (anon) callers only, and it
+--     answers only with the secret. A wrong, missing, short or unchanged
+--     secret gets an error and nothing else.
+-- Captured tokens are kept one hour (Supabase's email links expire by then).
+-- To remove it all: teardown-outbox.sql.
+
+-- Only in the project marked as the Financial OS test project (marker.sql).
+do $$
+declare
+  v_marker text;
+begin
+  if to_regprocedure('public.financial_os_test_environment()') is not null then
+    execute 'select public.financial_os_test_environment()' into v_marker;
+  end if;
+  if v_marker is null or v_marker not like 'financial-os-hosted-test:%' or v_marker like '%YOUR_PROJECT_REF' then
+    raise exception 'This project is not marked as the Financial OS test project. Run marker.sql (with this project''s ref) first; never install the test outbox anywhere else.';
+  end if;
+end;
+$$;
 
 create table if not exists public.financial_os_test_outbox (
   id bigint generated always as identity primary key,
@@ -56,8 +81,8 @@ begin
     insert into public.financial_os_test_outbox (email, action, token_hash, redirect_to)
     values (v_new_email, v_data ->> 'email_action_type', v_new_hash, coalesce(v_data ->> 'redirect_to', ''));
   end if;
-  -- Keep only the last day.
-  delete from public.financial_os_test_outbox where created_at < now() - interval '1 day';
+  -- Keep only the last hour: the links expire by then.
+  delete from public.financial_os_test_outbox where created_at < now() - interval '1 hour';
   return '{}'::jsonb;
 end;
 $$;
@@ -70,7 +95,10 @@ security definer
 set search_path = ''
 as $$
 begin
-  if p_secret is null or not exists (select 1 from public.financial_os_test_outbox_secret s where s.secret = p_secret and s.secret <> 'CHANGE_ME_TO_A_LONG_RANDOM_SECRET') then
+  if p_secret is null or not exists (
+    select 1 from public.financial_os_test_outbox_secret s
+    where s.secret = p_secret and length(s.secret) >= 32 and s.secret <> 'CHANGE_ME_TO_A_LONG_RANDOM_SECRET'
+  ) then
     raise exception 'Not allowed.' using errcode = 'PT403';
   end if;
   return query
@@ -86,5 +114,6 @@ revoke all on function public.financial_os_test_send_email(jsonb) from public, a
 grant usage on schema public to supabase_auth_admin;
 grant execute on function public.financial_os_test_send_email(jsonb) to supabase_auth_admin;
 grant insert, delete, select on table public.financial_os_test_outbox to supabase_auth_admin;
-revoke all on function public.financial_os_test_read_outbox(text, text) from public;
-grant execute on function public.financial_os_test_read_outbox(text, text) to anon, authenticated;
+-- The runner reads with the public key alone, as a signed-out caller; signed-in users have no use for it.
+revoke all on function public.financial_os_test_read_outbox(text, text) from public, anon, authenticated;
+grant execute on function public.financial_os_test_read_outbox(text, text) to anon;
