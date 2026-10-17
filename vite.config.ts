@@ -45,7 +45,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
     // Security rule tests need the Firestore emulator (`npm run test:rules`);
-    // database tests need PostgreSQL (`npm run test:db`).
-    exclude: ['**/node_modules/**', '**/dist/**', '**/*.rules.test.ts', '**/*.db.test.ts', '**/*.supabase.test.ts'],
+    // database tests need PostgreSQL (`npm run test:db`); Supabase and browser
+    // tests need a local stack (`npm run test:supabase`, `npm run e2e:supabase`).
+    exclude: ['**/node_modules/**', '**/dist/**', '**/*.rules.test.ts', '**/*.db.test.ts', '**/*.supabase.test.ts', '**/*.e2e.test.ts'],
   },
 });

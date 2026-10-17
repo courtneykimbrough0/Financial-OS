@@ -16,6 +16,7 @@
     "e2e": "VITE_ACCOUNTS=off vite build --outDir dist-e2e && node scripts/e2e-smoke.mjs dist-e2e",
     "test:db": "node scripts/test-db.mjs",
     "test:supabase": "node scripts/test-supabase.mjs",
+    "e2e:supabase": "node scripts/e2e-supabase.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-financial-os \"vitest run --config vitest.rules.config.ts\"",
     "start": "node server.mjs"
   },
