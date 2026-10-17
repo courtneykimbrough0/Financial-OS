@@ -795,6 +795,273 @@ describe('accounts in the development copy', () => {
   });
 });
 
+/** Another tab in the same browser (it shares the browser's Supabase session). */
+async function newTab(page: Any, at: Date) {
+  const tab = await page.context().newPage();
+  tab.setDefaultTimeout(15000);
+  await tab.clock.setFixedTime(at);
+  const saves = track(tab);
+  await tab.goto(DEV);
+  await loaded(tab);
+  return { page: tab, saves };
+}
+/** In `tab`: sign out of whoever is signed in, then sign in as `account`. */
+async function switchTo(tab: Any, account: Account) {
+  await signOutUi(tab);
+  await signIn(tab, account.email, account.password);
+}
+/** A plan saved for an account through the API (setup for the cross-tab tests). */
+async function seedAccount(account: Account, data: AppData, times = 1) {
+  const api = asUser(account.session.access_token);
+  await api.rpc('create_workspace');
+  for (let i = 0; i < times; i++) {
+    const current = (await api.rpc('load_plan')).data as LoadedPlan;
+    const { error } = await api.rpc('save_plan', { p_base_revision: current.revision, p_save_id: crypto.randomUUID(), p_mode: 'replace', p_plan: toRows(data) });
+    if (error) throw new Error(error.message);
+  }
+}
+const planOf = async (account: Account) => fromRows((await asUser(account.session.access_token).rpc('load_plan')).data as LoadedPlan);
+const recoveryPanel = (page: Any) => page.getByRole('region', { name: 'Unsaved changes from another account' });
+async function unlock(page: Any, account: Account, password = account.password) {
+  const panel = recoveryPanel(page);
+  await panel.getByLabel(`Password for ${account.email}`).fill(password);
+  await panel.getByRole('button', { name: 'Unlock' }).click();
+}
+/** Holds the next save_plan request in this tab until `release()`; it then goes out as it was (same token). */
+async function holdNextSave(page: Any) {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  let held!: () => void;
+  const arrived = new Promise<void>((r) => (held = r));
+  await page.route(
+    '**/rest/v1/rpc/save_plan',
+    async (route: Any) => {
+      held();
+      await gate;
+      await route.continue();
+    },
+    { times: 1 },
+  );
+  return { arrived, release: () => release() };
+}
+const emptyPlan = (): AppData => ({ schemaVersion: 2, revision: 0, onboardingComplete: false, sources: [], records: [] });
+
+describe('two tabs on one device', () => {
+  const at = new Date(2026, 9, 16, 9, 0);
+
+  it('the same account in two tabs: both show it, a change in one is there in the other after reload, nothing set aside', async () => {
+    const a = await open(DEV, at);
+    await seed(a.page, contested());
+    const tab2 = await newTab(a.page, at);
+    expect((await sessionOf(tab2.page)).user.id).toBe((await sessionOf(a.page)).user.id);
+    await payPhone(a.page);
+    await a.saves.idle();
+    await tab2.page.reload();
+    await loaded(tab2.page);
+    expect(phoneRecord(await onScreen(tab2.page))!.actualAmountCents).toBe(15000);
+    expect(await recoveryPanel(a.page).count()).toBe(0);
+    await a.page.context().close();
+  });
+
+  it('another account signs in in the other tab with nothing unsaved: this tab follows it, never showing the first plan, and nothing is set aside', async () => {
+    const a = await open(DEV, at);
+    await seed(a.page, { ...contested(), sources: contested().sources.map((x) => (x.id === 'phone' ? { ...x, description: 'Alpha phone' } : x)) });
+    await a.page.goto(`${DEV}#/expenses`);
+    await a.page.getByText('Alpha phone').first().waitFor();
+    const b = await newAccount();
+    await seedAccount(b, contested());
+    const tab2 = await newTab(a.page, at);
+    await switchTo(tab2.page, b);
+    // This tab now shows B's plan (the browser has one session), and never A's.
+    await expect.poll(async () => (await sessionOf(a.page)).user.id).toBe(b.userId);
+    await a.page.goto(`${DEV}#/expenses`);
+    await a.page.getByRole('heading', { name: 'Phone' }).waitFor();
+    expect(await appText(a.page)).not.toContain('Alpha phone');
+    expect(await recoveryPanel(a.page).count()).toBe(0);
+    await a.page.context().close();
+  });
+
+  it('an unsaved change (the server failed) when another account signs in: set aside for its own account, unlocked by its password, saved there; the new account untouched', async () => {
+    const a = await open(DEV, at);
+    await seed(a.page, contested());
+    const b = await newAccount();
+    await seedAccount(b, contested());
+    const bBefore = await planOf(b);
+    await a.page.route('**/rest/v1/rpc/save_plan', (route: Any) => route.fulfill({ status: 503, body: '{}' }));
+    await payPhone(a.page);
+    await statusBar(a.page).waitFor();
+    const tab2 = await newTab(a.page, at);
+    await switchTo(tab2.page, b);
+    // Tab A: B's app, with A's change set aside and locked.
+    const panel = recoveryPanel(a.page);
+    await panel.waitFor();
+    expect(await panel.innerText()).toContain(`Changes made as ${a.account.email} weren’t saved`);
+    expect(await panel.getByRole('button', { name: /^Save them/ }).count()).toBe(0);
+    expect(await panel.getByRole('button', { name: 'Download them' }).count()).toBe(0);
+    await a.page.unroute('**/rest/v1/rpc/save_plan');
+    // B's plan never received A's change.
+    expect(await planOf(b)).toEqual(bBefore);
+    // A wrong password doesn't unlock it.
+    await unlock(a.page, a.account, 'not-the-password');
+    await panel.getByRole('alert').waitFor();
+    expect(await panel.getByRole('button', { name: /^Save them/ }).count()).toBe(0);
+    await unlock(a.page, a.account);
+    await panel.getByRole('button', { name: `Save them to ${a.account.email}’s account` }).click();
+    await a.page.getByText(`Saved to ${a.account.email}’s account.`).waitFor();
+    expect(phoneRecord(await planOf(a.account))!.actualAmountCents).toBe(15000);
+    expect(await planOf(b)).toEqual(bBefore);
+    // This tab stayed signed in as B throughout.
+    expect((await sessionOf(a.page)).user.id).toBe(b.userId);
+    await a.page.context().close();
+  });
+
+  it('after a network failure: set aside, and it can be downloaded once unlocked', async () => {
+    const a = await open(DEV, at);
+    await seed(a.page, contested());
+    const b = await newAccount();
+    await a.page.route('**/rest/v1/rpc/save_plan', (route: Any) => route.abort('failed'));
+    await payPhone(a.page);
+    await statusBar(a.page).waitFor();
+    const tab2 = await newTab(a.page, at);
+    await switchTo(tab2.page, b);
+    await recoveryPanel(a.page).waitFor();
+    await unlock(a.page, a.account);
+    const [download] = await Promise.all([a.page.waitForEvent('download'), recoveryPanel(a.page).getByRole('button', { name: 'Download them' }).click()]);
+    const file = readBackup(readFileSync(await download.path(), 'utf8'));
+    expect(phoneRecord(file.data)!.actualAmountCents).toBe(15000);
+    // Downloading isn't saving: the panel still says so.
+    expect(await recoveryPanel(a.page).innerText()).toContain('weren’t saved');
+    expect(phoneRecord(await planOf(a.account))).toBeUndefined();
+    await a.page.context().close();
+  });
+
+  it('a save in flight when another account signs in: it lands in its own account, and the set-aside copy recognizes it’s already saved', async () => {
+    const a = await open(DEV, at);
+    await seed(a.page, contested());
+    const b = await newAccount();
+    await seedAccount(b, contested());
+    const bBefore = await planOf(b);
+    const hold = await holdNextSave(a.page);
+    await payPhone(a.page);
+    await hold.arrived;
+    const tab2 = await newTab(a.page, at);
+    await switchTo(tab2.page, b);
+    await recoveryPanel(a.page).waitFor();
+    hold.release();
+    await a.saves.idle();
+    expect(phoneRecord(await planOf(a.account))!.actualAmountCents).toBe(15000);
+    expect(await planOf(b)).toEqual(bBefore);
+    await unlock(a.page, a.account);
+    await recoveryPanel(a.page).getByRole('button', { name: `Save them to ${a.account.email}’s account` }).click();
+    await a.page.getByText(`These changes are already saved in ${a.account.email}’s account.`).waitFor();
+    await a.page.context().close();
+  });
+
+  it('the previous account’s changes are never saved into the new account, even when a save was queued as the account changed', async () => {
+    const a = await open(DEV, at);
+    await seed(a.page, contested());
+    // B's plan is empty, at the revision A's next save will be based on: the case where a misdirected save would be accepted.
+    const b = await newAccount();
+    await seedAccount(b, emptyPlan(), 2);
+    const bBefore = await planOf(b);
+    expect(bBefore.revision).toBe(2);
+    // A's first change is held in flight; a second one waits behind it.
+    const hold = await holdNextSave(a.page);
+    await payPhone(a.page);
+    await hold.arrived;
+    await a.page.goto(`${DEV}#/settings`);
+    await a.page.getByRole('heading', { name: 'Review rhythm' }).waitFor();
+    await a.page.getByRole('radio', { name: /^Off/ }).focus();
+    await a.page.keyboard.press('ArrowDown');
+    // B signs in in the other tab; then A's first save completes and the queued one would follow.
+    const tab2 = await newTab(a.page, at);
+    await switchTo(tab2.page, b);
+    hold.release();
+    await a.saves.idle();
+    await recoveryPanel(a.page).waitFor();
+    expect(await planOf(b)).toEqual(bBefore);
+    // A's account has the first change (sent before the switch, with A's session); the second is set aside, not lost.
+    const aPlan = await planOf(a.account);
+    expect([phoneRecord(aPlan)!.actualAmountCents, aPlan.review ?? null]).toEqual([15000, null]);
+    expect(a.saves.log).toEqual([['update', 1, 200]]);
+    await unlock(a.page, a.account);
+    // A's plan moved on since those edits began (its first change landed), so they aren't written over it; they can be downloaded.
+    await recoveryPanel(a.page).getByRole('button', { name: `Save them to ${a.account.email}’s account` }).click();
+    await a.page.getByText(`${a.account.email}’s plan changed since these edits, so they weren’t saved over it. Download them to compare.`).waitFor();
+    const [download] = await Promise.all([a.page.waitForEvent('download'), recoveryPanel(a.page).getByRole('button', { name: 'Download them' }).click()]);
+    const kept = readBackup(readFileSync(await download.path(), 'utf8')).data;
+    expect([phoneRecord(kept)!.actualAmountCents, kept.review]).toEqual([15000, { cadence: 'weekly', handledOn: null, outcome: null }]);
+    expect(await planOf(b)).toEqual(bBefore);
+    await a.page.context().close();
+  });
+
+  it('a set-aside change is refused when its account changed since, rather than written over the newer plan', async () => {
+    const a = await open(DEV, at);
+    await seed(a.page, contested());
+    const b = await newAccount();
+    await a.page.route('**/rest/v1/rpc/save_plan', (route: Any) => route.abort('failed'));
+    await payPhone(a.page);
+    await statusBar(a.page).waitFor();
+    const tab2 = await newTab(a.page, at);
+    await switchTo(tab2.page, b);
+    await recoveryPanel(a.page).waitFor();
+    // Meanwhile A's plan changes on another device.
+    const elsewhere = await planOf(a.account);
+    const { error } = await asUser(a.account.session.access_token).rpc('save_plan', { p_base_revision: elsewhere.revision, p_save_id: crypto.randomUUID(), p_mode: 'update', p_plan: { ...toRows(elsewhere), review_cadence: 'monthly' } });
+    expect(error).toBeNull();
+    const newer = await planOf(a.account);
+    await unlock(a.page, a.account);
+    await recoveryPanel(a.page).getByRole('button', { name: `Save them to ${a.account.email}’s account` }).click();
+    await a.page.getByText(`${a.account.email}’s plan changed since these edits, so they weren’t saved over it. Download them to compare.`).waitFor();
+    expect(await planOf(a.account)).toEqual(newer);
+    expect(await recoveryPanel(a.page).getByRole('button', { name: 'Download them' }).count()).toBe(1);
+    await a.page.context().close();
+  });
+
+  it('the set-aside change can’t be dismissed by accident, and leaving the page warns', async () => {
+    const a = await open(DEV, at);
+    await seed(a.page, contested());
+    const b = await newAccount();
+    await a.page.route('**/rest/v1/rpc/save_plan', (route: Any) => route.abort('failed'));
+    await payPhone(a.page);
+    await statusBar(a.page).waitFor();
+    const tab2 = await newTab(a.page, at);
+    await switchTo(tab2.page, b);
+    const panel = recoveryPanel(a.page);
+    await panel.waitFor();
+    expect(await panel.getByRole('button', { name: /close/i }).count()).toBe(0);
+    await panel.getByRole('button', { name: 'Discard them' }).click();
+    await panel.getByRole('button', { name: 'Keep them' }).click();
+    expect(await panel.innerText()).toContain('weren’t saved');
+    const dialog = new Promise<Any>((resolve) => a.page.once('dialog', resolve));
+    await a.page.close({ runBeforeUnload: true });
+    const prompt = await dialog;
+    expect(prompt.type()).toBe('beforeunload');
+    await prompt.dismiss();
+    // Discarding takes a second, explicit step.
+    await panel.getByRole('button', { name: 'Discard them' }).click();
+    await panel.getByRole('button', { name: 'Discard for good' }).click();
+    await panel.waitFor({ state: 'detached' });
+    expect(phoneRecord(await planOf(a.account))).toBeUndefined();
+    await a.page.context().close();
+  });
+
+  it('signing out and back in after all this: each account’s confirmed plan is intact', async () => {
+    const a = await open(DEV, at);
+    await seed(a.page, contested());
+    await payPhone(a.page);
+    await a.saves.idle();
+    const b = await newAccount();
+    await seedAccount(b, contested());
+    const tab2 = await newTab(a.page, at);
+    await switchTo(tab2.page, b);
+    await switchTo(tab2.page, a.account);
+    expect(phoneRecord(await onScreen(tab2.page))!.actualAmountCents).toBe(15000);
+    expect(phoneRecord(await planOf(b))).toBeUndefined();
+    await a.page.context().close();
+  });
+});
+
 /** Signs this page's account out everywhere: its refresh tokens stop working (its access token runs until it expires). */
 async function revokeAll(page: Any) {
   const { access_token } = await sessionOf(page);

@@ -49,6 +49,7 @@ const SIGNED_OUT = 'You’ve been signed out, so this change isn’t saved. Sign
 const OFFLINE = 'Couldn’t reach the server, so this change isn’t saved yet. Check your connection and try again.';
 const CONFLICT = 'Your data was changed somewhere else, such as another device. Reload to see the latest version.';
 const SAVED_BUT_NEWER = 'Your change was saved, but your data has changed somewhere else since. Reload to see the latest version.';
+export const ACCOUNT_CHANGED = 'Another account signed in on this device, so this change wasn’t sent. It’s kept aside for its own account.';
 
 type Outcome =
   | { kind: 'saved'; reply: SaveReply }
@@ -61,6 +62,8 @@ function classify(data: unknown, error: RpcError | null, status: number): Outcom
   if (!error) return { kind: 'saved', reply: data as SaveReply };
   const code = error.code ?? '';
   if (code === 'PT409') return { kind: 'conflict' };
+  // Stopped on this device before sending: the session now belongs to someone else (see ownerGuardFetch).
+  if (code === 'FO401') return { kind: 'refused', message: ACCOUNT_CHANGED };
   // Not signed in, an expired session, or the signed-out (anon) role.
   if (code === 'PT401' || code === 'PGRST301' || code === 'PGRST302' || code === '42501' || status === 401) return { kind: 'refused', message: SIGNED_OUT };
   if (code === 'PT422') return { kind: 'refused', message: `This change couldn’t be saved: ${error.message}` };
@@ -175,3 +178,53 @@ export class SupabaseStorageAdapter implements StorageAdapter {
     throw new Error(CLEAR_UNSUPPORTED);
   }
 }
+
+/**
+ * Requests that belong to one account. Every call made through the returned
+ * client is marked with `ownerId`; `ownerGuardFetch` sends it only with that
+ * account's token. The browser keeps one Supabase session shared by all its
+ * tabs, so when another tab signs in as someone else, this account's
+ * remaining saves would otherwise go out under the new account's token.
+ */
+export const OWNER_HEADER = 'x-financial-os-owner';
+/** A supabase-js client's `rpc`, whose request can carry an extra header. */
+interface MarkableRpc {
+  rpc(fn: string, args?: Record<string, unknown>): { setHeader(name: string, value: string): PromiseLike<{ data: unknown; error: RpcError | null; status: number }> };
+}
+export function ownerBound(client: MarkableRpc, ownerId: string): RpcClient {
+  return { rpc: (fn, args) => client.rpc(fn, args).setHeader(OWNER_HEADER, ownerId) };
+}
+
+/** The user id (`sub`) in a bearer token, or null when there is none (a signed-out request carries only the public key). */
+export function tokenUser(authorization: string | null): string | null {
+  const token = authorization?.replace(/^Bearer\s+/i, '') ?? '';
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/'))) as { sub?: unknown };
+    return typeof payload.sub === 'string' && payload.sub ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * fetch for the Supabase client. A request marked with its owner goes out
+ * only if its token is that owner's; with another account's token it is
+ * stopped here, before reaching the server (status 401, code FO401). The mark
+ * itself never leaves the device. A request with no user token goes out, and
+ * the server refuses it as signed out.
+ */
+export function ownerGuardFetch(base: typeof fetch = (...args) => fetch(...args)): typeof fetch {
+  return async (input, init) => {
+    const request = new Request(input, init);
+    const owner = request.headers.get(OWNER_HEADER);
+    if (!owner) return base(request);
+    const headers = new Headers(request.headers);
+    headers.delete(OWNER_HEADER);
+    const user = tokenUser(headers.get('authorization'));
+    if (user !== null && user !== owner) {
+      return new Response(JSON.stringify({ code: 'FO401', message: 'Another account is signed in on this device.', details: null, hint: null }), { status: 401, headers: { 'content-type': 'application/json' } });
+    }
+    return base(new Request(request, { headers }));
+  };
+}
+

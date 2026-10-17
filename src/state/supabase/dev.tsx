@@ -14,6 +14,8 @@ import { useMemo, type ReactNode } from 'react';
 import type { StorageAdapter } from '../storage';
 import { AccountCard, AccountLine, SessionGuard } from '../../ui/supabase/AccountControls';
 import { NewPasswordScreen, SignedOutScreen } from '../../ui/supabase/AuthScreens';
+import { RecoveryPanel } from '../../ui/supabase/RecoveryPanel';
+import { ownerGuardFetch } from './adapter';
 import type { AccountSlot } from '../slots';
 import { SupabaseAccountGate } from './session';
 
@@ -59,9 +61,18 @@ export function SupabaseDevelopment({ children }: { children: (adapter: StorageA
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
   const problem = devConfigProblem(url, key);
   // PKCE: links in emails return with a one-time code for the browser that asked, never with tokens in the address.
+  // ownerGuardFetch: a request bound to one account is never sent under another account's session.
   const client = useMemo(
-    () => (problem ? null : createClient(url, key!, { auth: { storageKey: DEV_AUTH_KEY, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' } })),
+    () =>
+      problem
+        ? null
+        : createClient(url, key!, { auth: { storageKey: DEV_AUTH_KEY, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' }, global: { fetch: ownerGuardFetch() } }),
     [problem, url, key],
+  );
+  // For checking a password without touching the browser's session: in memory only, never shared with other tabs.
+  const verifier = useMemo(
+    () => () => createClient(url, key!, { auth: { storageKey: `${DEV_AUTH_KEY}:verify`, persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } }),
+    [url, key],
   );
 
   if (!client) {
@@ -76,7 +87,7 @@ export function SupabaseDevelopment({ children }: { children: (adapter: StorageA
       <p className="dev-storage-note" role="note">
         Development storage: local Supabase. For testing only; not for real financial data.
       </p>
-      <SupabaseAccountGate client={client} screens={{ SignedOut: SignedOutScreen, NewPassword: NewPasswordScreen }} slot={slot}>
+      <SupabaseAccountGate client={client} verifier={verifier} screens={{ SignedOut: SignedOutScreen, NewPassword: NewPasswordScreen, Recovery: RecoveryPanel }} slot={slot}>
         {children}
       </SupabaseAccountGate>
     </>

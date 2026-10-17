@@ -10,13 +10,20 @@
  * - A session that ends without signing out (expired, revoked elsewhere)
  *   doesn't throw the person out while changes are unsaved: `sessionEnded`
  *   is set and the Guard asks them to sign in again as the same account.
+ * - The browser has one session for all its tabs. When another tab signs in
+ *   as someone else, this tab's app is replaced by theirs. Anything it hadn't
+ *   saved is first set aside (in memory, while the page is open) for its own
+ *   account; the Recovery panel unlocks it only with that account's password.
+ *   Every request is also bound to its account (`ownerBound`), so nothing of
+ *   one account is ever sent under another's session.
  */
 import type { AuthError, SupabaseClient, User } from '@supabase/supabase-js';
 import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import { forgetSampleData } from '../mode';
+import type { AppData } from '../../domain/types';
 import { AccountSlotContext, type AccountSlot } from '../slots';
 import type { StorageAdapter } from '../storage';
-import { SupabaseStorageAdapter } from './adapter';
+import { ownerBound, SupabaseStorageAdapter } from './adapter';
 
 export interface AccountUser {
   id: string;
@@ -40,6 +47,21 @@ export interface SupabaseAccount {
   checkEmailConfirmed(): Promise<void>;
   /** Leaves the app for the sign-in screen (after the session ended with nothing unsaved). */
   leave(notice: string): void;
+  /** The running app registers how to read what it hasn't saved, so a change of account can set it aside first. */
+  setCapture(read: (() => Unsaved | null) | null): void;
+}
+
+export interface Unsaved {
+  data: AppData;
+  /** The revision the changes are based on: they're only ever saved on top of exactly that. */
+  baseRevision: number;
+}
+
+/** Changes set aside when another account took over this browser's session. Kept in memory only. */
+export interface SetAside extends Unsaved {
+  id: string;
+  owner: AccountUser;
+  at: string;
 }
 
 const AccountContext = createContext<SupabaseAccount | null>(null);
@@ -62,6 +84,8 @@ export function authMessage(error: AuthError | null | undefined): string {
   return 'That didn’t work. Try again in a moment.';
 }
 
+const DELETED = 'Your account and everything in it were deleted.';
+
 const toUser = (u: User): AccountUser => ({ id: u.id, email: u.email ?? null, anonymous: Boolean(u.is_anonymous) });
 
 /** Where links in emails return: this page, without query or hash. */
@@ -77,11 +101,30 @@ type Phase =
 export interface AuthScreens {
   SignedOut: ComponentType<{ client: SupabaseClient; notice: string | null }>;
   NewPassword: ComponentType<{ client: SupabaseClient; reason: 'recovery' | 'converting'; onDone: () => void }>;
+  /** One set-aside change: unlock with its account's password (through `verifier`), then save or download it, or discard it. */
+  Recovery: ComponentType<{ item: SetAside; verifier: () => SupabaseClient; onSaved: () => void; onDone: () => void }>;
 }
 
-export function SupabaseAccountGate({ client, screens, slot, children }: { client: SupabaseClient; screens: AuthScreens; slot: AccountSlot; children: (adapter: StorageAdapter) => ReactNode }) {
+export function SupabaseAccountGate({
+  client,
+  verifier,
+  screens,
+  slot,
+  children,
+}: {
+  client: SupabaseClient;
+  /** A separate client with its own in-memory session, for checking a password without touching the browser's session. */
+  verifier: () => SupabaseClient;
+  screens: AuthScreens;
+  slot: AccountSlot;
+  children: (adapter: StorageAdapter) => ReactNode;
+}) {
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [sessionEnded, setSessionEnded] = useState(false);
+  const [setAside, setSetAside] = useState<SetAside[]>([]);
+  /** Bumped to load the app again (after a set-aside change was saved into the account on screen). */
+  const [generation, setGeneration] = useState(0);
+  const capture = useRef<(() => Unsaved | null) | null>(null);
   const leaving = useRef(false);
   /** Set from the link in a recovery email (see the sign-in screen). */
   const recovering = useRef(new URLSearchParams(window.location.search).get('recovery') === '1');
@@ -128,6 +171,12 @@ export function SupabaseAccountGate({ client, screens, slot, children }: { clien
         return;
       }
       setSessionEnded(false);
+      // Someone else now holds this browser's session: set aside what the current account hasn't saved, then hand over.
+      if (current.kind === 'signed-in' && current.user.id !== user.id) {
+        const unsaved = capture.current?.();
+        capture.current = null;
+        if (unsaved) setSetAside((list) => [...list, { ...unsaved, id: crypto.randomUUID(), owner: current.user, at: new Date().toISOString() }]);
+      }
       // Same person: keep the app (and anything unsaved). Anyone else: a fresh app for them.
       setPhase((p) => (p.kind === 'signed-in' && p.user.id === user.id && p.user.email === user.email && p.user.anonymous === user.anonymous ? p : { kind: 'signed-in', user }));
     });
@@ -137,7 +186,22 @@ export function SupabaseAccountGate({ client, screens, slot, children }: { clien
   const user = phase.kind === 'signed-in' ? phase.user : null;
   // One adapter per person: it holds what it knows about unconfirmed saves, which must never carry over.
   const userId = user?.id ?? null;
-  const adapter = useMemo(() => (userId ? new SupabaseStorageAdapter(client) : null), [client, userId]);
+  const adapter = useMemo(() => (userId ? new SupabaseStorageAdapter(ownerBound(client, userId)) : null), [client, userId]);
+
+  // Set-aside changes live only in this page: leaving it asks first.
+  useEffect(() => {
+    if (setAside.length === 0) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [setAside.length]);
+
+  const setCapture = useCallback((read: (() => Unsaved | null) | null) => {
+    capture.current = read;
+  }, []);
 
   const leave = useCallback((notice: string) => {
     leaving.current = true;
@@ -181,7 +245,7 @@ export function SupabaseAccountGate({ client, screens, slot, children }: { clien
       if (check.error) return check.error.code === 'invalid_credentials' ? 'That password isn’t right. Nothing was deleted.' : authMessage(check.error);
       const { error } = await client.rpc('delete_account');
       if (error) return `Your account wasn’t deleted. ${error.message}`;
-      leave('Your account and everything in it were deleted.');
+      leave(DELETED);
       return null;
     },
     [client, user, leave],
@@ -206,32 +270,50 @@ export function SupabaseAccountGate({ client, screens, slot, children }: { clien
   }, [client]);
 
   const account = useMemo<SupabaseAccount | null>(
-    () => (user ? { user, sessionEnded, signOut, reauthenticate, deleteAccount, addEmail, checkEmailConfirmed, leave } : null),
-    [user, sessionEnded, signOut, reauthenticate, deleteAccount, addEmail, checkEmailConfirmed, leave],
+    () => (user ? { user, sessionEnded, signOut, reauthenticate, deleteAccount, addEmail, checkEmailConfirmed, leave, setCapture } : null),
+    [user, sessionEnded, signOut, reauthenticate, deleteAccount, addEmail, checkEmailConfirmed, leave, setCapture],
   );
 
+  const recovery = setAside.map((item) => (
+    <screens.Recovery
+      key={item.id}
+      item={item}
+      verifier={verifier}
+      onSaved={() => phaseRef.current.kind === 'signed-in' && phaseRef.current.user.id === item.owner.id && setGeneration((g) => g + 1)}
+      onDone={() => setSetAside((list) => list.filter((x) => x.id !== item.id))}
+    />
+  ));
+
+  let content: ReactNode;
   if (phase.kind === 'loading') {
-    return (
+    content = (
       <div className="load-screen" role="status" aria-live="polite">
         <span className="spinner" aria-hidden="true" />
         <p>Opening Financial OS…</p>
       </div>
     );
-  }
-  if (phase.kind === 'signed-out') return <screens.SignedOut client={client} notice={phase.notice} />;
-  if (phase.kind === 'new-password') {
+  } else if (phase.kind === 'signed-out') {
+    content = <screens.SignedOut client={client} notice={phase.notice} />;
+  } else if (phase.kind === 'new-password') {
     const done = () => {
       recovering.current = false;
       localStorage.removeItem(CONVERTING_KEY);
       setPhase({ kind: 'signed-in', user: phase.user });
     };
-    return <screens.NewPassword client={client} reason={phase.reason} onDone={done} />;
+    content = <screens.NewPassword client={client} reason={phase.reason} onDone={done} />;
+  } else {
+    content = (
+      <AccountContext.Provider value={account}>
+        <AccountSlotContext.Provider value={slot}>
+          <Fragment key={`${phase.user.id}:${generation}`}>{children(adapter!)}</Fragment>
+        </AccountSlotContext.Provider>
+      </AccountContext.Provider>
+    );
   }
   return (
-    <AccountContext.Provider value={account}>
-      <AccountSlotContext.Provider value={slot}>
-        <Fragment key={phase.user.id}>{children(adapter!)}</Fragment>
-      </AccountSlotContext.Provider>
-    </AccountContext.Provider>
+    <>
+      {recovery}
+      {content}
+    </>
   );
 }

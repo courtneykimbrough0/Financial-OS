@@ -43,6 +43,13 @@ interface Store {
   retrySave: () => void;
   /** Discard unsaved changes and load the latest saved data. */
   reload: () => void;
+  /**
+   * What's on screen that the storage hasn't confirmed, and the revision it is
+   * based on; null when everything is saved. Read when the app is about to be
+   * taken away (another account signed in on this device), so nothing
+   * unconfirmed disappears unseen.
+   */
+  unsavedChanges: () => { data: AppData; baseRevision: number } | null;
   /** Unsaved changes that were set aside because newer data was saved elsewhere. */
   recoveredCopy: { data: AppData; savedAt: string } | null;
   dismissRecoveredCopy: () => void;
@@ -268,6 +275,11 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
 
   const reload = useCallback(() => setLoadCount((n) => n + 1), []);
 
+  const unsavedChanges = useCallback<Store['unsavedChanges']>(() => {
+    const unconfirmed = dirty.current || saving.current || blocked.current !== null;
+    return unconfirmed && dataRef.current ? { data: dataRef.current, baseRevision: savedRevision.current } : null;
+  }, []);
+
   const dismissRecoveredCopy = useCallback(() => {
     adapter.discardRecoveredCopy?.();
     setRecoveredCopy(null);
@@ -292,8 +304,8 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
   }, []);
 
   const value = useMemo(
-    () => (data ? { data, today, run, replacePlan, retryReplace, cancelReplace, saveStatus, saveMessage, retrySave, reload, recoveredCopy, dismissRecoveredCopy } : null),
-    [data, today, run, replacePlan, retryReplace, cancelReplace, saveStatus, saveMessage, retrySave, reload, recoveredCopy, dismissRecoveredCopy],
+    () => (data ? { data, today, run, replacePlan, retryReplace, cancelReplace, saveStatus, saveMessage, retrySave, reload, unsavedChanges, recoveredCopy, dismissRecoveredCopy } : null),
+    [data, today, run, replacePlan, retryReplace, cancelReplace, saveStatus, saveMessage, retrySave, reload, unsavedChanges, recoveredCopy, dismissRecoveredCopy],
   );
 
   if (loadError) {

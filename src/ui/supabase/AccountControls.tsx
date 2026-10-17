@@ -231,7 +231,13 @@ export function AccountLine() {
  */
 export function SessionGuard() {
   const account = useSupabaseAccount();
-  const { retrySave, saveStatus } = useStore();
+  const { retrySave, saveStatus, unsavedChanges } = useStore();
+  // If another account takes over this browser's session, the gate sets aside what this one hasn't saved.
+  useEffect(() => {
+    if (!account) return;
+    account.setCapture(unsavedChanges);
+    return () => account.setCapture(null);
+  }, [account, unsavedChanges]);
   const unsaved = saveStatus !== 'idle';
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
