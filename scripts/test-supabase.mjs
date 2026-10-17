@@ -13,10 +13,10 @@
 import { spawnSync } from 'node:child_process';
 import { localSupabase } from './local-supabase.mjs';
 
-const { url, key } = await localSupabase();
+const { url, key, mailUrl } = await localSupabase();
 
 const r = spawnSync('npx', ['vitest', 'run', '--config', 'vitest.supabase.config.ts', ...process.argv.slice(2)], {
-  env: { ...process.env, SUPABASE_TEST_URL: url, SUPABASE_TEST_ANON_KEY: key },
+  env: { ...process.env, SUPABASE_TEST_URL: url, SUPABASE_TEST_ANON_KEY: key, SUPABASE_TEST_MAIL_URL: mailUrl },
   stdio: 'inherit',
   cwd: new URL('..', import.meta.url).pathname,
 });

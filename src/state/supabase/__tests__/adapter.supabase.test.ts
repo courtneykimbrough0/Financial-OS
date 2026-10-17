@@ -17,6 +17,7 @@ import type { AppData } from '../../../domain/types';
 import { SupabaseStorageAdapter } from '../adapter';
 import { canonicalize, toRows } from '../rows';
 import { clock, richPlan, smallPlan, TODAY } from './fixtures';
+import { confirmedAccount } from './local-auth';
 
 const URL = process.env.SUPABASE_TEST_URL!;
 const KEY = process.env.SUPABASE_TEST_ANON_KEY!;
@@ -47,13 +48,10 @@ function client(): { sb: SupabaseClient; loseNextReply: () => void } {
   return { sb, loseNextReply: () => (lose = true) };
 }
 
-/** A new signed-in user. `devices` more clients sign in as the same person. */
+/** A new signed-in user with a confirmed email. `devices` more clients sign in as the same person. */
 async function signUp(devices = 0) {
-  const email = `t-${randomUUID()}@example.test`;
-  const password = `pw-${randomUUID()}`;
   const main = client();
-  const { data, error } = await main.sb.auth.signUp({ email, password });
-  if (error || !data.session) throw new Error(`sign-up failed: ${error?.message ?? 'no session'}`);
+  const { email, password, userId } = await confirmedAccount(main.sb);
   const others = [];
   for (let i = 0; i < devices; i++) {
     const c = client();
@@ -61,7 +59,7 @@ async function signUp(devices = 0) {
     if (r.error) throw new Error(`sign-in failed: ${r.error.message}`);
     others.push(c);
   }
-  return { ...main, userId: data.user!.id, others };
+  return { ...main, userId, others };
 }
 
 const adapterFor = (sb: SupabaseClient) => new SupabaseStorageAdapter(sb);

@@ -15,7 +15,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { localSupabase } from './local-supabase.mjs';
 
 const root = new URL('..', import.meta.url).pathname;
-const { url, key } = await localSupabase();
+const { url, key, mailUrl } = await localSupabase();
 
 const build = (outDir, args, env) => {
   const r = spawnSync('npx', ['vite', 'build', '--outDir', outDir, '--emptyOutDir', ...args], { cwd: root, stdio: ['ignore', 'ignore', 'inherit'], env: { ...process.env, ...env } });
@@ -48,7 +48,7 @@ try {
   const r = spawnSync('npx', ['vitest', 'run', '--config', 'vitest.e2e.config.ts', ...process.argv.slice(2)], {
     cwd: root,
     stdio: 'inherit',
-    env: { ...process.env, SUPABASE_TEST_URL: url, SUPABASE_TEST_ANON_KEY: key, E2E_SUPABASE_BASE: devBase, E2E_DEFAULT_BASE: defaultBase, E2E_LEGACY_BASE: legacyBase, E2E_DEFAULT_DIST: `${root}dist-e2e-default` },
+    env: { ...process.env, SUPABASE_TEST_URL: url, SUPABASE_TEST_ANON_KEY: key, SUPABASE_TEST_MAIL_URL: mailUrl, E2E_SUPABASE_BASE: devBase, E2E_DEFAULT_BASE: defaultBase, E2E_LEGACY_BASE: legacyBase, E2E_DEFAULT_DIST: `${root}dist-e2e-default` },
   });
   status = r.status ?? 1;
 } finally {
