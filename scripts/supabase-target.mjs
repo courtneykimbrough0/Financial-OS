@@ -14,10 +14,11 @@
 //         (supabase/hosted-test/marker.sql).
 //
 // Either way only a public key (anon or publishable) is accepted: the tests use
-// only what a browser has. Emails: the local stack's email-testing server, or
-// for a hosted project SUPABASE_TEST_MAIL_URL (a Mailpit-compatible API behind
-// the project's test SMTP); without one, tests that need an email are skipped
-// and the project must have email confirmation off (see docs/SUPABASE-HOSTED.md).
+// only what a browser has. Email confirmation stays on, so the tests read each
+// confirmation or recovery email: from the local stack's email-testing server,
+// or for a hosted project from its test outbox (SUPABASE_TEST_OUTBOX_SECRET,
+// supabase/hosted-test/test-outbox.sql) or a Mailpit-compatible API
+// (SUPABASE_TEST_MAIL_URL). A hosted run with neither is refused.
 import { readFileSync } from 'node:fs';
 
 const LOOPBACK = ['127.0.0.1', 'localhost', '[::1]'];
@@ -66,7 +67,7 @@ export function checkTarget(env, approved) {
     if (!LOOPBACK.includes(hostOf(url))) return { ok: false, error: `SUPABASE_TEST_URL must be a local Supabase stack (127.0.0.1 or localhost); got "${hostOf(url) || url}". To test a hosted project, set SUPABASE_TEST_TARGET=hosted.` };
     if (!LOOPBACK.includes(hostOf(mailUrl))) return { ok: false, error: 'SUPABASE_TEST_MAIL_URL must be the local stack’s email-testing server.' };
     if (keyProblem) return { ok: false, error: keyProblem };
-    return { ok: true, target: { kind: 'local', url, key, mailUrl, ref: null } };
+    return { ok: true, target: { kind: 'local', url, key, mailUrl, ref: null, outboxSecret: env.SUPABASE_TEST_OUTBOX_SECRET || null } };
   }
 
   if (target !== 'hosted') return { ok: false, error: `SUPABASE_TEST_TARGET must be "local" or "hosted"; got "${target}".` };
@@ -80,7 +81,11 @@ export function checkTarget(env, approved) {
   if (env.SUPABASE_TEST_ALLOW_DESTRUCTIVE !== ref) return { ok: false, error: `These tests create and delete accounts. Set SUPABASE_TEST_ALLOW_DESTRUCTIVE=${ref} to confirm ${ref} is a disposable test project.` };
   const mailUrl = env.SUPABASE_TEST_MAIL_URL || null;
   if (mailUrl && !hostOf(mailUrl)) return { ok: false, error: 'SUPABASE_TEST_MAIL_URL isn’t a valid address.' };
-  return { ok: true, target: { kind: 'hosted', url, key, mailUrl, ref } };
+  const outboxSecret = env.SUPABASE_TEST_OUTBOX_SECRET || null;
+  if (!mailUrl && !outboxSecret) {
+    return { ok: false, error: 'Email confirmation stays on, so a hosted run needs to read confirmation emails: set SUPABASE_TEST_OUTBOX_SECRET (supabase/hosted-test/test-outbox.sql) or SUPABASE_TEST_MAIL_URL.' };
+  }
+  return { ok: true, target: { kind: 'hosted', url, key, mailUrl, ref, outboxSecret } };
 }
 
 /** The approved hosted test projects (supabase/hosted-test/projects.json). */
@@ -114,7 +119,16 @@ export async function supabaseTarget(env = process.env) {
     }
     if (marker !== `${MARKER_PREFIX}${t.ref}`) fail(`Project ${t.ref} isn’t marked as the Financial OS test project (supabase/hosted-test/marker.sql), so nothing was run.`);
   }
-  if (t.mailUrl) {
+  if (t.outboxSecret) {
+    let answered = false;
+    try {
+      const res = await fetch(`${t.url}/rest/v1/rpc/financial_os_test_read_outbox`, { method: 'POST', headers: { apikey: t.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_secret: t.outboxSecret, p_email: 'nobody@example.test' }) });
+      answered = res.ok;
+    } catch {
+      answered = false;
+    }
+    if (!answered) fail('The test outbox didn’t accept SUPABASE_TEST_OUTBOX_SECRET (supabase/hosted-test/test-outbox.sql), so nothing was run.');
+  } else if (t.mailUrl) {
     try {
       const res = await fetch(`${t.mailUrl}/api/v1/info`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -132,6 +146,7 @@ export function testEnv(t) {
     SUPABASE_TEST_URL: t.url,
     SUPABASE_TEST_ANON_KEY: t.key,
     SUPABASE_TEST_PROJECT_REF: t.ref ?? '',
-    SUPABASE_TEST_MAIL_URL: t.mailUrl ?? '',
+    SUPABASE_TEST_MAIL_URL: t.outboxSecret ? '' : (t.mailUrl ?? ''),
+    SUPABASE_TEST_OUTBOX_SECRET: t.outboxSecret ?? '',
   };
 }

@@ -12,7 +12,7 @@ import type { AppData } from '../../../domain/types';
 import { SupabaseStorageAdapter } from '../adapter';
 import { canonicalize, toRows } from '../rows';
 import { richPlan, smallPlan } from './fixtures';
-import { ANONYMOUS_ON, confirmedAccount, deleteTestAccounts, HAS_MAIL, latestMail, newEmail, newPassword, openLink, TARGET } from './local-auth';
+import { ANONYMOUS_ON, confirmedAccount, deleteTestAccounts, HAS_MAIL, latestMail, newEmail, newPassword, openLink, subjectIs, TARGET } from './local-auth';
 
 const URL = process.env.SUPABASE_TEST_URL!;
 const KEY = process.env.SUPABASE_TEST_ANON_KEY!;
@@ -43,7 +43,7 @@ describe('creating an account and signing in', () => {
     expect(early.error?.code).toBe('email_not_confirmed');
 
     const mail = await latestMail(email);
-    expect(mail.subject).toBe('Confirm your email address');
+    expect(subjectIs(mail, 'Confirm your email address')).toBe(true);
     const opened = await openLink(mail.link);
     expect(opened.status).toBe(303);
     expect(opened.location.startsWith(REDIRECT)).toBe(true);
@@ -81,7 +81,7 @@ describe('password recovery', () => {
     const sentAt = new Date().toISOString();
     expect((await client().auth.resetPasswordForEmail(email, { redirectTo: REDIRECT })).error).toBeNull();
     const mail = await latestMail(email, sentAt);
-    expect(mail.subject).toBe('Reset your password');
+    expect(subjectIs(mail, 'Reset your password')).toBe(true);
     const opened = await openLink(mail.link);
     const tokens = fromRedirect(opened.location);
     expect(tokens.type).toBe('recovery');

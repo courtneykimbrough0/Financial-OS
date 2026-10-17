@@ -21,7 +21,7 @@ import { buildForecast, explainTimingGaps, paycheckCycles } from '../src/domain/
 import type { AppData } from '../src/domain/types';
 import { createBackup, readBackup } from '../src/state/backup';
 import { richPlan } from '../src/state/supabase/__tests__/fixtures';
-import { ANONYMOUS_ON, confirmedAccount, deleteTestAccounts, HAS_MAIL, latestMail } from '../src/state/supabase/__tests__/local-auth';
+import { ANONYMOUS_ON, confirmedAccount, deleteTestAccounts, HAS_MAIL, latestMail, subjectIs } from '../src/state/supabase/__tests__/local-auth';
 import { canonicalize, checkForMigration, fromRows, toRows, type LoadedPlan } from '../src/state/supabase/rows';
 
 const require = createRequire(import.meta.url);
@@ -502,7 +502,7 @@ describe('accounts in the development copy', () => {
     await page.getByText('We sent the link again.').waitFor();
     // The link from the email, opened in this browser, finishes sign-up and opens setup.
     const mail = await latestMail(email);
-    expect(mail.subject).toBe('Confirm your email address');
+    expect(subjectIs(mail, 'Confirm your email address')).toBe(true);
     await page.goto(mail.link);
     await loaded(page);
     await page.getByRole('heading', { name: 'See your cash flow ahead of time' }).waitFor();
@@ -560,7 +560,7 @@ describe('accounts in the development copy', () => {
     await form.getByRole('button', { name: 'Send the link' }).click();
     await page.getByRole('heading', { name: 'Check your email' }).waitFor();
     const mail = await latestMail(account.email, sentAt);
-    expect(mail.subject).toBe('Reset your password');
+    expect(subjectIs(mail, 'Reset your password')).toBe(true);
     await page.goto(mail.link);
     await page.getByRole('heading', { name: 'Choose a new password' }).waitFor();
     const fresh = 'a-brand-new-password-2';

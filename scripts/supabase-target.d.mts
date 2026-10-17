@@ -4,6 +4,7 @@ export interface SupabaseTarget {
   key: string;
   mailUrl: string | null;
   ref: string | null;
+  outboxSecret: string | null;
 }
 export const MARKER_PREFIX: string;
 export function keyRole(key: string | undefined): { role: string; ref: string | null };

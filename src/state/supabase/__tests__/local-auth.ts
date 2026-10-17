@@ -1,17 +1,24 @@
 /**
  * Real accounts for the integration and browser tests, on the local stack or
  * an approved hosted test project (scripts/supabase-target.mjs checked which).
- * Sign-ups are confirmed through a Mailpit-compatible email-testing server: the
- * local stack's own, or the one behind a hosted test project's test SMTP. A
- * hosted project with no such server must have email confirmation off; tests
- * that need an email then skip themselves (`HAS_MAIL`).
+ * Email confirmation stays on, so sign-ups are confirmed through their real
+ * links, read from:
+ * - the local stack's email-testing server (Mailpit), or
+ * - a hosted test project's test outbox (supabase/hosted-test/test-outbox.sql:
+ *   Supabase Auth's Send Email hook stores each email's token there, and only
+ *   the runner's SUPABASE_TEST_OUTBOX_SECRET can read it back).
+ * With neither, tests that need an email skip themselves (`HAS_MAIL`) and
+ * accounts can't be created; the runner refuses that for a hosted project.
  */
 import { randomUUID } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 export const TARGET = (process.env.SUPABASE_TEST_TARGET ?? 'local') as 'local' | 'hosted';
 export const MAIL_URL = process.env.SUPABASE_TEST_MAIL_URL ?? (TARGET === 'local' ? 'http://127.0.0.1:54324' : '');
-export const HAS_MAIL = MAIL_URL !== '';
+const OUTBOX_SECRET = process.env.SUPABASE_TEST_OUTBOX_SECRET ?? '';
+/** Where emails are read: an email-testing server (real emails, with subjects), or the test outbox (tokens only). */
+export const MAIL_KIND: 'mailpit' | 'outbox' | 'none' = OUTBOX_SECRET ? 'outbox' : MAIL_URL ? 'mailpit' : 'none';
+export const HAS_MAIL = MAIL_KIND !== 'none';
 /** Anonymous sign-ins: on in the local stack (to convert earlier development identities), off in a hosted project. */
 export const ANONYMOUS_ON = TARGET === 'local';
 
@@ -21,11 +28,16 @@ interface Mail {
   Created: string;
 }
 
-/** The newest email to `address` (optionally newer than `after`), waiting up to 10 seconds for it. */
-export async function latestMail(address: string, after?: string): Promise<{ subject: string; text: string; link: string }> {
+/**
+ * The newest email to `address` (optionally newer than `after`), waiting up to
+ * 10 seconds for it. `subject` is null from the test outbox, which keeps only
+ * the token, not the composed email.
+ */
+export async function latestMail(address: string, after?: string): Promise<{ subject: string | null; text: string; link: string }> {
+  if (MAIL_KIND === 'outbox') return latestFromOutbox(address, after);
   for (let i = 0; i < 50; i++) {
     const found = (await (await fetch(`${MAIL_URL}/api/v1/search?query=${encodeURIComponent(`to:"${address}"`)}`)).json()) as { messages: Mail[] };
-    const mail = found.messages.find((m) => !after || m.Created > after);
+    const mail = found.messages.find((m) => !after || new Date(m.Created) > new Date(after));
     if (mail) {
       const full = (await (await fetch(`${MAIL_URL}/api/v1/message/${mail.ID}`)).json()) as { Text: string };
       const link = /https?:\/\/\S+\/auth\/v1\/verify\S+/.exec(full.Text)?.[0];
@@ -35,6 +47,33 @@ export async function latestMail(address: string, after?: string): Promise<{ sub
     await new Promise((r) => setTimeout(r, 200));
   }
   throw new Error(`no email to ${address}`);
+}
+
+/** The test outbox's newest entry for `address`, as the link the email would have carried. */
+async function latestFromOutbox(address: string, after?: string) {
+  const url = process.env.SUPABASE_TEST_URL!;
+  const key = process.env.SUPABASE_TEST_ANON_KEY!;
+  for (let i = 0; i < 50; i++) {
+    const res = await fetch(`${url}/rest/v1/rpc/financial_os_test_read_outbox`, {
+      method: 'POST',
+      headers: { apikey: key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_secret: OUTBOX_SECRET, p_email: address }),
+    });
+    if (!res.ok) throw new Error(`the test outbox refused the request (HTTP ${res.status})`);
+    const rows = (await res.json()) as { created_at: string; action: string; token_hash: string; redirect_to: string }[];
+    const row = rows.find((r) => !after || new Date(r.created_at) > new Date(after));
+    if (row) {
+      const link = `${url}/auth/v1/verify?token=${encodeURIComponent(row.token_hash)}&type=${encodeURIComponent(row.action)}${row.redirect_to ? `&redirect_to=${encodeURIComponent(row.redirect_to)}` : ''}`;
+      return { subject: null, text: '', link };
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  throw new Error(`no email to ${address}`);
+}
+
+/** Checks an email's subject when the email itself was captured (not from the test outbox, which keeps no subject). */
+export function subjectIs(mail: { subject: string | null }, subject: string) {
+  return mail.subject === null || mail.subject === subject;
 }
 
 /** Opens a link from an email the way a browser would, without following the redirect back to the app. */

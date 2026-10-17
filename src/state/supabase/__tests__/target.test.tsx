@@ -51,6 +51,7 @@ describe('the test runners’ target', () => {
     SUPABASE_TEST_PROJECT_REF: REF,
     SUPABASE_TEST_ANON_KEY: 'sb_publishable_abc',
     SUPABASE_TEST_ALLOW_DESTRUCTIVE: REF,
+    SUPABASE_TEST_OUTBOX_SECRET: 'a-test-outbox-secret',
     ...over,
   });
   const error = (env: Record<string, string | undefined>, approved = [REF]) => {
@@ -59,13 +60,16 @@ describe('the test runners’ target', () => {
   };
 
   it('defaults to the local stack and keeps its local-only check', () => {
-    expect(checkTarget({ SUPABASE_TEST_ANON_KEY: 'sb_publishable_abc' }, [])).toEqual({ ok: true, target: { kind: 'local', url: 'http://127.0.0.1:54321', key: 'sb_publishable_abc', mailUrl: 'http://127.0.0.1:54324', ref: null } });
+    expect(checkTarget({ SUPABASE_TEST_ANON_KEY: 'sb_publishable_abc' }, [])).toEqual({ ok: true, target: { kind: 'local', url: 'http://127.0.0.1:54321', key: 'sb_publishable_abc', mailUrl: 'http://127.0.0.1:54324', ref: null, outboxSecret: null } });
     expect(error({ SUPABASE_TEST_ANON_KEY: 'sb_publishable_abc', SUPABASE_TEST_URL: `https://${REF}.supabase.co` }, [REF])).toMatch(/^SUPABASE_TEST_URL must be a local Supabase stack/);
     expect(error({ SUPABASE_TEST_ANON_KEY: 'sb_secret_abc' })).toBe('SUPABASE_TEST_ANON_KEY must be the public anon or publishable key, not a secret key.');
   });
 
   it('a hosted project only when approved, at its exact address, confirmed for destructive tests', () => {
-    expect(checkTarget(hostedEnv(), [REF])).toEqual({ ok: true, target: { kind: 'hosted', url: `https://${REF}.supabase.co`, key: 'sb_publishable_abc', mailUrl: null, ref: REF } });
+    expect(checkTarget(hostedEnv(), [REF])).toEqual({ ok: true, target: { kind: 'hosted', url: `https://${REF}.supabase.co`, key: 'sb_publishable_abc', mailUrl: null, ref: REF, outboxSecret: 'a-test-outbox-secret' } });
+    // Email confirmation stays on: a hosted run must be able to read confirmation emails.
+    expect(error(hostedEnv({ SUPABASE_TEST_OUTBOX_SECRET: undefined }))).toBe('Email confirmation stays on, so a hosted run needs to read confirmation emails: set SUPABASE_TEST_OUTBOX_SECRET (supabase/hosted-test/test-outbox.sql) or SUPABASE_TEST_MAIL_URL.');
+    expect(checkTarget(hostedEnv({ SUPABASE_TEST_OUTBOX_SECRET: undefined, SUPABASE_TEST_MAIL_URL: 'https://mail.example.test' }), [REF]).ok).toBe(true);
     expect(error(hostedEnv(), [])).toBe(`Project ${REF} isn’t in supabase/hosted-test/projects.json. Only approved test projects can be used.`);
     expect(error(hostedEnv({ SUPABASE_TEST_PROJECT_REF: undefined }))).toBe('Set SUPABASE_TEST_PROJECT_REF to the hosted test project’s 20-letter ref.');
     expect(error(hostedEnv({ SUPABASE_TEST_URL: `https://${OTHER}.supabase.co` }))).toBe(`SUPABASE_TEST_URL must be exactly https://${REF}.supabase.co for project ${REF}.`);
