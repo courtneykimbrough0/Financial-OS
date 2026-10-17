@@ -49,7 +49,7 @@ interface Store {
    * taken away (another account signed in on this device), so nothing
    * unconfirmed disappears unseen.
    */
-  unsavedChanges: () => { data: AppData; baseRevision: number } | null;
+  unsavedChanges: () => { data: AppData; baseRevision: number; intent: SaveIntent } | null;
   /** Unsaved changes that were set aside because newer data was saved elsewhere. */
   recoveredCopy: { data: AppData; savedAt: string } | null;
   dismissRecoveredCopy: () => void;
@@ -276,8 +276,10 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
   const reload = useCallback(() => setLoadCount((n) => n + 1), []);
 
   const unsavedChanges = useCallback<Store['unsavedChanges']>(() => {
+    // A restore or start over waiting for confirmation: the plan it would write, not the one on screen (nothing else runs meanwhile).
+    if (replacing.current) return { data: replacing.current.data, baseRevision: savedRevision.current, intent: replacing.current.intent };
     const unconfirmed = dirty.current || saving.current || blocked.current !== null;
-    return unconfirmed && dataRef.current ? { data: dataRef.current, baseRevision: savedRevision.current } : null;
+    return unconfirmed && dataRef.current ? { data: dataRef.current, baseRevision: savedRevision.current, intent: 'update' } : null;
   }, []);
 
   const dismissRecoveredCopy = useCallback(() => {

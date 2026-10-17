@@ -46,7 +46,8 @@ interface Unknown {
 }
 
 const SIGNED_OUT = 'You’ve been signed out, so this change isn’t saved. Sign in again, then try again.';
-const OFFLINE = 'Couldn’t reach the server, so this change isn’t saved yet. Check your connection and try again.';
+// No usable reply: the change may or may not have reached the database, so this never says it failed.
+const OFFLINE = 'Couldn’t reach the server, so this change isn’t confirmed yet. Check your connection and try again.';
 const CONFLICT = 'Your data was changed somewhere else, such as another device. Reload to see the latest version.';
 const SAVED_BUT_NEWER = 'Your change was saved, but your data has changed somewhere else since. Reload to see the latest version.';
 export const ACCOUNT_CHANGED = 'Another account signed in on this device, so this change wasn’t sent. It’s kept aside for its own account.';

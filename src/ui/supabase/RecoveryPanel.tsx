@@ -7,6 +7,12 @@
  * revision they were made from, so newer data is never written over; or
  * downloaded as a backup. Discarding takes a second, explicit step. Nothing
  * here marks them saved unless the server confirms it.
+ *
+ * A restore or start over that was waiting for the server's answer may or may
+ * not have been applied. Unlocked, the panel checks that account: applied
+ * (its plan is the restored or erased one), not applied (still exactly the
+ * revision it started from: the person can finish it, as that account), or
+ * changed since (left alone). It's never sent again by itself.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AlertCircle, Download } from 'lucide-react';
@@ -22,6 +28,39 @@ const samePlan = (a: AppData, b: AppData) => JSON.stringify(canonicalize({ ...a,
 
 type Outcome = { kind: 'saved' | 'already'; message: string } | null;
 
+/** What the panel says, by what was waiting: ordinary changes, a restore, or a start over. */
+function copyFor(item: SetAside) {
+  const who = item.owner.email ?? 'a temporary identity';
+  if (item.intent === 'replace') {
+    return {
+      intro: `A restore of a backup for ${who} was waiting for the server’s answer when another account signed in on this device. It may or may not have been applied.`,
+      action: `Check and finish the restore in ${who}’s account`,
+      already: `The restore was applied to ${who}’s account.`,
+      saved: `Restored in ${who}’s account.`,
+      stale: `${who}’s plan changed since, so the restore wasn’t applied over it. Download the backup to compare.`,
+      download: 'Download the backup',
+    };
+  }
+  if (item.intent === 'reset') {
+    return {
+      intro: `Starting over (erasing the plan) for ${who} was waiting for the server’s answer when another account signed in on this device. It may or may not have been applied.`,
+      action: `Check and finish starting over in ${who}’s account`,
+      already: `${who}’s plan was erased: starting over was applied.`,
+      saved: `${who}’s plan was erased.`,
+      stale: `${who}’s plan changed since, so it wasn’t erased.`,
+      download: null,
+    };
+  }
+  return {
+    intro: null,
+    action: `Save them to ${who}’s account`,
+    already: `These changes are already saved in ${who}’s account.`,
+    saved: `Saved to ${who}’s account.`,
+    stale: `${who}’s plan changed since these edits, so they weren’t saved over it. Download them to compare.`,
+    download: 'Download them',
+  };
+}
+
 export function RecoveryPanel({ item, verifier, onSaved, onDone }: { item: SetAside; verifier: () => SupabaseClient; onSaved: () => void; onDone: () => void }) {
   const email = item.owner.email;
   const [password, setPassword] = useState('');
@@ -31,6 +70,7 @@ export function RecoveryPanel({ item, verifier, onSaved, onDone }: { item: SetAs
   const [outcome, setOutcome] = useState<Outcome>(null);
   const [discarding, setDiscarding] = useState(false);
   const verifierClient = useRef<SupabaseClient | null>(null);
+  const copy = copyFor(item);
 
   // The separate session ends with the panel.
   useEffect(() => () => void verifierClient.current?.auth.signOut({ scope: 'local' }).catch(() => undefined), []);
@@ -59,17 +99,14 @@ export function RecoveryPanel({ item, verifier, onSaved, onDone }: { item: SetAs
       if (loaded.error) return setError(`They weren’t saved: ${loaded.error.message}`);
       const current = loaded.data ? fromRows(loaded.data as LoadedPlan) : null;
       if (current && samePlan(current, item.data)) {
-        setOutcome({ kind: 'already', message: `These changes are already saved in ${email}’s account.` });
+        setOutcome({ kind: 'already', message: copy.already });
         return;
       }
-      if (!current || current.revision !== item.baseRevision) {
-        return setError(`${email}’s plan changed since these edits, so they weren’t saved over it. Download them to compare.`);
-      }
-      const { error: err } = await unlocked.rpc('save_plan', { p_base_revision: item.baseRevision, p_save_id: crypto.randomUUID(), p_mode: 'update', p_plan: toRows(item.data) });
-      if (err) {
-        return setError(err.code === 'PT409' ? `${email}’s plan changed since these edits, so they weren’t saved over it. Download them to compare.` : `They weren’t saved: ${err.message}`);
-      }
-      setOutcome({ kind: 'saved', message: `Saved to ${email}’s account.` });
+      if (!current || current.revision !== item.baseRevision) return setError(copy.stale);
+      // Exactly the revision it started from: send it now, as that account, with its own intent.
+      const { error: err } = await unlocked.rpc('save_plan', { p_base_revision: item.baseRevision, p_save_id: crypto.randomUUID(), p_mode: item.intent, p_plan: toRows(item.data) });
+      if (err) return setError(err.code === 'PT409' ? copy.stale : `That wasn’t saved: ${err.message}`);
+      setOutcome({ kind: 'saved', message: copy.saved });
       onSaved();
     } finally {
       setBusy(false);
@@ -93,7 +130,13 @@ export function RecoveryPanel({ item, verifier, onSaved, onDone }: { item: SetAs
       ) : (
         <>
           <p>
-            <Icon icon={AlertCircle} size={16} /> Changes made as <strong>{email ?? 'a temporary identity'}</strong> weren’t saved: another account signed in on this device. They’re kept here, not in any account, until this page closes.
+            <Icon icon={AlertCircle} size={16} />{' '}
+            {copy.intro ?? (
+              <>
+                Changes made as <strong>{email ?? 'a temporary identity'}</strong> weren’t saved: another account signed in on this device.
+              </>
+            )}{' '}
+            They’re kept here, not in any account, until this page closes.
           </p>
           {!unlocked && email && (
             <form className="stack-sm" onSubmit={(e) => void unlock(e)} noValidate aria-label="Unlock the unsaved changes">
@@ -107,12 +150,14 @@ export function RecoveryPanel({ item, verifier, onSaved, onDone }: { item: SetAs
             <div className="settings-actions">
               {unlocked && (
                 <button type="button" className="button small primary" onClick={() => void save()} disabled={busy}>
-                  {busy ? 'Saving…' : `Save them to ${email}’s account`}
+                  {busy ? 'Checking…' : copy.action}
                 </button>
               )}
-              <button type="button" className="button small secondary" onClick={download}>
-                <Icon icon={Download} size={16} /> Download them
-              </button>
+              {copy.download && (
+                <button type="button" className="button small secondary" onClick={download}>
+                  <Icon icon={Download} size={16} /> {copy.download}
+                </button>
+              )}
             </div>
           )}
           <FormError message={error} />

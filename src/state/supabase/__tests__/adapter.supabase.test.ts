@@ -22,7 +22,7 @@ import { confirmedAccount } from './local-auth';
 const URL = process.env.SUPABASE_TEST_URL!;
 const KEY = process.env.SUPABASE_TEST_ANON_KEY!;
 
-const OFFLINE = 'Couldn’t reach the server, so this change isn’t saved yet. Check your connection and try again.';
+const OFFLINE = 'Couldn’t reach the server, so this change isn’t confirmed yet. Check your connection and try again.';
 const SIGNED_OUT = 'You’ve been signed out, so this change isn’t saved. Sign in again, then try again.';
 const CONFLICT = 'Your data was changed somewhere else, such as another device. Reload to see the latest version.';
 const SAVED_BUT_NEWER = 'Your change was saved, but your data has changed somewhere else since. Reload to see the latest version.';

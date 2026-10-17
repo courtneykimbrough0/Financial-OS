@@ -22,7 +22,7 @@ import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, u
 import { forgetSampleData } from '../mode';
 import type { AppData } from '../../domain/types';
 import { AccountSlotContext, type AccountSlot } from '../slots';
-import type { StorageAdapter } from '../storage';
+import type { SaveIntent, StorageAdapter } from '../storage';
 import { OWNER_HEADER, ownerBound, SupabaseStorageAdapter } from './adapter';
 
 export interface AccountUser {
@@ -55,6 +55,8 @@ export interface Unsaved {
   data: AppData;
   /** The revision the changes are based on: they're only ever saved on top of exactly that. */
   baseRevision: number;
+  /** `replace` or `reset`: a restore or start over that was sent and not confirmed; it may or may not have been applied. */
+  intent: SaveIntent;
 }
 
 /** Changes set aside when another account took over this browser's session. Kept in memory only. */
