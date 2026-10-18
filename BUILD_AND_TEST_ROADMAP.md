@@ -52,6 +52,46 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | Audit recommendations (not yet approved) | docs/REDUCTION-AUDIT.md §3 and decisions §7 |
 | Deferred features | PRODUCT_EXPERIENCE.md §10; Step 8's deferred imports; Step 9 |
 
+### Proposed next phase: Home (progress, actions, what's coming) — plan only, not authorized
+
+Goal: within about 30 seconds of opening the app, a person can tell (1) whether their cash flow is improving, declining or steady, (2) what needs attention now, and (3) what's coming. It carries out phases R2, C1, C2 and C4 below in a tighter order, and adds no financial data, inputs or engine.
+
+**Assessment of today's dashboard (`Dashboard.tsx`, October 2026).** One screen stacks: the date; an overdue banner *or* a "Review this week" button; the review-rhythm entry; the transfers entry; "Explore a scenario"; a Month / Week / Paycheck / Custom switch; the cash-flow hero (cash flow, in / out / set aside, lowest running total, timing gap, next payday); a calendar with a key; the breakdown; tag totals; and the period's weeks or days. Problems:
+- **Progress isn't shown.** Cash flow is for the selected period only, with nothing to compare it with, so "improving or declining" can't be read.
+- **Actions are scattered** across up to four separate entry points (overdue banner, review button, rhythm entry, transfers entry), each opening its own sheet. A shortfall a planned transfer would cause shows only after opening the transfers list.
+- **Week information is duplicated**: the Week tab, the week list under every period, the "Review this week" sheet and the period review all list the same items.
+- **Supporting detail sits on the opening screen** (breakdown, tag totals, calendar key, Paycheck and Custom views) and pushes actions below the fold on a phone.
+
+**Opening screen ("This week"; Q1).** Top to bottom; a section appears only when it has content (phase C4):
+1. **Progress line.** Available cash flow this month (recorded plus still expected) with an arrow against last month's recorded cash flow (improving, steady or declining), and the lowest running total ahead if it goes below $0, linked to its explanation. No other metric.
+2. **Needs attention.** One list: overdue items from any date, items due today, planned transfers due and not recorded (with the shortfall when the source balance is known), and a timing gap that starts within 7 days. Each item has Record and Move; batch recording only for items due today or earlier (Q4).
+3. **Coming up.** The rest of this week and early next week by day: expected income, obligations, reserve allocations and planned transfers, kept visually distinct from recorded items.
+4. **Happened this week.** Recorded items with any difference from what was expected ("$128, expected $90").
+
+Previous and next week stay one tap away. The month calendar, breakdown, tag totals, custom range and scenarios move to a **Forecast** tab (C2); nothing is removed from the app.
+
+**Remove (each needs its decision):** review completion states, the payday rhythm and batch Undo (Q3, Q4; phase R2); the separate overdue banner, "Review this week" button, rhythm entry and transfers entry (folded into Needs attention); the dashboard's Week tab and per-period week list (replaced by the opening screen); the Paycheck view and main paycheck (Q2; phase R1, can follow later); the calendar key's explanatory list (a tooltip instead).
+
+**Consolidate:** the four action entry points into Needs attention; "Review this week" and the period review into the opening screen; What if… and scenarios into one "See what happens if…" (Q5; phase C6, later).
+
+**Reuse (no new money math):** `periodKpis` and `periodPlan` (progress, month cash flow), `overdueEntries` and `reviewEntries` (attention, coming up), `explainTimingGaps` and `timingGapsAhead` (gaps), `variance` (happened vs expected), `transfersDue` and `transferShortfall` (transfers), `recordAsExpected` / `rescheduleSelected` (batch actions), and the existing `OccurrenceSheet`, `GapsSheet`, `TransferForm`, `EntryButton`, `FlowAmount` and `StatusBadge`. One new pure helper groups a week's entries and transfers into the four sections, with tests.
+
+**Dependencies:** R2 before H2 (it removes the review states the opening screen would otherwise duplicate). Decisions Q1, Q3, Q4 and the progress comparison (below) before H2. Nothing depends on Supabase, Firebase or new storage.
+
+**Sequence (each its own authorized task, with tests):**
+- **H1. Week grouping helper.** Pure function: attention, coming up, happened and early next week, including transfers and shortfalls; overdue items from earlier weeks; week boundaries. Domain tests only. Complexity: low.
+- **H2. Opening screen.** The progress line and the four sections, built from H1, replacing the dashboard as the first screen; previous/next week. Removes the four entry points. Component and e2e tests. Complexity: medium. (Includes R2.)
+- **H3. Forecast tab and navigation.** Month calendar, gaps, breakdown, tag totals, custom range and scenarios under Forecast; tabs This week, Forecast, Plan (Activity later, C3); redirects from old routes. Complexity: medium.
+- **H4. Conditional visibility and wording** on the screens touched (C4, B1 for those screens). Complexity: low.
+- Later, separately: R1 (main paycheck), C3 (Activity), C5 (Plan and setup), C6 (one "See what happens if…"), D (visual redesign).
+
+**Decisions needing product-owner approval:**
+1. **Q1:** the week view opens the app, with no separate dashboard.
+2. **Progress comparison:** this month's available cash flow (recorded plus expected) against last month's recorded cash flow, shown as improving, steady (within a small band, for example $25 or 5%) or declining. The alternative is the change in the lowest running total over the next 4 weeks. Either reuses existing figures; the choice is about meaning.
+3. **Q3 / Q4:** remove review completion states, the payday rhythm and batch Undo; limit batch recording to items due today or earlier.
+4. **Timing-gap threshold for Needs attention:** a gap starting within 7 days (proposed) versus any gap in the 90-day look-ahead (which stays visible in the progress line either way).
+5. **Q2** (main paycheck and Paycheck view) can wait; H1–H3 don't depend on it.
+
 ### Phases
 
 Revised for the product philosophy (AGENTS.md section A) and the reduction audit ([docs/REDUCTION-AUDIT.md](docs/REDUCTION-AUDIT.md)). Removals come before redesign, so nothing is redesigned and then removed.
