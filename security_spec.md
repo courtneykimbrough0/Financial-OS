@@ -29,4 +29,4 @@ statement below is one or more of those tests.
 10. Writing to any other collection.
 11. A `review` that isn't exactly `cadence`, `handledOn` and `outcome` with allowed values.
 
-**Accounts (where money is received, held and spent).** Never written to Firestore: while `ACCOUNTS_IN_SIGNED_IN_SAVES` is false, account saves leave out `accounts` and every item's `accountId`, so the rules above (a fixed set of top-level fields) are unchanged and no save is refused.
+**Accounts (where money is received, held and spent) and transfers.** Never written to Firestore: while `ACCOUNTS_IN_SIGNED_IN_SAVES` is false, account saves leave out `accounts`, `transfers` and every item's `accountId`, so the rules above (a fixed set of top-level fields) are unchanged and no save is refused. Reserve releases are a field on a record and are saved. Signed-in users never see accounts, so nothing they entered is dropped. On the device and in backups, a transfer is validated whole on every load (both accounts present and different, a positive whole-cent amount, a valid date and status) and dropped otherwise, never kept with one side.

@@ -38,7 +38,7 @@ Financial OS is in a **product experience phase**. In order:
 - removal of legacy offline synchronization;
 - Vercel deployment;
 - further infrastructure;
-- roadmap Step 9 (virtual allocations and transfers).
+- roadmap Step 9's remaining work (virtual paycheck allocations; Strategic Reserves and recorded transfers were built in October 2026, section 11).
 
 The Supabase schema, adapter, accounts and security work stay as they are, and resume in Phase F.
 
@@ -103,12 +103,12 @@ The structure follows the information model. The full proposal, with the reasons
 | **This week** (opens the app) | What to do now | Section 3.2 |
 | **Forecast** | What's possible | Month calendar, running totals and timing gaps ahead, "See what happens if…", any date range including "Until next income" |
 | **Activity** | What happened | Section 4 |
-| **Plan** | Inputs | Income, bills, subscriptions, liability payments, savings, with one-time items inside each kind |
+| **Plan** | Inputs | Income, bills, subscriptions, liability payments, Strategic Reserves and varied spending, with one-time items where the classification allows them |
 
 - **Settings** sits behind the gear.
 - **"+ Add"** in the top bar opens a short sheet with two choices: Add income, and Add a bill or payment. Record a payment is in the week view, where the due items are.
 - **Wide screens** move the tabs to a left rail (section 7.6).
-- **Today:** the tabs are Dashboard, Income, Expenses and Liabilities, and the week is one of four dashboard views (**Implemented**).
+- **Today:** the tabs are Dashboard, Income, Expenses (Bills, Subscriptions, Varied), Liabilities and Reserves, and the week is one of four dashboard views (**Implemented**).
 
 ### 3.2 The week view
 
@@ -147,7 +147,7 @@ The structure follows the information model. The full proposal, with the reasons
 
 ### 3.4 Plan
 
-One screen with five sections: Income, Bills, Subscriptions, Liabilities, Savings. Use a segmented control on phones and a single page with headings on desktop.
+One screen with six sections: Income, Bills, Subscriptions, Liabilities, Strategic Reserves, Varied spending. Use a segmented control on phones and a single page with headings on desktop.
 
 **Each recurring item is a single tappable row:** name, schedule, next date, amount. Tapping it opens the item's detail sheet, which holds:
 - upcoming and recent dates (today's "See dates");
@@ -249,7 +249,7 @@ Visibility follows the data, through rules computed from forecast output. CSS ne
 | Totals by tag | At least one tagged entry in the period | Otherwise absent | — | — | — |
 | Plan section empty | No items of that kind | — | — | One line plus an Add button; no empty card with a heading | — |
 | One-time lists (Plan) | Items exist | Absent when none; "Add one-time" is in the section's menu | — | — | — |
-| Onboarding review lists | Items of that kind exist | Kinds with none collapse into one line: "Not added: subscriptions, savings." with Add links | — | — | — |
+| Onboarding review lists | Items of that kind exist | Kinds with none collapse into one line: "Not added: subscriptions, reserves." with Add links | — | — | — |
 | "Until next income" range option | An upcoming income exists | Option absent | — | — | — |
 | Actions that would open nothing | Never shown | — | — | e.g. no "See dates" on an item with no dates in range | — |
 
@@ -527,7 +527,7 @@ See what happens if…                            ›
 **Plan › Income:**
 
 ```
-Plan    [Income | Bills | Subscriptions | Liabilities | Savings]
+Plan    [Income | Bills | Subscriptions | Liabilities | Reserves | Varied]
 Paycheck                      +$1,800   Every 2 weeks · Thu Oct 22  ›
 Weekend job                     +$400   Every 2 weeks · Mon Oct 19  ›
 One-time
@@ -548,7 +548,7 @@ Add ─────────────────────────�
 **Setup.** Three steps instead of seven.
 
 1. **When do you get paid?** Add one or more incomes, with no main paycheck choice. Welcome, sample data and restore sit on this first screen as links.
-2. **What do you pay regularly?** One list for bills, subscriptions and liability payments (with a kind picker). Savings is offered as "Set money aside on a schedule (optional)".
+2. **What do you pay regularly?** One list for bills, subscriptions and liability payments (with a kind picker). Strategic Reserves are offered as "Set money aside on a schedule (optional)".
 3. **Your first look:**
    - cash flow for the next four weeks;
    - any timing gap;
@@ -584,7 +584,7 @@ The structural decisions (Q1–Q7) are in [docs/REDUCTION-AUDIT.md](docs/REDUCTI
 | D9 | Estimating a tipped paycheck from shifts | **Off by default.** The baseline paycheck stays as entered; estimates are suggestions to approve. |
 | D10 | Freelance payment without a date | **Possible, not counted**, until a date is set or it's received. |
 | D11 | "Cash available now" (the open item in the roadmap) | Keep deferred, but leave room in the week view's forecast line for an optional starting amount (REDUCTION-AUDIT Q6). |
-| D12 | Savings as an expense | Unchanged (Step 9 is paused). |
+| D12 | Savings as an expense | **Replaced** (Development-State Directive, October 2026): Strategic Reserves are an internal allocation that lowers available cash flow without counting as spending (section 11.3). |
 
 ---
 
@@ -597,14 +597,14 @@ The structural decisions (Q1–Q7) are in [docs/REDUCTION-AUDIT.md](docs/REDUCTI
 - Light theme.
 - Scenario saving and applying.
 - Imports.
-- Allocations and transfers (Step 9).
+- Rule-based or scheduled transfers and routing (section 11.7).
 - Any bank connection (never; AGENTS.md section E).
 
 ---
 
-## 11. Accounts (Confirmed model, October 2026; foundation implemented)
+## 11. Accounts, Strategic Reserves and transfers (Confirmed model, October 2026; implemented through AC4)
 
-Accounts say where money arrives, where it is held and where it is spent, so money has a purpose and a destination. They are the person's own labels: no bank connections, no transfers carried out, no balances fetched. The account system stays secondary: Home's priorities (cash-flow progress, what needs attention now, what's coming) don't change, and accounts are never required, including during setup.
+Accounts say where money arrives, where it is held and where it is spent, so money has a purpose and a destination. They are the person's own labels: no bank connections, nothing moved at a bank, no balances fetched. The account system stays secondary: Home's priorities (cash-flow progress, what needs attention now, what's coming) don't change, and accounts are never required, including during setup.
 
 ### 11.1 Three account types (Confirmed)
 
@@ -628,18 +628,22 @@ The classifications describe activity; account types describe where money is. Th
 | Item | Account type |
 | --- | --- |
 | Income | Income |
-| Bills, subscriptions, liability payments (and, when it exists, varied spending) | Payment |
-| Strategic reserve allocations (today's savings kind) | Distribution |
+| Bills, subscriptions, liability payments, varied spending | Payment |
+| Strategic Reserves | Distribution |
+
+The six classifications: **Income**, **Bills** (essential, recurring, no payoff), **Subscriptions** (nonessential, recurring, no payoff), **Liabilities** (a payoff amount and date), **Strategic Reserves** (money set aside on purpose) and **Varied Spending** (one-time). Bills, subscriptions and liabilities are recurring by definition; a one-time item is income, varied spending or a reserve. Screens: Income, Expenses (Bills, Subscriptions, Varied), Liabilities and Reserves.
 
 Tags stay optional, user-created and never pre-filled.
 
-### 11.3 Money movement (Confirmed rules; transfers not built yet)
+### 11.3 Money movement and cash flow (Confirmed; implemented)
 
 - Full structure: external income → Income → Distribution (routing) → Distribution (reserves) and Payment → external payments.
 - Simplified: external income → Income (also routing) → Distribution (reserves) and Payment → external payments.
 - **Moving money between the person's own accounts is neither income nor an expense.** It changes where money is held, not cash flow, and the forecast never counts it twice.
 - External events: a paycheck arriving, a bill or liability payment made. Internal transfers: everything between the person's own accounts.
-- When transfers are built: every transfer has a source and a different destination account; it preserves the total across the person's accounts; it never appears as both income and expense; it never alters recorded history unexpectedly; expected and recorded transfers stay distinguishable; a scheduled transfer is never reported as having happened.
+- Every transfer has a source and a different destination account; it preserves the total across the person's accounts; it never appears as income or expense; it never alters recorded history unexpectedly; expected (planned) and recorded transfers stay distinguishable; a planned transfer is never reported as having happened because its date passed. Any direction between two of the person's accounts is allowed, so corrections and rebalancing need no special case.
+- **Strategic Reserves.** An allocation is money set aside: it lowers the cash available for ordinary spending (available cash flow and the running total) and is never external spending. Using reserves (a one-time reserve marked "Use reserves") returns money to available cash flow and is never income. Operating cash flow = income − outflows; available cash flow ("Cash flow" on screen) = operating − net reserves. The breakdown shows reserves on their own line, never inside Spending.
+- A reserve allocation and the transfer that moves that money are never counted twice: the allocation affects cash flow only; the transfer affects balances only.
 - Account separation is for control, not administration. A purpose account (for example subscriptions) may deliberately hold little money, but Financial OS never causes a failed payment, withholds a transfer, or assumes an interruption has no consequence. Funding decisions stay with the person.
 - Account balances, total cash flow, money set aside for obligations and money available for discretionary use are different things. Money in one account is never assumed to be available for another account's payments, and no screen shows account-level assurances without balance and transfer information.
 
@@ -651,14 +655,18 @@ Tags stay optional, user-created and never pre-filled.
 
 Nobody chooses an arrangement; the app accommodates whatever accounts they add.
 
-### 11.5 What exists now (Implemented, Phase AC1)
+### 11.5 What exists now (Implemented, AC1, AC2, AC3 and AC4)
 
 - Domain: `Account` (id, name, type, created and updated times) and `AccountType` in `types.ts`; `accountTypeFor(kind)`; `addAccount`, `renameAccount`, `assignAccount` in `operations.ts`. Recurring items and one-time items carry an optional `accountId`; recurring occurrences follow their item.
 - Persistence: `accounts` (absent until the first one) and `accountId` in the saved document and backups. Loading drops malformed accounts and any assignment to a missing or unsuitable account, keeping every item.
-- Interface: an **Accounts** section in Settings (list with each account's type and number of items; add with a name and a type; rename) and an optional **Account** choice on a recurring item's form, listing only accounts that suit the item and appearing only when one exists.
-- The forecast never reads accounts: creating or assigning one changes no figure (tested).
-- Not available yet where the storage can't keep them: signed in with Firebase (`ACCOUNTS_IN_SIGNED_IN_SAVES`, rules accept a fixed set of fields) and the Supabase development build (no table yet; a save with accounts is refused rather than dropping them).
+- Interface: an **Accounts** section in Settings (each account's type, number of items and, once it has an opening balance, its balance; add with a name and a type). Tapping an account opens it: rename, add or change its balance, its transfers, and delete. An optional **Account** choice on recurring and one-time item forms lists only accounts that suit the item and appears only when one exists; an item's row shows its account.
+- **Deleting an account:** with nothing assigned, one confirmation; with items assigned, the confirmation says how many and that they stay with no account. An account that a transfer moves money to or from can't be deleted until those transfers are deleted or changed, so recorded history never loses a side.
+- **Transfers:** "Move money" (with two or more accounts) records a transfer that already happened or plans one. A planned transfer can be recorded (with the amount and date it actually had), changed or deleted; a recorded one can be corrected or deleted. When the source account's balance is known, a planned transfer that would take it below $0 says how far, and nothing is moved to cover it.
+- **Balances:** optional. An opening balance is what an account held at the end of a day; from it, the recorded balance follows recorded income, payments and transfers assigned to that account, and a projected balance (always an estimate) adds what is still expected. Strategic Reserve items change no balance; only transfers move money between accounts.
+- **Dashboard:** "N transfers to record" when planned transfers are due and not recorded, or "N transfers planned this week"; tapping lists them and opens each to record it. A day's sheet lists its transfers. Transfers never change a day's totals.
+- Cash flow and the running total never read accounts or transfers (tested).
+- Not available yet where the storage can't keep them: signed in with Firebase (`ACCOUNTS_IN_SIGNED_IN_SAVES`, rules accept a fixed set of fields; saves leave accounts and transfers out) and the Supabase development build (no tables yet; a save with accounts, transfers or reserve releases is refused rather than dropping them).
 
 ### 11.6 Deferred (needs later review and explicit authorization)
 
-Transfers (expected and recorded) and transfer scheduling or rules; automatic funding; account balances and forecasts based on them; account-level availability; cash-flow-index payoff recommendations and liability payoff algorithms; account-based notifications; subscription interruption handling; scenarios with transfers; any mandatory account setup; an account-routing dashboard; bank connections or real transfers (never). Roadmap: accounts phases AC2–AC6.
+Recurring or rule-based transfers ("each payday, move $X") and transfer scheduling; automatic funding; account-level availability and balance-based forecasts beyond the projected balance; cash-flow-index payoff recommendations and liability payoff algorithms; account-based notifications; subscription interruption handling; scenarios with transfers; any mandatory account setup; an account-routing dashboard; bank connections or real transfers (never). Roadmap: accounts phases AC5, AC6 and AC-S.

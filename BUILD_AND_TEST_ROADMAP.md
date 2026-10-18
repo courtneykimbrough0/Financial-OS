@@ -32,7 +32,7 @@ The mission and philosophy are in [AGENTS.md](AGENTS.md) section A; the specific
 - removal of offline synchronization (Step 10c);
 - Vercel deployment (Step 10e);
 - further infrastructure;
-- Step 9 (allocations and transfers).
+- Step 9 (virtual allocations; reserves and transfers are built, accounts phases AC3–AC5).
 
 The completed Supabase, account and security work (Steps 10a–10d in development, and the hosted-test preparation) stays as it is, and resumes in Phase F. Nothing in it is undone or rebuilt.
 
@@ -99,7 +99,7 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 **R1. Remove the main paycheck and the Paycheck view** (Q2). Complexity: **medium**.
 - **Scope:** every use replaced per REDUCTION-AUDIT §5.4:
   - the setup cash-flow bar shows the next 4 weeks;
-  - scenario savings follow a chosen income;
+  - scenario reserves follow a chosen income;
   - the picker and badge are removed.
 - **Data:** stored `mainPaycheck` / `main_paycheck` stay readable and are ignored. No schema change until the Supabase cutover.
 - **Dependencies:** A1.
@@ -110,7 +110,7 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 - **Tests:**
   - old data with `mainPaycheck` loads;
   - backups round-trip;
-  - scenario savings on a chosen income's paydays;
+  - scenario reserves on a chosen income's paydays;
   - updated component and e2e tests.
 - **Excluded:** dropping the column; any calculation change.
 
@@ -218,41 +218,36 @@ Specification: PRODUCT_EXPERIENCE.md section 11. Each phase is separately author
   - Validation on load, device storage and backups.
   - Firebase and Supabase guarded (below).
   - No forecast change.
-- **AC2. Assignment where people already work.** Complexity: **low**.
-  - An item's account shown on its row.
-  - An account choice on one-time items.
-  - Deleting an unused account, or one whose items become unassigned after confirmation.
-  - Changing an account's type only when no assignment conflicts.
-  - Tests: references stay valid; the forecast is unchanged.
+- **AC2. Assignment where people already work (complete, October 2026).**
+  - An item's account shown on its row; an account choice on one-time items.
+  - Deleting an account: one confirmation when unused; when items are assigned, the confirmation names the count and the items stay, unassigned. Refused while a transfer references the account.
+  - Not built: changing an account's type. Every account keeps the one type it was created with (Account Distribution & Cash-Flow Architecture, Phase 2); a different type is a new account.
+- **AC3. Transfers (expected and recorded) (complete, October 2026).**
+  - `Transfer` (id, source, destination, amount, date, `expected` or `recorded`, audit times) with `addTransfer`, `recordTransfer`, `updateTransfer` and `deleteTransfer`; one atomic entry per transfer, so no one-sided record exists.
+  - Any direction between two different accounts (corrections and rebalancing included). Never income or spending; the forecast never reads transfers.
+  - A planned transfer stays planned until recorded; the dashboard lists those due and this week's. Recording takes the amount and date it actually had.
+  - Not built: recurring or rule-based transfers ("each payday, move $X"). Entering them with minimal effort is still an open product decision (below).
+- **AC4. Strategic Reserves as an internal allocation (complete, October 2026).**
+  - Decided by the Development-State Directive: reserve allocations lower available cash flow and the running total, and are never external outflows. Releases ("Use reserves") return money to available cash flow.
+  - Six classifications: `reserve` replaces `savings`; `varied` (Varied Spending, one-time only) replaces one-time bills. No migration of sample data; a document with retired kinds isn't loaded (its copy is kept).
+  - Totals split into income, outflows and net reserves (operating and available cash flow; FINANCIAL_ENGINE.md).
+- **AC5. Account balances (partly complete, October 2026).**
+  - Done: optional opening balances, recorded and projected balances per account (`balances.ts`), and the shortfall a planned transfer would cause in its source account. Reserve items move no balance.
+  - Not built: account-level availability ("enough in Bills for rent"), balance-based forecasts or alerts, and the "cash available now" starting amount for the running total (decision Q6).
 - **AC-S. Accounts in Supabase.** Complexity: **medium**.
-  - An `accounts` table with workspace ownership and row-level security.
-  - Nullable `account_id` on sources and one-time records.
-  - `load_plan` / `save_plan` carrying them.
-  - Remove the adapter's refusal.
+  - `accounts` and `transfers` tables with workspace ownership and row-level security; nullable `account_id` on sources and one-time records; a `release` flag on one-time records; opening balances.
+  - `load_plan` / `save_plan` carrying them; remove the adapter's refusal.
   - Tests: `test:db`, `test:supabase`, `e2e:supabase`.
-  - Belongs with Phase F unless authorized earlier.
-- **AC3. Transfer domain (expected and recorded).** Complexity: **medium–high**.
-  - Transfers between the person's own accounts: source ≠ destination, total preserved, never income or expense, expected and recorded kept apart, nothing marked done because it was scheduled.
-  - In the forecast only as internal movement (cash flow unchanged), with invariant tests first.
-  - Depends on AC2.
-  - Needs a decision on how planned transfers are entered with minimal effort (for example "each payday, move $X to Bills").
-- **AC4. Strategic Reserves as an internal allocation.** Complexity: **medium**.
-  - Decide whether savings deposits into a Distribution account stop counting as money out (they would become transfers).
-  - This changes cash flow, so it needs a product-owner decision, a data migration and before-and-after tests.
-  - Tied to roadmap Step 9 (paused).
-- **AC5. Account balances.** Complexity: **high**.
-  - Optional starting balances per account (related to decision Q6) and projected balances per account.
-  - Only then any account-level availability ("enough in Bills for rent").
-  - Depends on AC3.
+  - Belongs with Phase F unless authorized earlier. The kind constraints already match the six classifications (migration `20261018000002`).
 - **AC6. Payoff support.** Using existing liability information and the cash-flow index to help decide when to deploy reserves. Needs liability payoff amounts, which aren't stored today, and its own specification.
 
-**Conflicts recorded for review (not resolved by AC1):**
-1. **Six classifications vs five kinds.** The app has income, bill, subscription, liability and savings. "Strategic Reserves" is today's savings kind under another name, and "Varied Spending" doesn't exist. AC1 maps savings to Distribution and leaves names unchanged.
-2. **Savings as money out vs the transfer rule.** Under the account rules, moving money to a reserve account is an internal transfer, but today it reduces cash flow. See AC4.
+**Conflicts and open decisions:**
+1. ~~Six classifications vs five kinds~~ and 2. ~~Savings as money out vs the transfer rule~~: resolved by AC4.
 3. **"Account" means two things in the interface.** It names the sign-in account ("Your Financial OS account", "Delete account") and money accounts. They never appear together today, since money accounts are hidden when signed in, but the Supabase cutover will put both on one screen. Needs a wording decision (for example "Sign-in" for the former).
 4. **Liabilities are defined with a payoff amount and date, but liability items store only payments.** Needed before AC6.
-5. **Storage.** Accounts work with device storage and in backups only. Firebase (legacy, rules can't change) and Supabase (no table yet) are guarded, so signed-in users don't see accounts.
-6. **Step 9 is paused, but AC1 starts its territory.** AC1 was authorized directly. AC3 and AC4 should be authorized with Step 9 in mind.
+5. **Storage.** Accounts, transfers and reserve releases work with device storage and in backups only. Firebase (legacy, rules can't change) leaves accounts and transfers out and keeps releases; Supabase refuses all three until AC-S. Signed-in users don't see accounts.
+6. **Planned transfers with minimal effort.** Each planned transfer is entered once today. A repeating plan ("each payday, move $X to Reserves") needs rules for how it's generated, edited and recorded; not built until those are decided.
+7. **Opening balance on the same day.** An opening balance is the balance at the end of its day, so a transfer recorded on that same day is treated as already included. Clear in the form's wording; revisit if it confuses people.
 
 #### F. Infrastructure resumption
 
@@ -418,7 +413,7 @@ Since the product experience decision above, this order is paused after the host
 - `buildForecast` inputs and whether scenarios can be represented as data changes applied to a copy.
 
 **Build or correct**
-- Scenarios computed by applying changes to a copy of the data and running the same `buildForecast`: extra liability payments, savings goals, one-time expenses, moved payment dates, and variable income.
+- Scenarios computed by applying changes to a copy of the data and running the same `buildForecast`: extra liability payments, reserve allocations, one-time expenses, moved payment dates, and variable income.
 - A comparison view: baseline vs. scenario across the whole timeline, with the assumptions listed.
 
 **Tests**
@@ -438,7 +433,7 @@ Revised (October 2026): the priority is a fast first forecast and safe recovery,
 - Guided setup (`Onboarding.tsx`), the item forms (`forms.tsx`), backup and restore (`backup.ts`, `components/backup.tsx`), and sample data (`mode.tsx`).
 
 **Build or correct**
-- The shortest path to a useful forecast: the main income is enough; bills and debt payments next; subscriptions, savings and other details can wait. No exhaustive profile, history, balances or categories are required, and nothing missing is invented.
+- The shortest path to a useful forecast: the main income is enough; bills and debt payments next; subscriptions, reserves and other details can wait. No exhaustive profile, history, balances or categories are required, and nothing missing is invented.
 - Say clearly that payments before the next payday aren't in the running total.
 - Restore shows what will be replaced and offers a backup of the current data first; a refused or canceled restore changes nothing.
 - A safe start-over: explicit confirmation, a backup offered first.
@@ -456,17 +451,17 @@ Revised (October 2026): the priority is a fast first forecast and safe recovery,
 
 Paused (October 2026) by the product experience decision. Only if the product owner authorizes implementation.
 
+**Update (October 2026):** the separation between external cash flow and internal allocations is built (Strategic Reserves, transfers and balances; accounts phases AC3–AC5). What remains here is virtual paycheck allocations (money set aside for a purpose without a real account), without fixed percentages.
+
 **Inspect**
-- How savings and transfers are modeled. Today, savings deposits count as expenses in cash flow (a product-owner decision recorded in README and AGENTS.md section D), and transfers between a person's own accounts aren't modeled.
+- How reserves, transfers and balances are modeled (FINANCIAL_ENGINE.md).
 
 **Build or correct**
-- A separation between external cash flow and internal allocations (money set aside for a purpose), without requiring a real account per category and without fixed percentages.
-- Decide with the product owner whether savings moves from "expense" to "allocation", and migrate existing data if so.
+- Virtual allocations, without requiring a real account per category and without fixed percentages.
 
 **Tests**
 - Reserved funds, money available to spend, obligations due before the next paycheck, insufficient income, user overrides.
 - Transfers between a person's own accounts never count as new income or spending in consolidated totals.
-- Existing data keeps the same cash-flow results unless the person opts into the new model.
 
 **Exit criteria**
 - Allocations are optional, explainable, and never double counted.
@@ -598,7 +593,8 @@ Replaces the earlier plan to validate Firebase persistence and offline behavior.
 - **Product experience audit: complete (documentation only, October 2026).** [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) (decisions and specifications), [docs/PRODUCT-AUDIT.md](docs/PRODUCT-AUDIT.md) (findings ranked by severity, the forecast-start analysis, the wording table) and [docs/COPY-INVENTORY.md](docs/COPY-INVENTORY.md) (every interface string). No application code changed. Next: Phase A1, once authorized.
 - **Product reduction audit: complete (documentation only, October 2026).** The philosophy and information model are in AGENTS.md section A. [docs/REDUCTION-AUDIT.md](docs/REDUCTION-AUDIT.md) has the feature inventory and classifications, ranked recommendations, verified defects D1–D5, the proposed structure (This week, Forecast, Activity, Plan) and decisions Q1–Q7. The phases above were revised to match.
 - **Phase A1: complete (October 2026).** The running total starts the day before the earliest outstanding or received-today income from any active recurring source, so entry order and the main paycheck no longer decide it (defect D1). Overdue income counts the same for every source; one-time income, inactive sources and hypothetical scenario income don't start it. Setup's first-period cash flow, lowest running total and before-payday note start from the same point (defect D2, `firstPeriod`). Pay periods still follow the main paycheck. Tests: `forecast-start` (15), the updated `forecast` anchor test, a setup test in `setup-timing-gaps`, and a browser step in the e2e smoke test.
-- **Accounts AC1: complete (October 2026).** Income, Distribution and Payment accounts (`types.ts`, `addAccount` / `renameAccount` / `assignAccount`), an Accounts section in Settings, an optional account on recurring item forms, validation on load, device storage and backups. Firebase saves leave accounts out (`ACCOUNTS_IN_SIGNED_IN_SAVES`) and the Supabase adapter refuses them, so nothing is silently dropped. The forecast never reads accounts. Tests: `accounts` (domain), `accounts-persistence`, `money-accounts` (UI), and an e2e step. Next: AC2, or AC-S with Phase F.
+- **Accounts AC1: complete (October 2026).** Income, Distribution and Payment accounts (`types.ts`, `addAccount` / `renameAccount` / `assignAccount`), an Accounts section in Settings, an optional account on recurring item forms, validation on load, device storage and backups. Firebase saves leave accounts out (`ACCOUNTS_IN_SIGNED_IN_SAVES`) and the Supabase adapter refuses them, so nothing is silently dropped. The forecast never reads accounts. Tests: `accounts` (domain), `accounts-persistence`, `money-accounts` (UI), and an e2e step.
+- **Account distribution and cash-flow architecture: AC2, AC3, AC4 complete; AC5 partly (October 2026).** Six classifications (Strategic Reserves and Varied Spending); reserves lower available cash flow without counting as spending; operating and available cash flow; transfers (expected and recorded); optional opening balances with recorded and projected balances; account deletion; the account on item rows; transfers on the dashboard. Supabase kind constraints updated (migration `20261018000002`); Supabase still refuses accounts, transfers and releases (AC-S). Tests: `reserves-transfers` (25), updated `plan`, `accounts-persistence`, `storage`, `money-accounts` (AC2, balances, transfers, dashboard), a DB classification test, and an e2e transfer step. Next: AC-S with Phase F, or the planned-transfer decision (conflict 6).
 
 ## Open items
 

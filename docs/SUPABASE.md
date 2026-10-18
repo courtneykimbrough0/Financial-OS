@@ -32,7 +32,7 @@ auth.users 1─1 workspaces 1─* sources 1─* schedule_versions
   - recurrence-rule shapes (`validateRule`);
   - an actual exists exactly when an occurrence is completed;
   - a cancel time exists exactly when it's canceled;
-  - one-time items are income, bills or savings;
+  - recurring items are income, bills, subscriptions, liabilities or reserves; one-time items are income, varied spending or reserves (migration `20261018000002`);
   - at most one main paycheck;
   - a liability type only on liability payments;
   - estimate dismissals are complete or absent;
@@ -252,7 +252,7 @@ Last run (October 2026): Supabase CLI 2.121.0, Supabase Postgres 17.11.0.004, Go
 
 `e2e/supabase.e2e.test.ts` drives built copies of the app in Chromium against a local stack. It has the same requirements as `test:supabase`, and `scripts/local-supabase.mjs` applies the same checks. Every test signs in through the app's sign-in screen.
 
-- **Setup and everyday use:** an empty workspace, setup (income, a bill, a one-time expense, a liability payment), a recorded payment, undo, a raise from a date, a moved occurrence, a review rhythm and a completed review, a restore, a dismissed estimate suggestion, and start over. After each one, Supabase holds exactly what's on screen, and a reload brings back the same plan, the same dashboard and identical forecasts. Every save is confirmed; all are `update` except one `replace` and one `reset`.
+- **Setup and everyday use:** an empty workspace, setup (income, a bill, varied spending, a liability payment), a recorded payment, undo, a raise from a date, a moved occurrence, a review rhythm and a completed review, a restore, a dismissed estimate suggestion, and start over. After each one, Supabase holds exactly what's on screen, and a reload brings back the same plan, the same dashboard and identical forecasts. Every save is confirmed; all are `update` except one `replace` and one `reset`.
 - **Conflicts and retries:**
   - two devices signed in to one account: the second save gets a conflict and isn't shown as saved, the first is kept, the unsaved change can still be downloaded, and Reload shows the latest;
   - a reply lost after commit: shown as not saved, warns before leaving, Try again reuses the save id and applies once;
@@ -295,11 +295,10 @@ Measured once, as a guide only (local PostgreSQL 16): a plan with 40 items and 1
 
 | Feature | How it would be added |
 | --- | --- |
-| Virtual paycheck allocations and reserves | New tables keyed by `workspace_id`; recommendations with proposed / approved / dismissed status |
+| Virtual paycheck allocations | New tables keyed by `workspace_id`; recommendations with proposed / approved / dismissed status |
 | Optional cash-on-hand snapshot | A dated snapshot table; with none, the forecast keeps its $0 start the day before payday |
-| Accounts (in the app since Phase AC1; not in the schema) | An `accounts` table (id, name, type `income` / `distribution` / `payment`, timestamps) keyed by `workspace_id`, a nullable `account_id` on sources and on one-time records (null = unassigned) referencing it, and `load_plan` / `save_plan` carrying them (roadmap AC-S). Until then the adapter refuses a plan with accounts (`hasAccountData`) instead of saving it without them, and `checkForMigration` reports it |
-| Transfers | Between the person's own accounts: a transfer record with a source and a different destination account, expected or recorded, never counted as income or expense (PRODUCT_EXPERIENCE.md section 11); savings stays money out unless the product owner decides otherwise |
+| Accounts, transfers and reserve releases (in the app; not in the schema) | An `accounts` table (id, name, type `income` / `distribution` / `payment`, optional opening balance and date, timestamps) keyed by `workspace_id`, a nullable `account_id` on sources and on one-time records (null = unassigned) referencing it, a `transfers` table (source and a different destination account in the same workspace, positive amount, date, `expected` / `recorded`), a `release` flag on one-time reserve records, and `load_plan` / `save_plan` carrying them (roadmap AC-S). Until then the adapter refuses a plan with any of them (`hasAccountData`) instead of saving it without them, and `checkForMigration` reports it |
 | Shared households | A membership table; the read policies and the owner check in the functions change, rows don't |
 | Partial payments | Several actuals per occurrence (a child table of `occurrence_records`) with completion rules in the engine; today an occurrence has one recorded outcome |
 
-Savings stays money out, and the zero-start anchor is unchanged.
+The zero-start anchor is unchanged.
