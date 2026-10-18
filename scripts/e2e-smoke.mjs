@@ -606,6 +606,36 @@ try {
   assert.deepEqual(dataAfterRestore.sources, dataBeforeReset.sources);
   assert.deepEqual(dataAfterRestore.records, dataBeforeReset.records);
 
+  step('accounts: add one in Settings, assign an item to it, and it survives a reload without changing the forecast');
+  {
+    await page.getByRole('link', { name: 'Settings' }).click();
+    await page.getByRole('heading', { name: 'Accounts' }).waitFor();
+    await page.getByRole('button', { name: 'Add account' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Add account' });
+    await sheet.getByLabel('Name').fill('Paycheck account');
+    await sheet.getByText('Income', { exact: true }).click();
+    await sheet.getByRole('button', { name: 'Add account' }).click();
+    await page.getByText('Account added.').waitFor();
+    const dataBefore = JSON.parse(await page.evaluate(() => localStorage.getItem('financial-os:data')));
+    await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Income' }).click();
+    await page.getByRole('button', { name: 'Edit' }).first().click();
+    const edit = page.getByRole('dialog', { name: /^Edit / });
+    await edit.getByLabel('Account (optional)').selectOption({ label: 'Paycheck account' });
+    await edit.getByRole('button', { name: 'Save changes' }).click();
+    await edit.waitFor({ state: 'detached' });
+    await page.reload();
+    await page.getByRole('heading', { name: 'Income', exact: true }).waitFor();
+    const dataAfter = JSON.parse(await page.evaluate(() => localStorage.getItem('financial-os:data')));
+    const account = dataAfter.accounts.find((a) => a.name === 'Paycheck account');
+    assert.equal(account.type, 'income');
+    assert.equal(dataAfter.sources.filter((src) => src.accountId === account.id).length, 1);
+    // Same items, amounts and records: only the assignment changed.
+    assert.deepEqual(dataAfter.records, dataBefore.records);
+    // (An item with no history yet is saved afresh, so its schedule gets a new id; the schedule itself is the same.)
+    const schedules = (d) => d.sources.map((src) => [src.id, src.versions.map(({ id: _id, ...v }) => v)]);
+    assert.deepEqual(schedules(dataAfter), schedules(dataBefore));
+  }
+
   step('forecast start: income entered later but paid earlier starts the running total');
   {
     // A fresh device: the Oct 27 paycheck is entered first, the Oct 19 weekend job second.

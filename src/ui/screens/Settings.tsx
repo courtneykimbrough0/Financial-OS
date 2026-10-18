@@ -8,6 +8,7 @@ import { AccountActions } from '../components/account';
 import { DownloadBackupButton, RestoreBackupButton, StartOverButton } from '../components/backup';
 import { Modal } from '../components/common';
 import { ReviewRhythmSettings } from '../components/rhythm';
+import { AccountsSettings } from '../components/money-accounts';
 import { navigate } from '../router';
 
 /** Account, backups, and sample data, in one place instead of the bottom of every screen. */
@@ -25,6 +26,8 @@ export function Settings() {
       </header>
 
       {slot ? <slot.Card /> : <AccountActions />}
+
+      <AccountsSettings />
 
       {(!account || data.isSample || REVIEW_RHYTHM_IN_ACCOUNTS) && <ReviewRhythmSettings />}
 

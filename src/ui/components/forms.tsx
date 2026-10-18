@@ -7,6 +7,7 @@ import { describeRule, nextOccurrenceOnOrAfter } from '../../domain/recurrence';
 import { LIABILITY_TYPE_LABEL, LIABILITY_TYPES, mainPaycheckId, type LiabilityType, type RecurrenceRule, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { Field, FormError, Icon, MoneyInput, useToast } from './common';
+import { AccountSelect } from './money-accounts';
 
 export const KIND_COPY: Record<TransactionKind, { noun: string; nameLabel: string; placeholder: string; amountLabel: string; dateLabel: string }> = {
   income: {
@@ -264,6 +265,7 @@ export function SourceForm({
   const [description, setDescription] = useState(source?.description ?? '');
   const [tags, setTags] = useState<string[]>(source?.tags ?? []);
   const [liabilityType, setLiabilityType] = useState<LiabilityType | undefined>(source?.liabilityType);
+  const [accountId, setAccountId] = useState<string | null>(source?.accountId ?? null);
   const [amount, setAmount] = useState(current ? centsToInput(current.amountCents) : '');
   const [startDate, setStartDate] = useState<DateStr>(defaultStart);
   const [rule, setRule] = useState<RuleState>(() => ruleToState(current?.rule ?? { type: kind === 'income' ? 'biweekly' : 'monthly' }, defaultStart || null));
@@ -283,15 +285,19 @@ export function SourceForm({
     const r = stateToRule(rule);
     if (typeof r === 'string') return setError(r);
 
+    // The account choice is optional and changes nothing in the forecast; it's applied with the rest in one step.
+    const withAccount = (step: ops.Result, id: string, clock: ops.Clock): ops.Result => (step.ok ? ops.assignAccount(step.data, id, accountId, clock) : step);
+
     if (!source) {
-      const result = run((d, clock) => ops.addSource(d, { kind, description, tags, liabilityType, amountCents: cents!, startDate, rule: r }, clock));
+      const id = ops.newId('src');
+      const result = run((d, clock) => withAccount(ops.addSource(d, { kind, description, tags, liabilityType, amountCents: cents!, startDate, rule: r }, clock, id), id, clock));
       if (!result.ok) return setError(result.error);
       toast(`Added ${description.trim()}.`);
       return onDone();
     }
 
     if (fresh) {
-      const result = run((d, clock) => ops.redefineSource(d, source.id, { description, tags, liabilityType, amountCents: cents!, startDate, rule: r }, clock));
+      const result = run((d, clock) => withAccount(ops.redefineSource(d, source.id, { description, tags, liabilityType, amountCents: cents!, startDate, rule: r }, clock), source.id, clock));
       if (!result.ok) return setError(result.error);
       toast(`Saved ${description.trim()}.`);
       return onDone();
@@ -301,7 +307,7 @@ export function SourceForm({
       source.active &&
       (cents !== current!.amountCents || startDate !== defaultStart || JSON.stringify(r) !== JSON.stringify(current!.rule));
     const result = run((d, clock) => {
-      const step = ops.updateSourceDetails(d, source.id, { description, tags, liabilityType }, clock);
+      const step = withAccount(ops.updateSourceDetails(d, source.id, { description, tags, liabilityType }, clock), source.id, clock);
       if (!step.ok || !scheduleChanged) return step;
       return ops.changeSourceSchedule(step.data, source.id, { startDate, amountCents: cents!, rule: r }, clock);
     });
@@ -346,6 +352,7 @@ export function SourceForm({
       <RecurrenceFields value={rule} onChange={setRule} />
         </>
       )}
+      <AccountSelect kind={kind} value={accountId} onChange={setAccountId} />
       <TagInput value={tags} onChange={setTags} />
       <FormError message={error} />
       <div className="form-actions">
