@@ -699,8 +699,9 @@ try {
     await p2.getByRole('button', { name: /1 timing gap ahead/ }).waitFor();
     assert.equal(await p2.getByText(/due before your next payday/).count(), 0);
     await p2.getByRole('button', { name: 'See my forecast' }).click();
-    await p2.locator('.hero').waitFor();
-    assert.match(await p2.locator('.hero').innerText(), /Lowest running total\s*−\$600\.00 · Oct 22[\s\S]*Timing gap ahead/);
+    // The review screen's summary is also a .hero, so wait for the dashboard itself.
+    await p2.getByRole('heading', { name: 'Your cash flow' }).waitFor();
+    assert.match(await p2.locator('.dashboard .hero').innerText(), /Lowest running total\s*−\$600\.00 · Oct 22[\s\S]*Timing gap ahead/);
     await fresh.close();
   }
 
