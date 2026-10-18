@@ -5,9 +5,9 @@ This document says how Financial OS should look, read and behave for the people 
 - [FINANCIAL_ENGINE.md](FINANCIAL_ENGINE.md): the math;
 - [DESIGN.md](DESIGN.md): the visual system that is built today.
 
-The evidence behind it (screenshots, findings ranked by severity, and the inventory of interface wording) is in [docs/PRODUCT-AUDIT.md](docs/PRODUCT-AUDIT.md). The order of work is in [BUILD_AND_TEST_ROADMAP.md](BUILD_AND_TEST_ROADMAP.md), Phases A–F.
+The mission, philosophy, information model (projections, recorded activity, the week view) and design principles are in [AGENTS.md](AGENTS.md) section A; this document applies them and doesn't repeat them. The evidence is in [docs/PRODUCT-AUDIT.md](docs/PRODUCT-AUDIT.md) (screens, wording, the forecast-start defect) and [docs/REDUCTION-AUDIT.md](docs/REDUCTION-AUDIT.md) (feature inventory, what to remove or simplify, decisions Q1–Q7). The order of work is in [BUILD_AND_TEST_ROADMAP.md](BUILD_AND_TEST_ROADMAP.md), Phases A–F.
 
-Written October 2026 at commit `d00a919`, as a plan: none of the proposals below is built yet. Every requirement carries one of these labels, so nobody mistakes a proposal for what exists:
+Written October 2026 (first at `d00a919`, revised at `748d9f7` for the product philosophy), as a plan: none of the proposals below is built yet. Every requirement carries one of these labels, so nobody mistakes a proposal for what exists:
 
 | Label | Meaning |
 | --- | --- |
@@ -83,7 +83,7 @@ A calm, competent friend who is good with money. Plain words, short sentences, s
 | Empty day | (not shown; see section 5) | — |
 | Empty list | What goes here + one action | "No subscriptions yet." [Add subscription] |
 | Record | Verb + object | "Record payment" → "Payment recorded." |
-| Undo | Undo + what | "Undo payment" |
+| Correction | Verb + what it fixes | "Mark as not paid", "Edit payment" |
 | Destructive confirm | Question + consequence | "Delete Car repair? It comes off your forecast." [Delete] [Keep] |
 | Projection | "expected", "may", "planned" | "Expected Oct 27" — never "you will have" |
 | Explanation | Plain sentence + "How this works" | "Cash flow is money in minus money out for this period." |
@@ -92,120 +92,60 @@ The full list of current wording to change, with replacements, is in [docs/PRODU
 
 ---
 
-## 3. Information architecture
+## 3. Information architecture (Proposed)
 
-### 3.1 Navigation (Proposed)
+The structure follows the information model. The full proposal, with the reasons and the features it absorbs, is [docs/REDUCTION-AUDIT.md](docs/REDUCTION-AUDIT.md) §5 (pending decisions Q1–Q5); this section keeps only what screens must do.
 
-**Implemented today:**
-- four tabs: Dashboard, Income, Expenses (Bills / Subscriptions / Savings) and Liabilities;
-- Settings behind a gear.
+### 3.1 Navigation
 
-Three of the four tabs are for setup and maintenance, which people do rarely. The things people do daily (look ahead, record a payment, check a day) all sit on one long dashboard.
-
-**Proposed:**
-
-| Tab | Purpose | Holds |
+| Tab | Perspective | Holds |
 | --- | --- | --- |
-| **Home** | "Am I okay, and what's next?" | Summary, attention items, coming up, quick actions |
-| **Calendar** | "What happens when?" | Month grid, agenda list, week and day detail |
-| **Reports** | "Where does it come from and go?" | Cash flow, Income, Payments (later: Earnings) |
-| **Plan** | "What I've told the app to expect" | Income, Bills, Subscriptions, Liabilities, Savings, one section each |
+| **This week** (opens the app) | What to do now | Section 3.2 |
+| **Forecast** | What's possible | Month calendar, running totals and timing gaps ahead, "See what happens if…", any date range including "Until next income" |
+| **Activity** | What happened | Section 4 |
+| **Plan** | Inputs | Income, bills, subscriptions, liability payments, savings, with one-time items inside each kind |
 
-- **Settings** stays behind the gear.
-- **Quick add** is a "+" button in the top bar on every tab. It opens a short sheet:
-  - Add income
-  - Add a bill or payment
-  - Record a payment (picks from items due soon)
-  - Log a shift or job (shown only once earnings tracking is on; section 6)
-- On wide screens the tabs move to a left rail (section 7.6).
+- **Settings** sits behind the gear.
+- **"+ Add"** in the top bar opens a short sheet with two choices: Add income, and Add a bill or payment. Record a payment is in the week view, where the due items are.
+- **Wide screens** move the tabs to a left rail (section 7.6).
+- **Today:** the tabs are Dashboard, Income, Expenses and Liabilities, and the week is one of four dashboard views (**Implemented**).
 
-"Plan" is the working name; "Setup" is the alternative (decision D5 in section 9).
+### 3.2 The week view
 
-### 3.2 Home (Proposed)
+**Purpose (Confirmed).** It answers what has happened, what's expected next, what needs attention and what may need a decision. It's the opening screen when decision Q1 is approved. It shows the current week, with previous and next.
 
-**Purpose.** In five seconds, someone can answer:
-- What's coming in?
-- What do I have to pay?
-- How does it end up?
-- Does anything need me?
+**Sections, top to bottom. Each appears only when it has content:**
 
-**Default period:** *This pay period*, from today to the day before the next main payday. It falls back to *This month* when there are no pay periods. A compact period chip changes it:
-- This pay period
-- Next pay period
-- This month
-- Next month
-- Custom…
-
-The week view moves to Calendar.
-
-**Mobile, above the fold (390 × 844), top to bottom:**
-
-```
-┌──────────────────────────────────────┐
-│ Financial OS              [+]  [⚙]   │  top bar
-├──────────────────────────────────────┤
-│ ⚠ Short $600 on Oct 31 · See why  ›  │  attention line — only when relevant;
-│   +1 more                            │  one line, highest priority first
-├──────────────────────────────────────┤
-│ This pay period ▾      Oct 22 – Nov 4│
-│                                      │
-│   −$600                              │  cash flow, signed, red + icon if < 0
-│   Cash flow                          │
-│                                      │
-│   In    +$1,800   Out   −$2,400      │  two figures, no duplicates
-│   Lowest  −$600 on Oct 31            │  only when below $0; else
-│                                      │  "Stays above $0 through Nov 4 ✓"
-├──────────────────────────────────────┤
-│ Coming up                   See all ›│
-│ ● Paycheck      Thu Oct 22  +$1,800  │  next 4–5 items, income and payments,
-│ ● Phone  overdue  since Oct 5  −$60 ✓│  overdue first; ✓ records the payment
-│ ● Rent          Fri Oct 23  −$1,200  │  in one tap (undo in the toast)
-│ ● Car loan      Mon Oct 26    −$350  │
-└──────────────────────────────────────┘
-```
-
-**Below the fold:**
-1. **Next 14 days:** a compact strip of days with chips and the running total, sharing the Calendar's encoding. Tapping it opens Calendar at today.
-2. **See what happens if…:** a secondary link to scenarios. It currently sits at the top with the same weight as primary content.
-3. **Reports shortcuts:** two or three one-line links with a figure each, for example "Income this month: $3,450 received, $1,800 expected ›".
-4. Review rhythm entry, only when a review is due (it also appears in the attention line).
-
-**What moves:**
-
-| Element today | Goes to | Why |
-| --- | --- | --- |
-| Date heading "Sun, Oct 11" | Removed (date in the period chip) | Takes a line, says nothing |
-| Overdue banner, review button, review-due entry | Merged into the attention line | Three competing banners |
-| "Explore a scenario" button | Below the fold as "See what happens if…" | Advanced; was the second thing on screen |
-| Month / Week / Paycheck / Custom tabs | Period chip (Home); Week view in Calendar | Four equal pills dominate the top |
-| Hero card | Stays, simplified | Lowest running total only when it matters; payday line moves to Coming up |
-| Full month calendar + key | Calendar tab | Needs a key to read; pushes everything else down |
-| Breakdown card | Reports › Cash flow | Repeats the hero's three numbers |
-| Totals by tag | Reports › Cash flow | Detail |
-| Week by week | Calendar › Agenda | Detail; empty weeks add noise |
-
-**Desktop (≥ 1024 px).** Two columns in a 1,120 px container:
-- **left (≈ 60%):** summary card, then Coming up (10 items);
-- **right (≈ 40%):** attention list (all items, not one line), a month calendar mini-grid with chips, and Reports shortcuts.
-
-The month calendar only appears on Home when there is room for it without scrolling the summary away.
+1. **Forecast line.** The running total at the end of the week, and the next timing gap: "Short $600 on Oct 31 · See why". With no gap: "You stay above $0 through Jan 9."
+2. **Needs attention.** Overdue items from any earlier date, and items due today.
+   - Each item has Record and Move.
+   - Several can be selected and recorded or moved together.
+   - Batch recording covers only items due today or earlier. Later items can be moved, or recorded one at a time as paid early, with a date.
+3. **Coming up this week.** Expected items by day, only on days that have items.
+4. **Happened this week.** Recorded items on their actual dates, with any difference from what was expected: "$128, expected $90".
+5. **Early next week.** The next income, and payments in the first days of next week.
 
 **Rules:**
-- Home reads only `buildForecast`, `periodKpis` / `periodPlan`, `lowestPoint`, `timingGapsAhead` / `explainTimingGaps`, `overdueEntries` / `reviewEntries` and `paycheckCycles`.
-- "Coming up" is an ordering of forecast entries; it computes no money.
+- No calendar row, breakdown, tag totals or empty day rows.
+- Future weeks show projections only and never ask for confirmation.
+- Past weeks show what happened and what was missed.
+- **Engine use:** `entriesInRange`, `overdueEntries`, `reviewEntries`, `variance` and `explainTimingGaps`. A pure grouping helper with tests; no new money math.
 
-### 3.3 Calendar (Proposed)
+### 3.3 Forecast
 
-- **Grid** (the current month calendar, kept). Chips, flags and the key work as today. Only days with entries, or with a running total below $0, open a sheet (section 5).
-- **Agenda** (a toggle next to Grid). Days with activity, grouped by week:
-  - each week header shows money in, money out and the running total at week end;
-  - days without activity collapse (section 5).
+- **Month calendar.** Today's grid, with a simpler encoding (section 7.2). Days without activity are plain cells (section 5).
+- **Timing gaps ahead,** each opening the explanation, with "See what happens if…" on each item.
+- **"See what happens if…"** is one tool: today's What if… and scenarios merged. A single change can still be applied after confirmation.
+- **Range chip:**
+  - This month
+  - Next month
+  - Next 4 weeks
+  - Until next income
+  - Custom
 
-  This replaces "Week by week" and "Day by day".
-- **Week** (from today's Week view) is the agenda filtered to one week, with previous and next.
-- **Day sheet.** Unchanged in content, but the empty version is never opened.
+  It gives cash flow for the range and the lowest running total when below $0.
 
-### 3.4 Plan (Proposed)
+### 3.4 Plan
 
 One screen with five sections: Income, Bills, Subscriptions, Liabilities, Savings. Use a segmented control on phones and a single page with headings on desktop.
 
@@ -219,88 +159,72 @@ The row loses its three equal buttons and its "On" badge. Only "Off" is marked, 
 
 **Next date shows the item's true status.** When an occurrence is overdue, the row says "Overdue since Oct 5", not "Next: Nov 5". Today the same bill appears on three different dates (audit finding H5).
 
-### 3.5 Settings (Proposed)
+### 3.5 Settings
 
-Order by how often people need each thing:
+In order:
 1. Account
 2. Backups (download, restore)
-3. Review rhythm (one line showing the current choice; tap to change)
-4. Sample data
-5. Start over (danger zone, at the end)
+3. Sample data
+4. Start over (danger zone, at the end)
 
-Today the review rhythm's four large options fill the first screen.
+The review rhythm section goes away if decision Q3 is approved.
+
+### 3.6 Corrections
+
+Corrections are ordinary edits, with no undo history (AGENTS.md section A2).
+
+| Situation | Action, on the item |
+| --- | --- |
+| Recorded by mistake | **Mark as not paid** / **Mark as not received** (today's "Undo: not paid yet", `restoreOccurrence`) |
+| Wrong amount or date recorded | **Edit payment** (`correctActual`) |
+| Skipped by mistake | **Add back** (today's "Restore") |
+
+- The batch Undo callout goes (decision Q4).
+- Destructive actions (delete, start over, restore a backup) keep their confirmations and the offer of a backup first.
 
 ---
 
-## 4. Reports (Proposed; Missing today)
+## 4. Recorded activity: the Activity view (Proposed; Missing today)
 
-Reports give depth without crowding Home. Every figure comes from the forecast engine. A report never invents data: with nothing entered, it says what would fill it.
+**Today.** Nothing shows what actually happened across items. Recorded entries appear only in day sheets, each item's "See dates", estimate sheets and the optional period review (**Verified**, REDUCTION-AUDIT §1).
 
-### 4.1 Common behavior
+### 4.1 First release: existing data only
 
-- **Placement:** a Reports tab, plus shortcuts from Home.
-- **Tabs at the top:** Cash flow · Income · Payments. Earnings appears only when earnings data exists.
-- **Period filter (chip):**
-  - This pay period, Last pay period, Next pay period;
-  - This month, Last month, Next month;
-  - Custom.
+**The list:**
+- Recorded income and payments by actual date, newest first.
+- Filter by range (this month, last month, custom) and by kind.
+- Each row shows its expected amount and date when they differ, from `variance` against the original expectation.
 
-  Defaults to the Home period.
-- **Time states stay apart, always labeled:**
-  - **Received / Paid:** recorded actuals, history.
-  - **Expected:** forecast items still to come.
-  - **Overdue:** date passed, nothing recorded.
-  - **Earned, not paid yet:** Phase E only; work done whose money hasn't arrived. Never part of cash flow or the running total.
+**The month summary at the top:**
+- Received, paid, and cash flow from recorded items only.
+- **By kind** and **By tag** totals: today's dashboard Breakdown and tag totals, moved here and applied to what happened.
 
-  Projected income is never called available or guaranteed.
-- **Drill-down:** every row opens the list of entries behind it, and each entry opens the same item sheet as everywhere else.
-- **Phones:** stacked list cards (label left, amount right), no wide tables. Charts only where they answer a question better than a list (section 7.2).
-- **Empty states:** a category with nothing in the period is hidden, unless the report would otherwise be blank. Then show one line saying what would appear and how to add it.
+**Rules:**
+- **Forecast figures stay out.** Projections live in Forecast; the two never mix in one total.
+- **Labels:**
+  - Received, Paid, Saved for what happened;
+  - Expected for what's to come (outside this view);
+  - Overdue for a date that passed with nothing recorded.
+- **Engine use:** pure aggregation in `src/domain/` over recorded entries, with exact-cents tests. No component totals money.
 
-### 4.2 First release: needs only the current engine
+### 4.2 Later: needs income data (section 6)
 
-**Cash flow report.** Sources: `periodPlan`, `periodKpis`, `paycheckCycles`, `explainTimingGaps`, `dailyTimeline`.
-- Money in, money out and cash flow for the period. Money out is broken down by kind (bills, subscriptions, liability payments, savings) and by tag.
-- **Pay period by pay period** (for a month or custom range): each cycle's in, out, cash flow and lowest running total.
-  - `paycheckCycles` only returns pay periods from the forecast start on.
-  - Past pay periods (for "last pay period") need a small history variant that lists earlier main paydays from recorded paychecks. It reports cash flow only, since there is no running total before the start.
-- **Timing gaps in the period:** dates, depth and recovery date, each opening the existing gap explanation and What if….
-- Received/Paid and Expected shown separately within money in and money out.
+An **Earnings** section appears only when earnings data exists:
+- hours;
+- wages, cash tips and card tips;
+- effective hourly earnings;
+- freelance jobs pending and paid;
+- gig earnings waiting for payout.
 
-**Income report.** Sources: forecast entries of kind income in the range, and `variance`.
-- By source: received so far, still expected, overdue.
-- **Expected vs actual** for received income: amount difference and days early or late, from `variance`. It compares each payment with its *original* prediction (`expected*`).
-- Trend across the last six months or pay periods, as a list of amounts per period. Only recorded amounts count as history.
+**Earned is never added to cash flow.** Money counts when it arrives.
 
-**Payments report.** Sources: forecast entries of the expense kinds, `variance`, `overdueEntries`.
-- Coming up (expected), Paid, Overdue, each with a count and total.
-- **Expected vs actual** for paid items: amount and timing differences, largest first.
-- By item: recurring bills, subscriptions and liability payments with their payments in the period.
+### 4.3 Empty states
 
-**New domain code.** Pure aggregation functions in `src/domain/reports.ts` that take a `Forecast` and a range and group its entries. They do arithmetic only on amounts the forecast already placed, and they get exact-cents tests. No component computes totals.
-
-### 4.3 Later: needs income data from Phase E
-
-**Earnings report.** Shown only when earnings data exists:
-- hours worked;
-- wages;
-- cash tips and card tips;
-- total earned per shift and per week;
-- effective hourly earnings: (wages + tips) ÷ hours, over shifts that have hours;
-- freelance jobs done, payments pending and payments received;
-- gig earnings waiting for payout, and payouts received.
-
-**Earned is never added to cash flow.** Cash flow counts money when it arrives: cash tips on the shift day, payroll on payday, payouts on the deposit day.
-
-### 4.4 Empty states for reports
-
-| Report | No data in period | No data at all |
-| --- | --- | --- |
-| Cash flow | "Nothing scheduled from Oct 1 to Oct 31." | "Add your income to see cash flow." [Add income] |
-| Income | "No income in this period." | "Add a paycheck or other income." [Add income] |
-| Payments | "No payments in this period." | "Add your bills to see payments here." [Add a bill] |
-| Expected vs actual | (section hidden) | "Record payments as they happen to compare them with what you expected." |
-| Earnings | (tab hidden) | (tab hidden) |
+| Situation | Shown |
+| --- | --- |
+| Nothing recorded yet | "Payments you record show up here." |
+| Nothing in the chosen range | "Nothing recorded from Oct 1 to Oct 31." |
+| A kind or tag with nothing | Hidden |
 
 ---
 
@@ -317,17 +241,16 @@ Visibility follows the data, through rules computed from forecast output. CSS ne
 | Agenda / week day rows | The day has entries, or its running total is below $0, or it's today | Runs of empty days fold into one line: "Oct 12 – 17 · nothing scheduled" (running total shown if it changes) | Negative days; today | A week with no rows shows one line under its header: "Nothing scheduled this week" | Folded runs are text, not buttons |
 | Week row (agenda header / week list) | Always within the period | A week with no entries and a running total at or above $0 (or none) has no expand control and shows "Nothing scheduled" | Running total when below $0 | No $0.00 / $0.00 / Net $0.00 columns: show the amounts only when non-zero | No `aria-expanded` on rows that can't expand |
 | Running total "—" (before the forecast start) | Only where a running total column exists | Days before the start show no running total cell at all; the agenda starts at the forecast start, with one line above: "Your running total starts Oct 19, your first payday." | — | — | — |
-| Home summary card | Income exists | No recurring income: replaced by the setup card (below) | — | No $0.00 hero, empty calendar or empty breakdown | — |
-| Setup card (no income) | No active recurring income | Hidden once income exists | — | "Add your income to see what's ahead." [Add income] — nothing else on Home except quick add | — |
+| Forecast line and Forecast summary | Income exists | No recurring income: replaced by the setup card (below) | — | No $0.00 hero, empty calendar or empty breakdown | — |
+| Setup card (no income) | No active recurring income | Hidden once income exists | — | "Add your income to see what's ahead." [Add income], and nothing else except "+ Add" | — |
+| Week view sections (Needs attention, Coming up, Happened, Early next week) | The section has items | Absent when empty | Overdue items from any earlier week | A week with nothing at all: one line, "Nothing scheduled this week.", plus the forecast line | Section headings are real headings |
 | Lowest running total line | The period's lowest is below $0 | Otherwise replaced by "Stays above $0 through …" | Always shown when below $0 | — | Status has an icon and words, not just color |
-| Attention line | Overdue items, a timing gap in the next 90 days, or a review due | Nothing needs attention | Highest-priority item; "+N more" opens all | — | `role="status"` for changes; it's a button |
-| Coming up | Any outstanding entries in the next 30 days | No upcoming entries: "Nothing scheduled in the next 30 days." | Overdue items first | — | List semantics |
 | Breakdown / report category rows | The category has a non-zero amount in the period | Hidden when zero | — | When every category is zero, one line for the report (section 4.4) | — |
 | Totals by tag | At least one tagged entry in the period | Otherwise absent | — | — | — |
 | Plan section empty | No items of that kind | — | — | One line plus an Add button; no empty card with a heading | — |
 | One-time lists (Plan) | Items exist | Absent when none; "Add one-time" is in the section's menu | — | — | — |
 | Onboarding review lists | Items of that kind exist | Kinds with none collapse into one line: "Not added: subscriptions, savings." with Add links | — | — | — |
-| Pay period view / chip option | At least one complete pay period | Option disabled with its reason ("Needs two upcoming paydays") | — | — | Disabled options say why |
+| "Until next income" range option | An upcoming income exists | Option absent | — | — | — |
 | Actions that would open nothing | Never shown | — | — | e.g. no "See dates" on an item with no dates in range | — |
 
 **Where it lives.** A pure helper in the UI layer, `src/ui/visibility.ts`, takes `DayRow` / `WeekSummary` values and returns flags. It does no money math, only tests on fields the engine already computed. Component tests cover each row of the table, including the "negative but empty" case.
@@ -355,13 +278,13 @@ Visibility follows the data, through rules computed from forecast output. CSS ne
 | Gig | Baseline expected payouts, or nothing | Sessions: earnings, cash received, platform payouts |
 | One-time / irregular | Amount and date (exists today) | Mark as expected or possible |
 
-**Implemented today:** recurring income (fixed amounts on a schedule), one-time income, recorded actuals with amounts and dates that can differ from the expected ones, and the main paycheck. Everything else in this table is Missing.
+**Implemented today:** recurring income (fixed amounts on a schedule), one-time income, recorded actuals with amounts and dates that can differ from the expected ones, and the main paycheck (proposed for removal, REDUCTION-AUDIT Q2). Everything else in this table is Missing.
 
 ### 6.3 Expected, possible, received (Proposed domain addition)
 
 - **Expected** (counts): what every income is today. Its amount and date are dependable enough to plan around. It moves the running total.
 - **Possible** (new; doesn't count): income that may come but isn't dependable, such as a freelance invoice with no confirmed date, or tips beyond the baseline.
-  - It appears in Coming up, in the Income report under "Possible", and in scenarios as hypothetical income.
+  - It appears in the week view and in Activity's income list under "Possible", and in scenarios as hypothetical income.
   - It is never in cash flow or the running total.
   - One tap marks it Expected (with a date) or records it as Received.
 - **Received** (counts): a recorded actual. Unchanged from today.
@@ -379,10 +302,10 @@ The data model gains an optional `certainty: 'expected' | 'possible'` on income 
 - **Card tips and wages** are paid through payroll, so they are *not* money in on the shift date. They add to "Earned, not paid yet" until the paycheck that covers them is recorded.
 - **The paycheck stays one income event.** Its expected amount is the baseline the person entered.
   - **Option A (default):** keep the baseline.
-  - **Option B (opt-in):** estimate it from logged wages and card tips in that pay period, shown as a *suggestion* the person approves. The existing estimate-suggestion pattern applies: never automatic.
+  - **Option B (opt-in):** estimate it from wages and card tips logged since that job's previous paycheck, shown as a *suggestion* the person approves. The existing estimate-suggestion pattern applies: never automatic.
 - **Recording the paycheck closes the loop.**
   - Its actual amount is what arrived, already including card tips.
-  - Shifts in its pay period are marked "paid in the Oct 27 paycheck".
+  - Shifts since that job's previous paycheck are marked "paid in the Oct 27 paycheck".
   - Their card tips and wages are never added again.
   - The Earnings report shows earned versus paid for reconciliation, and flags a difference without changing anything.
 - **Totals:** per shift (wage × hours + cash tips + card tips), per week, and effective hourly earnings (total ÷ hours, over shifts with hours).
@@ -419,7 +342,7 @@ The data model gains an optional `certainty: 'expected' | 'possible'` on income 
 
 ### 6.7 Reminders (Deferred; optional when built)
 
-- **In-app first.** A Home attention item the morning after a scheduled shift: "Log last night's shift?" [Log] [Skip]. A Monday item for weekly entry. "Did Acme pay?" on a job's expected payment date. "Payout arrived?" on a gig payout date.
+- **In-app first.** A week-view attention item the morning after a scheduled shift: "Log last night's shift?" [Log] [Skip]. A Monday item for weekly entry. "Did Acme pay?" on a job's expected payment date. "Payout arrived?" on a gig payout date.
 - **Opt-in per income source; off by default.** Snoozing or skipping never piles up (the review-rhythm rule).
 - Push notifications need service-worker push and, on iPhone, an installed PWA. They come later and are never claimed as delivered without verified delivery (roadmap Step 5).
 
@@ -446,9 +369,9 @@ WorkEntry {
 ```
 
 - Work entries never enter `buildForecast` directly. Only their linked income records do, so the no-double-counting rule is structural.
-- Pure operations in `operations.ts`: `logWork`, `editWork`, `linkPayout`, `recordJobPayment`, each with undo.
+- Pure operations in `operations.ts`: `logWork`, `editWork`, `linkPayout`, `recordJobPayment`, each correctable by ordinary editing (no undo history).
 
-**4. Reports.** `src/domain/reports.ts`, plus `earnings.ts` for hours, tips, effective hourly, and earned versus paid.
+**4. Aggregation.** The Activity view's pure helpers in `src/domain/`, plus `earnings.ts` for hours, tips, effective hourly, and earned versus paid.
 
 ### 6.9 Persistence and database changes (Proposed)
 
@@ -469,7 +392,7 @@ Start from the current system ([DESIGN.md](DESIGN.md)), which already has good b
 
 ### 7.1 Hierarchy and density
 
-- **One hero per screen.** On Home it is the period summary. Everything else is lists.
+- **One hero per screen.** In the week view it is the forecast line; in Forecast, the range summary. Everything else is lists.
 - **Fewer cards.** Group related rows in one surface with hairline dividers. Stop wrapping every section in its own 24 px-radius card. Section labels stay, sentence case (not uppercase) at 15/600.
 - **Type scale:**
 
@@ -501,7 +424,7 @@ Today money out is indigo, which competes with the accent, and the calendar uses
 
 Status always pairs color with a sign, icon or word (unchanged rule).
 
-**Charts** are allowed only where they answer a question faster than a list: the 14-day running-total strip, and income per pay period. No decorative charts, pies or gauges.
+**Charts** are allowed only where they answer a question faster than a list: the running total over the coming weeks in Forecast, and recorded income per month in Activity. No decorative charts, pies or gauges.
 
 ### 7.3 Buttons and actions
 
@@ -528,7 +451,7 @@ Status always pairs color with a sign, icon or word (unchanged rule).
 | --- | --- |
 | < 600 px | Bottom tabs, single column |
 | 600–1023 px | Bottom tabs; content max 640 px; lists may show two columns of figures |
-| ≥ 1024 px | Left navigation rail; content up to 1,120 px; Home and Reports use two columns (section 3.2); sheets become side panels on the right instead of centered dialogs, so the content stays visible |
+| ≥ 1024 px | Left navigation rail; content up to 1,120 px; the week view and Activity use two columns; sheets become side panels on the right instead of centered dialogs, so the content stays visible |
 
 Today the desktop layout is the phone column centered at 640 px.
 
@@ -547,65 +470,65 @@ Today the desktop layout is the phone column centered at 640 px.
 ### 7.8 Reusable components (to define in Phase D)
 
 - **AppShell:** top bar with Quick add and Settings; bottom tabs or rail.
-- **PeriodChip:** period picker.
+- **RangeChip:** range picker.
 - **SummaryCard:** hero.
-- **AttentionLine:** with "+N more".
+- **WeekSection:** a heading plus entry rows; hidden when empty.
 - **EntryRow:** avatar, title, status, amount and an optional ✓.
-- **DayStrip:** 14-day running total.
 - **ListGroup:** one surface with dividers.
 - **Sheet / SidePanel.**
 - **OverflowMenu.**
 - **EmptyLine:** one line plus an action.
 - **StatusBadge:** existing.
-- **Toast with Undo.**
+- **Toast:** confirmation only, with no undo.
 
 `src/ui/components/common.tsx` holds today's versions; Phase D replaces them one at a time.
 
 ### 7.9 Wireframe specifications
 
-**Dashboard (Home):** section 3.2.
-
-**Reports:**
+**The week view:**
 
 ```
-Reports                           [This month ▾]
-[ Cash flow | Income | Payments ]
-┌ Cash flow ─────────────────────────────────┐
-│ +$922            In +$3,450  Out −$2,528   │
-│ Received/paid so far  +$1,522              │
-│ Still expected        −$600                │
-└────────────────────────────────────────────┘
-Money out by kind
-  Bills                 −$2,178   ›
-  Liability payments      −$350   ›
-Pay periods
-  Oct 22 – Nov 4  −$600   lowest −$600 ⚠  ›
-Timing gaps
-  Oct 31 – Nov 4  short $600  back Nov 5  ›
+This week                Oct 11 – 17  ‹ ›          [+] [⚙]
+Ends at $1,740 · Short $600 on Oct 31 · See why  ›
+Needs attention                                [Select]
+  Phone          overdue since Oct 5     −$60   [Record]
+Coming up this week
+  (nothing — section hidden)
+Happened this week
+  (nothing — section hidden)
+Early next week
+  Paycheck       Thu Oct 22           +$1,800
+  Rent           Fri Oct 23           −$1,200
 ```
 
-**Calendar:**
+The empty sections don't render; the example keeps them for illustration.
+
+**Activity:**
 
 ```
-Calendar                 [Grid | Agenda]   ‹ October 2026 ›
-(Grid: today's grid; inactive days plain; key behind (i))
-(Agenda:)
-Week of Oct 18          +$1,800  −$1,260   ends $540
-  Thu Oct 22  Paycheck +$1,800 · Phone −$60 (overdue)  $1,740
-  Fri Oct 23  Rent −$1,200                              $540
-Week of Oct 25          −$1,140            ends −$600 ⚠
-  Mon Oct 26  Car loan −$350                            $190
-  Thu Oct 29  Electric −$90                             $100
-  Sat Oct 31  Car repair −$700                 −$600 ⚠ LOW
-Oct 1 – 17  · before your running total starts (3 items) ›
+Activity                         [This month ▾] [All kinds ▾]
+October so far: received +$1,650 · paid −$128 · cash flow +$1,522
+By kind   Bills −$128                                     ›
+Oct 9   Paycheck   +$1,650   expected $1,800 on Oct 8     ›
+Oct 1   Electric     −$128   expected $90 on Sep 29       ›
 ```
 
-**Income (Plan › Income):**
+**Forecast:**
+
+```
+Forecast                 [This month ▾]
+Cash flow +$922 · lowest −$600 on Oct 31
+(month grid; inactive days plain; key behind (i))
+Timing gaps ahead
+  Oct 31 – Nov 4   short $600   back Nov 5     ›
+See what happens if…                            ›
+```
+
+**Plan › Income:**
 
 ```
 Plan    [Income | Bills | Subscriptions | Liabilities | Savings]
 Paycheck                      +$1,800   Every 2 weeks · Thu Oct 22  ›
-   Main paycheck
 Weekend job                     +$400   Every 2 weeks · Mon Oct 19  ›
 One-time
 Tax refund (possible)           +$600   Expected Nov 15             ›
@@ -614,27 +537,23 @@ Tax refund (possible)           +$600   Expected Nov 15             ›
  Edit from a date · Track shifts and tips ▸ · Turn off · Delete)
 ```
 
-**Quick entry:**
+**Quick add:**
 
 ```
 Add ─────────────────────────────── ✕
   Add income
   Add a bill or payment
-  Record a payment            (Phone overdue, Rent Fri, …)
-  Log a shift                 (only with earnings tracking)
-──
-Record payment: [Phone ▾]  Amount [$60.00]  Date [Today ▾]
-                                   [Record payment]
 ```
 
-**Onboarding.** Four steps instead of seven. Use a full screen with a progress bar.
+**Setup.** Three steps instead of seven.
 
-1. **Welcome:** one sentence plus Get started; "Try with sample data" and "Restore a backup" as links.
-2. **Income:** "When do you get paid?" Add one or more paychecks. With two or more, choose the main paycheck inline (default: the one paid most often, so pay periods are shortest; decision D3). Other income types are offered as "Other kinds of income (tips, freelance, gig)…", which opens the same baseline form with a type label.
-3. **Bills and payments:**
-   - "What do you pay regularly?" One list for bills, subscriptions and liability payments, each added with a kind picker.
-   - Savings appears as "Set money aside on a schedule (optional)".
-4. **Your first look:** the Home summary for the first pay period, any timing gap, the payments due before the first payday (if any), and "Looks right" (primary) / "Change something".
+1. **When do you get paid?** Add one or more incomes, with no main paycheck choice. Welcome, sample data and restore sit on this first screen as links.
+2. **What do you pay regularly?** One list for bills, subscriptions and liability payments (with a kind picker). Savings is offered as "Set money aside on a schedule (optional)".
+3. **Your first look:**
+   - cash flow for the next four weeks;
+   - any timing gap;
+   - payments due before the first income, if any;
+   - "Looks right" (primary) and "Change something".
 
 ---
 
@@ -642,7 +561,7 @@ Record payment: [Phone ▾]  Amount [$60.00]  Date [Today ▾]
 
 **Decision.** The running total starts on the **earliest eligible upcoming income event**, not on whichever income was entered first or marked main. The anchor stays at $0 on the day before.
 
-The **main paycheck** keeps organizing pay periods, the payday review rhythm and "each payday" scenario savings. It no longer decides where the running total starts.
+The **main paycheck** no longer decides where the running total starts. It is proposed for removal altogether (decision Q2), with a replacement for each use (REDUCTION-AUDIT §5.4).
 
 **Today.** `buildForecast` starts the running total at the next payday of `mainPaycheckId`: the income marked main, else the first active income in entry order. Income from other sources before that day falls outside the running total. A real timing gap can stay hidden: the audit reproduces a hidden $600 gap.
 
@@ -652,19 +571,21 @@ Root cause, algorithm, impact and tests: [docs/PRODUCT-AUDIT.md](docs/PRODUCT-AU
 
 ## 9. Open decisions (recommended defaults)
 
+The structural decisions (Q1–Q7) are in [docs/REDUCTION-AUDIT.md](docs/REDUCTION-AUDIT.md) §7. These are the detailed ones.
+
 | # | Decision | Recommended default |
 | --- | --- | --- |
 | D1 | Can one-time expected income start the running total? | **No.** Recurring income only, for now. One-time income still counts once it's inside the running total. Revisit when "possible" income exists. |
-| D2 | Can overdue income from a non-main source start the running total? | **No.** Only upcoming (today or later) or received-today income from other sources. The main paycheck keeps its overdue rule. Overdue items are still carried to the start, as today. |
-| D3 | Which income is the main paycheck when none is marked? | Keep today's fallback until Phase A1 lands. Then propose the most frequent income (ties → the earliest next payday), asked once with a clear choice. Entry order never decides anything financial. |
-| D4 | Home's default period | **This pay period** when there are pay periods; else this month. |
-| D5 | Tab names | **Home, Calendar, Reports, Plan** ("Setup" as the alternative for Plan). |
+| D2 | Can overdue income start the running total? | While the main paycheck exists: only its overdue payday does, as today; other sources only from today on. If Q2 removes it: **no overdue income starts the running total**. Overdue items are still carried to the start. |
+| D3 | ~~Which income is the main paycheck~~ | Superseded by REDUCTION-AUDIT Q2 (remove it). Entry order never decides anything financial. |
+| D4 | ~~Home's default period~~ | Superseded by Q1: the week view opens the app; Forecast defaults to this month. |
+| D5 | Tab names | **This week, Forecast, Activity, Plan** (follows Q1). |
 | D6 | Money-out color | **Neutral with a "−" sign**; indigo becomes the accent only. |
 | D7 | Light theme | Dark stays the default in the first redesign. Light theme (following the system setting) is a later, separate phase. |
 | D8 | Persisting new income data while Firebase is legacy | **A feature flag**: on for device storage and Supabase, off for Firebase accounts. Full availability at the Supabase cutover. |
 | D9 | Estimating a tipped paycheck from shifts | **Off by default.** The baseline paycheck stays as entered; estimates are suggestions to approve. |
 | D10 | Freelance payment without a date | **Possible, not counted**, until a date is set or it's received. |
-| D11 | "Cash available now" (the open item in the roadmap) | Keep deferred, but design Home so an optional starting amount can slot into the summary card later. It's the one input that would let shortfalls before payday show. |
+| D11 | "Cash available now" (the open item in the roadmap) | Keep deferred, but leave room in the week view's forecast line for an optional starting amount (REDUCTION-AUDIT Q6). |
 | D12 | Savings as an expense | Unchanged (Step 9 is paused). |
 
 ---

@@ -8,23 +8,56 @@ Read next: [BUILD_AND_TEST_ROADMAP.md](BUILD_AND_TEST_ROADMAP.md) (the order of 
 
 ## A. Product philosophy
 
-Financial OS is **one evolving application**. Alpha, beta, and general release are testing and learning phases with progressively larger groups of people. They are not separate feature sets, and a phase is never a reason on its own to leave something out of the product vision. Build and validate incrementally; let evidence from real users justify adding, simplifying, changing, or removing features.
+Product-owner decision, October 2026. This section is the authoritative statement of the mission and philosophy; other documents point here.
 
-The central purpose is **cash-flow control first, and cash-flow creation next**.
+**Mission.** Financial OS helps people establish a personal financial operating system that supports financial independence through consistent habits and increasing financial resilience. People shouldn't need to become accountants, understand complicated financial concepts, or treat everyday money decisions like a second job. The software handles the complexity wherever practical.
 
-The application should:
+**Core philosophy.** Financial resilience is built through repeated, sustainable financial habits. Good habits, kept up over a long enough time, produce results that reinforce further progress. Financial OS makes those habits easier to establish, repeat and maintain: it helps people understand their circumstances, anticipate changes, make informed decisions and learn from what actually happened, without constant attention, unnecessary data entry or elaborate routines.
 
-- Help people understand their future income, expenses, liability payments, available cash, and potential timing gaps.
-- Identify potential problems early enough for people to act on them.
-- Help people compare financial decisions and understand their consequences.
-- Model real life: changing dates, variable amounts, unexpected events, and imperfect plans.
-- Do the complicated calculation and coordination behind the scenes.
-- Keep the experience simple: review, confirm, correct a date or amount, undo a mistake, or choose an action.
-- Stay free of rigid budget philosophies, unnecessary categories, excessive notifications, and unnecessary account setup.
-- Explain important recommendations briefly, with more detail available on request.
-- Preserve history, so people can see what was expected, what changed, and what actually happened.
+**Three objectives.** Every feature serves at least one:
+1. **Establish** a reliable financial system that accounts for income, obligations, available money and changing circumstances.
+2. **Simplify** keeping that system up: automation, clear information, sensible defaults, straightforward actions.
+3. **Strengthen** the habits and decisions that improve financial resilience over time.
 
-It is a projection tool for the big picture. It does not track every penny, and it does not show a bank balance.
+Financial independence is the long-term direction; financial resilience is the practical capability people build along the way.
+
+**Governing standard.** *Financial OS should make managing money easier than not using Financial OS.* Judge this by real workflows, not by feature counts or visual minimalism.
+
+### A1. Information model
+
+Three complementary perspectives, each with its own job. They complement one another and don't duplicate information.
+
+| Perspective | Question | What it is |
+| --- | --- | --- |
+| **Projections** | What's possible? | The consequences of expected income, expenses, obligations and planned decisions: running totals, timing gaps, scenarios. Projections are never confirmed transactions, and people are never asked to confirm future amounts or dates that can't reasonably be known before they happen. |
+| **Recorded activity** | What happened? | The factual history of financial events, kept distinguishable from projections. It preserves financial accuracy (original expectation, latest expectation, actual; section D) without imposing administrative work, and lets people see outcomes, patterns and the consequences of earlier decisions. |
+| **The week view** | What do I do now? | Connects recorded activity with upcoming projections for the current week: what has happened, what's expected next, what needs attention, what may need a decision. It's an intentional part of the product, never removed just because a continuous forecast exists, and never an extra budgeting system, administrative checklist or redundant dashboard. |
+
+*Projections show what's possible. Recorded activity shows what happened. The week view helps people decide what to do now.*
+
+### A2. Design principles
+
+- **Decisions over data.** Prominent information helps people understand their circumstances or make a meaningful decision; supporting analysis lives in secondary views.
+- **Actions over management.** Minimize repetitive input, configuration, confirmations and administrative work.
+- **Clarity over completeness.** Show what's relevant; keep detail reachable.
+- **Reality over artificial structure.** Support several income sources, overlapping or closely spaced deposits, irregular schedules, variable earnings and changing obligations. Don't force people into arbitrary income hierarchies or periods.
+- **Honest forecasting.** Keep expected and recorded activity distinct. Future income amounts and dates can stay uncertain until the money arrives; never build workflows that demand impossible certainty.
+- **Human language.** Plain, natural wording about practical consequences, not internal mechanics; no robotic encouragement, generic AI phrasing, needless reassurance or jargon ([PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 2).
+- **Simplicity through subtraction.** A feature must justify the complexity it adds. Remove, simplify or consolidate what doesn't; never remove essential functionality just to have fewer screens.
+- **Complexity belongs in the software.** Internal sophistication is welcome when it improves reliability or saves effort; implementation details never become user-facing concepts.
+- **Habits over administrative rituals.** Make useful, repeatable behaviors easier. Extra confirmations, checklists or review requirements are not habit formation.
+- **No unnecessary undo complexity.** Don't build visible undo histories, complex recovery workflows or extra interface states without demonstrated need. Keep the safeguards that prevent data loss or wrong financial records. A genuine financial correction (this wasn't actually paid; the amount was different) is an ordinary edit, distinct from undoing an interface action.
+
+### A3. What this means in practice
+
+- Model real life: changing dates, variable amounts, unexpected events and imperfect plans; do the calculation and coordination behind the scenes.
+- Identify problems early enough to act on, and help people compare decisions and their consequences.
+- Explain important recommendations briefly, with more detail on request.
+- Preserve history: what was expected, what changed, what actually happened.
+- Stay free of rigid budget philosophies, unnecessary categories, excessive notifications and unnecessary account setup.
+- It's a projection tool for the big picture. It doesn't track every penny, and it doesn't show a bank balance.
+
+Alpha, beta and general release are testing phases with growing groups of people, not separate feature sets. Let evidence from real users justify adding, simplifying, changing or removing features.
 
 ## B. Mandatory working procedure
 
@@ -42,6 +75,15 @@ Every agent, on every task:
 10. Reviews the complete diff for regressions, duplicated logic, data loss, security concerns, and accidental scope expansion.
 11. Reports exactly what changed, which commands were run, their actual results, what was not tested, and known limitations (section I).
 12. Updates documentation (README, DESIGN, security_spec, this file, the roadmap) when the change alters documented behavior.
+
+**Reasoning discipline** (for audits, recommendations and reviews):
+1. No invented assumptions: evaluate actual requirements and implemented behavior, never claims attributed to the product owner that they didn't make.
+2. Challenge with evidence: code, tests, documented requirements, observed behavior or sound reasoning.
+3. Separate facts from interpretations: label findings **Verified**, **Inferred** or **Unresolved**.
+4. No manufactured objections or speculative edge cases to appear critical, and no automatic agreement either: raise substantive objections when the evidence warrants them.
+5. Stay within scope.
+
+Challenge the reasoning, not a distorted version of the argument.
 
 Never claim a test passed if it wasn't run. Never hide failing tests, skip or disable tests, or weaken assertions to get a passing result.
 
@@ -144,7 +186,7 @@ Simple and mobile-first. Prefer:
 
 - batch confirmation and editing;
 - exception-focused review (show what needs attention, not everything);
-- clear undo and recovery;
+- safe corrections through ordinary editing, and recovery from data loss (backups, restore), without elaborate undo (section A2);
 - short contextual explanations, with optional deeper detail;
 - sensible defaults;
 - a configurable review cadence instead of repeated nagging;
@@ -156,7 +198,7 @@ Product terms are fixed; use them consistently in UI, docs, and tests:
 
 - **Cash flow** — income minus expenses (including savings) for a period.
 - **Running total** — the day-by-day cumulative total from the forecast anchor. Never call it a "balance".
-- **Main paycheck** — the income whose paydays start pay periods.
+- **Main paycheck** — the income whose paydays start pay periods. *Under review for removal* (docs/REDUCTION-AUDIT.md); until a decision, it must not exclude other income from the running total (section D).
 - **Expected / Overdue / Done**, **Money in / Money out**, **Lowest running total**, **Timing gap**.
 
 Categories are income, bills, subscriptions, liability payments (card, loan, or line of credit), and savings. No category is labeled "other", "misc", or anything similarly vague. Tags are optional and created only by the person; none are built in.
