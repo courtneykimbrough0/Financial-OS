@@ -24,7 +24,7 @@ Each step lists:
 6. Better support for several kinds of income.
 7. Mobile-first usability.
 
-The specification is [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md); the evidence is [docs/PRODUCT-AUDIT.md](docs/PRODUCT-AUDIT.md).
+The mission and philosophy are in [AGENTS.md](AGENTS.md) section A; the specification is [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md); the evidence is [docs/PRODUCT-AUDIT.md](docs/PRODUCT-AUDIT.md) and [docs/REDUCTION-AUDIT.md](docs/REDUCTION-AUDIT.md).
 
 **Paused, as a sequencing decision, not abandonment:**
 - hosted Supabase setup and testing;
@@ -49,261 +49,173 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | Known defects | docs/PRODUCT-AUDIT.md §2 (H1 is a financial defect); "Open items" below |
 | Missing functionality | PRODUCT_EXPERIENCE.md, items marked **Missing**; docs/PRODUCT-AUDIT.md §7 |
 | Proposed design changes | PRODUCT_EXPERIENCE.md, items marked **Proposed**, pending review |
+| Audit recommendations (not yet approved) | docs/REDUCTION-AUDIT.md §3 and decisions §7 |
 | Deferred features | PRODUCT_EXPERIENCE.md §10; Step 8's deferred imports; Step 9 |
 
 ### Phases
 
-Workstreams A–F, in the recommended order of work:
+Revised for the product philosophy (AGENTS.md section A) and the reduction audit ([docs/REDUCTION-AUDIT.md](docs/REDUCTION-AUDIT.md)). Removals come before redesign, so nothing is redesigned and then removed.
 
-A1 → B1 → C1 → D1 → C2 → C3 → D2 → D3 → B2 → (decision D8) → E1 → E2 → E3 → E4 → E5 → E6 → F
+**Order:**
 
-Each phase is its own authorized task, small enough to verify on its own. A–C must not change any calculation except A1's. No phase mixes a visual redesign with new forecasting calculations.
+A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D → (decision D8) → E → F
+
+**Rules for every phase:**
+- Each phase is its own authorized task, small enough to verify on its own, with tests in the same change.
+- Only A1 changes a calculation.
+- Phases R1–R2 need the product owner's approval of the matching decision (Q2–Q4); until then they stay proposals.
 
 #### A. Financial correctness
 
-**A1. Forecast start follows the earliest eligible income.** Complexity: **medium**.
-- **Scope.**
-  - The running total starts the day before the earliest eligible upcoming income: the algorithm in docs/PRODUCT-AUDIT.md §6.3, with defaults D1 and D2.
-  - Add `nextMainPayday` to `Forecast`.
-  - Screens that say "next payday" use it. Screens that explain where the running total starts use `anchor` / `forecastStart`.
-  - Preview and scenario "can't compare" wording updated to match.
-- **Dependencies:** none. This is the first phase.
-- **Likely files:**
-  - `src/domain/forecast.ts`, `src/domain/types.ts` (comments only for `mainPaycheckId`);
-  - `src/domain/preview.ts`, `src/domain/scenarios.ts` (messages);
-  - `src/ui/screens/Dashboard.tsx`, `src/ui/screens/Onboarding.tsx`, `src/ui/components/WhatIfSheet.tsx`, `src/ui/components/EstimateSheet.tsx`, `src/ui/components/ScenarioSheet.tsx`;
+**A1. The running total starts at the earliest eligible upcoming income** (defects D1 and D2). Complexity: **medium**.
+- **Scope:**
+  - The algorithm in docs/PRODUCT-AUDIT.md §6.3, with defaults D1 and D2 (PRODUCT_EXPERIENCE.md §9).
+  - `Forecast` gains `nextMainPayday`, while the main paycheck still exists.
+  - Wording that says "next payday" where it means the running total's start is corrected.
+- **Dependencies:** none.
+- **Files:**
+  - `src/domain/forecast.ts`, `preview.ts`, `scenarios.ts` (messages);
+  - `src/ui/screens/Dashboard.tsx`, `Onboarding.tsx`, `src/ui/components/WhatIfSheet.tsx`, `EstimateSheet.tsx`, `ScenarioSheet.tsx`;
   - `FINANCIAL_ENGINE.md`, `README.md`.
 - **Acceptance:**
-  - In the audit's reproduction (Oct 27 paycheck entered first, Oct 19 weekend job, Oct 22 rent), the running total starts Oct 19, Rent shows a $600 timing gap, and pay periods still start Oct 27.
+  - In the audit's reproduction, the running total starts Oct 19 and shows the $600 gap.
   - Entry order never changes the start.
-  - Single-income plans give identical results.
+  - Single-income plans are unchanged.
 - **Tests:**
-  - every regression test in docs/PRODUCT-AUDIT.md §6.6, written failing first against the current code;
-  - existing tests that encoded the old start (`forecast.test.ts › anchors on the main paycheck…`) updated deliberately, each change explained in the commit;
-  - an end-to-end step for the reproduction.
-- **Excluded:**
-  - any layout or visual change;
-  - wording beyond what the new start makes wrong;
-  - changing how the main paycheck is chosen (D3);
-  - "cash available now" (D11).
+  - docs/PRODUCT-AUDIT.md §6.6, written failing first;
+  - `forecast.test.ts › anchors on the main paycheck…` updated deliberately;
+  - an e2e step for the reproduction.
+- **Excluded:** layout; removing the main paycheck (R1); "cash available now".
 
-**A2. Correctness follow-ups from the audit, if confirmed.** Complexity: **low**.
-- **Scope:** fix only what a failing test shows to be wrong. Today, no other calculation defect is confirmed. H5 (one bill on three dates) is presentation and belongs to C1.
+**A2. Small verified defects** (D3, D5). Complexity: **low**.
+- **Scope:**
+  - the one-time item's delete label uses its own words;
+  - a failed switch to sample data shows a message.
+- **Tests:** a component test for each.
+- **Excluded:** other wording (B1).
+
+#### R. Removals (each needs its decision approved)
+
+**R1. Remove the main paycheck and the Paycheck view** (Q2). Complexity: **medium**.
+- **Scope:** every use replaced per REDUCTION-AUDIT §5.4:
+  - the setup cash-flow bar shows the next 4 weeks;
+  - scenario savings follow a chosen income;
+  - the picker and badge are removed.
+- **Data:** stored `mainPaycheck` / `main_paycheck` stay readable and are ignored. No schema change until the Supabase cutover.
 - **Dependencies:** A1.
-- **Tests:** regression tests for anything found.
-- **Excluded:** anything without a failing test.
+- **Files:**
+  - `types.ts`, `forecast.ts` (`paycheckCycles` callers), `cadence.ts`, `scenarios.ts`, `operations.ts`;
+  - `forms.tsx`, `SourcesScreen.tsx`, `Dashboard.tsx`, `Onboarding.tsx`, `ScenarioSheet.tsx`.
+- **Acceptance:** no screen mentions a main paycheck; forecasts are identical to A1's.
+- **Tests:**
+  - old data with `mainPaycheck` loads;
+  - backups round-trip;
+  - scenario savings on a chosen income's paydays;
+  - updated component and e2e tests.
+- **Excluded:** dropping the column; any calculation change.
+
+**R2. Remove review completion states, the payday rhythm and batch Undo; limit batch recording to due items** (Q3, Q4). Complexity: **low**.
+- **Scope:**
+  - Remove `completeReview` / `skipReview` and their UI, the payday option, and the `REVIEW_RHYTHM_IN_ACCOUNTS` branching.
+  - Keep the monthly look-ahead only if Q3a says so.
+  - Remove the batch Undo callout and `undoBatch`.
+  - `recordAsExpected` accepts only items due today or earlier.
+- **Data:** the stored `review` field stays readable and is ignored.
+- **Dependencies:** none (can run before or after A1).
+- **Acceptance:** per-item corrections still work (Mark as not paid, Edit payment, Add back).
+- **Tests:**
+  - migration of data with `review`;
+  - batch recording refuses not-yet-due items with a clear message;
+  - the e2e review steps updated.
+- **Excluded:** the week view (C1).
+
+#### C. Structure (simplify, consolidate, relocate)
+
+**C1. The week view** (REDUCTION-AUDIT §5.2, PRODUCT_EXPERIENCE.md §3.2). Complexity: **medium–high**.
+- **Scope:**
+  - The week view replaces the dashboard's Week tab, the "Review this week" sheet and the overdue banner.
+  - Its sections: forecast line, Needs attention (overdue from any date, plus today), Coming up, Happened (with expected-vs-actual), Early next week.
+  - Batch record and move are kept, for due items.
+- **Dependencies:** R2 (and Q1 for whether it opens the app).
+- **Files:**
+  - a new week screen and a grouping helper (pure, tested);
+  - `Dashboard.tsx`, `ReviewSheet.tsx`.
+- **Acceptance:**
+  - In the sample data, this week shows the overdue phone bill and the Oct 22 paycheck.
+  - Empty sections are absent.
+  - Every figure comes from the forecast.
+- **Tests:**
+  - the grouping helper (overdue from earlier weeks, week boundaries, early next week);
+  - component tests per section;
+  - e2e: record and move from the week view.
+- **Excluded:** visual redesign; new data.
+
+**C2. Navigation and the remaining dashboard** (Q1; PRODUCT_EXPERIENCE.md §3.1, §3.3). Complexity: **medium**.
+- **Scope:**
+  - The tabs This week, Forecast, Activity and Plan; Plan for now is today's Income / Expenses / Liabilities screens behind one tab.
+  - Forecast holds the month calendar, gaps, "See what happens if…" and the range chip.
+  - The Breakdown, tag totals and custom range leave the main screen.
+- **Dependencies:** C1.
+- **Acceptance:** every current capability stays reachable, each one checked off in the task report.
+- **Tests:** routing with redirects from old hashes; the e2e smoke test updated.
+- **Excluded:** the Activity view (C3); visual redesign.
+
+**C3. The Activity view** (PRODUCT_EXPERIENCE.md §4). Complexity: **medium**.
+- **Scope:** recorded history with expected-vs-actual, and a month summary by kind and by tag.
+- **Dependencies:** C2.
+- **Tests:** exact-cents aggregation reconciled with recorded entries and `variance`; component and e2e tests.
+- **Excluded:** forecast figures; the Earnings section (E).
+
+**C4. Conditional visibility** (PRODUCT_EXPERIENCE.md §5) on the screens that remain. Complexity: **low–medium**.
+- **Dependencies:** C2.
+- **Tests:**
+  - a pure visibility helper, including "negative but empty";
+  - component tests;
+  - no `aria-expanded` or `aria-haspopup` on inert rows.
+
+**C5. Plan screens and setup** (rows plus a detail sheet, one-time items inside each kind; setup in three steps). Complexity: **medium**.
+- **Dependencies:** R1, C2.
+- **Tests:** the minimum setup (one income) reaches a forecast; component and e2e tests.
+
+**C6. One "See what happens if…"** (merge What if… and scenarios; Q5). Complexity: **medium–high**.
+- **Dependencies:** C2.
+- **Tests:** the existing `preview` and `scenarios` behaviors preserved (comparisons, hidden shortfalls, apply-one-change with confirmation).
+- **Excluded:** saving scenarios.
 
 #### B. Product language
 
-**B1. Voice guide adopted, and the most-seen wording corrected.** Complexity: **low–medium**.
-- **Scope:**
-  - Adopt the voice and tone rules (PRODUCT_EXPERIENCE.md §2) in AGENTS.md section F.
-  - Apply the term decisions and rows 1–35 of the wording table (docs/PRODUCT-AUDIT.md §4): Home, setup, the item sheet, the review list, Plan screens and forms.
-  - No layout change.
-  - Remove the one "debt" string and the "debt" fallback.
-  - Fix the silent sample-data failure.
-- **Dependencies:** A1, so wording about the running total's start is written once, against the new rule.
-- **Likely files:**
-  - `src/ui/screens/*.tsx`;
-  - `src/ui/components/{OccurrenceSheet,ReviewSheet,PeriodReviewSheet,forms,common,plan,rhythm,WhatIfSheet}.tsx`;
-  - `src/domain/operations.ts` (error messages);
-  - `src/state/mode.tsx` callers;
-  - `scripts/e2e-smoke.mjs` and the component tests that assert text.
-- **Acceptance:**
-  - Every changed string matches the voice guide.
-  - No "debt", "transaction", "occurrence", "prediction" or "outstanding" remains in the default build's interface.
-  - The same state uses the same word everywhere.
-- **Tests:**
-  - updated text assertions;
-  - a test that scans rendered screens for the banned terms;
-  - a test that sample-data failure shows a message.
-- **Excluded:**
-  - layout;
-  - new features;
-  - calculation changes;
-  - the Supabase development screens (checked at the account cutover).
-
-**B2. Remaining wording.** Complexity: **low**.
-- **Scope:** rows 36–63 of the wording table: the gap, What if…, scenario and estimate sheets, save and conflict messages, operation errors, backups and Settings.
-- **Dependencies:** C2, so text isn't rewritten for screens that move.
-- **Tests:** as in B1.
-- **Excluded:** as in B1.
-
-#### C. Information architecture
-
-**C1. Conditional visibility on today's screens.** Complexity: **low–medium**.
-- **Scope:**
-  - The rules in PRODUCT_EXPERIENCE.md §5, applied to the current dashboard, calendar, week list, day list, day sheet, setup review and Plan lists:
-    - empty days aren't buttons;
-    - empty runs fold;
-    - empty weeks have no expand control;
-    - zero columns are hidden;
-    - the no-income dashboard becomes a single setup card;
-    - negative running totals always stay visible.
-  - H5: the overdue date on item cards.
-- **Dependencies:** B1.
-- **Likely files:**
-  - new `src/ui/visibility.ts` (pure flags from `DayRow` / `WeekSummary`);
-  - `Dashboard.tsx`, `Onboarding.tsx`, `SourcesScreen.tsx`;
-  - `styles.css`.
-- **Acceptance:** each row of the §5 table holds. An empty week with a negative running total stays visible and is announced.
-- **Tests:**
-  - unit tests for `visibility.ts`, including "negative but empty";
-  - component tests for each component in the table;
-  - accessibility checks (no `aria-expanded` or `aria-haspopup` on inert rows);
-  - e2e: the empty dashboard.
-- **Excluded:** moving content between screens; visual redesign; any change to engine output.
-
-**C2. Navigation and Home.** Complexity: **high** (split into C2a shell and tabs, C2b Home, C2c Calendar tab, C2d Plan).
-- **Scope:**
-  - The Home / Calendar / Reports / Plan tabs.
-  - Quick add.
-  - Home per PRODUCT_EXPERIENCE.md §3.2: summary, attention line, Coming up with one-tap recording, period chip.
-  - The Calendar tab, with grid and agenda.
-  - Plan with item rows and detail sheets.
-  - Settings reorder.
-  - Every existing capability stays reachable.
-- **Dependencies:** C1, D1.
-- **Likely files:**
-  - `src/ui/App.tsx`, `src/ui/router.ts` (new routes, with redirects from old hashes);
-  - `src/ui/screens/*`;
-  - new `Home.tsx`, `Calendar.tsx`, `Plan.tsx`;
-  - `components/common.tsx`.
-- **Acceptance:**
-  - At 390 × 844, Home's summary and the first three Coming up items are above the fold.
-  - Recording a due payment takes one tap from Home, with undo.
-  - Every action available today is still available. Each one is checked off in the task report.
-- **Tests:**
-  - component tests per screen;
-  - routing and redirect tests;
-  - the e2e smoke test rewritten to the new navigation, covering every current flow;
-  - keyboard and screen-reader paths.
-- **Excluded:** new calculations; Reports (C3); new income data.
-
-**C3. Reports, first release.** Complexity: **medium**.
-- **Scope:**
-  - Cash flow, Income and Payments reports (PRODUCT_EXPERIENCE.md §4.2).
-  - Period filter, drill-down and empty states.
-  - Pure aggregation in `src/domain/reports.ts`.
-  - The history variant for past pay periods.
-- **Dependencies:** C2.
-- **Likely files:** new `src/domain/reports.ts`, `src/ui/screens/Reports.tsx`; `plan.tsx` (moved breakdowns).
-- **Acceptance:**
-  - Every figure equals the forecast's own totals for the same range.
-  - Actuals, expected and overdue are always labeled apart.
-  - Empty categories are hidden.
-- **Tests:**
-  - exact-cents domain tests that reconcile with `periodKpis` / `periodPlan` / `variance`;
-  - component tests;
-  - an e2e step.
-- **Excluded:** the Earnings report (E5); charts beyond the two allowed in §7.2.
+**B1. Wording** (PRODUCT_EXPERIENCE.md §2; docs/PRODUCT-AUDIT.md §4, minus rows made moot by R1–R2). Complexity: **low–medium**.
+- **Scope:** the voice rules adopted, "debt" removed, and one word per state.
+- **Placement:** after C1, so the week view's text is written once. Wording on screens untouched by C2–C6 can go earlier.
+- **Tests:** updated text assertions; a scan for banned terms ("debt", "transaction", "occurrence", "prediction", "outstanding").
 
 #### D. Visual redesign
 
-**D1. Tokens and core components.** Complexity: **medium**.
-- **Scope:**
-  - Color roles: money out neutral, indigo as the accent only (D6).
-  - Type scale, fewer card wrappers, section labels in sentence case.
-  - New components: ListGroup, EntryRow (with ✓), AttentionLine, PeriodChip, SummaryCard, OverflowMenu, EmptyLine, Toast with Undo, and one toast at a time.
-  - Applied to existing screens without moving content.
-- **Dependencies:** C1.
-- **Likely files:** `src/styles.css`, `src/ui/components/common.tsx`, `DESIGN.md`.
-- **Acceptance:**
-  - Contrast stays at WCAG AA.
-  - Status still pairs color with an icon or word.
-  - Targets are 44 px or larger.
-  - The screenshot set is retaken.
-- **Tests:**
-  - component tests for new components;
-  - existing tests pass unchanged except class-name assertions;
-  - e2e screenshots compared by the product owner.
-- **Excluded:** navigation changes; calculation changes; light theme (D7).
+PRODUCT_EXPERIENCE.md §7: tokens and components first, then screen by screen, then desktop. Complexity: **high**, split per screen.
+- **Dependencies:** C1–C6.
+- **Excluded:** calculation changes; the light theme.
 
-**D2. Screen-by-screen redesign.** Complexity: **high** (one screen per task).
-- **Scope:** Home, Calendar, Plan, Reports, Settings, then onboarding in four steps (PRODUCT_EXPERIENCE.md §7.9), each to the wireframe specifications.
-- **Dependencies:** C2, C3, D1.
-- **Acceptance:** the wireframe's hierarchy holds at 390 px; the product owner approves screenshots for each screen.
-- **Tests:**
-  - component and e2e tests per screen;
-  - for onboarding, the minimum path (one paycheck) still reaches a forecast in the fewest steps.
-- **Excluded:** new data or calculations.
+#### E. Income expansion (possible new functionality; separate approval)
 
-**D3. Desktop layouts.** Complexity: **medium**.
-- **Scope:** the navigation rail, two-column Home and Reports, side panels instead of centered dialogs (PRODUCT_EXPERIENCE.md §7.6).
-- **Dependencies:** D2.
-- **Tests:** e2e at 1280 × 900 and 768 × 1024; focus management in side panels.
-- **Excluded:** phone layout changes.
+PRODUCT_EXPERIENCE.md §6:
+- income certainty and types;
+- tipped and hourly shifts;
+- freelance jobs;
+- gig payouts;
+- the Earnings section;
+- optional reminders.
 
-#### E. Income expansion
-
-Starts only after decision D8 (how new fields are stored while Firebase is legacy). Each step adds persisted data, so each one updates validation, `migrate`, backups, the Supabase mapping and schema, and the database tests, with migration tests (AGENTS.md section C).
-
-**E1. Income certainty and income types.** Complexity: **medium**.
-- **Scope:**
-  - `certainty` (expected / possible) and `incomeType` labels.
-  - Possible income is displayed, never counted, and never starts the running total.
-  - Setup offers "Other kinds of income (tips, freelance, gig)…" using the same baseline form.
-- **Dependencies:** A1, C2, D8.
-- **Tests:**
-  - domain: possible income is never in totals or the running total, and one tap converts it to expected or received;
-  - migration: existing income reads as expected;
-  - setup still works with one paycheck.
-- **Excluded:** shifts, jobs, sessions.
-
-**E2. Tipped and hourly shifts.** Complexity: **high**.
-- **Scope:**
-  - Optional per-source tracking: shifts with hours, wage, cash tips and card tips.
-  - Cash tips become one received income entry.
-  - Card tips and wages count as earned and are linked to the paycheck that pays them.
-  - Optional paycheck estimate as a suggestion (D9).
-- **Dependencies:** E1.
-- **Tests:**
-  - no double counting: cash tips counted once on the shift date; card tips never counted apart from the paycheck; a paycheck that already includes the tips is never increased;
-  - effective hourly earnings in exact cents;
-  - undo.
-- **Excluded:** reminders; freelance; gig.
-
-**E3. Freelance jobs.** Complexity: **medium**.
-- **Scope:**
-  - Clients and jobs: Planned / Done / Paid.
-  - An expected payment date makes a job an expected income event; without one it is possible (D10).
-  - Earned-not-paid is shown outside cash flow.
-- **Dependencies:** E1.
-- **Tests:** counting rules; recording a payment keeps the original expectation.
-- **Excluded:** partial payments; invoices.
-
-**E4. Gig sessions and payouts.** Complexity: **medium**.
-- **Scope:**
-  - Sessions, cash received immediately, and earnings waiting for payout.
-  - A payout is the only event that counts, linked to its sessions.
-- **Dependencies:** E1.
-- **Tests:** no double counting between sessions and payouts; cash received counts once.
-- **Excluded:** platform integrations.
-
-**E5. Earnings report.** Complexity: **medium**.
-- **Scope:** PRODUCT_EXPERIENCE.md §4.3.
-- **Dependencies:** C3 and E2–E4 (each part appears when its data exists).
-- **Tests:**
-  - exact-cents aggregation;
-  - earned never added to cash flow;
-  - the tab is hidden without data.
-
-**E6. In-app reminders.** Complexity: **low–medium**.
-- **Scope:** optional Home attention items: log last night's shift, weekly entry, confirm a freelance payment, confirm a payout. Off by default; skipping never piles up.
-- **Dependencies:** E2–E4, C2.
-- **Tests:** timing across days and weeks; quiet by default.
-- **Excluded:** push notifications (Deferred).
+Each step adds persisted data, so it needs decision D8 and the storage, backup, Supabase and migration work in AGENTS.md section C. Complexity: **medium–high** per step.
 
 #### F. Infrastructure resumption
 
-Resumes after the product owner judges the product work ready. The order is unchanged from the October 2026 development order below:
+Unchanged and paused:
+1. the hosted Supabase test project ([docs/SUPABASE-HOSTED.md](docs/SUPABASE-HOSTED.md));
+2. the data move and the Firebase cutover;
+3. removing offline sync;
+4. Vercel.
 
-1. hosted Supabase test project and runs ([docs/SUPABASE-HOSTED.md](docs/SUPABASE-HOSTED.md));
-2. moving real data and cutting over from Firebase (10b/10d);
-3. removing offline synchronization (10c);
-4. Vercel deployment and real-device testing (10e).
-
-Complexity: **high**, split as in Step 10. Persisted fields added in Phase E are included in the cutover's migration and tests.
+Fields ignored by R1–R2 can be dropped from the schema at the cutover.
 
 ---
 
@@ -637,10 +549,11 @@ Replaces the earlier plan to validate Firebase persistence and offline behavior.
 - **Step 10d (development), account safety:** requests are bound to their account, so another tab switching accounts can't send one account's changes under another's session (reproduced, then fixed). Unconfirmed changes are set aside for their own account, unlocked with its password, and saved only on top of the revision they came from, or downloaded. A deletion whose reply was lost is checked with the auth server before it is reported. Deletion authorization was audited against the real stack with no weakness found. Tests: `owner-guard`, the audit tests in `auth.supabase`, and the two-tab and deletion tests in `npm run e2e:supabase`.
 - **Hosted test preparation: ready, not run.** An approved hosted test project can be selected deliberately, through an allowlist (empty until approved), an exact address, the `supabase-hosted-test` build mode, `SUPABASE_TEST_TARGET=hosted`, a destructive-test confirmation and an in-database marker. The suites run against it unchanged; email- and anonymous-dependent tests skip when the target can't support them, and test accounts are cleaned up. Setup steps, migrations and verification SQL: docs/SUPABASE-HOSTED.md. Tests: `target`.
 - **Product experience audit: complete (documentation only, October 2026).** [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) (decisions and specifications), [docs/PRODUCT-AUDIT.md](docs/PRODUCT-AUDIT.md) (findings ranked by severity, the forecast-start analysis, the wording table) and [docs/COPY-INVENTORY.md](docs/COPY-INVENTORY.md) (every interface string). No application code changed. Next: Phase A1, once authorized.
+- **Product reduction audit: complete (documentation only, October 2026).** The philosophy and information model are in AGENTS.md section A. [docs/REDUCTION-AUDIT.md](docs/REDUCTION-AUDIT.md) has the feature inventory and classifications, ranked recommendations, verified defects D1–D5, the proposed structure (This week, Forecast, Activity, Plan) and decisions Q1–Q7. The phases above were revised to match.
 
 ## Open items
 
-- **Defect (financial correctness): the running total can start too late.** It starts at the next payday of the main paycheck (the marked one, or the first income entered), so income from another source before that day is left out and a real timing gap can stay hidden. Decided fix and tests: docs/PRODUCT-AUDIT.md §6; Phase A1.
+- **Defect (financial correctness): the running total can start too late.** It starts at the next payday of the main paycheck (the marked one, or the first income entered), so income from another source before that day is left out and a real timing gap can stay hidden. Decided fix and tests: docs/PRODUCT-AUDIT.md §6; Phase A1. Smaller verified defects D3–D5: docs/REDUCTION-AUDIT.md §4; Phase A2.
 - **Cash before payday is unknown.** The running total starts at $0 the day before the next payday, so a shortfall caused by spending before that payday can't be shown. A product decision (for example, an optional "cash available now" amount); see FINANCIAL_ENGINE.md.
 - **For the UI review** (calculations are consistent; how they are presented needs a look):
   - An early payment followed by a schedule change: both the payment and the new schedule's first payment count.

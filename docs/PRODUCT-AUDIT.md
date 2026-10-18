@@ -2,6 +2,14 @@
 
 A read-only audit of the current Financial OS app against the intended product experience. The decisions and specifications that follow from it are in [PRODUCT_EXPERIENCE.md](../PRODUCT_EXPERIENCE.md), and the order of work is in [BUILD_AND_TEST_ROADMAP.md](../BUILD_AND_TEST_ROADMAP.md), Phases A–F. No application code was changed for this audit.
 
+> **Revised by the product reduction audit** ([REDUCTION-AUDIT.md](REDUCTION-AUDIT.md)), which applies the product philosophy in AGENTS.md section A. The findings, wording table and forecast-start analysis below stand. These recommendations are superseded:
+> - a Home that defaults to the pay period;
+> - folding the week view into a Calendar agenda;
+> - a Reports tab built around analysis;
+> - one-tap recording with undo toasts.
+>
+> The week view, the Activity view and corrections by ordinary editing replace them (PRODUCT_EXPERIENCE.md §3–§4).
+
 ## 1. Method
 
 - **Code.** Commit `d00a919` on `ccr-12ec4965-6tzwgr`.
