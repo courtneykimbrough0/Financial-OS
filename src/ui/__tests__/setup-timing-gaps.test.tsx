@@ -62,4 +62,19 @@ describe('timing gaps at the end of setup', () => {
     expect(screen.queryByText(/timing gap/i)).toBeNull();
     expect(screen.getByText(/Lowest running total before Oct 28:/)).toBeInTheDocument();
   });
+  it('starts from the earliest income, so the gap before a later paycheck shows (whatever was entered first)', async () => {
+    // The Oct 27 paycheck is entered first; the Oct 19 weekend job arrives before it.
+    let d = source(ops.emptyData(), TODAY, 'income', 'Restaurant paycheck', 900, '2026-10-27', { type: 'biweekly' }, 'late');
+    d = source(d, TODAY, 'income', 'Weekend job', 400, '2026-10-19', { type: 'biweekly' }, 'early');
+    d = source(d, TODAY, 'bill', 'Rent', 1000, '2026-10-22', { type: 'monthly' }, 'rent');
+    await reachReview(d);
+
+    expect(screen.getByText('Next expected payday').closest('section')).toHaveTextContent('Oct 19in 8 days');
+    expect(screen.getByText(/Lowest running total before Nov 9:/).closest('span')).toHaveTextContent('Lowest running total before Nov 9: −$600.00 · Oct 22');
+    expect(screen.getByRole('button', { name: /1 timing gap ahead/ })).toBeInTheDocument();
+    // Rent comes after the first income, so it isn't described as due before payday.
+    expect(screen.queryByText(/due before your next payday/)).toBeNull();
+    // Cash flow covers Oct 19 – Nov 9: $400 + $900 + $400 − $1,000.
+    expect(document.querySelector('.left-to-spend')).toHaveTextContent('Cash flowFirst pay period · Oct 19 – Nov 9+$700.00');
+  });
 });

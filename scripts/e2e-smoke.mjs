@@ -606,6 +606,40 @@ try {
   assert.deepEqual(dataAfterRestore.sources, dataBeforeReset.sources);
   assert.deepEqual(dataAfterRestore.records, dataBeforeReset.records);
 
+  step('forecast start: income entered later but paid earlier starts the running total');
+  {
+    // A fresh device: the Oct 27 paycheck is entered first, the Oct 19 weekend job second.
+    const fresh = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+    const p2 = await fresh.newPage();
+    p2.on('pageerror', (e) => errors.push(String(e)));
+    await p2.clock.setFixedTime(new Date(2026, 9, 11, 9, 0));
+    await p2.goto(BASE);
+    await p2.getByRole('button', { name: 'Get started' }).click();
+    const addItem = async (button, nameLabel, name, amountLabel, amount, dateLabel, date, freq) => {
+      await p2.getByRole('button', { name: button }).first().click();
+      const s = p2.getByRole('dialog');
+      await s.getByLabel(nameLabel).fill(name);
+      await s.getByLabel(amountLabel).fill(amount);
+      await s.getByLabel(dateLabel).fill(date);
+      await s.getByLabel('How often?').selectOption(freq);
+      await s.getByRole('button', { name: 'Save' }).click();
+      await s.waitFor({ state: 'detached' });
+    };
+    await addItem(/^Add (another )?income$/, 'What is this income?', 'Restaurant paycheck', 'Amount you expect to receive', '900', 'Next payment date', '2026-10-27', 'biweekly');
+    await addItem(/^Add (another )?income$/, 'What is this income?', 'Weekend job', 'Amount you expect to receive', '400', 'Next payment date', '2026-10-19', 'biweekly');
+    await p2.getByRole('button', { name: 'Continue' }).click();
+    await addItem(/^Add (a|another) bill$/, 'What is this bill?', 'Rent', 'Amount you expect to pay', '1000', 'Next due date', '2026-10-22', 'monthly');
+    await p2.getByRole('button', { name: 'Skip to review' }).click();
+    await p2.getByRole('heading', { name: 'Check everything over' }).waitFor();
+    assert.match(await p2.locator('.review-hero').innerText(), /Oct 19\s*in 8 days[\s\S]*Lowest running total before Nov 9: −\$600\.00 · Oct 22/);
+    await p2.getByRole('button', { name: /1 timing gap ahead/ }).waitFor();
+    assert.equal(await p2.getByText(/due before your next payday/).count(), 0);
+    await p2.getByRole('button', { name: 'See my forecast' }).click();
+    await p2.locator('.hero').waitFor();
+    assert.match(await p2.locator('.hero').innerText(), /Lowest running total\s*−\$600\.00 · Oct 22[\s\S]*Timing gap ahead/);
+    await fresh.close();
+  }
+
   assert.deepEqual(errors, [], `Console errors: ${errors.join('\n')}`);
   console.log('\nE2E smoke test passed.');
 } catch (err) {

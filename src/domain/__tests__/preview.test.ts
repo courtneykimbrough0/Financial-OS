@@ -150,7 +150,7 @@ describe('moving income', () => {
       const p = preview(d, change);
       expect(p.anchorChanged).toBe(true);
       expect(p.comparable).toBe(false);
-      expect(p.limitation).toMatch(/moves the next main payday from 2026-10-15/);
+      expect(p.limitation).toMatch(/moves the next payday from 2026-10-15/);
       expect([p.lowestChangeCents, p.target, p.newGaps, p.worsenedGaps]).toEqual([null, null, [], []]);
       // Each side is still described on its own terms.
       expect(p.current.forecastStart).toBe('2026-10-15');

@@ -65,22 +65,27 @@ describe('forecast anchor and running tally', () => {
     ]);
   });
 
-  it('anchors on the main paycheck when there are several income schedules', () => {
+  it('starts the running total at the earliest income, whichever is the main paycheck', () => {
     let d = baseline();
     d = source(d, TODAY, 'income', 'Side job', 300, '2026-10-13', { type: 'monthly' }, 'income-side');
-    // The first income added is the main paycheck unless another is chosen.
+    // The first income added is the main paycheck unless another is chosen, but
+    // the side job is paid first, so the running total starts the day before it.
     const f = buildForecast(d, TODAY);
     expect(f.mainSourceId).toBe(PAY);
-    expect(f.anchor).toBe('2026-10-14');
-    expect(tallyOn(f, '2026-10-15')).toBe(usd(1800));
-    // Its income still counts, inside the main paycheck's pay periods.
-    expect(tallyOn(f, '2026-11-13')! - tallyOn(buildForecast(baseline(), TODAY), '2026-11-13')!).toBe(usd(300));
+    expect(f.anchor).toBe('2026-10-12');
+    expect(f.forecastStart).toBe('2026-10-13');
+    expect(tallyOn(f, '2026-10-13')).toBe(usd(300));
+    expect(tallyOn(f, '2026-10-15')).toBe(usd(2100));
+    // Pay periods still follow the main paycheck.
+    expect(paycheckCycles(f)[0]!.start).toBe('2026-10-15');
 
+    // Choosing the side job as the main paycheck changes pay periods, not the start.
     const switched = buildForecast(unwrap(ops.setMainPaycheck(d, 'income-side', clockAt(TODAY))), TODAY);
     expect(switched.mainSourceId).toBe('income-side');
     expect(switched.anchor).toBe('2026-10-12');
     expect(tallyOn(switched, '2026-10-13')).toBe(usd(300));
     expect(tallyOn(switched, '2026-10-15')).toBe(usd(2100));
+    expect(paycheckCycles(switched)[0]!.start).toBe('2026-10-13');
   });
 
   it('allows only active income as the main paycheck, and only one at a time', () => {

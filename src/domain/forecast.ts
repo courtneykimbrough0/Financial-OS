@@ -19,12 +19,17 @@
  *   user marked, or else the first active income. Other income still counts
  *   as money in; it just doesn't start a pay period. This keeps households
  *   paid on nearby days (say Wednesday and Thursday) from getting one-day pay
- *   periods.
+ *   periods. The main paycheck plays no part in where the running total
+ *   starts.
  *
  * Forecast anchor:
- *   The "next expected payday" is the earliest main-paycheck occurrence that
- *   is still outstanding (including overdue: a late paycheck has not arrived
- *   yet) or that was received today. The anchor is the day before it.
+ *   The "next expected payday" is the earliest occurrence of any active
+ *   recurring income that is still outstanding (including overdue: a late
+ *   paycheck has not arrived yet) or that was received today. Which income
+ *   was entered first, or marked as the main paycheck, doesn't matter, so
+ *   earlier income from another source is never left out of the running
+ *   total. One-time income doesn't start the running total (it still counts
+ *   once inside it). The anchor is the day before the payday.
  *   The running tally is $0 at the end of the anchor day and transactions are
  *   processed from the next day (the payday itself) onward.
  *
@@ -93,12 +98,13 @@ function dataStart(data: AppData, today: DateStr): DateStr {
 }
 
 /**
- * The next expected payday per the anchor rule above, or null.
+ * The next expected payday per the anchor rule above, or null: the earliest
+ * outstanding or received-today occurrence of any of `incomeSourceIds`.
  */
-export function nextExpectedPayday(occurrences: Occurrence[], today: DateStr, mainSourceId: string | null): DateStr | null {
+export function nextExpectedPayday(occurrences: Occurrence[], today: DateStr, incomeSourceIds: ReadonlySet<string>): DateStr | null {
   let best: DateStr | null = null;
   for (const o of occurrences) {
-    if (o.kind !== 'income' || o.sourceId === null || o.sourceId !== mainSourceId || o.status === 'canceled') continue;
+    if (o.kind !== 'income' || o.sourceId === null || !incomeSourceIds.has(o.sourceId) || o.status === 'canceled') continue;
     let candidate: DateStr | null = null;
     if (isOutstanding(o)) candidate = o.scheduledDate;
     else if (o.status === 'completed' && o.actualDate !== null && o.actualDate >= today) candidate = o.actualDate;
@@ -107,13 +113,25 @@ export function nextExpectedPayday(occurrences: Occurrence[], today: DateStr, ma
   return best;
 }
 
-export function buildForecast(data: AppData, today: DateStr, options: { through?: DateStr } = {}): Forecast {
+export interface ForecastOptions {
+  /** Build the forecast through at least this date. */
+  through?: DateStr;
+  /**
+   * Income sources that may not start the running total, though they still
+   * count inside it. Scenarios use this for hypothetical income, so income
+   * that may never arrive never moves the start earlier.
+   */
+  excludeFromStart?: (sourceId: string) => boolean;
+}
+
+export function buildForecast(data: AppData, today: DateStr, options: ForecastOptions = {}): Forecast {
   const horizonEnd = maxDate(options.through ?? today, addDays(today, DEFAULT_HORIZON_DAYS));
   const occurrences = resolveOccurrences(data, dataStart(data, today), horizonEnd, today);
 
   const mainSourceId = mainPaycheckId(data);
   const hasActiveIncome = mainSourceId !== null;
-  const payday = hasActiveIncome ? nextExpectedPayday(occurrences, today, mainSourceId) : null;
+  const startSources = new Set(data.sources.filter((s) => s.kind === 'income' && s.active && !options.excludeFromStart?.(s.id)).map((s) => s.id));
+  const payday = hasActiveIncome ? nextExpectedPayday(occurrences, today, startSources) : null;
   const forecastStart = payday;
   const anchor = payday ? addDays(payday, -1) : null;
   const issue: ForecastIssue | null = !hasActiveIncome ? 'no-recurring-income' : payday ? null : 'no-upcoming-income';
@@ -407,6 +425,19 @@ export function paycheckCycles(forecast: Forecast, maxCycles = 12): PaycheckCycl
     cycles.push({ start: dates[i]!, end: addDays(dates[i + 1]!, -1), paydayEntries: byDate.get(dates[i]!)! });
   }
   return cycles;
+}
+
+/**
+ * The first stretch of the forecast that setup describes: from the start of
+ * the running total (the earliest income) to the end of the first pay period,
+ * the day before the main paycheck's second upcoming payday. It begins with
+ * the first income of any kind, so income and payments before the main
+ * payday are never left out. Null until there is a first pay period.
+ */
+export function firstPeriod(forecast: Forecast): [DateStr, DateStr] | null {
+  const cycle = paycheckCycles(forecast, 1)[0];
+  if (!forecast.forecastStart || !cycle) return null;
+  return [minDate(forecast.forecastStart, cycle.start), cycle.end];
 }
 
 /** Outstanding occurrences whose date has passed, oldest first. */

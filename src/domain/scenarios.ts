@@ -278,7 +278,8 @@ export function evaluateScenario(data: AppData, changes: ScenarioChange[], clock
   }
 
   const before = buildForecast(data, clock.today, { through: options.through });
-  const after = buildForecast(copy, clock.today, { through: options.through });
+  // Hypothetical income counts inside the running total but never moves its start earlier.
+  const after = buildForecast(copy, clock.today, { through: options.through, excludeFromStart: (id) => id.startsWith(SCENARIO_ID_PREFIX) });
   const { window, current, proposed, anchorChanged } = compareForecasts(before, after, clock.today, options.through);
   const end = window.end;
   const start = before.forecastStart;
@@ -305,7 +306,7 @@ export function evaluateScenario(data: AppData, changes: ScenarioChange[], clock
     result: { ...base, comparable: false, reason, limitations: [text, ...limitations], differences: { ...money, lowestCents: null, endingCents: null }, newGaps: [], worsenedGaps: [], reducedGaps: [], resolvedGaps: [], shortfallDespiteGain: false },
   });
 
-  if (!before.forecastStart || !after.forecastStart) return notCompared('no-forecast', 'There’s no upcoming main payday to start a running total from, so only cash flow is compared.');
+  if (!before.forecastStart || !after.forecastStart) return notCompared('no-forecast', 'There’s no upcoming income to start a running total from, so only cash flow is compared.');
   if (anchorChanged) return notCompared('anchor-changed', `This scenario moves your next payday from ${formatMedium(before.forecastStart)} to ${formatMedium(after.forecastStart)}, so the running totals start on different days and can’t be compared directly.`);
   // A transaction moved from inside the running total to before it would just drop out of it.
   const was = new Map(before.entries.map((e) => [e.occurrence.id, e.date]));
@@ -389,7 +390,7 @@ function baselineOnly(data: AppData, clock: ops.Clock, options: { through?: Date
       scenario: side,
       comparable,
       reason: comparable ? null : 'no-forecast',
-      limitations: comparable ? [] : ['There’s no upcoming main payday to start a running total from, so only cash flow is compared.'],
+      limitations: comparable ? [] : ['There’s no upcoming income to start a running total from, so only cash flow is compared.'],
       differences: { incomeCents: 0, outflowCents: 0, netCents: 0, lowestCents: comparable ? 0 : null, endingCents: comparable ? 0 : null },
       newGaps: [],
       worsenedGaps: [],

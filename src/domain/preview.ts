@@ -136,7 +136,7 @@ export function previewChange(data: AppData, change: ProposedChange, clock: ops.
   const base = { change, window, current, proposed, anchorChanged };
 
   if (!before.forecastStart || !after.forecastStart) {
-    return { ok: true, preview: { ...base, comparable: false, reason: 'no-forecast', limitation: 'There is no upcoming main payday to start a running total from, so the two forecasts can’t be compared.', lowestChangeCents: null, target: null, newGaps: [], worsenedGaps: [] } };
+    return { ok: true, preview: { ...base, comparable: false, reason: 'no-forecast', limitation: 'There is no upcoming income to start a running total from, so the two forecasts can’t be compared.', lowestChangeCents: null, target: null, newGaps: [], worsenedGaps: [] } };
   }
   if (anchorChanged) {
     return {
@@ -145,7 +145,7 @@ export function previewChange(data: AppData, change: ProposedChange, clock: ops.
         ...base,
         comparable: false,
         reason: 'anchor-changed',
-        limitation: `This change moves the next main payday from ${before.forecastStart} to ${after.forecastStart}, so the running totals start from different days and can’t be compared directly.`,
+        limitation: `This change moves the next payday from ${before.forecastStart} to ${after.forecastStart}, so the running totals start from different days and can’t be compared directly.`,
         lowestChangeCents: null,
         target: null,
         newGaps: [],

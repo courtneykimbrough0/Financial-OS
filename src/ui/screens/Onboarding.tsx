@@ -1,7 +1,7 @@
 import { AlertCircle, Banknote, CalendarClock, ChevronRight, Info, Plus } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { diffDays, formatMedium, formatShort } from '../../domain/dates';
-import { buildForecast, dailyTimeline, entriesInRange, explainTimingGaps, lowestPoint, paycheckCycles } from '../../domain/forecast';
+import { buildForecast, dailyTimeline, entriesInRange, explainTimingGaps, firstPeriod, lowestPoint } from '../../domain/forecast';
 import { formatMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { periodPlan } from '../../domain/plan';
@@ -264,9 +264,10 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
   const { data } = useStore();
   const [about, setAbout] = useState(false);
   const forecast = buildForecast(data, today);
-  const cycle = paycheckCycles(forecast, 1)[0];
-  const plan = cycle ? periodPlan(forecast, cycle.start, cycle.end) : null;
-  const low = cycle ? lowestPoint(dailyTimeline(forecast, cycle.start, cycle.end)) : null;
+  // From the first income of any kind, so earlier income and payments are in it.
+  const period = firstPeriod(forecast);
+  const plan = period ? periodPlan(forecast, period[0], period[1]) : null;
+  const low = period ? lowestPoint(dailyTimeline(forecast, period[0], period[1])) : null;
   const payday = forecast.forecastStart;
   const days = payday ? diffDays(today, payday) : 0;
   // Payments due before the running total starts: in cash flow, not in the running total.
@@ -309,11 +310,11 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
               <span className="hero-when">{days > 1 ? `in ${days} days` : days === 1 ? 'tomorrow' : 'today'}</span>
             </p>
           </div>
-          {cycle && low && (
+          {period && low && (
             <div className="hero-footer">
               <Icon icon={low.tallyCents < 0 ? AlertCircle : Banknote} size={22} className={low.tallyCents < 0 ? 'flag-neg' : 'hero-footer-icon'} />
               <span>
-                Lowest running total before {formatShort(cycle.end)}: <strong className={low.tallyCents < 0 ? 'negative-text' : ''}>{formatMoney(low.tallyCents)}</strong>
+                Lowest running total before {formatShort(period[1])}: <strong className={low.tallyCents < 0 ? 'negative-text' : ''}>{formatMoney(low.tallyCents)}</strong>
                 <span className="muted"> · {formatShort(low.date)}</span>
               </span>
             </div>
@@ -399,8 +400,8 @@ export function Onboarding() {
   const hasIncome = data.sources.some((s) => s.kind === 'income' && s.active);
   const plan = useMemo(() => {
     const forecast = buildForecast(data, today);
-    const cycle = paycheckCycles(forecast, 1)[0];
-    return cycle ? periodPlan(forecast, cycle.start, cycle.end) : null;
+    const period = firstPeriod(forecast);
+    return period ? periodPlan(forecast, period[0], period[1]) : null;
   }, [data, today]);
   const def = STEPS[step]!;
 

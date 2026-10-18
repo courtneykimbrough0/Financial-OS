@@ -283,7 +283,7 @@ describe('confirmed and hypothetical income', () => {
     d = source(d, TODAY, 'bill', 'Rent', 1500, '2026-11-01', { type: 'monthly' }, 'rent');
     const r = run([{ kind: 'hypothetical-income', description: 'Side gig', amountCents: usd(400), schedule: { startDate: '2026-10-23', rule: { type: 'weekly' } } }], d);
     expect(r).toMatchObject({ comparable: false, reason: 'no-forecast', differences: { lowestCents: null, endingCents: null }, newGaps: [] });
-    expect(r.limitations[0]).toBe('There’s no upcoming main payday to start a running total from, so only cash flow is compared.');
+    expect(r.limitations[0]).toBe('There’s no upcoming income to start a running total from, so only cash flow is compared.');
   });
 });
 
