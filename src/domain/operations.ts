@@ -17,7 +17,7 @@ import type { Cents } from './money';
 import { DEFAULT_REVIEW, reviewStatus } from './cadence';
 import { findOccurrence } from './occurrences';
 import { validateRule } from './recurrence';
-import { LIABILITY_TYPES, REVIEW_CADENCES, type AppData, type ReviewCadence, type LiabilityType, type OccurrenceRecord, type RecurrenceRule, type RecurringSource, type TransactionKind } from './types';
+import { ACCOUNT_TYPES, LIABILITY_TYPES, REVIEW_CADENCES, accountTypeFor, type Account, type AccountType, type AppData, type ReviewCadence, type LiabilityType, type OccurrenceRecord, type RecurrenceRule, type RecurringSource, type TransactionKind } from './types';
 
 export type Result = { ok: true; data: AppData } | { ok: false; error: string };
 
@@ -492,6 +492,81 @@ export function undoBatch(data: AppData, before: AppData, after: AppData, ids: s
   const previous = before.records.filter((r) => selected.has(r.id));
   const kept = data.records.filter((r) => !selected.has(r.id));
   return ok({ ...data, records: [...kept, ...previous] });
+}
+
+// ---------------------------------------------------------------------------
+// Accounts: where money is received, held and spent (see `AccountType`).
+// Optional everywhere: items work without one, and the forecast never reads
+// them. Creating, renaming or assigning an account changes no amount or date.
+// ---------------------------------------------------------------------------
+
+export const MAX_ACCOUNTS = 50;
+export const MAX_ACCOUNT_NAME = 60;
+
+export interface AccountInput {
+  name: string;
+  type: AccountType;
+}
+
+function validateAccountName(data: AppData, name: string, exceptId?: string): string | null {
+  const trimmed = name.trim();
+  if (trimmed === '') return 'Enter a name for the account.';
+  if (trimmed.length > MAX_ACCOUNT_NAME) return `Keep the name under ${MAX_ACCOUNT_NAME} characters.`;
+  const lower = trimmed.toLowerCase();
+  if ((data.accounts ?? []).some((a) => a.id !== exceptId && a.name.toLowerCase() === lower)) return 'You already have an account with that name.';
+  return null;
+}
+
+export function addAccount(data: AppData, input: AccountInput, clock: Clock, id = newId('acct')): Result {
+  if (!ACCOUNT_TYPES.includes(input.type)) return fail('Choose income, distribution or payment.');
+  const err = validateAccountName(data, input.name);
+  if (err) return fail(err);
+  const accounts = data.accounts ?? [];
+  if (accounts.length >= MAX_ACCOUNTS) return fail(`You can have up to ${MAX_ACCOUNTS} accounts.`);
+  if (accounts.some((a) => a.id === id)) return fail('That account already exists.');
+  const account: Account = { id, name: input.name.trim(), type: input.type, createdAt: clock.now, updatedAt: clock.now };
+  return ok({ ...data, accounts: [...accounts, account] });
+}
+
+/** A new name; the id, type and every assignment stay as they are. */
+export function renameAccount(data: AppData, id: string, name: string, clock: Clock): Result {
+  const accounts = data.accounts ?? [];
+  if (!accounts.some((a) => a.id === id)) return fail('That account no longer exists.');
+  const err = validateAccountName(data, name, id);
+  if (err) return fail(err);
+  return ok({ ...data, accounts: accounts.map((a) => (a.id === id ? { ...a, name: name.trim(), updatedAt: clock.now } : a)) });
+}
+
+const WRONG_ACCOUNT_TYPE: Record<AccountType, string> = {
+  income: 'Income goes to an income account.',
+  distribution: 'Savings is held in a distribution account.',
+  payment: 'Payments come from a payment account.',
+};
+
+/**
+ * Assigns a recurring item, or a one-time item, to an account, or clears it
+ * (`accountId` null). The account's type must suit the item's kind
+ * (`accountTypeFor`). Only that item changes; amounts, dates, history and the
+ * forecast don't.
+ */
+export function assignAccount(data: AppData, itemId: string, accountId: string | null, clock: Clock): Result {
+  const source = data.sources.find((s) => s.id === itemId);
+  const record = source ? undefined : data.records.find((r) => r.id === itemId && r.sourceId === null);
+  const item = source ?? record;
+  if (!item) return fail('That item no longer exists.');
+  if (accountId !== null) {
+    const account = (data.accounts ?? []).find((a) => a.id === accountId);
+    if (!account) return fail('That account no longer exists.');
+    if (account.type !== accountTypeFor(item.kind)) return fail(WRONG_ACCOUNT_TYPE[accountTypeFor(item.kind)]);
+  }
+  if ((item.accountId ?? null) === accountId) return ok(data);
+  const assign = <T extends { accountId?: string; updatedAt: string }>(x: T): T => {
+    const { accountId: _old, ...rest } = x;
+    return { ...(rest as T), ...(accountId !== null ? { accountId } : {}), updatedAt: clock.now };
+  };
+  return source
+    ? ok({ ...data, sources: data.sources.map((s) => (s.id === itemId ? assign(s) : s)) })
+    : ok({ ...data, records: data.records.map((r) => (r.id === itemId ? assign(r) : r)) });
 }
 
 // ---------------------------------------------------------------------------

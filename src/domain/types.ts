@@ -20,6 +20,49 @@ export const LIABILITY_TYPE_LABEL: Record<LiabilityType, string> = {
   lineOfCredit: 'Line of credit',
 };
 
+/**
+ * Where money is received, held and spent. Every account has exactly one type;
+ * its name (the person's own) says what it's for. A type never describes a
+ * financial classification: "Strategic Reserves" is a classification, held in
+ * a distribution account; "Subscriptions" is a classification, paid from a
+ * payment account. No bank connection: these are the person's own labels.
+ *
+ * - income: receives external income and moves it to other accounts. In a
+ *   simple setup it also does the routing. Never pays bills or spending.
+ * - distribution: receives internal transfers, may accumulate money (routing,
+ *   strategic reserves), and moves it on. Never receives external income or
+ *   pays outside parties.
+ * - payment: holds money for payments and spending, and pays outside parties.
+ *   Obligations and everyday spending are both payment accounts; the purpose
+ *   is in the name.
+ */
+export type AccountType = 'income' | 'distribution' | 'payment';
+export const ACCOUNT_TYPES: AccountType[] = ['income', 'distribution', 'payment'];
+export const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = {
+  income: 'Income',
+  distribution: 'Distribution',
+  payment: 'Payment',
+};
+
+export interface Account {
+  id: string;
+  /** The person's own name for it, e.g. "Paycheck account", "Bills", "Reserves". */
+  name: string;
+  type: AccountType;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * The account type an item of this kind can be assigned to: income arrives in
+ * an income account; bills, subscriptions and liability payments are paid from
+ * a payment account; savings (strategic reserves) is held in a distribution
+ * account.
+ */
+export function accountTypeFor(kind: TransactionKind): AccountType {
+  return kind === 'income' ? 'income' : kind === 'savings' ? 'distribution' : 'payment';
+}
+
 export const KINDS: TransactionKind[] = ['income', 'bill', 'subscription', 'liability', 'savings'];
 export const EXPENSE_KINDS: TransactionKind[] = ['bill', 'subscription', 'liability', 'savings'];
 
@@ -88,6 +131,8 @@ export interface RecurringSource {
   pausedRanges: { from: DateStr; until: DateStr }[];
   /** The latest estimate suggestion the person dismissed (see `estimates.ts`). Absent otherwise. */
   estimateDismissal?: EstimateDismissal;
+  /** Optional: the account this item is received in, paid from or held in (see `accountTypeFor`). Never read by the forecast. */
+  accountId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -123,6 +168,8 @@ export interface OccurrenceRecord {
   description: string;
   /** One-time items carry their own tags; recurring occurrences copy their source's. */
   tags: string[];
+  /** One-time items only, optional: their account (recurring occurrences follow their source's). Never read by the forecast. */
+  accountId?: string;
   expectedDate: DateStr;
   expectedAmountCents: Cents;
   scheduledDate: DateStr;
@@ -176,6 +223,8 @@ export interface AppData {
   records: OccurrenceRecord[];
   /** Absent until the person chooses a review rhythm (then saved with the rest). */
   review?: ReviewSettings;
+  /** The person's accounts. Absent until the first one is added; items work without any. */
+  accounts?: Account[];
 }
 
 export const KIND_LABEL: Record<TransactionKind, string> = {

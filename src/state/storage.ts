@@ -5,8 +5,8 @@
  * document; `migrate` is where future schema upgrades go.
  */
 import { isValidDateStr } from '../domain/dates';
-import { emptyData } from '../domain/operations';
-import { LIABILITY_TYPES, REVIEW_CADENCES, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type ReviewCadence, type ReviewSettings, type TransactionKind } from '../domain/types';
+import { emptyData, MAX_ACCOUNT_NAME, MAX_ACCOUNTS } from '../domain/operations';
+import { ACCOUNT_TYPES, LIABILITY_TYPES, REVIEW_CADENCES, accountTypeFor, type Account, type AccountType, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type ReviewCadence, type ReviewSettings, type TransactionKind } from '../domain/types';
 
 export type SaveResult =
   | { ok: true; revision: number }
@@ -108,6 +108,32 @@ function readDismissal(d: unknown): EstimateDismissal | undefined {
   return { currentCents: v.currentCents!, proposedCents: v.proposedCents!, through: v.through };
 }
 
+/**
+ * Saved accounts, keeping only well-formed ones (a known type, a name, a
+ * unique id) up to the limit. Anything else is dropped rather than failing
+ * the whole load; items that pointed at a dropped account become unassigned.
+ */
+function readAccounts(a: unknown): Account[] {
+  if (!Array.isArray(a)) return [];
+  const out: Account[] = [];
+  const ids = new Set<string>();
+  for (const x of a) {
+    if (out.length >= MAX_ACCOUNTS || !x || typeof x !== 'object') continue;
+    const v = x as Partial<Account>;
+    if (typeof v.id !== 'string' || v.id === '' || ids.has(v.id) || !ACCOUNT_TYPES.includes(v.type as AccountType) || typeof v.name !== 'string' || v.name.trim() === '') continue;
+    ids.add(v.id);
+    const now = typeof v.createdAt === 'string' ? v.createdAt : new Date(0).toISOString();
+    out.push({ id: v.id, name: v.name.trim().slice(0, MAX_ACCOUNT_NAME), type: v.type!, createdAt: now, updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : now });
+  }
+  return out;
+}
+
+/** An item's account, kept only when that account exists and suits the item's kind. */
+function keptAccount(accounts: Account[], kind: TransactionKind, accountId: unknown): { accountId?: string } {
+  const account = typeof accountId === 'string' ? accounts.find((a) => a.id === accountId) : undefined;
+  return account && account.type === accountTypeFor(kind) ? { accountId: account.id } : {};
+}
+
 /** Validates and upgrades parsed JSON. Throws if the document is unusable. */
 export function migrate(raw: unknown): AppData {
   if (!raw || typeof raw !== 'object') throw new Error('Saved data is not an object.');
@@ -117,24 +143,28 @@ export function migrate(raw: unknown): AppData {
   const records = Array.isArray(doc.records) ? doc.records : [];
   if (!sources.every(isSource) || !records.every(isRecord)) throw new Error('Saved data is damaged.');
   const revision = Number.isSafeInteger(doc.revision) && doc.revision! >= 0 ? doc.revision! : 0;
+  const accounts = readAccounts(doc.accounts);
   return {
     schemaVersion: 2,
     revision,
     onboardingComplete: Boolean(doc.onboardingComplete),
     ...(doc.isSample ? { isSample: true } : {}),
-    sources: sources.map(({ category: _oldCategory, liabilityType, mainPaycheck, estimateDismissal, ...s }: RecurringSource & { category?: unknown }) => ({
+    sources: sources.map(({ category: _oldCategory, liabilityType, mainPaycheck, estimateDismissal, accountId, ...s }: RecurringSource & { category?: unknown }) => ({
       ...s,
       kind: upgradeKind(s.kind),
       // Keep a liability type only when it is one of the three allowed values; the edit form asks for it otherwise.
       ...(s.kind === 'liability' && liabilityType && LIABILITY_TYPES.includes(liabilityType) ? { liabilityType } : {}),
       ...(s.kind === 'income' && mainPaycheck === true ? { mainPaycheck: true } : {}),
       ...(readDismissal(estimateDismissal) ? { estimateDismissal: readDismissal(estimateDismissal) } : {}),
+      ...keptAccount(accounts, upgradeKind(s.kind), accountId),
       tags: Array.isArray(s.tags) ? s.tags : [],
       pausedRanges: s.pausedRanges ?? [],
       endDate: s.endDate ?? null,
     })),
-    records: records.map((r) => ({ ...r, kind: upgradeKind(r.kind), tags: Array.isArray(r.tags) ? r.tags : [] })),
+    // Only one-time items carry their own account; recurring occurrences follow their item's.
+    records: records.map(({ accountId, ...r }) => ({ ...r, kind: upgradeKind(r.kind), tags: Array.isArray(r.tags) ? r.tags : [], ...(r.sourceId === null ? keptAccount(accounts, upgradeKind(r.kind), accountId) : {}) })),
     ...(readReview(doc.review) ? { review: readReview(doc.review) } : {}),
+    ...(accounts.length > 0 ? { accounts } : {}),
   };
 }
 

@@ -12,7 +12,7 @@
  */
 import { emptyData } from '../domain/operations';
 import type { AppData } from '../domain/types';
-import { REVIEW_RHYTHM_IN_ACCOUNTS } from './features';
+import { ACCOUNTS_IN_SIGNED_IN_SAVES, REVIEW_RHYTHM_IN_ACCOUNTS } from './features';
 import { migrate, type SaveResult, type StorageAdapter } from './storage';
 
 /**
@@ -59,6 +59,8 @@ export class CloudAdapter implements StorageAdapter {
     private readonly storage: Storage = window.localStorage,
     /** Whether saves include the review rhythm; see REVIEW_RHYTHM_IN_ACCOUNTS. */
     private readonly includeReview: boolean = REVIEW_RHYTHM_IN_ACCOUNTS,
+    /** Whether saves include accounts and item assignments; see ACCOUNTS_IN_SIGNED_IN_SAVES. */
+    private readonly includeAccounts: boolean = ACCOUNTS_IN_SIGNED_IN_SAVES,
   ) {}
 
   /** The review rhythm the account had when last loaded; kept on saves while `includeReview` is off. */
@@ -136,7 +138,7 @@ export class CloudAdapter implements StorageAdapter {
     // (the live rules may refuse the field), but one the account already had is saved back unchanged
     // (the rules accepted it, and leaving it out would erase it).
     const kept = this.includeReview ? review : this.accountReview;
-    const doc = kept ? { ...rest, review: kept } : rest;
+    const doc = withoutAccounts(kept ? { ...rest, review: kept } : rest, this.includeAccounts);
     this.writeCopy({ data: { ...doc, revision: baseRevision }, pending: true });
     let revision: number | null;
     try {
@@ -191,4 +193,15 @@ export function hasPendingDeviceChanges(userId: string, storage: Storage = windo
   } catch {
     return false;
   }
+}
+
+/** The plan without accounts or item assignments, unless `include`; see ACCOUNTS_IN_SIGNED_IN_SAVES. */
+function withoutAccounts<T extends Omit<AppData, 'isSample' | 'review'>>(doc: T, include: boolean): T {
+  if (include) return doc;
+  const { accounts: _accounts, ...rest } = doc;
+  return {
+    ...(rest as T),
+    sources: doc.sources.map(({ accountId: _a, ...s }) => s),
+    records: doc.records.map(({ accountId: _a, ...r }) => r),
+  };
 }

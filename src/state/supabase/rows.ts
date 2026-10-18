@@ -103,6 +103,17 @@ function ruleFrom(v: VersionRow): RecurrenceRule {
   return { type: v.rule_type };
 }
 
+/**
+ * True when the plan has accounts or item assignments. The database has no
+ * place for them yet (roadmap, accounts phase AC-S), so the adapter refuses
+ * such a save instead of dropping them.
+ */
+export function hasAccountData(data: AppData): boolean {
+  return (data.accounts?.length ?? 0) > 0 || data.sources.some((s) => s.accountId !== undefined) || data.records.some((r) => r.accountId !== undefined);
+}
+
+export const ACCOUNTS_NOT_STORED = 'This plan has accounts, which can’t be saved to this storage yet. Nothing was saved.';
+
 /** The plan as the rows save_plan expects. Doesn't validate; see `checkForMigration`. */
 export function toRows(data: AppData): PlanRows {
   const sources: SourceRow[] = data.sources.map((s, i) => ({
@@ -329,5 +340,6 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
   const all = [...data.sources.flatMap((s) => [s.createdAt, s.updatedAt]), ...data.records.flatMap((r) => [r.createdAt, r.updatedAt, r.completedAt, r.canceledAt])];
   if (all.some((t) => t !== null && isTimestamp(t) && canonicalTimestamp(t) !== t)) normalized('Some times will be stored as ISO-8601 UTC with milliseconds.');
   if (data.isSample) error('Sample data is never stored in an account.');
+  if (hasAccountData(data)) error('Accounts and account assignments can’t be stored in Supabase yet.');
   return issues;
 }
