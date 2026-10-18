@@ -6,6 +6,8 @@ You enter everything by hand. Data is saved to the user's Financial OS account (
 
 **Architecture direction.** The current version stores data with Firebase (or on the device) and is hosted on Cloud Run, with offline changes synchronized later. Those parts are legacy: Financial OS is moving to Supabase PostgreSQL for data (and, later, authentication), Vercel for hosting, and an online-first design where the backend is the source of truth. The sections below describe how the current version works; [AGENTS.md](AGENTS.md) section C1 and the roadmap's Step 10 describe the plan. The Supabase database foundation and storage adapter are built and tested; only a development build on a local stack uses them so far: [docs/SUPABASE.md](docs/SUPABASE.md).
 
+**Current priority.** Financial OS is in a product experience phase (correct forecasts, clear workflows, natural language, a simpler dashboard, reports, more kinds of income); infrastructure work is paused. See [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) and the roadmap's Phases A–F. The screens described below are the current app.
+
 ## Quick start
 
 ```bash

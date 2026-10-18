@@ -2,6 +2,8 @@
 
 Financial OS uses a dark-first, card-based visual language. It is calm and legible, with large numbers and one consistent set of controls. Every token lives at the top of `src/styles.css`, and the shared React pieces live in `src/ui/components/common.tsx`.
 
+This file describes the visual system **as built**. A redesign direction (fewer cards, color roles, navigation, desktop layouts) is proposed in [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 7 and will replace parts of this file as roadmap Phase D is built; until then, this file stays authoritative for the current app.
+
 The product's terms are fixed (Cash flow, Running total, Projected income, Projected expenses, Money in, Money out, Overdue, and so on). This system governs only how things look.
 
 ## Principles

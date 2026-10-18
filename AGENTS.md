@@ -2,7 +2,7 @@
 
 This is the canonical source of project rules for Financial OS. Every agent (Claude Code, Gemini / AI Studio, Codex, or any other) reads this file in full before doing any work. `CLAUDE.md`, `GEMINI.md` and `CODEX.md` only point here; when they and this file differ, this file wins.
 
-Read next: [BUILD_AND_TEST_ROADMAP.md](BUILD_AND_TEST_ROADMAP.md) (the order of work and its test gates), [README.md](README.md) (architecture, forecast rules, data model), [DESIGN.md](DESIGN.md) (visual system), [security_spec.md](security_spec.md) (Firestore guarantees) and [AI_STUDIO_TASKS.md](AI_STUDIO_TASKS.md) (Firebase and Cloud Run setup for the current, legacy infrastructure).
+Read next: [BUILD_AND_TEST_ROADMAP.md](BUILD_AND_TEST_ROADMAP.md) (the order of work and its test gates), [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) (how the product should look, read and behave; the current priority), [README.md](README.md) (architecture, forecast rules, data model), [DESIGN.md](DESIGN.md) (visual system), [security_spec.md](security_spec.md) (Firestore guarantees) and [AI_STUDIO_TASKS.md](AI_STUDIO_TASKS.md) (Firebase and Cloud Run setup for the current, legacy infrastructure).
 
 ---
 
@@ -71,6 +71,8 @@ These decisions replace earlier infrastructure plans. Don't reopen them in a tas
 
 The roadmap's Step 10 holds stages 2–6.
 
+**Current priority (product-owner decision, October 2026).** The product experience comes first: financial correctness, clear workflows, natural language, a clean dashboard, reports, more kinds of income, mobile-first usability ([PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md), roadmap Phases A–F). Hosted Supabase testing, Firebase retirement, removing offline sync, Vercel deployment, further infrastructure and Step 9 are paused as a sequencing decision; the completed Supabase and security work is kept as the foundation and resumes as Phase F. A visual or wording change never changes a calculation, and a financial fix ships on its own with before-and-after tests.
+
 ### C2. Current implementation
 
 Preserve the existing architecture; don't rebuild it without a reason the product owner has agreed to. As of this writing (verify before relying on it):
@@ -117,6 +119,7 @@ Rules:
 - Transfers between a person's own accounts are not new income or spending in a consolidated view, and internal allocation of money is not, in itself, an external expense.
   - **Current product decision:** scheduled **savings** deposits count as expenses in cash flow (README: "savings is treated as an expense" — the product owner's call). Changing that to an internal allocation is a decision for the product owner in roadmap Step 9. Don't change it silently.
 - A low or negative **running total** is a forecast condition to explain (a timing gap), not a data error.
+- **Where the running total starts** (decided October 2026; the code doesn't do this yet, see roadmap Phase A1): the day before the earliest eligible upcoming income, whichever source it comes from. Entry order never decides it, and the main paycheck organizes pay periods without excluding earlier income. Uncertain or speculative income never sets the start.
 - Batch confirmation applies only to the selected records. An event is never marked actual merely because it was expected.
 - Undo, corrections, batch operations, imports, and resets never silently alter unrelated records.
 - **Uncertain future income is never counted as confirmed cash flow** just because past income suggests it may arrive. Income counts in the forecast only when the person has entered it as expected (a recurring or one-time item) or recorded it.
@@ -157,6 +160,8 @@ Product terms are fixed; use them consistently in UI, docs, and tests:
 - **Expected / Overdue / Done**, **Money in / Money out**, **Lowest running total**, **Timing gap**.
 
 Categories are income, bills, subscriptions, liability payments (card, loan, or line of credit), and savings. No category is labeled "other", "misc", or anything similarly vague. Tags are optional and created only by the person; none are built in.
+
+Interface wording follows the voice and tone rules in [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 2: short, specific, about the person's money rather than the app's mechanics. Never use "debt" in the interface (say liability, loan, card, line of credit or payment), and add no budgeting terminology or budgeting features. Show information when the data makes it relevant (PRODUCT_EXPERIENCE.md section 5), and never hide a running total below $0.
 
 Follow [DESIGN.md](DESIGN.md) for visuals and its accessibility rules (status never shown by color alone, 44px tap targets, focus management in sheets). In onboarding and marketing copy, say what something is rather than what it isn't.
 
