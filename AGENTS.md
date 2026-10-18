@@ -264,6 +264,8 @@ Check `package.json` before running anything; scripts can change. Currently:
 
 For any coherent code change, run `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build` at minimum. Also run `npm run e2e` for user-facing flows, state changes, navigation, or persistence, and `npm run test:rules` for storage or security changes when the emulator can run. If a command can't be run, say so and why; never report it as passing.
 
+**CI** (`.github/workflows/ci.yml`) runs every command above on each pull request and on pushes to `main`, in five jobs: checks (typecheck, lint, tests, build), the browser smoke test, the database tests on the runner's PostgreSQL, the Firestore rules on the emulator, and the Supabase integration and browser suites against a local stack started with the Supabase CLI (its public key only; never a hosted project). When a command can't run in your environment, its CI job is the evidence; report which.
+
 **Repository practice**
 - Use npm. Only change `package-lock.json` by running `npm install`; keep every entry's `resolved` and `integrity` fields. Never add `bun.lock` or another lockfile.
 - The working branch is `ccr-12ec4965-6tzwgr` (GitHub's default branch, which AI Studio syncs with). Pull before starting and before pushing; never force-push or rewrite shared history.
