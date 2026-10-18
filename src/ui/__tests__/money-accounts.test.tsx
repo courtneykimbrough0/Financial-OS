@@ -82,6 +82,7 @@ describe('accounts in Settings and on item forms', () => {
 
     const id = stored().accounts!.find((a) => a.name === 'Bills')!.id;
     await user.click(within(section()).getByRole('button', { name: /^Bills/ }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Bills' })).getByRole('button', { name: 'Rename' }));
     sheet = screen.getByRole('dialog', { name: 'Rename Bills' });
     expect(sheet).toHaveTextContent('Payment account.');
     await user.clear(within(sheet).getByLabelText('Name'));
@@ -118,6 +119,137 @@ describe('accounts in Settings and on item forms', () => {
     const user = await renderAt('income', plan());
     await user.click(await screen.findByRole('button', { name: 'Edit' }));
     expect(within(screen.getByRole('dialog', { name: 'Edit Paycheck' })).queryByLabelText('Account (optional)')).toBeNull();
+  });
+});
+
+describe('AC2: accounts on items, deleting accounts, balances and transfers', () => {
+  const clock = { today: TODAY, now: '2026-10-11T12:00:00.000Z' };
+  function withAccounts(): AppData {
+    let d = plan();
+    d = unwrap(ops.addAccount(d, { name: 'Paycheck account', type: 'income' }, clock, 'acct-income'));
+    d = unwrap(ops.addAccount(d, { name: 'Reserves', type: 'distribution' }, clock, 'acct-reserves'));
+    d = unwrap(ops.addAccount(d, { name: 'Bills', type: 'payment' }, clock, 'acct-bills'));
+    return unwrap(ops.assignAccount(d, 'rent', 'acct-bills', clock));
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 11, 9, 0));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    window.location.hash = '';
+  });
+
+  it('shows an item’s account on its row', async () => {
+    await renderAt('expenses', withAccounts());
+    const card = (await screen.findByRole('heading', { name: 'Rent' })).closest('li')!;
+    expect(card).toHaveTextContent('Account: Bills');
+  });
+
+  it('a one-time item can be given an account when it is added', async () => {
+    const user = await renderAt('expenses', withAccounts());
+    await user.click(await screen.findByRole('tab', { name: 'Varied' }));
+    await user.click(screen.getByRole('button', { name: 'Add spending' }));
+    const sheet = screen.getByRole('dialog', { name: 'Add varied spending' });
+    await user.type(within(sheet).getByLabelText('Description'), 'Car repair');
+    await user.type(within(sheet).getByLabelText('Expected amount'), '700');
+    expect(within(within(sheet).getByLabelText('Account (optional)')).getAllByRole('option').map((o) => o.textContent)).toEqual(['No account', 'Bills']);
+    await user.selectOptions(within(sheet).getByLabelText('Account (optional)'), 'Bills');
+    await user.click(within(sheet).getByRole('button', { name: 'Add spending' }));
+    await waitFor(() => expect(stored().records.find((r) => r.description === 'Car repair')).toMatchObject({ kind: 'varied', accountId: 'acct-bills', scheduledAmountCents: 70000 }));
+  });
+
+  it('a one-time reserve can set money aside or use it', async () => {
+    const user = await renderAt('reserves', withAccounts());
+    await user.click(await screen.findByRole('button', { name: 'Add one-time' }));
+    const sheet = screen.getByRole('dialog', { name: 'Add one-time reserve' });
+    await user.click(within(sheet).getByRole('radio', { name: 'Use reserves' }));
+    await user.type(within(sheet).getByLabelText('Description'), 'Toward the repair');
+    await user.type(within(sheet).getByLabelText('Expected amount'), '300');
+    await user.click(within(sheet).getByRole('button', { name: 'Add release' }));
+    await waitFor(() => expect(stored().records.find((r) => r.description === 'Toward the repair')).toMatchObject({ kind: 'reserve', release: true }));
+    expect(await screen.findByText('+$300.00')).toBeInTheDocument();
+  });
+
+  it('deleting an account with items asks first, keeps the items, and clears their account', async () => {
+    const user = await renderAt('settings', withAccounts());
+    await user.click(await screen.findByRole('button', { name: /^Bills/ }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Bills' })).getByRole('button', { name: 'Delete' }));
+    const confirm = screen.getByRole('dialog', { name: 'Delete Bills?' });
+    expect(confirm).toHaveTextContent('1 item is assigned to it. It stays in your plan with no account.');
+    await user.click(within(confirm).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(stored().accounts!.map((a) => a.id)).toEqual(['acct-income', 'acct-reserves']));
+    const rent = stored().sources.find((s) => s.id === 'rent')!;
+    expect('accountId' in rent).toBe(false);
+    const schedule = (v: typeof rent.versions) => v.map(({ id: _id, ...x }) => x);
+    expect(schedule(rent.versions)).toEqual(schedule(withAccounts().sources.find((s) => s.id === 'rent')!.versions));
+  });
+
+  it('an opening balance shows the account’s balance; moving money changes two balances and no cash flow', async () => {
+    const before = withAccounts();
+    const user = await renderAt('settings', before);
+    await user.click(await screen.findByRole('button', { name: /^Paycheck account/ }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Paycheck account' })).getByRole('button', { name: 'Add balance' }));
+    let sheet = screen.getByRole('dialog', { name: 'Paycheck account balance' });
+    await user.type(within(sheet).getByLabelText('Balance'), '900');
+    // At the end of yesterday, so today's transfer comes after it.
+    await user.clear(within(sheet).getByLabelText('On'));
+    await user.type(within(sheet).getByLabelText('On'), '2026-10-10');
+    await user.click(within(sheet).getByRole('button', { name: 'Save' }));
+    expect(within(screen.getByRole('dialog', { name: 'Paycheck account' })).getByRole('definition')).toHaveTextContent('$900.00');
+    await user.keyboard('{Escape}');
+
+    await user.click(screen.getByRole('button', { name: 'Move money' }));
+    sheet = screen.getByRole('dialog', { name: 'Move money' });
+    await user.selectOptions(within(sheet).getByLabelText('From'), 'Paycheck account');
+    await user.selectOptions(within(sheet).getByLabelText('To'), 'Reserves');
+    await user.type(within(sheet).getByLabelText('Amount'), '250');
+    await user.click(within(sheet).getByRole('button', { name: 'Record transfer' }));
+    await waitFor(() => expect(stored().transfers).toHaveLength(1));
+    expect(stored().transfers![0]).toMatchObject({ fromAccountId: 'acct-income', toAccountId: 'acct-reserves', amountCents: 25000, date: TODAY, status: 'recorded' });
+    expect(within(screen.getByRole('region', { name: 'Accounts' })).getByRole('button', { name: /^Paycheck account/ })).toHaveTextContent('$650.00');
+    // Same sources and records: a transfer is never income or spending.
+    expect(stored().sources.map((s) => s.versions)).toEqual(before.sources.map((s) => s.versions));
+    expect(stored().records).toEqual(before.records);
+
+    // The same account can't be on both sides.
+    await user.click(screen.getByRole('button', { name: 'Move money' }));
+    sheet = screen.getByRole('dialog', { name: 'Move money' });
+    await user.selectOptions(within(sheet).getByLabelText('To'), 'Paycheck account');
+    await user.type(within(sheet).getByLabelText('Amount'), '5');
+    await user.click(within(sheet).getByRole('button', { name: 'Record transfer' }));
+    expect(sheet).toHaveTextContent('Choose two different accounts.');
+  });
+
+  it('an account with a transfer can’t be deleted until the transfer is gone', async () => {
+    const d = unwrap(ops.addTransfer(withAccounts(), { fromAccountId: 'acct-income', toAccountId: 'acct-bills', amountCents: 10000, date: TODAY }, 'recorded', clock, 't'));
+    const user = await renderAt('settings', d);
+    await user.click(await screen.findByRole('button', { name: /^Bills/ }));
+    const sheet = screen.getByRole('dialog', { name: 'Bills' });
+    expect(within(sheet).queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(sheet).toHaveTextContent('To delete this account, delete or change its transfers first.');
+    await user.click(within(sheet).getByRole('button', { name: /Paycheck account → Bills/ }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Transfer' })).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(stored().transfers).toBeUndefined());
+    expect(within(screen.getByRole('dialog', { name: 'Bills' })).getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+  });
+
+  it('a planned transfer whose date has passed waits on the dashboard until it is recorded', async () => {
+    let d = unwrap(ops.addTransfer(withAccounts(), { fromAccountId: 'acct-income', toAccountId: 'acct-reserves', amountCents: 10000, date: '2026-10-09' }, 'expected', clock, 'late'));
+    d = unwrap(ops.addTransfer(d, { fromAccountId: 'acct-income', toAccountId: 'acct-bills', amountCents: 120000, date: '2026-10-15' }, 'expected', clock, 'soon'));
+    const user = await renderAt('dashboard', d);
+    await user.click(await screen.findByRole('button', { name: '1 transfer to record' }));
+    let sheet = screen.getByRole('dialog', { name: 'Transfers' });
+    expect(within(sheet).getByRole('region', { name: 'Not recorded yet' })).toHaveTextContent('Paycheck account → ReservesOct 9, 2026 · Not recorded$100.00');
+    expect(within(sheet).getByRole('region', { name: 'Later this week' })).toHaveTextContent('Paycheck account → BillsOct 15, 2026 · Planned$1,200.00');
+    expect(stored().transfers!.find((t) => t.id === 'late')!.status).toBe('expected');
+    await user.click(within(sheet).getByRole('button', { name: /Paycheck account → Reserves/ }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Planned transfer' })).getByRole('button', { name: 'Record as moved' }));
+    await waitFor(() => expect(stored().transfers!.find((t) => t.id === 'late')).toMatchObject({ status: 'recorded', date: '2026-10-09', amountCents: 10000 }));
+    sheet = screen.getByRole('dialog', { name: 'Transfers' });
+    expect(within(sheet).queryByRole('region', { name: 'Not recorded yet' })).toBeNull();
   });
 });
 

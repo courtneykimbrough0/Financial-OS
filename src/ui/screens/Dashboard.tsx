@@ -62,6 +62,7 @@ import { REVIEW_RHYTHM_IN_ACCOUNTS } from '../../state/features';
 import { GapsSheet } from '../components/gaps';
 import { WhatIfSheet } from '../components/WhatIfSheet';
 import { PeriodBreakdown, TagBreakdown } from '../components/plan';
+import { DayTransfers, TransfersDue } from '../components/money-accounts';
 import { navigate } from '../router';
 
 type View = 'month' | 'week' | 'cycle' | 'custom';
@@ -166,6 +167,8 @@ export function Dashboard() {
           </button>
         )
       )}
+
+      <TransfersDue />
 
       {rhythm?.due && (
         <button type="button" className="rhythm-entry" onClick={() => setSheet({ kind: 'period-review' })} aria-haspopup="dialog">
@@ -862,6 +865,7 @@ function DaySheet({ forecast, date, onClose, onOpen }: { forecast: Forecast; dat
           ))}
         </ul>
       )}
+      <DayTransfers date={date} />
     </Modal>
   );
 }

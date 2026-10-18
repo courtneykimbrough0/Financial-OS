@@ -1,19 +1,23 @@
 /**
  * Accounts: where money is received, held and spent. Optional and secondary:
- * a short list in Settings, and an account choice on an item's form. Nothing
- * here changes the forecast. Hidden where the storage can't keep accounts yet
- * (signed in with Firebase, or the Supabase development build); see
- * ACCOUNTS_IN_SIGNED_IN_SAVES.
+ * a short list in Settings, an account choice on an item's form, the account
+ * on an item's row, and money moved between accounts. Nothing here changes
+ * cash flow or the running total. Hidden where the storage can't keep
+ * accounts yet (signed in with Firebase, or the Supabase development build);
+ * see ACCOUNTS_IN_SIGNED_IN_SAVES.
  */
 import { useId, useState, type FormEvent } from 'react';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ArrowRight, ChevronRight, Plus, Wallet } from 'lucide-react';
+import { accountBalance, accountTransfers, transferShortfall, transfersDue, transfersInRange } from '../../domain/balances';
+import { endOfWeek, formatMedium, type DateStr } from '../../domain/dates';
+import { centsToInput, formatMoney, parseMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
-import { ACCOUNT_TYPE_LABEL, ACCOUNT_TYPES, accountTypeFor, type Account, type AccountType, type AppData, type TransactionKind } from '../../domain/types';
+import { ACCOUNT_TYPE_LABEL, ACCOUNT_TYPES, accountTypeFor, type Account, type AccountType, type AppData, type TransactionKind, type Transfer } from '../../domain/types';
 import { useAccount } from '../../state/account';
 import { ACCOUNTS_IN_SIGNED_IN_SAVES } from '../../state/features';
 import { useAccountSlot } from '../../state/slots';
 import { useStore } from '../../state/store';
-import { Field, FormError, Icon, Modal, useToast } from './common';
+import { Field, FormError, Icon, Modal, MoneyInput, useToast } from './common';
 
 /** What each type is for, shown under the type choice. */
 const TYPE_HINT: Record<AccountType, string> = {
@@ -29,17 +33,16 @@ export function useAccountsAvailable(): boolean {
   return !slot && (!account || ACCOUNTS_IN_SIGNED_IN_SAVES);
 }
 
-function itemCount(data: AppData, accountId: string): number {
-  return data.sources.filter((s) => s.accountId === accountId).length + data.records.filter((r) => r.accountId === accountId).length;
-}
+const nameOf = (data: AppData, id: string) => (data.accounts ?? []).find((a) => a.id === id)?.name ?? 'Account';
 
-/** The Settings section: the person's accounts, adding one, and renaming one. */
+/** The Settings section: the person's accounts, adding one, and moving money between them. */
 export function AccountsSettings() {
-  const { data } = useStore();
+  const { data, today } = useStore();
   const available = useAccountsAvailable();
-  const [sheet, setSheet] = useState<{ mode: 'add' } | { mode: 'rename'; account: Account } | null>(null);
+  const [sheet, setSheet] = useState<{ mode: 'add' } | { mode: 'account'; id: string } | { mode: 'move' } | null>(null);
   if (!available) return null;
   const accounts = data.accounts ?? [];
+  const open = sheet?.mode === 'account' ? accounts.find((a) => a.id === sheet.id) : undefined;
 
   return (
     <section className="card settings-card" aria-labelledby="settings-accounts">
@@ -49,10 +52,11 @@ export function AccountsSettings() {
       ) : (
         <ul className="entry-list account-list">
           {accounts.map((a) => {
-            const n = itemCount(data, a.id);
+            const n = ops.assignedCount(data, a.id);
+            const balance = accountBalance(data, a.id, today, today);
             return (
               <li key={a.id}>
-                <button type="button" className="entry" onClick={() => setSheet({ mode: 'rename', account: a })} aria-haspopup="dialog">
+                <button type="button" className="entry" onClick={() => setSheet({ mode: 'account', id: a.id })} aria-haspopup="dialog">
                   <span className="entry-main">
                     <span className="entry-title">{a.name}</span>
                     <span className="entry-sub">
@@ -60,6 +64,7 @@ export function AccountsSettings() {
                       {n > 0 && ` · ${n === 1 ? '1 item' : `${n} items`}`}
                     </span>
                   </span>
+                  {balance && <span className={`entry-side amount${balance.recordedCents < 0 ? ' negative-text' : ''}`}>{formatMoney(balance.recordedCents)}</span>}
                   <Icon icon={ChevronRight} size={18} className="chevron" />
                 </button>
               </li>
@@ -71,18 +76,298 @@ export function AccountsSettings() {
         <button type="button" className="button small secondary" onClick={() => setSheet({ mode: 'add' })} aria-haspopup="dialog">
           <Icon icon={Plus} size={16} /> Add account
         </button>
+        {accounts.length >= 2 && (
+          <button type="button" className="button small secondary" onClick={() => setSheet({ mode: 'move' })} aria-haspopup="dialog">
+            <Icon icon={ArrowRight} size={16} /> Move money
+          </button>
+        )}
       </div>
       {sheet?.mode === 'add' && (
         <Modal title="Add account" onClose={() => setSheet(null)}>
           <AccountForm onDone={() => setSheet(null)} />
         </Modal>
       )}
-      {sheet?.mode === 'rename' && (
-        <Modal title={`Rename ${sheet.account.name}`} onClose={() => setSheet(null)}>
-          <AccountForm account={sheet.account} onDone={() => setSheet(null)} />
+      {open && <AccountSheet account={open} onClose={() => setSheet(null)} />}
+      {sheet?.mode === 'move' && (
+        <Modal title="Move money" onClose={() => setSheet(null)}>
+          <TransferForm onDone={() => setSheet(null)} />
         </Modal>
       )}
     </section>
+  );
+}
+
+/** One account: its name, balance if known, its transfers, and deleting it. */
+function AccountSheet({ account, onClose }: { account: Account; onClose: () => void }) {
+  const { data, today, run } = useStore();
+  const toast = useToast();
+  const [mode, setMode] = useState<'view' | 'rename' | 'balance' | 'delete' | { transfer: Transfer }>('view');
+  const balance = accountBalance(data, account.id, today, today);
+  const transfers = accountTransfers(data, account.id);
+  const assigned = ops.assignedCount(data, account.id);
+
+  if (mode === 'rename')
+    return (
+      <Modal title={`Rename ${account.name}`} onClose={() => setMode('view')}>
+        <AccountForm account={account} onDone={() => setMode('view')} />
+      </Modal>
+    );
+  if (mode === 'balance')
+    return (
+      <Modal title={`${account.name} balance`} onClose={() => setMode('view')}>
+        <OpeningBalanceForm account={account} onDone={() => setMode('view')} />
+      </Modal>
+    );
+  if (typeof mode === 'object')
+    return (
+      <Modal title={mode.transfer.status === 'expected' ? 'Planned transfer' : 'Transfer'} onClose={() => setMode('view')}>
+        <TransferForm transfer={mode.transfer} onDone={() => setMode('view')} />
+      </Modal>
+    );
+  if (mode === 'delete') {
+    const remove = () => {
+      const r = run((d, c) => ops.deleteAccount(d, account.id, c));
+      if (!r.ok) return toast(r.error, 'error');
+      toast(`${account.name} deleted.`);
+      onClose();
+    };
+    return (
+      <Modal title={`Delete ${account.name}?`} onClose={() => setMode('view')}>
+        <div className="stack">
+          <p>{assigned === 0 ? 'Nothing is assigned to it.' : `${assigned === 1 ? '1 item is' : `${assigned} items are`} assigned to it. ${assigned === 1 ? 'It stays' : 'They stay'} in your plan with no account.`}</p>
+          <div className="form-actions">
+            <button type="button" className="button secondary" onClick={() => setMode('view')} data-autofocus>
+              Keep it
+            </button>
+            <button type="button" className="button danger" onClick={remove}>
+              Delete
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title={account.name} onClose={onClose}>
+      <div className="stack">
+        <p className="hint">
+          {ACCOUNT_TYPE_LABEL[account.type]} account. {TYPE_HINT[account.type]}
+        </p>
+        {balance ? (
+          <dl className="sheet-stats">
+            <div>
+              <dt>Balance</dt>
+              <dd className={balance.recordedCents < 0 ? 'negative' : ''}>{formatMoney(balance.recordedCents)}</dd>
+            </div>
+          </dl>
+        ) : null}
+        <div className="settings-actions">
+          <button type="button" className="button small secondary" onClick={() => setMode('rename')}>
+            Rename
+          </button>
+          <button type="button" className="button small secondary" onClick={() => setMode('balance')}>
+            {account.opening ? 'Change balance' : 'Add balance'}
+          </button>
+          {transfers.length === 0 && (
+            <button type="button" className="button small secondary" onClick={() => setMode('delete')}>
+              Delete
+            </button>
+          )}
+        </div>
+        {account.opening && <p className="hint">From {formatMoney(account.opening.amountCents)} on {formatMedium(account.opening.date)}, with what you’ve recorded since.</p>}
+        {transfers.length > 0 && (
+          <section className="stack-sm" aria-label="Transfers">
+            <h3 className="subhead">Transfers</h3>
+            <ul className="entry-list card">
+              {transfers.map((t) => (
+                <li key={t.id}>
+                  <TransferRow transfer={t} onOpen={() => setMode({ transfer: t })} />
+                </li>
+              ))}
+            </ul>
+            <p className="hint">To delete this account, delete or change its transfers first.</p>
+          </section>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+/** "Paycheck account → Reserves", amount, date and whether it happened. */
+export function TransferRow({ transfer: t, onOpen }: { transfer: Transfer; onOpen: () => void }) {
+  const { data, today } = useStore();
+  const short = t.status === 'expected' ? transferShortfall(data, t.id, today) : null;
+  const status = t.status === 'recorded' ? 'Moved' : t.date < today ? 'Not recorded' : 'Planned';
+  return (
+    <button type="button" className="entry" onClick={onOpen} aria-haspopup="dialog">
+      <span className="avatar avatar-transfer avatar-sm" aria-hidden="true">
+        <Icon icon={ArrowRight} size={14} />
+      </span>
+      <span className="entry-main">
+        <span className="entry-title">
+          {nameOf(data, t.fromAccountId)} → {nameOf(data, t.toAccountId)}
+        </span>
+        <span className="entry-sub">
+          {formatMedium(t.date)} · {status}
+        </span>
+        {short ? <span className="entry-sub negative-text">Leaves {nameOf(data, t.fromAccountId)} {formatMoney(short)} short</span> : null}
+      </span>
+      <span className="entry-side amount">{formatMoney(t.amountCents)}</span>
+      <Icon icon={ChevronRight} size={18} className="chevron" />
+    </button>
+  );
+}
+
+/**
+ * Move money between two accounts, or plan to. Editing an expected transfer
+ * can record it; editing a recorded one corrects it. It never changes cash
+ * flow, and nothing moves at a bank.
+ */
+export function TransferForm({ transfer, onDone }: { transfer?: Transfer; onDone: () => void }) {
+  const { data, run, today } = useStore();
+  const toast = useToast();
+  const id = useId();
+  const accounts = data.accounts ?? [];
+  const [from, setFrom] = useState(transfer?.fromAccountId ?? accounts.find((a) => a.type === 'income')?.id ?? accounts[0]?.id ?? '');
+  const [to, setTo] = useState(transfer?.toAccountId ?? accounts.find((a) => a.id !== from && a.type !== 'income')?.id ?? '');
+  const [amount, setAmount] = useState(transfer ? centsToInput(transfer.amountCents) : '');
+  const [date, setDate] = useState<DateStr>(transfer?.date ?? today);
+  const [status, setStatus] = useState<Transfer['status']>(transfer?.status ?? 'recorded');
+  const [error, setError] = useState<string | null>(null);
+
+  const input = (): ops.TransferInput | null => {
+    const cents = parseMoney(amount);
+    if (cents === null || cents <= 0) {
+      setError('Enter an amount greater than $0.');
+      return null;
+    }
+    return { fromAccountId: from, toAccountId: to, amountCents: cents, date };
+  };
+  const finish = (r: ops.Result, message: string) => {
+    if (!r.ok) return setError(r.error);
+    toast(message);
+    onDone();
+  };
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    const i = input();
+    if (!i) return;
+    if (!transfer) return finish(run((d, c) => ops.addTransfer(d, i, status, c)), status === 'recorded' ? 'Transfer recorded.' : 'Transfer planned.');
+    finish(run((d, c) => ops.updateTransfer(d, transfer.id, i, c)), 'Transfer saved.');
+  };
+  const record = () => {
+    const i = input();
+    if (!i || !transfer) return;
+    finish(run((d, c) => ops.recordTransfer(d, transfer.id, { amountCents: i.amountCents, date: i.date > today ? today : i.date }, c)), 'Transfer recorded.');
+  };
+  const remove = () => {
+    if (transfer) finish(run((d) => ops.deleteTransfer(d, transfer.id)), 'Transfer deleted.');
+  };
+
+  const select = (value: string, onChange: (v: string) => void) => (p: { id: string }) => (
+    <select {...p} value={value} onChange={(e) => onChange(e.target.value)}>
+      {accounts.map((a) => (
+        <option key={a.id} value={a.id}>
+          {a.name}
+        </option>
+      ))}
+    </select>
+  );
+
+  return (
+    <form onSubmit={submit} noValidate className="stack">
+      {!transfer && (
+        <fieldset className="choice-field">
+          <legend className="sr-only">Moved or planned</legend>
+          <div className="choice-pills">
+            {(
+              [
+                ['recorded', 'Already moved'],
+                ['expected', 'Planned'],
+              ] as const
+            ).map(([value, label]) => (
+              <label key={value} className={`choice-pill${status === value ? ' selected' : ''}`}>
+                <input type="radio" name={`${id}-status`} checked={status === value} onChange={() => setStatus(value)} />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
+      <Field label="From">{select(from, setFrom)}</Field>
+      <Field label="To">{select(to, setTo)}</Field>
+      <Field label="Amount">{(p) => <MoneyInput {...p} value={amount} onChange={setAmount} autoFocus={!transfer} />}</Field>
+      <Field label="Date">{(p) => <input {...p} type="date" max={status === 'recorded' ? today : undefined} value={date} onChange={(e) => setDate(e.target.value)} />}</Field>
+      <FormError message={error} />
+      <div className="form-actions">
+        {transfer ? (
+          <button type="button" className="button secondary" onClick={remove}>
+            Delete
+          </button>
+        ) : (
+          <button type="button" className="button secondary" onClick={onDone}>
+            Cancel
+          </button>
+        )}
+        {transfer?.status === 'expected' && (
+          <button type="button" className="button secondary" onClick={record}>
+            Record as moved
+          </button>
+        )}
+        <button type="submit" className="button primary">
+          {transfer ? 'Save' : status === 'recorded' ? 'Record transfer' : 'Plan transfer'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** What the account held at the end of a day (optional; balances are shown only once there is one). */
+function OpeningBalanceForm({ account, onDone }: { account: Account; onDone: () => void }) {
+  const { run, today } = useStore();
+  const toast = useToast();
+  const [amount, setAmount] = useState(account.opening ? centsToInput(account.opening.amountCents) : '');
+  const [date, setDate] = useState<DateStr>(account.opening?.date ?? today);
+  const [error, setError] = useState<string | null>(null);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    const cents = parseMoney(amount);
+    if (cents === null) return setError('Enter a balance, like 1250 or -40.');
+    const r = run((d, c) => ops.setOpeningBalance(d, account.id, { amountCents: cents, date }, c));
+    if (!r.ok) return setError(r.error);
+    toast('Balance saved.');
+    onDone();
+  };
+  const clear = () => {
+    const r = run((d, c) => ops.setOpeningBalance(d, account.id, null, c));
+    if (!r.ok) return setError(r.error);
+    toast('Balance removed.');
+    onDone();
+  };
+  return (
+    <form onSubmit={submit} noValidate className="stack">
+      <Field label="Balance" hint="What the account held at the end of this day.">
+        {(p) => <MoneyInput {...p} value={amount} onChange={setAmount} autoFocus />}
+      </Field>
+      <Field label="On">{(p) => <input {...p} type="date" max={today} value={date} onChange={(e) => setDate(e.target.value)} />}</Field>
+      <FormError message={error} />
+      <div className="form-actions">
+        {account.opening ? (
+          <button type="button" className="button secondary" onClick={clear}>
+            Remove balance
+          </button>
+        ) : (
+          <button type="button" className="button secondary" onClick={onDone}>
+            Cancel
+          </button>
+        )}
+        <button type="submit" className="button primary">
+          Save
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -178,5 +463,100 @@ export function AccountSelect({ kind, value, onChange }: { kind: TransactionKind
         </select>
       )}
     </Field>
+  );
+}
+
+/** The item's account on its row, when it has one. */
+export function AccountLabel({ accountId }: { accountId?: string }) {
+  const { data } = useStore();
+  const available = useAccountsAvailable();
+  const account = accountId ? (data.accounts ?? []).find((a) => a.id === accountId) : undefined;
+  if (!available || !account) return null;
+  return (
+    <span className="account-label">
+      <Icon icon={Wallet} size={12} />
+      <span className="sr-only">Account: </span>
+      {account.name}
+    </span>
+  );
+}
+
+/**
+ * On the dashboard: planned transfers whose date has come and that aren't
+ * recorded yet, and the rest of this week's. A passed date never marks one
+ * done; the person records it once the money has moved.
+ */
+export function TransfersDue() {
+  const { data, today } = useStore();
+  const available = useAccountsAvailable();
+  const [open, setOpen] = useState<Transfer | 'list' | null>(null);
+  if (!available) return null;
+  const due = transfersDue(data, today, endOfWeek(today));
+  const count = due.attention.length + due.upcoming.length;
+  if (count === 0 && open === null) return null;
+  const label = due.attention.length > 0 ? `${due.attention.length === 1 ? '1 transfer' : `${due.attention.length} transfers`} to record` : `${due.upcoming.length === 1 ? '1 transfer' : `${due.upcoming.length} transfers`} planned this week`;
+  return (
+    <>
+      {count > 0 && (
+        <button type="button" className="rhythm-entry transfers-entry" onClick={() => setOpen('list')} aria-haspopup="dialog">
+          <span>{label}</span>
+          <Icon icon={ChevronRight} size={18} />
+        </button>
+      )}
+      {open === 'list' && (
+        <Modal title="Transfers" onClose={() => setOpen(null)}>
+          <div className="stack">
+            {[
+              ['Not recorded yet', due.attention],
+              ['Later this week', due.upcoming],
+            ].map(([heading, list]) =>
+              (list as Transfer[]).length ? (
+                <section key={heading as string} className="stack-sm" aria-label={heading as string}>
+                  <h3 className="subhead">{heading as string}</h3>
+                  <ul className="entry-list card">
+                    {(list as Transfer[]).map((t) => (
+                      <li key={t.id}>
+                        <TransferRow transfer={t} onOpen={() => setOpen(t)} />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null,
+            )}
+            {count === 0 && <p className="muted">Nothing left to record.</p>}
+          </div>
+        </Modal>
+      )}
+      {open && open !== 'list' && (
+        <Modal title="Planned transfer" onClose={() => setOpen('list')}>
+          <TransferForm transfer={open} onDone={() => setOpen('list')} />
+        </Modal>
+      )}
+    </>
+  );
+}
+
+/** Transfers on one day, for the day sheet. They move money between accounts and don't change the day's totals. */
+export function DayTransfers({ date }: { date: DateStr }) {
+  const { data } = useStore();
+  const available = useAccountsAvailable();
+  const [open, setOpen] = useState<Transfer | null>(null);
+  const list = transfersInRange(data, date, date);
+  if (!available || list.length === 0) return null;
+  return (
+    <section className="stack-sm" aria-label="Transfers">
+      <h3 className="subhead">Transfers between your accounts</h3>
+      {open ? (
+        <TransferForm transfer={open} onDone={() => setOpen(null)} />
+      ) : (
+        <ul className="entry-list">
+          {list.map((t) => (
+            <li key={t.id}>
+              <TransferRow transfer={t} onOpen={() => setOpen(t)} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

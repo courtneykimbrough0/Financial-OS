@@ -636,6 +636,40 @@ try {
     assert.deepEqual(schedules(dataAfter), schedules(dataBefore));
   }
 
+  step('transfers: a planned move waits on the dashboard, is recorded there, and changes no cash flow');
+  {
+    await page.getByRole('link', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Add account' }).click();
+    let sheet = page.getByRole('dialog', { name: 'Add account' });
+    await sheet.getByLabel('Name').fill('Reserves');
+    await sheet.getByText('Distribution', { exact: true }).click();
+    await sheet.getByRole('button', { name: 'Add account' }).click();
+    await page.getByText('Account added.').waitFor();
+    await page.getByRole('button', { name: 'Move money' }).click();
+    sheet = page.getByRole('dialog', { name: 'Move money' });
+    await sheet.getByText('Planned', { exact: true }).click();
+    await sheet.getByLabel('From').selectOption({ label: 'Paycheck account' });
+    await sheet.getByLabel('To').selectOption({ label: 'Reserves' });
+    await sheet.getByLabel('Amount').fill('100');
+    const today = await page.evaluate(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; });
+    await sheet.getByLabel('Date').fill(today);
+    await sheet.getByRole('button', { name: 'Plan transfer' }).click();
+    await page.getByText('Transfer planned.').waitFor();
+    await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Dashboard' }).click();
+    const heroBefore = await page.locator('.hero').innerText();
+    await page.getByRole('button', { name: '1 transfer to record' }).click();
+    await page.getByRole('dialog', { name: 'Transfers' }).getByRole('button', { name: /Paycheck account → Reserves/ }).click();
+    await shot('13-planned-transfer');
+    await page.getByRole('dialog', { name: 'Planned transfer' }).getByRole('button', { name: 'Record as moved' }).click();
+    await page.getByText('Transfer recorded.').waitFor();
+    await page.keyboard.press('Escape');
+    assert.equal(await page.getByRole('button', { name: /transfers? to record/ }).count(), 0);
+    assert.equal(await page.locator('.hero').innerText(), heroBefore);
+    const saved = JSON.parse(await page.evaluate(() => localStorage.getItem('financial-os:data')));
+    assert.equal(saved.transfers.length, 1);
+    assert.equal(saved.transfers[0].status, 'recorded');
+  }
+
   step('forecast start: income entered later but paid earlier starts the running total');
   {
     // A fresh device: the Oct 27 paycheck is entered first, the Oct 19 weekend job second.

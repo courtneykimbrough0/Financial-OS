@@ -248,7 +248,7 @@ main.with-nav {
   left: 0;
   right: 0;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   background: var(--color-bg);
   border-top: 1px solid var(--color-border);
   padding-bottom: env(safe-area-inset-bottom);
@@ -260,7 +260,7 @@ main.with-nav {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 10px 4px 12px;
+  padding: 10px 2px 12px;
   min-height: 64px;
   font-size: var(--text-caption);
   font-weight: 500;
@@ -2695,4 +2695,16 @@ button.callout.gap-line:focus-visible {
 .recovery-panel {
   margin: 12px 16px;
   border: 1px solid var(--color-warn);
+}
+
+/* Accounts: the account on an item's row, and transfers between accounts. */
+.account-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+.avatar-transfer {
+  background: var(--color-text-secondary);
 }
