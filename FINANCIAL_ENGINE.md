@@ -29,6 +29,8 @@ How stored data becomes the forecast, and which tests prove each behavior. Writt
    - `weekSummaries`, `monthWeekSummaries`, `paycheckCycles`, `lowestPoint`, `negativeStretches`, `timingGapsAhead` (90 days from the forecast start), `overdueEntries`.
    - Screens read only these; none computes money itself.
 
+**Accounts aren't inputs.** Items may carry an `accountId` (PRODUCT_EXPERIENCE.md section 11), but nothing above reads it: creating, renaming or assigning accounts changes no entry, running total or cash-flow figure (`accounts.test.ts`). When transfers between the person's own accounts exist, they will be internal movements, excluded from income, expenses and cash flow. Open conflict for that work: savings deposits count as money out today, while a strategic-reserve allocation into a Distribution account is an internal transfer under the account rules; changing it would change cash flow and needs the product owner's decision (roadmap Step 9 / AC4).
+
 **What the inputs can't express.** No amount of cash on hand is stored, so the running total measures change from the payday anchor. Upcoming items before the next payday count in cash flow for their period but not in the running total, so a shortfall before payday can't be shown. Once such an item is overdue and still unrecorded, it's carried to payday.
 
 ## Review rhythm (`cadence.ts`)

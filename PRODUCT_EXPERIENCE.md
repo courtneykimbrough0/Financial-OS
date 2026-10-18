@@ -599,3 +599,66 @@ The structural decisions (Q1–Q7) are in [docs/REDUCTION-AUDIT.md](docs/REDUCTI
 - Imports.
 - Allocations and transfers (Step 9).
 - Any bank connection (never; AGENTS.md section E).
+
+---
+
+## 11. Accounts (Confirmed model, October 2026; foundation implemented)
+
+Accounts say where money arrives, where it is held and where it is spent, so money has a purpose and a destination. They are the person's own labels: no bank connections, no transfers carried out, no balances fetched. The account system stays secondary: Home's priorities (cash-flow progress, what needs attention now, what's coming) don't change, and accounts are never required, including during setup.
+
+### 11.1 Three account types (Confirmed)
+
+Every account has exactly one type. Its name is the person's own and says what it's for; a purpose never creates a new type.
+
+| Type | Receives | Sends | Never |
+| --- | --- | --- | --- |
+| **Income** | External income | Internal transfers to other accounts; in a simple setup it does the routing itself | Pays bills, subscriptions, liability payments or spending |
+| **Distribution** | Internal transfers | Internal transfers; may accumulate money (routing, strategic reserves, other purposes) | Receives external income; pays outside parties |
+| **Payment** | Internal transfers | Payments to outside parties: obligations, subscriptions, everyday spending | Receives external income |
+
+- Several accounts of any type are allowed; names are unique (ignoring capitals).
+- A spending account is a Payment account; obligations versus discretionary spending is a matter of name and purpose, not type.
+- Strategic Reserves is a financial classification held in a Distribution account. Money there stays under the person's control: nothing assumes it must go toward a liability, or when.
+- People aren't required to have several real bank accounts, follow a prescribed arrangement or build a hierarchy.
+
+### 11.2 Accounts versus financial classifications (Confirmed)
+
+The classifications describe activity; account types describe where money is. They never stand in for each other. Assignments follow the classification:
+
+| Item | Account type |
+| --- | --- |
+| Income | Income |
+| Bills, subscriptions, liability payments (and, when it exists, varied spending) | Payment |
+| Strategic reserve allocations (today's savings kind) | Distribution |
+
+Tags stay optional, user-created and never pre-filled.
+
+### 11.3 Money movement (Confirmed rules; transfers not built yet)
+
+- Full structure: external income → Income → Distribution (routing) → Distribution (reserves) and Payment → external payments.
+- Simplified: external income → Income (also routing) → Distribution (reserves) and Payment → external payments.
+- **Moving money between the person's own accounts is neither income nor an expense.** It changes where money is held, not cash flow, and the forecast never counts it twice.
+- External events: a paycheck arriving, a bill or liability payment made. Internal transfers: everything between the person's own accounts.
+- When transfers are built: every transfer has a source and a different destination account; it preserves the total across the person's accounts; it never appears as both income and expense; it never alters recorded history unexpectedly; expected and recorded transfers stay distinguishable; a scheduled transfer is never reported as having happened.
+- Account separation is for control, not administration. A purpose account (for example subscriptions) may deliberately hold little money, but Financial OS never causes a failed payment, withholds a transfer, or assumes an interruption has no consequence. Funding decisions stay with the person.
+- Account balances, total cash flow, money set aside for obligations and money available for discretionary use are different things. Money in one account is never assumed to be available for another account's payments, and no screen shows account-level assurances without balance and transfer information.
+
+### 11.4 Arrangements (examples for design and tests, never presets)
+
+- **Minimal:** one Income account (also routing), one Payment account.
+- **Separated:** Income; Distribution (routing); Distribution (Strategic Reserves); Payment (obligations); Payment (spending).
+- **Purpose-specific:** several Income accounts; one or more Distribution accounts; Payment accounts for housing, subscriptions, transportation, everyday spending.
+
+Nobody chooses an arrangement; the app accommodates whatever accounts they add.
+
+### 11.5 What exists now (Implemented, Phase AC1)
+
+- Domain: `Account` (id, name, type, created and updated times) and `AccountType` in `types.ts`; `accountTypeFor(kind)`; `addAccount`, `renameAccount`, `assignAccount` in `operations.ts`. Recurring items and one-time items carry an optional `accountId`; recurring occurrences follow their item.
+- Persistence: `accounts` (absent until the first one) and `accountId` in the saved document and backups. Loading drops malformed accounts and any assignment to a missing or unsuitable account, keeping every item.
+- Interface: an **Accounts** section in Settings (list with each account's type and number of items; add with a name and a type; rename) and an optional **Account** choice on a recurring item's form, listing only accounts that suit the item and appearing only when one exists.
+- The forecast never reads accounts: creating or assigning one changes no figure (tested).
+- Not available yet where the storage can't keep them: signed in with Firebase (`ACCOUNTS_IN_SIGNED_IN_SAVES`, rules accept a fixed set of fields) and the Supabase development build (no table yet; a save with accounts is refused rather than dropping them).
+
+### 11.6 Deferred (needs later review and explicit authorization)
+
+Transfers (expected and recorded) and transfer scheduling or rules; automatic funding; account balances and forecasts based on them; account-level availability; cash-flow-index payoff recommendations and liability payoff algorithms; account-based notifications; subscription interruption handling; scenarios with transfers; any mandatory account setup; an account-routing dashboard; bank connections or real transfers (never). Roadmap: accounts phases AC2–AC6.

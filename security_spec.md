@@ -28,3 +28,5 @@ statement below is one or more of those tests.
 9. An `updatedAt` set by the client instead of the server.
 10. Writing to any other collection.
 11. A `review` that isn't exactly `cadence`, `handledOn` and `outcome` with allowed values.
+
+**Accounts (where money is received, held and spent).** Never written to Firestore: while `ACCOUNTS_IN_SIGNED_IN_SAVES` is false, account saves leave out `accounts` and every item's `accountId`, so the rules above (a fixed set of top-level fields) are unchanged and no save is refused.

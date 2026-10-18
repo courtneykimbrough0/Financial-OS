@@ -207,6 +207,53 @@ PRODUCT_EXPERIENCE.md §6:
 
 Each step adds persisted data, so it needs decision D8 and the storage, backup, Supabase and migration work in AGENTS.md section C. Complexity: **medium–high** per step.
 
+#### AC. Accounts (where money is received, held and spent)
+
+Specification: PRODUCT_EXPERIENCE.md section 11. Each phase is separately authorized. None adds bank connections, real transfers or automation.
+
+- **AC1. Foundation (complete, October 2026).**
+  - Three account types.
+  - The `Account` entity, with create, rename and view in Settings.
+  - Optional assignment of recurring items (form) and one-time items (domain) to an account whose type suits them.
+  - Validation on load, device storage and backups.
+  - Firebase and Supabase guarded (below).
+  - No forecast change.
+- **AC2. Assignment where people already work.** Complexity: **low**.
+  - An item's account shown on its row.
+  - An account choice on one-time items.
+  - Deleting an unused account, or one whose items become unassigned after confirmation.
+  - Changing an account's type only when no assignment conflicts.
+  - Tests: references stay valid; the forecast is unchanged.
+- **AC-S. Accounts in Supabase.** Complexity: **medium**.
+  - An `accounts` table with workspace ownership and row-level security.
+  - Nullable `account_id` on sources and one-time records.
+  - `load_plan` / `save_plan` carrying them.
+  - Remove the adapter's refusal.
+  - Tests: `test:db`, `test:supabase`, `e2e:supabase`.
+  - Belongs with Phase F unless authorized earlier.
+- **AC3. Transfer domain (expected and recorded).** Complexity: **medium–high**.
+  - Transfers between the person's own accounts: source ≠ destination, total preserved, never income or expense, expected and recorded kept apart, nothing marked done because it was scheduled.
+  - In the forecast only as internal movement (cash flow unchanged), with invariant tests first.
+  - Depends on AC2.
+  - Needs a decision on how planned transfers are entered with minimal effort (for example "each payday, move $X to Bills").
+- **AC4. Strategic Reserves as an internal allocation.** Complexity: **medium**.
+  - Decide whether savings deposits into a Distribution account stop counting as money out (they would become transfers).
+  - This changes cash flow, so it needs a product-owner decision, a data migration and before-and-after tests.
+  - Tied to roadmap Step 9 (paused).
+- **AC5. Account balances.** Complexity: **high**.
+  - Optional starting balances per account (related to decision Q6) and projected balances per account.
+  - Only then any account-level availability ("enough in Bills for rent").
+  - Depends on AC3.
+- **AC6. Payoff support.** Using existing liability information and the cash-flow index to help decide when to deploy reserves. Needs liability payoff amounts, which aren't stored today, and its own specification.
+
+**Conflicts recorded for review (not resolved by AC1):**
+1. **Six classifications vs five kinds.** The app has income, bill, subscription, liability and savings. "Strategic Reserves" is today's savings kind under another name, and "Varied Spending" doesn't exist. AC1 maps savings to Distribution and leaves names unchanged.
+2. **Savings as money out vs the transfer rule.** Under the account rules, moving money to a reserve account is an internal transfer, but today it reduces cash flow. See AC4.
+3. **"Account" means two things in the interface.** It names the sign-in account ("Your Financial OS account", "Delete account") and money accounts. They never appear together today, since money accounts are hidden when signed in, but the Supabase cutover will put both on one screen. Needs a wording decision (for example "Sign-in" for the former).
+4. **Liabilities are defined with a payoff amount and date, but liability items store only payments.** Needed before AC6.
+5. **Storage.** Accounts work with device storage and in backups only. Firebase (legacy, rules can't change) and Supabase (no table yet) are guarded, so signed-in users don't see accounts.
+6. **Step 9 is paused, but AC1 starts its territory.** AC1 was authorized directly. AC3 and AC4 should be authorized with Step 9 in mind.
+
 #### F. Infrastructure resumption
 
 Unchanged and paused:
@@ -551,6 +598,7 @@ Replaces the earlier plan to validate Firebase persistence and offline behavior.
 - **Product experience audit: complete (documentation only, October 2026).** [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) (decisions and specifications), [docs/PRODUCT-AUDIT.md](docs/PRODUCT-AUDIT.md) (findings ranked by severity, the forecast-start analysis, the wording table) and [docs/COPY-INVENTORY.md](docs/COPY-INVENTORY.md) (every interface string). No application code changed. Next: Phase A1, once authorized.
 - **Product reduction audit: complete (documentation only, October 2026).** The philosophy and information model are in AGENTS.md section A. [docs/REDUCTION-AUDIT.md](docs/REDUCTION-AUDIT.md) has the feature inventory and classifications, ranked recommendations, verified defects D1–D5, the proposed structure (This week, Forecast, Activity, Plan) and decisions Q1–Q7. The phases above were revised to match.
 - **Phase A1: complete (October 2026).** The running total starts the day before the earliest outstanding or received-today income from any active recurring source, so entry order and the main paycheck no longer decide it (defect D1). Overdue income counts the same for every source; one-time income, inactive sources and hypothetical scenario income don't start it. Setup's first-period cash flow, lowest running total and before-payday note start from the same point (defect D2, `firstPeriod`). Pay periods still follow the main paycheck. Tests: `forecast-start` (15), the updated `forecast` anchor test, a setup test in `setup-timing-gaps`, and a browser step in the e2e smoke test.
+- **Accounts AC1: complete (October 2026).** Income, Distribution and Payment accounts (`types.ts`, `addAccount` / `renameAccount` / `assignAccount`), an Accounts section in Settings, an optional account on recurring item forms, validation on load, device storage and backups. Firebase saves leave accounts out (`ACCOUNTS_IN_SIGNED_IN_SAVES`) and the Supabase adapter refuses them, so nothing is silently dropped. The forecast never reads accounts. Tests: `accounts` (domain), `accounts-persistence`, `money-accounts` (UI), and an e2e step. Next: AC2, or AC-S with Phase F.
 
 ## Open items
 

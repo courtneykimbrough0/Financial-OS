@@ -297,8 +297,8 @@ Measured once, as a guide only (local PostgreSQL 16): a plan with 40 items and 1
 | --- | --- |
 | Virtual paycheck allocations and reserves | New tables keyed by `workspace_id`; recommendations with proposed / approved / dismissed status |
 | Optional cash-on-hand snapshot | A dated snapshot table; with none, the forecast keeps its $0 start the day before payday |
-| Real accounts | An `accounts` table and a nullable `account_id` on sources and records (null = today's single pool) |
-| Transfers | A link table pairing a money-out record with a money-in record; savings stays money out unless the product owner decides otherwise |
+| Accounts (in the app since Phase AC1; not in the schema) | An `accounts` table (id, name, type `income` / `distribution` / `payment`, timestamps) keyed by `workspace_id`, a nullable `account_id` on sources and on one-time records (null = unassigned) referencing it, and `load_plan` / `save_plan` carrying them (roadmap AC-S). Until then the adapter refuses a plan with accounts (`hasAccountData`) instead of saving it without them, and `checkForMigration` reports it |
+| Transfers | Between the person's own accounts: a transfer record with a source and a different destination account, expected or recorded, never counted as income or expense (PRODUCT_EXPERIENCE.md section 11); savings stays money out unless the product owner decides otherwise |
 | Shared households | A membership table; the read policies and the owner check in the functions change, rows don't |
 | Partial payments | Several actuals per occurrence (a child table of `occurrence_records`) with completion rules in the engine; today an occurrence has one recorded outcome |
 

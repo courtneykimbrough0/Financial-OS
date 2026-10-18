@@ -49,7 +49,7 @@ It also has a subscription and a savings item.
 | Income | Recurring income (add, edit from an effective date, turn off/on), one-time income, and the **main paycheck** choice when there are two or more incomes. |
 | Expenses | Three tabs: **Bills** (with one-time expenses), **Subscriptions**, and **Savings** (with one-time deposits). |
 | Liabilities | Recurring payments on a **card**, **loan**, or **line of credit**. Choosing one of the three is required. Each payment counts once, as money out. |
-| Settings | The gear in the top bar. Account (signed-in email, sign out, delete account), review rhythm, backups (download, restore), and sample data. |
+| Settings | The gear in the top bar. Account (signed-in email, sign out, delete account), **Accounts** (where money is received, held and spent: add with a name and a type, rename; device storage only for now), review rhythm, backups (download, restore), and sample data. A recurring item's form offers an optional account that suits it once one exists. |
 
 Tap any transaction to mark it received/paid, change its date or amount, cancel it, undo, or fix a recorded actual. For a recurring item, “Change just this one” moves only that occurrence; “Change this and later ones” opens the item’s screen to change its schedule from a date on.
 
@@ -105,6 +105,7 @@ Every dashboard element (calendar, KPIs, summaries, timeline, cycles) reads from
   - `status`: `scheduled`, `completed`, or `canceled`. **Overdue** is derived (scheduled and the date has passed) and is never stored.
 
 - **Estimate dismissal** (`estimateDismissal`, optional, on a recurring item): the latest estimate suggestion the person dismissed (the estimate, the amount suggested, the latest payment's date), so it doesn't return right away.
+- **Account** (`accounts`, optional): where money is received, held and spent: an id, the person's name for it, and a type (`income`, `distribution` or `payment`). Recurring and one-time items may carry an `accountId` whose type suits them (income → income, bills, subscriptions and liability payments → payment, savings → distribution). The forecast never reads accounts. Kept on the device and in backups; left out of Firebase account saves and refused by the Supabase development build for now (see PRODUCT_EXPERIENCE.md section 11).
 - **Review rhythm** (`review`, optional): `cadence` (`off` by default, `weekly`, `payday` or `monthly`), and the day the latest review was completed or skipped (`handledOn`, `outcome`). Written only once a rhythm is chosen.
 
 ### Persistence
