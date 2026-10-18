@@ -5,7 +5,7 @@
  * document; `migrate` is where future schema upgrades go.
  */
 import { isValidDateStr } from '../domain/dates';
-import { emptyData, MAX_ACCOUNT_NAME, MAX_ACCOUNTS } from '../domain/operations';
+import { emptyData, MAX_ACCOUNT_NAME, MAX_ACCOUNTS, MAX_BALANCE_CENTS } from '../domain/operations';
 import { ACCOUNT_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, REVIEW_CADENCES, accountTypeFor, type Account, type AccountType, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type ReviewCadence, type ReviewSettings, type TransactionKind, type Transfer } from '../domain/types';
 
 export type SaveResult =
@@ -118,7 +118,7 @@ function readAccounts(a: unknown): Account[] {
     const now = typeof v.createdAt === 'string' ? v.createdAt : new Date(0).toISOString();
     const o = v.opening;
     // A malformed opening balance is dropped: the balance becomes unknown, never wrong.
-    const opening = o && typeof o === 'object' && Number.isSafeInteger(o.amountCents) && isValidDateStr(o.date) ? { opening: { amountCents: o.amountCents, date: o.date } } : {};
+    const opening = o && typeof o === 'object' && Number.isSafeInteger(o.amountCents) && Math.abs(o.amountCents) <= MAX_BALANCE_CENTS && isValidDateStr(o.date) ? { opening: { amountCents: o.amountCents, date: o.date } } : {};
     out.push({ id: v.id, name: v.name.trim().slice(0, MAX_ACCOUNT_NAME), type: v.type!, ...opening, createdAt: now, updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : now });
   }
   return out;
@@ -198,12 +198,11 @@ export function migrate(raw: unknown): AppData {
       pausedRanges: s.pausedRanges ?? [],
       endDate: s.endDate ?? null,
     })),
-    // Only one-time items carry their own account; recurring occurrences follow their item's.
-    // A release is kept only on a one-time reserve.
+    // Only one-time items and recorded occurrences carry an account; a release is kept only on a one-time reserve.
     records: records.map(({ accountId, release, ...r }) => ({
       ...r,
       tags: Array.isArray(r.tags) ? r.tags : [],
-      ...(r.sourceId === null ? keptAccount(accounts, r.kind, accountId) : {}),
+      ...(r.sourceId === null || r.status === 'completed' ? keptAccount(accounts, r.kind, accountId) : {}),
       ...(r.sourceId === null && r.kind === 'reserve' && release === true ? { release: true as const } : {}),
     })),
     ...(readReview(doc.review) ? { review: readReview(doc.review) } : {}),

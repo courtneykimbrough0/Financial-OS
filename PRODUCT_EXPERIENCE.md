@@ -665,7 +665,7 @@ Nobody chooses an arrangement; the app accommodates whatever accounts they add.
 - **Balances:** optional. An opening balance is what an account held at the end of a day; from it, the recorded balance follows recorded income, payments and transfers assigned to that account, and a projected balance (always an estimate) adds what is still expected. Strategic Reserve items change no balance; only transfers move money between accounts.
 - **Dashboard:** "N transfers to record" when planned transfers are due and not recorded, or "N transfers planned this week"; tapping lists them and opens each to record it. A day's sheet lists its transfers. Transfers never change a day's totals.
 - Cash flow and the running total never read accounts or transfers (tested).
-- Not available yet where the storage can't keep them: signed in with Firebase (`ACCOUNTS_IN_SIGNED_IN_SAVES`, rules accept a fixed set of fields; saves leave accounts and transfers out) and the Supabase development build (no tables yet; a save with accounts, transfers or reserve releases is refused rather than dropping them).
+- Not available yet where the storage can't keep them: signed in with Firebase (`ACCOUNTS_IN_SIGNED_IN_SAVES`, rules accept a fixed set of fields; saves leave accounts and transfers out) and the Supabase development build (no tables yet; a save with accounts, transfers or reserve releases is refused rather than dropping them, and the build doesn't offer "Use reserves").
 
 ### 11.6 Deferred (needs later review and explicit authorization)
 

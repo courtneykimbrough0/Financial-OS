@@ -16,7 +16,7 @@ import { expandSource, findOccurrence } from './occurrences';
 import * as ops from './operations';
 import { compareForecasts, gapChanges } from './preview';
 import { describeRule, startKeepsDates } from './recurrence';
-import { mainPaycheckId, type AppData, type RecurrenceRule, type TransactionKind } from './types';
+import { mainPaycheckId, signFor, type AppData, type RecurrenceRule, type TransactionKind } from './types';
 
 /** A recurring schedule for a hypothetical item, or "on each main payday from the next one". */
 export type ScenarioSchedule = { startDate: DateStr; rule: RecurrenceRule } | 'each-paycheck';
@@ -190,11 +190,12 @@ function applyChange(data: AppData, change: ScenarioChange, index: number, clock
       const next = unwrap(ops.rescheduleOccurrence(data, o.id, { date, amountCents: amount }, clock));
       if (typeof next === 'string') return next;
       const income = o.kind === 'income';
+      const raises = signFor(o) === 1;
       const label =
         change.kind === 'occurrence-amount'
           ? `${o.description} on ${formatMedium(o.scheduledDate)}: ${formatMoney(o.scheduledAmountCents)} → ${formatMoney(amount)}`
           : `${o.description}: ${formatMedium(o.scheduledDate)} → ${formatMedium(date)} (${formatMoney(amount)})`;
-      return { data: next, assumption: { change, label, direction: income ? 'in' : 'out', amountCents: amount, recurrence: 'one-time', income: income ? 'confirmed' : null, dates: () => [date] } };
+      return { data: next, assumption: { change, label, direction: raises ? 'in' : 'out', amountCents: amount, recurrence: 'one-time', income: income ? 'confirmed' : null, dates: () => [date] } };
     }
     case 'recurring-amount': {
       const source = data.sources.find((s) => s.id === change.sourceId);

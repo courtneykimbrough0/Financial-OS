@@ -131,7 +131,7 @@ function EntryLines({ entries, onWhatIf }: { entries: ForecastEntry[]; onWhatIf?
         <li key={e.occurrence.id}>
           <span className="gap-entry-date">{formatShort(e.date)}</span>
           <span className="gap-entry-name">{e.occurrence.description}</span>
-          <FlowAmount kind={e.occurrence.kind} cents={e.amountCents} />
+          <FlowAmount kind={e.occurrence.kind} cents={e.amountCents} release={e.occurrence.release} />
           {onWhatIf && e.occurrence.status === 'scheduled' && (
             <button
               type="button"

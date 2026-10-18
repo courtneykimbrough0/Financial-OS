@@ -198,7 +198,7 @@ function AccountSheet({ account, onClose }: { account: Account; onClose: () => v
 export function TransferRow({ transfer: t, onOpen }: { transfer: Transfer; onOpen: () => void }) {
   const { data, today } = useStore();
   const short = t.status === 'expected' ? transferShortfall(data, t.id, today) : null;
-  const status = t.status === 'recorded' ? 'Moved' : t.date < today ? 'Not recorded' : 'Planned';
+  const status = t.status === 'recorded' ? 'Moved' : t.date <= today ? 'Not recorded' : 'Planned';
   return (
     <button type="button" className="entry" onClick={onOpen} aria-haspopup="dialog">
       <span className="avatar avatar-transfer avatar-sm" aria-hidden="true">
@@ -230,7 +230,7 @@ export function TransferForm({ transfer, onDone }: { transfer?: Transfer; onDone
   const id = useId();
   const accounts = data.accounts ?? [];
   const [from, setFrom] = useState(transfer?.fromAccountId ?? accounts.find((a) => a.type === 'income')?.id ?? accounts[0]?.id ?? '');
-  const [to, setTo] = useState(transfer?.toAccountId ?? accounts.find((a) => a.id !== from && a.type !== 'income')?.id ?? '');
+  const [to, setTo] = useState(transfer?.toAccountId ?? (accounts.find((a) => a.id !== from && a.type !== 'income') ?? accounts.find((a) => a.id !== from))?.id ?? '');
   const [amount, setAmount] = useState(transfer ? centsToInput(transfer.amountCents) : '');
   const [date, setDate] = useState<DateStr>(transfer?.date ?? today);
   const [status, setStatus] = useState<Transfer['status']>(transfer?.status ?? 'recorded');

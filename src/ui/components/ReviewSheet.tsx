@@ -197,7 +197,7 @@ function ReviewGroup({
                   <span className="entry-sub">{when}</span>
                 </span>
                 <span className="entry-side">
-                  <FlowAmount kind={o.kind} cents={o.scheduledAmountCents} />
+                  <FlowAmount kind={o.kind} cents={o.scheduledAmountCents} release={o.release} />
                   <Icon icon={ChevronRight} size={18} className="chevron" />
                 </span>
               </button>

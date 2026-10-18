@@ -7,6 +7,7 @@ import type { AppData } from '../../domain/types';
 import { AccountGate, useAccount, type AccountUser, type AuthService } from '../../state/account';
 import { CloudAdapter } from '../../state/cloud';
 import { DataModeProvider } from '../../state/mode';
+import { AccountSlotContext, type AccountSlot } from '../../state/slots';
 import { LocalStorageAdapter, STORAGE_KEY } from '../../state/storage';
 import { FakeServer } from '../../state/__tests__/fake-server';
 import { App } from '../App';
@@ -250,6 +251,59 @@ describe('AC2: accounts on items, deleting accounts, balances and transfers', ()
     await waitFor(() => expect(stored().transfers!.find((t) => t.id === 'late')).toMatchObject({ status: 'recorded', date: '2026-10-09', amountCents: 10000 }));
     sheet = screen.getByRole('dialog', { name: 'Transfers' });
     expect(within(sheet).queryByRole('region', { name: 'Not recorded yet' })).toBeNull();
+  });
+});
+
+describe('regressions', () => {
+  const clock = { today: TODAY, now: '2026-10-11T12:00:00.000Z' };
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 11, 9, 0));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    window.location.hash = '';
+  });
+
+  it('moving money between two income accounts starts with two different accounts', async () => {
+    let d = plan();
+    d = unwrap(ops.addAccount(d, { name: 'Main pay', type: 'income' }, clock, 'a'));
+    d = unwrap(ops.addAccount(d, { name: 'Side pay', type: 'income' }, clock, 'b'));
+    const user = await renderAt('settings', d);
+    await user.click(await screen.findByRole('button', { name: 'Move money' }));
+    const sheet = screen.getByRole('dialog', { name: 'Move money' });
+    expect([(within(sheet).getByLabelText('From') as HTMLSelectElement).value, (within(sheet).getByLabelText('To') as HTMLSelectElement).value]).toEqual(['a', 'b']);
+    await user.type(within(sheet).getByLabelText('Amount'), '50');
+    await user.click(within(sheet).getByRole('button', { name: 'Record transfer' }));
+    await waitFor(() => expect(stored().transfers![0]).toMatchObject({ fromAccountId: 'a', toAccountId: 'b', amountCents: 5000 }));
+  });
+
+  it('the Supabase development build, which can’t store releases yet, doesn’t offer “Use reserves”', async () => {
+    const slot: AccountSlot = { Card: () => null, Line: () => null, Guard: () => null, dataNote: '' };
+    await new LocalStorageAdapter().save(plan(), 0);
+    window.location.hash = '#/reserves';
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(
+      <AccountSlotContext.Provider value={slot}>
+        <DataModeProvider>
+          <ToastProvider>
+            <App />
+          </ToastProvider>
+        </DataModeProvider>
+      </AccountSlotContext.Provider>,
+    );
+    await user.click(await screen.findByRole('button', { name: 'Add one-time' }));
+    const sheet = screen.getByRole('dialog', { name: 'Add one-time reserve' });
+    expect(within(sheet).queryByRole('radio', { name: 'Use reserves' })).toBeNull();
+    expect(within(sheet).getByRole('button', { name: 'Add one-time reserve' })).toBeInTheDocument();
+  });
+
+  it('a release shows as money coming back on its item sheet', async () => {
+    const d = unwrap(ops.addOneTime(plan(), { kind: 'reserve', description: 'Toward the repair', amountCents: 30000, date: '2026-10-20', release: true }, clock, 'use'));
+    const user = await renderAt('reserves', d);
+    await user.click(await screen.findByRole('button', { name: /Toward the repair/ }));
+    expect(within(screen.getByRole('dialog')).getAllByText('+$300.00').length).toBeGreaterThan(0);
   });
 });
 

@@ -8,6 +8,7 @@ import { LIABILITY_TYPE_LABEL, LIABILITY_TYPES, mainPaycheckId, type LiabilityTy
 import { useStore } from '../../state/store';
 import { Field, FormError, Icon, MoneyInput, useToast } from './common';
 import { AccountSelect } from './money-accounts';
+import { useAccountSlot } from '../../state/slots';
 
 export const KIND_COPY: Record<TransactionKind, { noun: string; nameLabel: string; placeholder: string; amountLabel: string; dateLabel: string }> = {
   income: {
@@ -386,6 +387,8 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
   const [tags, setTags] = useState<string[]>([]);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [release, setRelease] = useState(false);
+  // The Supabase development build can't store releases yet (it refuses the save), so it doesn't offer them.
+  const canRelease = kind === 'reserve' && !useAccountSlot();
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -411,7 +414,7 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
   return (
     <form onSubmit={submit} noValidate className="stack">
       <p className="hint">This happens once and will not repeat.</p>
-      {kind === 'reserve' && (
+      {canRelease && (
         <fieldset className="choice-field">
           <legend className="sr-only">Set aside or use</legend>
           <div className="choice-pills">

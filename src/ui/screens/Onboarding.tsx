@@ -94,7 +94,7 @@ function OneTimeRow({ r, onOpen }: { r: OccurrenceRecord; onOpen: () => void }) 
           <TagList tags={r.tags} />
         </span>
         <span className="entry-side">
-          <FlowAmount kind={r.kind} cents={r.scheduledAmountCents} />
+          <FlowAmount kind={r.kind} cents={r.scheduledAmountCents} release={r.release} />
           <Icon icon={ChevronRight} size={18} className="chevron" />
         </span>
       </button>

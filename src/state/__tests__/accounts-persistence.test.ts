@@ -108,11 +108,20 @@ describe('device storage and backups', () => {
       null,
     );
     raw.accounts[0].opening = { amountCents: 'lots', date: '2026-10-10' };
+    raw.accounts[1].opening = { amountCents: Number.MAX_SAFE_INTEGER, date: '2026-10-10' }; // beyond what the app allows
     const loaded = migrate(raw);
     expect(loaded.transfers!.map((t) => t.id)).toEqual(['xfer-rent', 'xfer-save']);
     // A malformed opening balance makes the balance unknown, never wrong.
     expect('opening' in loaded.accounts![0]!).toBe(false);
+    expect('opening' in loaded.accounts![1]!).toBe(false);
     expect(loaded.accounts!.find((a) => a.id === 'acct-bills')!.opening).toEqual({ amountCents: usd(-40), date: '2026-10-10' });
+  });
+
+  it('keeps the account a recorded occurrence was paid from, and drops one on an outstanding occurrence', () => {
+    let d = plan();
+    d = unwrap(ops.recordActual(d, 'rent@2026-10-20', { amountCents: usd(1200), date: TODAY }, clock));
+    const loaded = migrate(JSON.parse(JSON.stringify(d)));
+    expect(loaded.records.find((r) => r.id === 'rent@2026-10-20')).toMatchObject({ status: 'completed', accountId: 'acct-bills' });
   });
 
   it('drops transfers whose account was dropped, never keeping one side', () => {

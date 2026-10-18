@@ -117,7 +117,7 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
       <div className="occ-summary">
         <KindAvatar kind={o.kind} />
         <div className="occ-summary-main">
-          <FlowAmount kind={o.kind} cents={o.status === 'completed' ? o.actualAmountCents! : o.scheduledAmountCents} strike={o.status === 'canceled'} />
+          <FlowAmount kind={o.kind} cents={o.status === 'completed' ? o.actualAmountCents! : o.scheduledAmountCents} strike={o.status === 'canceled'} release={o.release} />
           <p className="muted">
             {KIND_LABEL[o.kind]} · {o.sourceId ? 'Recurring' : 'One-time'}
           </p>

@@ -4,7 +4,7 @@ import type { GapExplanation } from '../../domain/forecast';
 import { formatMoney, parseMoney } from '../../domain/money';
 import { findOccurrence } from '../../domain/occurrences';
 import { applyPreviewedChange, previewChange, type ChangePreview, type ProposedChange } from '../../domain/preview';
-import { LIABILITY_TYPE_LABEL, type AppData, type Occurrence } from '../../domain/types';
+import { LIABILITY_TYPE_LABEL, signFor, type AppData, type Occurrence } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { Field, FormError, KindAvatar, Modal, MoneyInput, useToast } from './common';
 
@@ -67,7 +67,7 @@ export function WhatIfSheet({ occurrenceId, through, onBack, onDone }: { occurre
           <div className="occ-summary-main">
             <strong>{o.description}</strong>
             <p className="muted">
-              Expected {o.kind === 'income' ? '+' : '−'}
+              Expected {signFor(o) === 1 ? '+' : '−'}
               {formatMoney(o.scheduledAmountCents)} on {formatMedium(o.scheduledDate)}
             </p>
           </div>

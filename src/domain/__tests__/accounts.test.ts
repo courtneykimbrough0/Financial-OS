@@ -111,12 +111,16 @@ describe('assigning items to accounts', () => {
     expect(unwrap(ops.assignAccount(after, 'rent', 'acct-bills', clockAt('2026-10-13')))).toBe(after);
   });
 
-  it('keeps recorded history and the item’s account apart: recording a payment doesn’t copy the account onto it', () => {
-    let d = unwrap(ops.assignAccount(plan(withAccounts()), 'rent', 'acct-bills', clock));
+  it('a recorded payment keeps the account it was paid from; moving the item later moves only what is still expected', () => {
+    let d = unwrap(ops.addAccount(plan(withAccounts()), { name: 'Housing', type: 'payment' }, clock, 'acct-housing'));
+    d = unwrap(ops.assignAccount(d, 'rent', 'acct-bills', clock));
     d = unwrap(ops.recordActual(d, 'rent@2026-10-20', { amountCents: usd(1200), date: '2026-10-20' }, clockAt('2026-10-20')));
-    const recorded = d.records.find((r) => r.id === 'rent@2026-10-20')!;
-    expect(recorded.status).toBe('completed');
-    expect('accountId' in recorded).toBe(false);
+    expect(d.records.find((r) => r.id === 'rent@2026-10-20')).toMatchObject({ status: 'completed', accountId: 'acct-bills' });
+    d = unwrap(ops.assignAccount(d, 'rent', 'acct-housing', clockAt('2026-10-21')));
+    expect(d.records.find((r) => r.id === 'rent@2026-10-20')!.accountId).toBe('acct-bills');
+    // Undone, it is outstanding again and follows the item.
+    d = unwrap(ops.restoreOccurrence(d, 'rent@2026-10-20', clockAt('2026-10-21')));
+    expect(d.records.find((r) => r.id === 'rent@2026-10-20')).toBeUndefined();
   });
 });
 

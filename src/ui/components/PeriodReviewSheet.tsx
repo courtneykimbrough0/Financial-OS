@@ -129,7 +129,7 @@ function Group({ label, hint, entries, today, onOpen }: { label: string; hint?: 
                     <span className="entry-sub">{when}</span>
                   </span>
                   <span className="entry-side">
-                    <FlowAmount kind={o.kind} cents={e.amountCents} />
+                    <FlowAmount kind={o.kind} cents={e.amountCents} release={o.release} />
                     <Icon icon={ChevronRight} size={18} className="chevron" />
                   </span>
                 </button>

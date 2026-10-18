@@ -217,7 +217,11 @@ export interface OccurrenceRecord {
   description: string;
   /** One-time items carry their own tags; recurring occurrences copy their source's. */
   tags: string[];
-  /** One-time items only, optional: their account (recurring occurrences follow their source's). Never read by the forecast. */
+  /**
+   * Optional, never read by the forecast. A one-time item's account; for a
+   * recurring occurrence, the account its item had when it was recorded
+   * (outstanding ones follow their item's current account).
+   */
   accountId?: string;
   /** One-time reserves only: money taken back out of reserves, which returns it to available cash flow. */
   release?: true;

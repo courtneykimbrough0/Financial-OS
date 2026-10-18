@@ -381,7 +381,9 @@ export function recordActual(data: AppData, id: string, actual: ActualInput, clo
   return withOccurrence(data, id, clock, (r) => {
     if (r.status === 'completed') return 'This transaction has already been recorded.';
     if (r.status === 'canceled') return 'This transaction was canceled. Restore it before recording what happened.';
-    return { ...r, status: 'completed', actualAmountCents: actual.amountCents, actualDate: actual.date, completedAt: clock.now };
+    // A recurring occurrence keeps the account its item has now, so moving the item later never moves recorded money.
+    const account = r.sourceId === null ? undefined : data.sources.find((s) => s.id === r.sourceId)?.accountId;
+    return { ...r, status: 'completed', actualAmountCents: actual.amountCents, actualDate: actual.date, completedAt: clock.now, ...(account ? { accountId: account } : {}) };
   });
 }
 
@@ -424,7 +426,10 @@ export function cancelOccurrence(data: AppData, id: string, note: string, clock:
 export function restoreOccurrence(data: AppData, id: string, clock: Clock): Result {
   const result = withOccurrence(data, id, clock, (r) => {
     if (r.status === 'scheduled') return 'This transaction is already outstanding.';
-    return { ...r, status: 'scheduled', actualAmountCents: null, actualDate: null, completedAt: null, canceledAt: null, cancelNote: null };
+    // Outstanding again, a recurring occurrence follows its item's account.
+    const { accountId: _recorded, ...rest } = r;
+    const base = r.sourceId === null ? r : rest;
+    return { ...base, status: 'scheduled', actualAmountCents: null, actualDate: null, completedAt: null, canceledAt: null, cancelNote: null };
   });
   if (!result.ok) return result;
   const r = result.data.records.find((x) => x.id === id)!;
@@ -515,7 +520,7 @@ export function undoBatch(data: AppData, before: AppData, after: AppData, ids: s
 export const MAX_ACCOUNTS = 50;
 export const MAX_ACCOUNT_NAME = 60;
 /** Largest opening balance, either way: the same bound as any amount. */
-const MAX_BALANCE_CENTS = 100_000_000_00;
+export const MAX_BALANCE_CENTS = 100_000_000_00;
 
 export interface AccountInput {
   name: string;

@@ -12,10 +12,10 @@
  *   + recorded transfers into it − recorded transfers out of it
  * counting activity after the opening day through `date`.
  *
- * Projected balance adds what is still expected after the opening day through
- * `date`: outstanding items assigned to the account and expected transfers,
- * including ones whose date has passed without being recorded. It is an
- * estimate and is always labeled as one.
+ * Projected balance adds everything still expected through `date`:
+ * outstanding items assigned to the account and expected transfers, whatever
+ * their date (one due before the opening day and not recorded is still owed).
+ * It is an estimate and is always labeled as one.
  *
  * Strategic Reserve items never change a balance: an allocation says money is
  * set aside, and the money moves only when a transfer moves it. Counting both
@@ -28,9 +28,14 @@ import { buildForecast } from './forecast';
 import type { Cents } from './money';
 import type { Account, AppData, Occurrence, Transfer } from './types';
 
-/** The account an occurrence belongs to: its source's for a recurring one, its own for a one-time one. */
-export function accountOf(data: AppData, o: Pick<Occurrence, 'sourceId' | 'accountId'>): string | null {
-  if (o.sourceId === null) return o.accountId ?? null;
+/**
+ * The account an occurrence belongs to: a one-time item's own; for a recurring
+ * one, the account it was recorded in once completed (kept on its record, so
+ * moving the item to another account never rewrites history), and otherwise
+ * its item's current account.
+ */
+export function accountOf(data: AppData, o: Pick<Occurrence, 'sourceId' | 'accountId' | 'status'>): string | null {
+  if (o.sourceId === null || o.status === 'completed') return o.accountId ?? null;
   return data.sources.find((s) => s.id === o.sourceId)?.accountId ?? null;
 }
 
@@ -79,7 +84,7 @@ function balanceOf(data: AppData, account: Account, date: DateStr, today: DateSt
     if (sign === 0) continue;
     if (o.status === 'completed') {
       if (after(e.date)) recorded += sign * e.amountCents;
-    } else if (after(o.scheduledDate)) {
+    } else if (o.scheduledDate <= date) {
       expected += sign * e.amountCents;
       if (o.scheduledDate < today) unrecordedPast += 1;
     }
@@ -90,7 +95,7 @@ function balanceOf(data: AppData, account: Account, date: DateStr, today: DateSt
     if (effect === 0) continue;
     if (t.status === 'recorded') {
       if (after(t.date)) recorded += effect;
-    } else if (after(t.date)) {
+    } else if (t.date <= date) {
       expected += effect;
       if (t.date < today) unrecordedPast += 1;
     }

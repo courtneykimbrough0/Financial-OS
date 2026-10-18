@@ -215,6 +215,32 @@ describe('account balances', () => {
     expect(late.unrecordedPastCount).toBe(2);
   });
 
+  it('projects an item that was already overdue on the opening day: it is still owed', () => {
+    let d = accounts(source(ops.emptyData(), '2026-10-01', 'bill', 'Rent', 1000, '2026-10-05', { type: 'monthly' }, 'rent'));
+    d = unwrap(ops.assignAccount(d, 'rent', 'bills', clock));
+    d = unwrap(ops.setOpeningBalance(d, 'bills', { amountCents: usd(1500), date: '2026-10-08' }, clock));
+    const before = accountBalance(d, 'bills', TODAY, TODAY)!;
+    expect([before.recordedCents, before.projectedCents, before.unrecordedPastCount]).toEqual([usd(1500), usd(500), 1]);
+    // Recording it today gives the same balance the projection showed.
+    d = unwrap(ops.recordActual(d, 'rent@2026-10-05', { amountCents: usd(1000), date: TODAY }, clock));
+    const after = accountBalance(d, 'bills', TODAY, TODAY)!;
+    expect([after.recordedCents, after.projectedCents]).toEqual([usd(500), usd(500)]);
+  });
+
+  it('moving an item to another account never moves money already recorded', () => {
+    let d = accounts(source(ops.emptyData(), '2026-10-01', 'bill', 'Rent', 1000, '2026-10-05', { type: 'monthly' }, 'rent'));
+    d = unwrap(ops.addAccount(d, { name: 'Housing', type: 'payment' }, clock, 'housing'));
+    d = unwrap(ops.assignAccount(d, 'rent', 'bills', clock));
+    d = unwrap(ops.setOpeningBalance(d, 'bills', { amountCents: usd(1500), date: '2026-10-01' }, clock));
+    d = unwrap(ops.setOpeningBalance(d, 'housing', { amountCents: 0, date: '2026-10-01' }, clock));
+    d = unwrap(ops.recordActual(d, 'rent@2026-10-05', { amountCents: usd(1000), date: '2026-10-05' }, clock));
+    d = unwrap(ops.assignAccount(d, 'rent', 'housing', clock));
+    expect(accountBalance(d, 'bills', TODAY, TODAY)!.recordedCents).toBe(usd(500));
+    expect(accountBalance(d, 'housing', TODAY, TODAY)!.recordedCents).toBe(0);
+    // The next rent is expected from Housing now.
+    expect(accountBalance(d, 'housing', '2026-11-05', TODAY)!.projectedCents).toBe(usd(-1000));
+  });
+
   it('show when an expected transfer would leave its source short, without moving anything', () => {
     let d = withBalances();
     d = unwrap(ops.addTransfer(d, { fromAccountId: 'reserves', toAccountId: 'bills', amountCents: usd(1500), date: '2026-10-12' }, 'expected', clock, 'big'));

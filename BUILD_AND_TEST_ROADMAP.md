@@ -245,7 +245,7 @@ Specification: PRODUCT_EXPERIENCE.md section 11. Each phase is separately author
 1. ~~Six classifications vs five kinds~~ and 2. ~~Savings as money out vs the transfer rule~~: resolved by AC4.
 3. **"Account" means two things in the interface.** It names the sign-in account ("Your Financial OS account", "Delete account") and money accounts. They never appear together today, since money accounts are hidden when signed in, but the Supabase cutover will put both on one screen. Needs a wording decision (for example "Sign-in" for the former).
 4. **Liabilities are defined with a payoff amount and date, but liability items store only payments.** Needed before AC6.
-5. **Storage.** Accounts, transfers and reserve releases work with device storage and in backups only. Firebase (legacy, rules can't change) leaves accounts and transfers out and keeps releases; Supabase refuses all three until AC-S. Signed-in users don't see accounts.
+5. **Storage.** Accounts, transfers and reserve releases work with device storage and in backups. Firebase (legacy, rules can't change) leaves accounts and transfers out and keeps releases; Supabase refuses all three until AC-S, and its development build doesn't offer accounts or "Use reserves". Signed-in users don't see accounts.
 6. **Planned transfers with minimal effort.** Each planned transfer is entered once today. A repeating plan ("each payday, move $X to Reserves") needs rules for how it's generated, edited and recorded; not built until those are decided.
 7. **Opening balance on the same day.** An opening balance is the balance at the end of its day, so a transfer recorded on that same day is treated as already included. Clear in the form's wording; revisit if it confuses people.
 
