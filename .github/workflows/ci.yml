@@ -1,0 +1,108 @@
+# Continuous integration: the same checks a contributor runs locally
+# (AGENTS.md section H), each through its existing npm script.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Typecheck, lint, unit tests, build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  browser:
+    name: Browser smoke test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Playwright isn't a project dependency; the smoke test resolves it at run time.
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: e2e-screenshots
+          path: e2e-screenshots/
+          retention-days: 7
+
+  database:
+    name: Database tests (PostgreSQL)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # The runner image ships the PostgreSQL server binaries; test:db starts a throwaway cluster on a Unix socket.
+      - run: npm run test:db
+
+  firestore-rules:
+    name: Firestore rules (emulator)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run test:rules
+
+  supabase:
+    name: Supabase integration and browser tests (local stack)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.121.0
+      - run: npm ci
+      - run: npm install --no-save playwright@1.56.1
+      - run: npx playwright install --with-deps chromium
+      # Applies supabase/migrations unchanged. Only the local stack's public key is used.
+      - run: supabase start
+      - name: Read the local stack's public key
+        run: |
+          key="$(supabase status -o env | sed -n 's/^ANON_KEY="\(.*\)"$/\1/p')"
+          test -n "$key"
+          echo "SUPABASE_TEST_ANON_KEY=$key" >> "$GITHUB_ENV"
+      - run: npm run test:supabase
+      - run: npm run e2e:supabase
+      - if: always()
+        run: supabase stop --no-backup
