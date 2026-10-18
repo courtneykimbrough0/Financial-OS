@@ -17,7 +17,7 @@ import type { Cents } from './money';
 import { DEFAULT_REVIEW, reviewStatus } from './cadence';
 import { findOccurrence } from './occurrences';
 import { validateRule } from './recurrence';
-import { ACCOUNT_TYPES, LIABILITY_TYPES, REVIEW_CADENCES, accountTypeFor, type Account, type AccountType, type AppData, type ReviewCadence, type LiabilityType, type OccurrenceRecord, type RecurrenceRule, type RecurringSource, type TransactionKind } from './types';
+import { ACCOUNT_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, REVIEW_CADENCES, accountTypeFor, type Account, type AccountType, type AppData, type ReviewCadence, type LiabilityType, type OccurrenceRecord, type OneTimeKind, type RecurrenceRule, type RecurringKind, type RecurringSource, type Transfer, type TransactionKind } from './types';
 
 export type Result = { ok: true; data: AppData } | { ok: false; error: string };
 
@@ -88,7 +88,7 @@ function validateDescription(description: string): string | null {
 // ---------------------------------------------------------------------------
 
 export interface SourceInput {
-  kind: TransactionKind;
+  kind: RecurringKind;
   description: string;
   tags?: string[];
   /** Required when kind is 'liability'. */
@@ -105,6 +105,7 @@ function validateLiabilityType(kind: TransactionKind, type: LiabilityType | unde
 
 export function addSource(data: AppData, input: SourceInput, clock: Clock, id = newId('src')): Result {
   const err =
+    (!RECURRING_KINDS.includes(input.kind) ? 'Choose income, a bill, a subscription, a liability or a strategic reserve.' : null) ??
     validateDescription(input.description) ??
     validateLiabilityType(input.kind, input.liabilityType) ??
     validateAmount(input.amountCents) ??
@@ -290,15 +291,19 @@ export function reactivateSource(data: AppData, id: string, nextDate: DateStr, c
 // ---------------------------------------------------------------------------
 
 export interface OneTimeInput {
-  kind: Exclude<TransactionKind, 'subscription' | 'liability'>;
+  kind: OneTimeKind;
   tags?: string[];
   description: string;
   amountCents: Cents;
   date: DateStr;
+  /** Reserves only: money taken out of reserves rather than set aside. */
+  release?: boolean;
 }
 
 export function addOneTime(data: AppData, input: OneTimeInput, clock: Clock, id = newId('one')): Result {
   const err =
+    (!ONE_TIME_KINDS.includes(input.kind) ? 'Choose income, varied spending or a strategic reserve.' : null) ??
+    (input.release && input.kind !== 'reserve' ? 'Only a strategic reserve can be released.' : null) ??
     validateDescription(input.description) ??
     validateAmount(input.amountCents) ??
     (!isValidDateStr(input.date) ? 'Enter a valid date.' : null);
@@ -309,6 +314,7 @@ export function addOneTime(data: AppData, input: OneTimeInput, clock: Clock, id 
     kind: input.kind,
     description: input.description.trim(),
     tags: normalizeTags(input.tags),
+    ...(input.release ? { release: true as const } : {}),
     expectedDate: input.date,
     expectedAmountCents: input.amountCents,
     scheduledDate: input.date,
@@ -497,11 +503,19 @@ export function undoBatch(data: AppData, before: AppData, after: AppData, ids: s
 // ---------------------------------------------------------------------------
 // Accounts: where money is received, held and spent (see `AccountType`).
 // Optional everywhere: items work without one, and the forecast never reads
-// them. Creating, renaming or assigning an account changes no amount or date.
+// them. Creating, renaming, assigning or deleting an account changes no
+// amount or date.
 // ---------------------------------------------------------------------------
 
+/**
+ * Bounds on what one stored plan holds, not on how the person organizes
+ * money: they keep the saved document (and a Firestore document's 1 MB limit)
+ * and the account list on a phone screen in reasonable size.
+ */
 export const MAX_ACCOUNTS = 50;
 export const MAX_ACCOUNT_NAME = 60;
+/** Largest opening balance, either way: the same bound as any amount. */
+const MAX_BALANCE_CENTS = 100_000_000_00;
 
 export interface AccountInput {
   name: string;
@@ -539,7 +553,7 @@ export function renameAccount(data: AppData, id: string, name: string, clock: Cl
 
 const WRONG_ACCOUNT_TYPE: Record<AccountType, string> = {
   income: 'Income goes to an income account.',
-  distribution: 'Savings is held in a distribution account.',
+  distribution: 'Strategic reserves are held in a distribution account.',
   payment: 'Payments come from a payment account.',
 };
 
@@ -567,6 +581,141 @@ export function assignAccount(data: AppData, itemId: string, accountId: string |
   return source
     ? ok({ ...data, sources: data.sources.map((s) => (s.id === itemId ? assign(s) : s)) })
     : ok({ ...data, records: data.records.map((r) => (r.id === itemId ? assign(r) : r)) });
+}
+
+/** How many items (recurring and one-time) are assigned to the account. */
+export function assignedCount(data: AppData, accountId: string): number {
+  return data.sources.filter((s) => s.accountId === accountId).length + data.records.filter((r) => r.accountId === accountId).length;
+}
+
+/**
+ * Deletes an account. Items assigned to it are kept and become unassigned
+ * (the interface asks first). An account that any transfer moves money to or
+ * from is kept, so recorded history never loses one side: delete or change
+ * those transfers first.
+ */
+export function deleteAccount(data: AppData, id: string, clock: Clock): Result {
+  const accounts = data.accounts ?? [];
+  if (!accounts.some((a) => a.id === id)) return fail('That account no longer exists.');
+  const used = (data.transfers ?? []).filter((t) => t.fromAccountId === id || t.toAccountId === id).length;
+  if (used > 0) return fail(`This account has ${used === 1 ? 'a transfer' : `${used} transfers`}. Delete or change ${used === 1 ? 'it' : 'them'} first.`);
+  const unassign = <T extends { accountId?: string; updatedAt: string }>(x: T): T => {
+    if (x.accountId !== id) return x;
+    const { accountId: _old, ...rest } = x;
+    return { ...(rest as T), updatedAt: clock.now };
+  };
+  const rest = accounts.filter((a) => a.id !== id);
+  const { accounts: _a, ...withoutList } = data;
+  return ok({ ...(rest.length ? { ...withoutList, accounts: rest } : withoutList), sources: data.sources.map(unassign), records: data.records.map(unassign) });
+}
+
+/**
+ * Sets what the account held at the end of `date` (today or earlier), or
+ * clears it (null). Balances are then known from that day on.
+ */
+export function setOpeningBalance(data: AppData, id: string, opening: { amountCents: Cents; date: DateStr } | null, clock: Clock): Result {
+  const accounts = data.accounts ?? [];
+  if (!accounts.some((a) => a.id === id)) return fail('That account no longer exists.');
+  if (opening) {
+    if (!Number.isSafeInteger(opening.amountCents) || Math.abs(opening.amountCents) > MAX_BALANCE_CENTS) return fail('Enter a balance.');
+    if (!isValidDateStr(opening.date)) return fail('Enter a valid date.');
+    if (opening.date > clock.today) return fail('Enter a balance for today or an earlier day.');
+  }
+  return ok({
+    ...data,
+    accounts: accounts.map((a) => {
+      if (a.id !== id) return a;
+      const { opening: _old, ...rest } = a;
+      return { ...rest, ...(opening ? { opening: { amountCents: opening.amountCents, date: opening.date } } : {}), updatedAt: clock.now };
+    }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Transfers: money moved between the person's own accounts (see `Transfer`).
+// Never income or spending; each one changes exactly two balances by the same
+// amount, in one step. Any direction between two different accounts is
+// allowed, so corrections and rebalancing need no special case.
+// ---------------------------------------------------------------------------
+
+export interface TransferInput {
+  fromAccountId: string;
+  toAccountId: string;
+  amountCents: Cents;
+  date: DateStr;
+}
+
+function validateTransfer(data: AppData, input: TransferInput, status: Transfer['status'], clock: Clock): string | null {
+  const accounts = data.accounts ?? [];
+  if (!accounts.some((a) => a.id === input.fromAccountId)) return 'Choose the account the money comes from.';
+  if (!accounts.some((a) => a.id === input.toAccountId)) return 'Choose the account the money goes to.';
+  if (input.fromAccountId === input.toAccountId) return 'Choose two different accounts.';
+  return (
+    validateAmount(input.amountCents) ??
+    (!isValidDateStr(input.date) ? 'Enter a valid date.' : null) ??
+    (status === 'recorded' && input.date > clock.today ? 'A transfer can be recorded once it has happened. Plan it as expected instead.' : null)
+  );
+}
+
+/** Adds a transfer: `expected` (a plan) or `recorded` (it happened, today or earlier). */
+export function addTransfer(data: AppData, input: TransferInput, status: Transfer['status'], clock: Clock, id = newId('xfer')): Result {
+  const err = validateTransfer(data, input, status, clock);
+  if (err) return fail(err);
+  const transfers = data.transfers ?? [];
+  if (transfers.some((t) => t.id === id)) return fail('That transfer already exists.');
+  const transfer: Transfer = {
+    id,
+    fromAccountId: input.fromAccountId,
+    toAccountId: input.toAccountId,
+    amountCents: input.amountCents,
+    date: input.date,
+    status,
+    recordedAt: status === 'recorded' ? clock.now : null,
+    createdAt: clock.now,
+    updatedAt: clock.now,
+  };
+  return ok({ ...data, transfers: [...transfers, transfer] });
+}
+
+/** Records that an expected transfer happened, with the amount and date it actually had. */
+export function recordTransfer(data: AppData, id: string, actual: { amountCents: Cents; date: DateStr }, clock: Clock): Result {
+  const t = (data.transfers ?? []).find((x) => x.id === id);
+  if (!t) return fail('That transfer no longer exists.');
+  if (t.status === 'recorded') return fail('This transfer has already been recorded.');
+  return updateTransfer(data, id, { ...t, ...actual }, clock, 'recorded');
+}
+
+/**
+ * Changes a transfer's accounts, amount or date: a change of plan for an
+ * expected one, or a correction for a recorded one (which stays recorded).
+ */
+export function updateTransfer(data: AppData, id: string, input: TransferInput, clock: Clock, status?: Transfer['status']): Result {
+  const transfers = data.transfers ?? [];
+  const t = transfers.find((x) => x.id === id);
+  if (!t) return fail('That transfer no longer exists.');
+  const next = status ?? t.status;
+  const err = validateTransfer(data, input, next, clock);
+  if (err) return fail(err);
+  const updated: Transfer = {
+    ...t,
+    fromAccountId: input.fromAccountId,
+    toAccountId: input.toAccountId,
+    amountCents: input.amountCents,
+    date: input.date,
+    status: next,
+    recordedAt: next === 'recorded' ? (t.recordedAt ?? clock.now) : null,
+    updatedAt: clock.now,
+  };
+  return ok({ ...data, transfers: transfers.map((x) => (x.id === id ? updated : x)) });
+}
+
+/** Removes a transfer entered by mistake, expected or recorded. Both balances lose it together. */
+export function deleteTransfer(data: AppData, id: string): Result {
+  const transfers = data.transfers ?? [];
+  if (!transfers.some((t) => t.id === id)) return fail('That transfer no longer exists.');
+  const rest = transfers.filter((t) => t.id !== id);
+  const { transfers: _t, ...withoutList } = data;
+  return ok(rest.length ? { ...withoutList, transfers: rest } : withoutList);
 }
 
 // ---------------------------------------------------------------------------

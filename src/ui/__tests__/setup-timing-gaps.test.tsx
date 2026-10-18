@@ -22,7 +22,7 @@ async function reachReview(data: AppData) {
     </DataModeProvider>,
   );
   await user.click(await screen.findByRole('button', { name: 'Get started' }));
-  // Income, bills, subscriptions, liabilities, savings, then review.
+  // Income, bills, subscriptions, liabilities, reserves, then review.
   for (let i = 0; i < 5; i++) await user.click(screen.getByRole('button', { name: 'Continue' }));
   await screen.findByRole('heading', { name: 'Check everything over' });
   return user;

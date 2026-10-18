@@ -104,7 +104,7 @@ describe('accounts', () => {
     await user.click(screen.getByRole('button', { name: 'Get started' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('button', { name: 'Continue without income' }));
-    // Bills, subscriptions, liabilities, and savings each have their own step.
+    // Bills, subscriptions, liabilities, and reserves each have their own step.
     for (const step of ['What bills do you pay?', 'What subscriptions renew?', 'What do you pay toward debts?', 'What do you set aside?']) {
       expect(screen.getByRole('heading', { name: step })).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: 'Continue' }));
@@ -170,7 +170,7 @@ describe('accounts', () => {
 
     server.offline = true;
     act(() => {
-      store.run((d, c) => addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: 5000, date: '2026-10-20' }, c, 'rep'));
+      store.run((d, c) => addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: 5000, date: '2026-10-20' }, c, 'rep'));
     });
     expect(await screen.findByRole('alert')).toHaveTextContent('kept on this device');
     expect(screen.getByText('items:1')).toBeInTheDocument();
@@ -192,7 +192,7 @@ describe('accounts', () => {
     const adapter = new CloudAdapter(server, USER.id, localStorage);
     await adapter.load();
     server.offline = true;
-    const mine = addOneTime(forecast(), { kind: 'bill', description: 'Mine', amountCents: 100, date: '2026-10-20' }, clock, 'm');
+    const mine = addOneTime(forecast(), { kind: 'varied', description: 'Mine', amountCents: 100, date: '2026-10-20' }, clock, 'm');
     if (!mine.ok) throw new Error(mine.error);
     await adapter.save(mine.data, 0);
     server.offline = false;

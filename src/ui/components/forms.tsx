@@ -4,7 +4,7 @@ import { formatMedium, parts, type DateStr } from '../../domain/dates';
 import { centsToInput, formatMoney, parseMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { describeRule, nextOccurrenceOnOrAfter } from '../../domain/recurrence';
-import { LIABILITY_TYPE_LABEL, LIABILITY_TYPES, mainPaycheckId, type LiabilityType, type RecurrenceRule, type RecurringSource, type TransactionKind } from '../../domain/types';
+import { LIABILITY_TYPE_LABEL, LIABILITY_TYPES, mainPaycheckId, type LiabilityType, type RecurrenceRule, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { Field, FormError, Icon, MoneyInput, useToast } from './common';
 import { AccountSelect } from './money-accounts';
@@ -38,12 +38,19 @@ export const KIND_COPY: Record<TransactionKind, { noun: string; nameLabel: strin
     amountLabel: 'Payment amount',
     dateLabel: 'Next payment due date',
   },
-  savings: {
-    noun: 'savings',
-    nameLabel: 'What are you saving for?',
+  reserve: {
+    noun: 'reserve',
+    nameLabel: 'What is this reserve for?',
     placeholder: 'e.g. Emergency fund',
     amountLabel: 'Amount you plan to set aside',
     dateLabel: 'Next date you’ll set it aside',
+  },
+  varied: {
+    noun: 'spending',
+    nameLabel: 'What is this spending?',
+    placeholder: 'e.g. Car repair',
+    amountLabel: 'Amount you expect to spend',
+    dateLabel: 'Date',
   },
 };
 
@@ -249,7 +256,7 @@ export function SourceForm({
   onDone,
   submitLabel,
 }: {
-  kind: TransactionKind;
+  kind: RecurringKind;
   source?: RecurringSource;
   onDone: () => void;
   submitLabel?: string;
@@ -367,13 +374,18 @@ export function SourceForm({
   );
 }
 
+const ONE_TIME_PLACEHOLDER: Record<ops.OneTimeInput['kind'], string> = { income: 'e.g. Tax refund', reserve: 'e.g. Bonus set aside', varied: 'e.g. Car repair' };
+
 export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; onDone: () => void }) {
   const { run, today } = useStore();
   const toast = useToast();
+  const id = useId();
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState<DateStr>(today);
   const [tags, setTags] = useState<string[]>([]);
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [release, setRelease] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -386,7 +398,11 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
     if (!date) errs.date = 'Choose a date.';
     setFieldErrors(errs);
     if (Object.keys(errs).length) return;
-    const result = run((d, clock) => ops.addOneTime(d, { kind, description, tags, amountCents: cents!, date }, clock));
+    const itemId = ops.newId('one');
+    const result = run((d, clock) => {
+      const step = ops.addOneTime(d, { kind, description, tags, amountCents: cents!, date, release }, clock, itemId);
+      return step.ok ? ops.assignAccount(step.data, itemId, accountId, clock) : step;
+    });
     if (!result.ok) return setError(result.error);
     toast(`Added ${description.trim()} on ${formatMedium(date)}.`);
     onDone();
@@ -395,10 +411,24 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
   return (
     <form onSubmit={submit} noValidate className="stack">
       <p className="hint">This happens once and will not repeat.</p>
+      {kind === 'reserve' && (
+        <fieldset className="choice-field">
+          <legend className="sr-only">Set aside or use</legend>
+          <div className="choice-pills">
+            {[
+              [false, 'Set aside'],
+              [true, 'Use reserves'],
+            ].map(([value, label]) => (
+              <label key={String(value)} className={`choice-pill${release === value ? ' selected' : ''}`}>
+                <input type="radio" name={`${id}-release`} checked={release === value} onChange={() => setRelease(value as boolean)} />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
       <Field label="Description" error={fieldErrors.description}>
-        {(p) => (
-          <input {...p} type="text" maxLength={80} placeholder={kind === 'income' ? 'e.g. Tax refund' : kind === 'savings' ? 'e.g. Extra deposit' : 'e.g. Car repair'} value={description} onChange={(e) => setDescription(e.target.value)} data-autofocus />
-        )}
+        {(p) => <input {...p} type="text" maxLength={80} placeholder={release ? 'e.g. Toward the car repair' : ONE_TIME_PLACEHOLDER[kind]} value={description} onChange={(e) => setDescription(e.target.value)} data-autofocus />}
       </Field>
       <Field label="Expected amount" error={fieldErrors.amount}>
         {(p) => <MoneyInput {...p} value={amount} onChange={setAmount} />}
@@ -406,6 +436,7 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
       <Field label="Expected date" error={fieldErrors.date}>
         {(p) => <input {...p} type="date" value={date} onChange={(e) => setDate(e.target.value)} />}
       </Field>
+      <AccountSelect kind={kind} value={accountId} onChange={setAccountId} />
       <TagInput value={tags} onChange={setTags} />
       <FormError message={error} />
       <div className="form-actions">
@@ -413,7 +444,7 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
           Cancel
         </button>
         <button type="submit" className="button primary">
-          Add one-time {KIND_COPY[kind].noun}
+          {kind === 'varied' ? 'Add spending' : release ? 'Add release' : `Add one-time ${KIND_COPY[kind].noun}`}
         </button>
       </div>
     </form>

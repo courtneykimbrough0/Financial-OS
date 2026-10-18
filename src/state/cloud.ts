@@ -195,10 +195,14 @@ export function hasPendingDeviceChanges(userId: string, storage: Storage = windo
   }
 }
 
-/** The plan without accounts or item assignments, unless `include`; see ACCOUNTS_IN_SIGNED_IN_SAVES. */
+/**
+ * The plan without accounts, item assignments or transfers (which need
+ * accounts), unless `include`; see ACCOUNTS_IN_SIGNED_IN_SAVES. Reserve
+ * releases are ordinary record fields and are kept.
+ */
 function withoutAccounts<T extends Omit<AppData, 'isSample' | 'review'>>(doc: T, include: boolean): T {
   if (include) return doc;
-  const { accounts: _accounts, ...rest } = doc;
+  const { accounts: _accounts, transfers: _transfers, ...rest } = doc;
   return {
     ...(rest as T),
     sources: doc.sources.map(({ accountId: _a, ...s }) => s),

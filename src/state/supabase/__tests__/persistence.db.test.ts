@@ -18,7 +18,7 @@ function started() {
 }
 
 const withBill = (plan: ReturnType<typeof load>, name: string, dollars: number) =>
-  unwrap(ops.addOneTime(plan, { kind: 'bill', description: name, amountCents: usd(dollars), date: '2026-11-05' }, clock, `one-${name.toLowerCase()}`));
+  unwrap(ops.addOneTime(plan, { kind: 'varied', description: name, amountCents: usd(dollars), date: '2026-11-05' }, clock, `one-${name.toLowerCase()}`));
 
 describe('saving', () => {
   it('1. a normal save applies once and advances the revision by one', () => {

@@ -60,9 +60,9 @@ describe('A. Basic projection', () => {
 
   it('computes period totals', () => {
     const f = buildForecast(data(), today);
-    expect(periodKpis(f, '2026-11-15', '2026-12-14')).toEqual({ incomeCents: usd(2000), outflowCents: usd(1300), netCents: usd(700) });
-    expect(periodKpis(f, '2026-11-01', '2026-11-30')).toEqual({ incomeCents: usd(2000), outflowCents: usd(100), netCents: usd(1900) });
-    expect(periodKpis(f, '2026-12-01', '2026-12-31')).toEqual({ incomeCents: usd(2000), outflowCents: usd(1300), netCents: usd(700) });
+    expect(periodKpis(f, '2026-11-15', '2026-12-14')).toEqual({ incomeCents: usd(2000), outflowCents: usd(1300), reservesCents: 0, operatingCents: usd(700), netCents: usd(700) });
+    expect(periodKpis(f, '2026-11-01', '2026-11-30')).toEqual({ incomeCents: usd(2000), outflowCents: usd(100), reservesCents: 0, operatingCents: usd(1900), netCents: usd(1900) });
+    expect(periodKpis(f, '2026-12-01', '2026-12-31')).toEqual({ incomeCents: usd(2000), outflowCents: usd(1300), reservesCents: 0, operatingCents: usd(700), netCents: usd(700) });
   });
 });
 
@@ -186,7 +186,7 @@ describe('G. One-time transaction', () => {
   it('a one-time $350 expense happens exactly once', () => {
     const today = '2026-11-01';
     let d = source(ops.emptyData(), today, 'income', 'Paycheck', 2000, '2026-11-05', { type: 'biweekly' }, 'pay');
-    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Concert tickets', amountCents: usd(350), date: '2026-11-21' }, clockAt(today), 'tickets'));
+    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Concert tickets', amountCents: usd(350), date: '2026-11-21' }, clockAt(today), 'tickets'));
     const f = buildForecast(d, today, { through: '2028-12-31' });
     const hits = f.entries.filter((e) => e.occurrence.description === 'Concert tickets');
     expect(hits.map((e) => [e.date, e.amountCents])).toEqual([['2026-11-21', usd(350)]]);
@@ -242,7 +242,7 @@ function richData(): { d: AppData; today: string } {
   d = source(d, setup, 'bill', 'Rent', 1400, '2026-11-01', { type: 'monthly' }, 'rent');
   d = source(d, setup, 'bill', 'Groceries', 120.55, '2026-11-02', { type: 'weekly' }, 'food');
   d = source(d, setup, 'liability', 'Card payment', 75.1, '2026-11-15', { type: 'twiceMonthly', days: [15, 31] }, 'card');
-  d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(350), date: '2026-11-18' }, clockAt(setup)));
+  d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(350), date: '2026-11-18' }, clockAt(setup)));
   const today = '2026-11-07';
   d = unwrap(ops.recordActual(d, occ('pay', '2026-11-06'), { amountCents: usd(1712.34), date: '2026-11-07' }, clockAt(today)));
   d = unwrap(ops.cancelOccurrence(d, occ('food', '2026-11-23'), '', clockAt(today)));
@@ -265,11 +265,11 @@ describe('J. Dashboard consistency', () => {
       expect(weeks.reduce((s, w) => s + w.outflowCents, 0)).toBe(kpis.outflowCents);
       expect(weeks.reduce((s, w) => s + w.netCents, 0)).toBe(kpis.netCents);
       for (const w of weeks) {
-        expect(periodKpis(f, w.start, w.end)).toEqual({ incomeCents: w.incomeCents, outflowCents: w.outflowCents, netCents: w.netCents });
+        expect(periodKpis(f, w.start, w.end)).toEqual({ incomeCents: w.incomeCents, outflowCents: w.outflowCents, reservesCents: w.reservesCents, operatingCents: w.operatingCents, netCents: w.netCents });
         expect(w.days.map((r) => r.date)).toEqual(eachDay(w.start, w.end));
       }
       // Daily rows agree with the entries they list.
-      for (const r of days) expect(totals(r.entries)).toEqual({ inCents: r.inCents, outCents: r.outCents, netCents: r.netCents });
+      for (const r of days) expect(totals(r.entries)).toEqual({ inCents: r.inCents, outCents: r.outCents, reservedCents: r.reservedCents, netCents: r.netCents });
     }
     // The tally equals the cumulative sum of daily nets from the anchor.
     const all = dailyTimeline(f, f.forecastStart!, '2027-01-31');

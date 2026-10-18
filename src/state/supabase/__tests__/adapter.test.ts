@@ -28,7 +28,7 @@ function setup(plan?: AppData) {
   return { fake, adapter };
 }
 const saveCalls = (fake: FakeSupabase) => fake.calls.filter((c) => c.fn === 'save_plan');
-const repair = (d: AppData, dollars: number) => unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(dollars), date: '2026-11-05' }, clock, 'one-repair'));
+const repair = (d: AppData, dollars: number) => unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(dollars), date: '2026-11-05' }, clock, 'one-repair'));
 
 beforeEach(() => localStorage.clear());
 
@@ -220,7 +220,7 @@ describe('failures and conflicts', () => {
     fake.failNext('network-after');
     await adapter.save(first, 0);
     // Meanwhile the person changed something else; the store sends the whole plan, still based on revision 0.
-    const both = unwrap(ops.addOneTime(first, { kind: 'bill', description: 'Dentist', amountCents: usd(120), date: '2026-11-12' }, clock, 'one-dentist'));
+    const both = unwrap(ops.addOneTime(first, { kind: 'varied', description: 'Dentist', amountCents: usd(120), date: '2026-11-12' }, clock, 'one-dentist'));
     expect(await adapter.save(both, 0)).toEqual({ ok: true, revision: 2 });
     expect(saveCalls(fake).map((c) => [c.args!.p_save_id, c.args!.p_base_revision])).toEqual([
       ['save-1', 0],
@@ -238,7 +238,7 @@ describe('failures and conflicts', () => {
     fake.failNext('network-after');
     await adapter.save(first, 0);
     fake.externalSave(toRows(first));
-    const both = unwrap(ops.addOneTime(first, { kind: 'bill', description: 'Dentist', amountCents: usd(120), date: '2026-11-12' }, clock, 'one-dentist'));
+    const both = unwrap(ops.addOneTime(first, { kind: 'varied', description: 'Dentist', amountCents: usd(120), date: '2026-11-12' }, clock, 'one-dentist'));
     expect(await adapter.save(both, 0)).toEqual({ ok: false, reason: 'conflict', message: SAVED_BUT_NEWER });
     expect(fake.workspace!.revision).toBe(2);
   });
@@ -303,7 +303,7 @@ describe('with the app’s store', () => {
     fake.hold = true;
     fake.failNext('network-before');
     act(() => {
-      store.run((d) => ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(80), date: '2026-11-05' }, clock, 'one-repair'));
+      store.run((d) => ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(80), date: '2026-11-05' }, clock, 'one-repair'));
     });
     expect(store.saveStatus).toBe('saving');
     await act(async () => fake.release());
@@ -325,7 +325,7 @@ describe('with the app’s store', () => {
     await waitFor(() => expect(store.data.sources).toHaveLength(2));
     fake.failNext('signed-out');
     act(() => {
-      store.run((d) => ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(80), date: '2026-11-05' }, clock, 'one-repair'));
+      store.run((d) => ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(80), date: '2026-11-05' }, clock, 'one-repair'));
     });
     await waitFor(() => expect(store.saveStatus).toBe('error'));
     expect(store.saveMessage).toBe(SIGNED_OUT);

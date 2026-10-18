@@ -15,7 +15,7 @@ describe('one-time income and expenses across every view', () => {
     let d = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1800, '2026-10-15', { type: 'biweekly' }, 'pay');
     d = source(d, TODAY, 'bill', 'Phone', 60, '2026-10-25', { type: 'monthly' }, 'phone');
     d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Gift', amountCents: usd(500), date: '2026-10-22' }, clockAt(TODAY), 'gift'));
-    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(300), date: '2026-10-27' }, clockAt(TODAY), 'repair'));
+    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(300), date: '2026-10-27' }, clockAt(TODAY), 'repair'));
     return d;
   }
 
@@ -38,11 +38,11 @@ describe('one-time income and expenses across every view', () => {
   it('counts in month, week, pay period, and custom views, only where its date falls', () => {
     const f = buildForecast(data(), TODAY);
     // Month
-    expect(periodKpis(f, '2026-10-01', '2026-10-31')).toEqual({ incomeCents: usd(4100), outflowCents: usd(360), netCents: usd(3740) });
-    expect(periodKpis(f, '2026-11-01', '2026-11-30')).toEqual({ incomeCents: usd(3600), outflowCents: usd(60), netCents: usd(3540) });
+    expect(periodKpis(f, '2026-10-01', '2026-10-31')).toEqual({ incomeCents: usd(4100), outflowCents: usd(360), reservesCents: 0, operatingCents: usd(3740), netCents: usd(3740) });
+    expect(periodKpis(f, '2026-11-01', '2026-11-30')).toEqual({ incomeCents: usd(3600), outflowCents: usd(60), reservesCents: 0, operatingCents: usd(3540), netCents: usd(3540) });
     // Weeks (Sunday–Saturday) and the month's weekly summaries
-    expect(periodKpis(f, '2026-10-18', '2026-10-24')).toEqual({ incomeCents: usd(500), outflowCents: 0, netCents: usd(500) });
-    expect(periodKpis(f, '2026-10-25', '2026-10-31')).toEqual({ incomeCents: usd(1800), outflowCents: usd(360), netCents: usd(1440) });
+    expect(periodKpis(f, '2026-10-18', '2026-10-24')).toEqual({ incomeCents: usd(500), outflowCents: 0, reservesCents: 0, operatingCents: usd(500), netCents: usd(500) });
+    expect(periodKpis(f, '2026-10-25', '2026-10-31')).toEqual({ incomeCents: usd(1800), outflowCents: usd(360), reservesCents: 0, operatingCents: usd(1440), netCents: usd(1440) });
     const weeks = monthWeekSummaries(f, '2026-10-01');
     expect(weeks.reduce((s, w) => s + w.netCents, 0)).toBe(usd(3740));
     // Pay periods: the one-time gift counts inside the period but does not start a new one.
@@ -51,8 +51,8 @@ describe('one-time income and expenses across every view', () => {
       ['2026-10-15', '2026-10-28'],
       ['2026-10-29', '2026-11-11'],
     ]);
-    expect(periodKpis(f, cycles[0]!.start, cycles[0]!.end)).toEqual({ incomeCents: usd(2300), outflowCents: usd(360), netCents: usd(1940) });
-    expect(periodKpis(f, cycles[1]!.start, cycles[1]!.end)).toEqual({ incomeCents: usd(1800), outflowCents: 0, netCents: usd(1800) });
+    expect(periodKpis(f, cycles[0]!.start, cycles[0]!.end)).toEqual({ incomeCents: usd(2300), outflowCents: usd(360), reservesCents: 0, operatingCents: usd(1940), netCents: usd(1940) });
+    expect(periodKpis(f, cycles[1]!.start, cycles[1]!.end)).toEqual({ incomeCents: usd(1800), outflowCents: 0, reservesCents: 0, operatingCents: usd(1800), netCents: usd(1800) });
     // Custom range starting mid-forecast carries the tally including the gift.
     expect(dailyTimeline(f, '2026-10-23', '2026-10-30')[0]!.tallyCents).toBe(usd(2300));
   });
@@ -69,14 +69,14 @@ describe('one-time income and expenses across every view', () => {
     expect(entriesInRange(f, '2026-10-27', '2026-10-27')).toHaveLength(0);
   });
 
-  it('counts in left to spend for the period it falls in', () => {
+  it('counts in cash flow for the period it falls in', () => {
     const f = buildForecast(data(), TODAY);
-    expect(periodPlan(f, '2026-10-15', '2026-10-28')).toMatchObject({ incomeCents: usd(2300), expensesCents: usd(360), cashFlowCents: usd(1940) });
-    expect(periodPlan(f, '2026-10-29', '2026-11-11')).toMatchObject({ incomeCents: usd(1800), expensesCents: 0, cashFlowCents: usd(1800) });
+    expect(periodPlan(f, '2026-10-15', '2026-10-28')).toMatchObject({ incomeCents: usd(2300), outflowCents: usd(360), cashFlowCents: usd(1940) });
+    expect(periodPlan(f, '2026-10-29', '2026-11-11')).toMatchObject({ incomeCents: usd(1800), outflowCents: 0, cashFlowCents: usd(1800) });
   });
 
   it('can create a timing gap', () => {
-    const d = unwrap(ops.addOneTime(data(), { kind: 'bill', description: 'Medical bill', amountCents: usd(2500), date: '2026-10-20' }, clockAt(TODAY)));
+    const d = unwrap(ops.addOneTime(data(), { kind: 'varied', description: 'Medical bill', amountCents: usd(2500), date: '2026-10-20' }, clockAt(TODAY)));
     expect(timingGapsAhead(buildForecast(d, TODAY))).toEqual([{ start: '2026-10-20', end: '2026-10-28', days: 9, lowestCents: usd(-700), lowestDate: '2026-10-20' }]);
   });
 });

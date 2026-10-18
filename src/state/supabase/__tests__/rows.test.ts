@@ -22,7 +22,7 @@ describe('mapping a plan to rows and back', () => {
       ['phone', 4, 'bill', false, null],
       ['loan', 5, 'liability', false, 'loan'],
       ['stream', 6, 'subscription', false, null],
-      ['save', 7, 'savings', false, null],
+      ['save', 7, 'reserve', false, null],
     ]);
     expect(rows.sources.find((s) => s.id === 'phone')).toMatchObject({ dismissed_current_cents: 6000, dismissed_proposed_cents: 6500, dismissed_through: '2026-09-25' });
     expect(rows.versions.filter((v) => v.source_id === 'pay').map((v) => [v.start_date, v.amount_cents, v.rule_type])).toEqual([

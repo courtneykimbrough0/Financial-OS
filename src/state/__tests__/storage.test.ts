@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { addSource, emptyData, recordActual } from '../../domain/operations';
-import { LocalStorageAdapter, STORAGE_KEY } from '../storage';
+import { LocalStorageAdapter, migrate, STORAGE_KEY } from '../storage';
 
 const clock = { today: '2026-10-11', now: '2026-10-11T12:00:00Z' };
 
@@ -56,37 +56,38 @@ describe('LocalStorageAdapter', () => {
   });
 });
 
-describe('migrating data saved by earlier builds', () => {
+describe('reading saved data', () => {
   beforeEach(() => localStorage.clear());
 
-  it('turns the old "expense" kind into bills, drops the old fixed categories, and adds empty tags', async () => {
-    const old = {
-      schemaVersion: 1,
-      onboardingComplete: true,
-      sources: [
-        { id: 'r', kind: 'expense', description: 'Rent', category: 'Housing', versions: [{ id: 'v', startDate: '2026-11-01', amountCents: 120000, rule: { type: 'monthly' } }], active: true, endDate: null, createdAt: 'x', updatedAt: 'x' },
-      ],
-      records: [
-        { id: 'one', sourceId: null, kind: 'expense', description: 'Repair', expectedDate: '2026-10-20', expectedAmountCents: 5000, scheduledDate: '2026-10-20', scheduledAmountCents: 5000, status: 'scheduled', actualDate: null, actualAmountCents: null, completedAt: null, canceledAt: null, cancelNote: null, createdAt: 'x', updatedAt: 'x' },
-      ],
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(old));
-    const data = (await new LocalStorageAdapter().load());
-    expect(data.sources[0]).toMatchObject({ kind: 'bill', tags: [], pausedRanges: [] });
-    expect(data.records[0]).toMatchObject({ kind: 'bill', tags: [] });
+  it('does not load a document with retired kinds, and keeps the unreadable copy', async () => {
+    // "savings", "expense" and "spending" were development-stage kinds; there is no upgrade path for sample data.
+    const v = [{ id: 'v', startDate: '2026-11-01', amountCents: 5000, rule: { type: 'monthly' } }];
+    for (const kind of ['savings', 'expense', 'spending']) {
+      localStorage.clear();
+      const text = JSON.stringify({ schemaVersion: 2, revision: 3, onboardingComplete: true, sources: [{ id: 's', kind, description: 'Old', tags: [], versions: v, active: true, endDate: null, pausedRanges: [], createdAt: 'x', updatedAt: 'x' }], records: [] });
+      localStorage.setItem(STORAGE_KEY, text);
+      expect(await new LocalStorageAdapter().load()).toEqual(emptyData());
+      const kept = Object.keys(localStorage).filter((k) => k.startsWith(`${STORAGE_KEY}:unreadable:`));
+      expect(kept.map((k) => localStorage.getItem(k))).toEqual([text]);
+    }
   });
 
-  it('turns the removed "spending" kind into bills', async () => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        schemaVersion: 1,
-        onboardingComplete: true,
-        sources: [{ id: 's', kind: 'spending', description: 'Groceries', tags: [], versions: [{ id: 'v', startDate: '2026-11-01', amountCents: 5000, rule: { type: 'weekly' } }], active: true, endDate: null, createdAt: 'x', updatedAt: 'x' }],
-        records: [],
-      }),
-    );
-    expect((await new LocalStorageAdapter().load()).sources[0]!.kind).toBe('bill');
+  it('refuses a one-time bill or a recurring varied spending: recurring obligations recur, varied spending happens once', () => {
+    const one = { id: 'one', sourceId: null, kind: 'bill', description: 'Repair', tags: [], expectedDate: '2026-10-20', expectedAmountCents: 5000, scheduledDate: '2026-10-20', scheduledAmountCents: 5000, status: 'scheduled', actualDate: null, actualAmountCents: null, completedAt: null, canceledAt: null, cancelNote: null, createdAt: 'x', updatedAt: 'x' };
+    expect(() => migrate({ schemaVersion: 2, sources: [], records: [one] })).toThrow('Saved data is damaged.');
+    expect(migrate({ schemaVersion: 2, sources: [], records: [{ ...one, kind: 'varied' }] }).records[0]!.kind).toBe('varied');
+    const src = { id: 's', kind: 'varied', description: 'X', tags: [], versions: [{ id: 'v', startDate: '2026-11-01', amountCents: 5000, rule: { type: 'monthly' } }], active: true, endDate: null, pausedRanges: [], createdAt: 'x', updatedAt: 'x' };
+    expect(() => migrate({ schemaVersion: 2, sources: [src], records: [] })).toThrow('Saved data is damaged.');
+  });
+
+  it('keeps a release only on a one-time reserve', () => {
+    const one = { id: 'one', sourceId: null, kind: 'reserve', release: true, description: 'Use', tags: [], expectedDate: '2026-10-20', expectedAmountCents: 5000, scheduledDate: '2026-10-20', scheduledAmountCents: 5000, status: 'scheduled', actualDate: null, actualAmountCents: null, completedAt: null, canceledAt: null, cancelNote: null, createdAt: 'x', updatedAt: 'x' };
+    const loaded = migrate({ schemaVersion: 2, sources: [], records: [one, { ...one, id: 'two', kind: 'varied' }, { ...one, id: 'three', release: 'yes' }] });
+    expect(loaded.records.map((r) => [r.id, r.release ?? null])).toEqual([
+      ['one', true],
+      ['two', null],
+      ['three', null],
+    ]);
   });
 
   it('keeps valid liability types and drops anything else so the user is asked again', async () => {

@@ -6,7 +6,7 @@
  */
 import { isValidDateStr } from '../domain/dates';
 import { emptyData, MAX_ACCOUNT_NAME, MAX_ACCOUNTS } from '../domain/operations';
-import { ACCOUNT_TYPES, LIABILITY_TYPES, REVIEW_CADENCES, accountTypeFor, type Account, type AccountType, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type ReviewCadence, type ReviewSettings, type TransactionKind } from '../domain/types';
+import { ACCOUNT_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, REVIEW_CADENCES, accountTypeFor, type Account, type AccountType, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type ReviewCadence, type ReviewSettings, type TransactionKind, type Transfer } from '../domain/types';
 
 export type SaveResult =
   | { ok: true; revision: number }
@@ -55,19 +55,12 @@ export const STORAGE_KEY = 'financial-os:data';
 /** Synthetic demonstration data lives under its own key and never touches real data. */
 export const SAMPLE_STORAGE_KEY = 'financial-os:sample-data';
 
-const KNOWN_KINDS = ['income', 'bill', 'subscription', 'liability', 'savings', 'expense', 'spending'];
-
-/** Earlier builds had "expense" and "spending" kinds; both are bills now. */
-function upgradeKind(kind: string): TransactionKind {
-  return (kind === 'expense' || kind === 'spending' ? 'bill' : kind) as TransactionKind;
-}
-
 function isSource(s: unknown): s is RecurringSource {
   if (!s || typeof s !== 'object') return false;
   const v = s as RecurringSource;
   return (
     typeof v.id === 'string' &&
-    KNOWN_KINDS.includes(v.kind) &&
+    (RECURRING_KINDS as readonly string[]).includes(v.kind) &&
     typeof v.description === 'string' &&
     Array.isArray(v.versions) &&
     v.versions.length > 0 &&
@@ -80,7 +73,7 @@ function isRecord(r: unknown): r is OccurrenceRecord {
   const v = r as OccurrenceRecord;
   return (
     typeof v.id === 'string' &&
-    KNOWN_KINDS.includes(v.kind) &&
+    (v.sourceId === null ? (ONE_TIME_KINDS as readonly string[]).includes(v.kind) : typeof v.sourceId === 'string' && (RECURRING_KINDS as readonly string[]).includes(v.kind)) &&
     isValidDateStr(v.expectedDate) &&
     isValidDateStr(v.scheduledDate) &&
     Number.isSafeInteger(v.expectedAmountCents) &&
@@ -123,7 +116,50 @@ function readAccounts(a: unknown): Account[] {
     if (typeof v.id !== 'string' || v.id === '' || ids.has(v.id) || !ACCOUNT_TYPES.includes(v.type as AccountType) || typeof v.name !== 'string' || v.name.trim() === '') continue;
     ids.add(v.id);
     const now = typeof v.createdAt === 'string' ? v.createdAt : new Date(0).toISOString();
-    out.push({ id: v.id, name: v.name.trim().slice(0, MAX_ACCOUNT_NAME), type: v.type!, createdAt: now, updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : now });
+    const o = v.opening;
+    // A malformed opening balance is dropped: the balance becomes unknown, never wrong.
+    const opening = o && typeof o === 'object' && Number.isSafeInteger(o.amountCents) && isValidDateStr(o.date) ? { opening: { amountCents: o.amountCents, date: o.date } } : {};
+    out.push({ id: v.id, name: v.name.trim().slice(0, MAX_ACCOUNT_NAME), type: v.type!, ...opening, createdAt: now, updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : now });
+  }
+  return out;
+}
+
+/**
+ * Saved transfers. Each one is whole or not kept: both accounts must exist
+ * and differ, the amount be positive whole cents, the date valid and the
+ * status known. A transfer is never kept with one side missing, so balances
+ * always move in pairs.
+ */
+function readTransfers(t: unknown, accounts: Account[]): Transfer[] {
+  if (!Array.isArray(t)) return [];
+  const known = new Set(accounts.map((a) => a.id));
+  const out: Transfer[] = [];
+  const ids = new Set<string>();
+  for (const x of t) {
+    if (!x || typeof x !== 'object') continue;
+    const v = x as Partial<Transfer>;
+    const valid =
+      typeof v.id === 'string' && v.id !== '' && !ids.has(v.id) &&
+      typeof v.fromAccountId === 'string' && known.has(v.fromAccountId) &&
+      typeof v.toAccountId === 'string' && known.has(v.toAccountId) &&
+      v.fromAccountId !== v.toAccountId &&
+      Number.isSafeInteger(v.amountCents) && v.amountCents! > 0 &&
+      isValidDateStr(v.date) &&
+      (v.status === 'expected' || v.status === 'recorded');
+    if (!valid) continue;
+    ids.add(v.id!);
+    const now = typeof v.createdAt === 'string' ? v.createdAt : new Date(0).toISOString();
+    out.push({
+      id: v.id!,
+      fromAccountId: v.fromAccountId!,
+      toAccountId: v.toAccountId!,
+      amountCents: v.amountCents!,
+      date: v.date!,
+      status: v.status!,
+      recordedAt: v.status === 'recorded' ? (typeof v.recordedAt === 'string' ? v.recordedAt : now) : null,
+      createdAt: now,
+      updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : now,
+    });
   }
   return out;
 }
@@ -144,27 +180,35 @@ export function migrate(raw: unknown): AppData {
   if (!sources.every(isSource) || !records.every(isRecord)) throw new Error('Saved data is damaged.');
   const revision = Number.isSafeInteger(doc.revision) && doc.revision! >= 0 ? doc.revision! : 0;
   const accounts = readAccounts(doc.accounts);
+  const transfers = readTransfers(doc.transfers, accounts);
   return {
     schemaVersion: 2,
     revision,
     onboardingComplete: Boolean(doc.onboardingComplete),
     ...(doc.isSample ? { isSample: true } : {}),
-    sources: sources.map(({ category: _oldCategory, liabilityType, mainPaycheck, estimateDismissal, accountId, ...s }: RecurringSource & { category?: unknown }) => ({
+    sources: sources.map(({ liabilityType, mainPaycheck, estimateDismissal, accountId, ...s }) => ({
       ...s,
-      kind: upgradeKind(s.kind),
+      kind: s.kind,
       // Keep a liability type only when it is one of the three allowed values; the edit form asks for it otherwise.
       ...(s.kind === 'liability' && liabilityType && LIABILITY_TYPES.includes(liabilityType) ? { liabilityType } : {}),
       ...(s.kind === 'income' && mainPaycheck === true ? { mainPaycheck: true } : {}),
       ...(readDismissal(estimateDismissal) ? { estimateDismissal: readDismissal(estimateDismissal) } : {}),
-      ...keptAccount(accounts, upgradeKind(s.kind), accountId),
+      ...keptAccount(accounts, s.kind, accountId),
       tags: Array.isArray(s.tags) ? s.tags : [],
       pausedRanges: s.pausedRanges ?? [],
       endDate: s.endDate ?? null,
     })),
     // Only one-time items carry their own account; recurring occurrences follow their item's.
-    records: records.map(({ accountId, ...r }) => ({ ...r, kind: upgradeKind(r.kind), tags: Array.isArray(r.tags) ? r.tags : [], ...(r.sourceId === null ? keptAccount(accounts, upgradeKind(r.kind), accountId) : {}) })),
+    // A release is kept only on a one-time reserve.
+    records: records.map(({ accountId, release, ...r }) => ({
+      ...r,
+      tags: Array.isArray(r.tags) ? r.tags : [],
+      ...(r.sourceId === null ? keptAccount(accounts, r.kind, accountId) : {}),
+      ...(r.sourceId === null && r.kind === 'reserve' && release === true ? { release: true as const } : {}),
+    })),
     ...(readReview(doc.review) ? { review: readReview(doc.review) } : {}),
     ...(accounts.length > 0 ? { accounts } : {}),
+    ...(transfers.length > 0 ? { transfers } : {}),
   };
 }
 

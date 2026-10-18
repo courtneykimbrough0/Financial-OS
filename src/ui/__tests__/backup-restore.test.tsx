@@ -35,7 +35,7 @@ function current(): AppData {
 function otherBackup(): string {
   let d = unwrap(ops.completeOnboarding(ops.emptyData()));
   d = source(d, TODAY, 'income', 'Salary', 2400, '2026-10-30', { type: 'monthly' }, 'sal');
-  d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(300), date: '2026-11-04' }, clock, 'rep'));
+  d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(300), date: '2026-11-04' }, clock, 'rep'));
   d = unwrap(ops.setReviewCadence(d, 'monthly'));
   return createBackup(d, new Date(2026, 9, 16, 9)).text;
 }

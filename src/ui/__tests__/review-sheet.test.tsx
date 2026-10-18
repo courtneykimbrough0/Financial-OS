@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { buildForecast } from '../../domain/forecast';
 import { addSource, correctActual, emptyData } from '../../domain/operations';
-import type { AppData, RecurrenceRule, TransactionKind } from '../../domain/types';
+import type { AppData, RecurrenceRule, RecurringKind } from '../../domain/types';
 import { MemoryAdapter } from '../../state/storage';
 import { StoreProvider, useStore } from '../../state/store';
 import { ToastProvider } from '../components/common';
@@ -17,7 +17,7 @@ const SETUP = { today: '2026-10-11', now: '2026-10-11T12:00:00Z' };
 const TODAY = '2026-10-21';
 
 function seed(): AppData {
-  const items: [string, TransactionKind, string, number, string, RecurrenceRule][] = [
+  const items: [string, RecurringKind, string, number, string, RecurrenceRule][] = [
     ['pay', 'income', 'Paycheck', 180000, '2026-10-15', { type: 'biweekly' }],
     ['car', 'liability', 'Car loan', 35000, '2026-10-20', { type: 'monthly' }],
     ['gym', 'subscription', 'Gym', 4000, '2026-10-20', { type: 'monthly' }],

@@ -102,13 +102,13 @@ try {
   // Rent is due Nov 1, after the first pay period, so cash flow is unchanged.
   assert.match(await page.locator('.left-to-spend').innerText(), /\$1,740\.00/);
 
-  step('onboarding: one-time expenses count in their period');
-  await page.getByRole('button', { name: 'Add one-time expense' }).click();
-  sheet = page.getByRole('dialog', { name: 'Add one-time expense' });
+  step('onboarding: varied spending counts in its period');
+  await page.getByRole('button', { name: 'Add spending' }).click();
+  sheet = page.getByRole('dialog', { name: 'Add varied spending' });
   await sheet.getByLabel('Description').fill('Car repair');
   await sheet.getByLabel('Expected amount').fill('100');
   await sheet.getByLabel('Expected date').fill('2026-10-26');
-  await sheet.getByRole('button', { name: /Add one-time/ }).click();
+  await sheet.getByRole('button', { name: 'Add spending' }).click();
   assert.match(await page.locator('.left-to-spend').innerText(), /\$1,640\.00/);
   await page.getByText('One time · Oct 26, 2026').waitFor();
   await shot('02c-bills-step');
@@ -151,11 +151,11 @@ try {
   const breakdown = await page.locator('section[aria-labelledby="breakdown-period"]').innerText();
   assert.match(breakdown, /Oct 15 – 28/);
   assert.match(breakdown, /Income\s+\+\$1,800\.00/);
-  assert.match(breakdown, /Expenses\s+−\$410\.00/);
+  assert.match(breakdown, /Spending\s+−\$410\.00/);
   assert.match(breakdown, /Bills\s+\$60\.00/);
   assert.match(breakdown, /Liability payments\s+\$350\.00/);
-  // Categories with nothing in the period are left out.
-  assert.doesNotMatch(breakdown, /Savings|Subscriptions/);
+  // Classifications with nothing in the period are left out.
+  assert.doesNotMatch(breakdown, /reserves|Subscriptions/);
   assert.match(breakdown, /Cash flow\s+\+\$1,390\.00/);
   const mainText = await page.locator('main').innerText();
   assert.match(mainText, /INCOME[\s\S]*Paycheck[\s\S]*BILLS[\s\S]*Phone[\s\S]*Rent[\s\S]*LIABILITY PAYMENTS[\s\S]*Car loan/i);
@@ -169,7 +169,7 @@ try {
   assert.match(heroText, /Lowest running total\s+\$1,390\.00/);
   const monthBreakdown = await page.locator('section[aria-labelledby="breakdown-period"]').innerText();
   assert.match(monthBreakdown, /Bills\s+\$60\.00[\s\S]*Liability payments\s+\$350\.00[\s\S]*Cash flow\s+\+\$3,190\.00/);
-  assert.doesNotMatch(monthBreakdown, /Subscriptions|Savings/);
+  assert.doesNotMatch(monthBreakdown, /Subscriptions|reserves/);
   await shot('04-dashboard-month');
 
   step('dashboard: week view follows the period, with a running total each day');
@@ -253,15 +253,15 @@ try {
   assert.match(dates, /Oct 29, 2026[\s\S]*\+\$1,800\.00[\s\S]*Expected/);
   await shot('09-income');
 
-  step('navigation: Dashboard, Income, Expenses, Liabilities');
+  step('navigation: Dashboard, Income, Expenses, Liabilities, Reserves');
   const nav = page.getByRole('navigation', { name: 'Main' }).last();
-  assert.deepEqual(await nav.getByRole('link').allInnerTexts(), ['Dashboard', 'Income', 'Expenses', 'Liabilities']);
+  assert.deepEqual(await nav.getByRole('link').allInnerTexts(), ['Dashboard', 'Income', 'Expenses', 'Liabilities', 'Reserves']);
   await nav.getByRole('link', { name: 'Liabilities' }).click();
   await page.getByRole('heading', { name: 'Liabilities', level: 1 }).waitFor();
   assert.match(await page.locator('.source-card').innerText(), /Car loan[\s\S]*Loan · Monthly on the 20th/);
   await nav.getByRole('link', { name: 'Expenses' }).click();
   await page.getByRole('tab', { name: 'Bills', selected: true }).waitFor();
-  assert.deepEqual(await page.getByRole('tablist', { name: 'Expense type' }).getByRole('tab').allInnerTexts(), ['Bills', 'Subscriptions', 'Savings']);
+  assert.deepEqual(await page.getByRole('tablist', { name: 'Expense type' }).getByRole('tab').allInnerTexts(), ['Bills', 'Subscriptions', 'Varied']);
   assert.match(await page.locator('.card-list').innerText(), /Rent[\s\S]*Housing/);
   await page.goto(`${BASE}#/income`);
 
@@ -432,7 +432,7 @@ try {
     ],
     records: [
       ...[['04', 210], ['05', 215], ['06', 220], ['07', 205], ['08', 225], ['09', 210], ['10', 210]].map(([m, d]) => bill(`2026-${m}-03`, d)),
-      { ...bill('2027-01-02', 940), id: 'ins', sourceId: null, description: 'Car insurance', expectedAmountCents: 94000, scheduledAmountCents: 94000,
+      { ...bill('2027-01-02', 940), id: 'ins', sourceId: null, kind: 'varied', description: 'Car insurance', expectedAmountCents: 94000, scheduledAmountCents: 94000,
         status: 'scheduled', actualDate: null, actualAmountCents: null, completedAt: null },
     ],
   };

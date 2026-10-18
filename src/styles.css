@@ -33,8 +33,9 @@
   --color-out-fill: #3d4cc0;
   --color-liability-fill: #6a4fc0;
   --color-subscription-fill: #2f6aa8;
-  --color-savings-fill: #1c7272;
-  --color-spending-fill: #9c3f66;
+  --color-reserve-fill: #1c7272;
+  --color-reserve: #6fd6d6;
+  --color-varied-fill: #9c3f66;
   --color-warn: #f5a623;
   --color-warn-soft: #3a2f17;
   --color-neg: #ff7b7b;
@@ -784,11 +785,11 @@ fieldset.inline-fields .field label {
 .avatar-subscription {
   background: var(--color-subscription-fill);
 }
-.avatar-savings {
-  background: var(--color-savings-fill);
+.avatar-reserve {
+  background: var(--color-reserve-fill);
 }
-.avatar-spending {
-  background: var(--color-spending-fill);
+.avatar-varied {
+  background: var(--color-varied-fill);
 }
 .avatar-liability {
   background: var(--color-liability-fill);
@@ -848,6 +849,9 @@ fieldset.inline-fields .field label {
 }
 .amount-out {
   color: var(--color-out);
+}
+.amount-reserve {
+  color: var(--color-reserve);
 }
 .amount.strike {
   color: var(--color-text-secondary);
@@ -1135,6 +1139,14 @@ fieldset.inline-fields .field label {
 .chip-out.chip-expected {
   border-color: var(--color-out);
   color: var(--color-out);
+}
+.chip-reserve.chip-done {
+  background: var(--color-reserve-fill);
+  color: #fff;
+}
+.chip-reserve.chip-expected {
+  border-color: var(--color-reserve);
+  color: var(--color-reserve);
 }
 @media (min-width: 520px) {
   .cal-day {

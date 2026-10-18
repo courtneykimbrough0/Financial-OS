@@ -3,7 +3,7 @@ import { analyzeEstimate, approveEstimate, dismissEstimate, estimateSuggestions,
 import { buildForecast, periodKpis } from '../forecast';
 import { findOccurrence, variance } from '../occurrences';
 import * as ops from '../operations';
-import type { AppData, RecurrenceRule, TransactionKind } from '../types';
+import type { AppData, RecurrenceRule, RecurringKind } from '../types';
 import { clockAt, expectError, source, unwrap, usd } from './helpers';
 
 /*
@@ -14,7 +14,7 @@ import { clockAt, expectError, source, unwrap, usd } from './helpers';
 const TODAY = '2026-10-16';
 const clock = clockAt(TODAY);
 
-function item(dollars: number, start: string, opts: { id?: string; name?: string; kind?: TransactionKind; rule?: RecurrenceRule } = {}, d: AppData = ops.emptyData()): AppData {
+function item(dollars: number, start: string, opts: { id?: string; name?: string; kind?: RecurringKind; rule?: RecurrenceRule } = {}, d: AppData = ops.emptyData()): AppData {
   return source(d, start, opts.kind ?? 'bill', opts.name ?? 'Electricity', dollars, start, opts.rule ?? { type: 'monthly' }, opts.id ?? 'elec');
 }
 
@@ -351,7 +351,7 @@ describe('too little history', () => {
     expect(estimateSuggestions(d, TODAY)).toEqual([]);
     const f = buildForecast(d, TODAY);
     expect(f.issue).toBeNull();
-    expect(periodKpis(f, '2026-11-01', '2026-11-30')).toEqual({ incomeCents: usd(3600), outflowCents: usd(1380), netCents: usd(2220) });
+    expect(periodKpis(f, '2026-11-01', '2026-11-30')).toEqual({ incomeCents: usd(3600), outflowCents: usd(1380), reservesCents: 0, operatingCents: usd(2220), netCents: usd(2220) });
   });
 });
 
@@ -625,7 +625,7 @@ describe('income and savings', () => {
       ['2026-09-18', 2200],
       ['2026-10-02', 2150],
     ]);
-    return item(100, '2026-01-20', { id: 'save', name: 'Savings', kind: 'savings' }, d);
+    return item(100, '2026-01-20', { id: 'save', name: 'Savings', kind: 'reserve' }, d);
   }
 
   it('recorded income never produces a suggestion or more expected income', () => {
@@ -739,7 +739,7 @@ describe('previewing a suggestion', () => {
     let d = pay(electricity(180, '2026-04-03'), 'elec', [['2026-10-03', 210]]);
     d = item(1000, '2026-10-23', { id: 'pay', name: 'Paycheck', kind: 'income', rule: { type: 'biweekly' } }, d);
     d = item(1500, '2026-11-01', { id: 'rent', name: 'Rent' }, d);
-    return unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Car insurance', amountCents: usd(940), date: '2027-01-02' }, clock, 'ins'));
+    return unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Car insurance', amountCents: usd(940), date: '2027-01-02' }, clock, 'ins'));
   }
 
   it('covers every later payment of a change from a date on, over the 90-day window, without saving', () => {
@@ -775,7 +775,7 @@ describe('previewing a suggestion', () => {
     let d = pay(electricity(250, '2026-04-03'), 'elec', [['2026-10-03', 210]]);
     d = item(1000, '2026-10-23', { id: 'pay', name: 'Paycheck', kind: 'income', rule: { type: 'biweekly' } }, d);
     d = item(1500, '2026-11-01', { id: 'rent', name: 'Rent' }, d);
-    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Car insurance', amountCents: usd(940), date: '2027-01-02' }, clock, 'ins'));
+    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Car insurance', amountCents: usd(940), date: '2027-01-02' }, clock, 'ins'));
     const r = previewEstimate(d, suggestion(d), clock);
     if (!r.ok) throw new Error(r.error);
     // Running totals now → with $215: Nov 3 −750 → −715; Dec 3 −500 → −430; Jan 2 60 → 130; Jan 3 −190 → −85.

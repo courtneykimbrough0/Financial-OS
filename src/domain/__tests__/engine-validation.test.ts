@@ -23,7 +23,7 @@ function ledger(f: Forecast, start: string, end: string) {
 
 /*
  * Household: paid $2,000.10 every 2 weeks from Thu Oct 15; rent $1,450 on the 1st;
- * car loan $310.55 on the 20th; streaming $15.99 on the 18th; savings $100 twice a
+ * car loan $310.55 on the 20th; streaming $15.99 on the 18th; a $100 reserve twice a
  * month (1st and 15th, from Nov 1); one-time vet bill $240 on Nov 3.
  */
 function household(): AppData {
@@ -32,8 +32,8 @@ function household(): AppData {
   d = source(d, TODAY, 'bill', 'Rent', 1450, '2026-11-01', { type: 'monthly' }, 'rent');
   d = source(d, TODAY, 'liability', 'Car loan', 310.55, '2026-10-20', { type: 'monthly' }, 'car');
   d = source(d, TODAY, 'subscription', 'Streaming', 15.99, '2026-10-18', { type: 'monthly' }, 'stream');
-  d = source(d, TODAY, 'savings', 'Savings', 100, '2026-11-01', { type: 'twiceMonthly', days: [1, 15] }, 'save');
-  return unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Vet', amountCents: usd(240), date: '2026-11-03' }, clock, 'one-vet'));
+  d = source(d, TODAY, 'reserve', 'Savings', 100, '2026-11-01', { type: 'twiceMonthly', days: [1, 15] }, 'save');
+  return unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Vet', amountCents: usd(240), date: '2026-11-03' }, clock, 'one-vet'));
 }
 
 describe('running total arithmetic', () => {
@@ -45,7 +45,7 @@ describe('running total arithmetic', () => {
       ['2026-10-18', -15.99, 1984.11],
       ['2026-10-20', -310.55, 1673.56],
       ['2026-10-29', 2000.1, 3673.66],
-      ['2026-11-01', -1550, 2123.66], // rent 1,450 + savings 100
+      ['2026-11-01', -1550, 2123.66], // rent 1,450 + reserve 100
       ['2026-11-03', -240, 1883.66],
       ['2026-11-12', 2000.1, 3883.76],
       ['2026-11-15', -100, 3783.76],
@@ -58,8 +58,8 @@ describe('running total arithmetic', () => {
   it('period cash flow equals the change in running total over the period', () => {
     const f = buildForecast(household(), TODAY);
     const nov = periodKpis(f, '2026-11-01', '2026-11-30');
-    // Paydays Nov 12 and 26; rent, savings x2, vet, streaming, car loan.
-    expect(nov).toEqual({ incomeCents: usd(4000.2), outflowCents: usd(2216.54), netCents: usd(1783.66) });
+    // Paydays Nov 12 and 26; rent, vet, streaming, car loan out; reserve x2 set aside.
+    expect(nov).toEqual({ incomeCents: usd(4000.2), outflowCents: usd(2016.54), reservesCents: usd(200), operatingCents: usd(1983.66), netCents: usd(1783.66) });
     expect(tallyOn(f, '2026-11-30')! - tallyOn(f, '2026-10-31')!).toBe(nov.netCents);
   });
 
@@ -76,7 +76,7 @@ describe('spending before the next payday', () => {
   // Payday is Thu Oct 15; the electric bill and a side payment land before it.
   function early(): AppData {
     let d = household();
-    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Electric', amountCents: usd(90), date: '2026-10-13' }, clock, 'one-electric'));
+    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Electric', amountCents: usd(90), date: '2026-10-13' }, clock, 'one-electric'));
     return unwrap(ops.addOneTime(d, { kind: 'income', description: 'Side job', amountCents: usd(50), date: '2026-10-12' }, clock, 'one-side'));
   }
 
@@ -116,7 +116,7 @@ describe('events on the same day', () => {
     d = source(d, TODAY, 'income', 'Side job', 200, '2026-11-01', { type: 'monthly' }, 'side');
     d = source(d, TODAY, 'bill', 'Rent', 1200, '2026-11-01', { type: 'monthly' }, 'rent');
     d = source(d, TODAY, 'bill', 'Water', 40, '2026-11-01', { type: 'monthly' }, 'water');
-    d = source(d, TODAY, 'savings', 'Savings', 40, '2026-11-01', { type: 'monthly' }, 'save');
+    d = source(d, TODAY, 'reserve', 'Savings', 40, '2026-11-01', { type: 'monthly' }, 'save');
     // Two separate $40 items on the same day stay two items.
     return unwrap(ops.rescheduleOccurrence(d, id('water', '2026-12-01'), { date: '2026-12-02', amountCents: usd(45) }, clock));
   }
@@ -127,7 +127,8 @@ describe('events on the same day', () => {
     expect(row.entries.map((e) => e.occurrence.id)).toEqual([
       id('pay', '2026-11-01'), id('side', '2026-11-01'), id('rent', '2026-11-01'), id('save', '2026-11-01'), id('water', '2026-11-01'),
     ]);
-    expect([row.inCents, row.outCents, row.netCents, row.tallyCents]).toEqual([usd(1700), usd(1280), usd(420), usd(420)]);
+    // The reserve is set aside, not spent: its own part of the day, and still off the running total.
+    expect([row.inCents, row.outCents, row.reservedCents, row.netCents, row.tallyCents]).toEqual([usd(1700), usd(1240), usd(40), usd(420), usd(420)]);
   });
 
   it('gives the same order and totals however the data is stored', () => {
@@ -141,8 +142,8 @@ describe('period boundaries', () => {
   it('includes events on the first and last day and nothing outside', () => {
     const f = buildForecast(household(), TODAY);
     // Oct 20 car loan and Oct 29 paycheck sit on the edges.
-    expect(periodKpis(f, '2026-10-20', '2026-10-29')).toEqual({ incomeCents: usd(2000.1), outflowCents: usd(310.55), netCents: usd(1689.55) });
-    expect(periodKpis(f, '2026-10-21', '2026-10-28')).toEqual({ incomeCents: 0, outflowCents: 0, netCents: 0 });
+    expect(periodKpis(f, '2026-10-20', '2026-10-29')).toEqual({ incomeCents: usd(2000.1), outflowCents: usd(310.55), reservesCents: 0, operatingCents: usd(1689.55), netCents: usd(1689.55) });
+    expect(periodKpis(f, '2026-10-21', '2026-10-28')).toEqual({ incomeCents: 0, outflowCents: 0, reservesCents: 0, operatingCents: 0, netCents: 0 });
   });
 
   it('crosses a year end without losing or repeating an occurrence', () => {
@@ -158,7 +159,8 @@ describe('period boundaries', () => {
 
   it('extends the forecast to cover a requested period beyond the default horizon', () => {
     const f = buildForecast(household(), TODAY, { through: '2028-06-30' });
-    expect(periodKpis(f, '2028-06-01', '2028-06-30').outflowCents).toBe(usd(1450 + 310.55 + 15.99 + 200));
+    const june = periodKpis(f, '2028-06-01', '2028-06-30');
+    expect([june.outflowCents, june.reservesCents]).toEqual([usd(1450 + 310.55 + 15.99), usd(200)]);
   });
 });
 

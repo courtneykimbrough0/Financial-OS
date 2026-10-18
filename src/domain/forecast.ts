@@ -33,9 +33,12 @@
  *   The running tally is $0 at the end of the anchor day and transactions are
  *   processed from the next day (the payday itself) onward.
  *
- * Running tally:
- *   tally(d) = tally(d - 1) + income(d) − (expenses + liability payments)(d)
- *   for every day d after the anchor. Days on or before the anchor have no
+ * Running tally (available cash):
+ *   tally(d) = tally(d - 1) + income(d) − outflows(d) − net reserves(d)
+ *   for every day d after the anchor, where outflows are bills, subscriptions,
+ *   liability payments and varied spending, and net reserves are allocations
+ *   to Strategic Reserves minus releases from them. Internal transfers between
+ *   accounts are not entries at all, so they never change it. Days on or before the anchor have no
  *   tally. Views never reset it: a week, cycle, or custom range starting later
  *   shows the cumulative value carried from the anchor.
  */
@@ -50,7 +53,7 @@ export interface ForecastEntry {
   date: DateStr;
   /** Unsigned amount the entry contributes. */
   amountCents: Cents;
-  /** Signed contribution: positive for income, negative for outflows, 0 when not counted. */
+  /** Signed contribution to available cash: positive for income and reserve releases, negative for outflows and reserve allocations, 0 when not counted. */
   signedCents: Cents;
   /** False for canceled occurrences (displayed but excluded from all totals). */
   counts: boolean;
@@ -76,8 +79,8 @@ const DEFAULT_HORIZON_DAYS = 400;
 
 export function compareEntries(a: ForecastEntry, b: ForecastEntry): number {
   if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-  const ai = a.occurrence.kind === 'income' ? 0 : 1;
-  const bi = b.occurrence.kind === 'income' ? 0 : 1;
+  const ai = signFor(a.occurrence) === 1 ? 0 : 1;
+  const bi = signFor(b.occurrence) === 1 ? 0 : 1;
   if (ai !== bi) return ai - bi;
   if (a.amountCents !== b.amountCents) return b.amountCents - a.amountCents;
   const ad = a.occurrence.description.localeCompare(b.occurrence.description);
@@ -143,7 +146,7 @@ export function buildForecast(data: AppData, today: DateStr, options: ForecastOp
         occurrence: o,
         date: o.actualDate ?? o.scheduledDate,
         amountCents: amount,
-        signedCents: signFor(o.kind) * amount,
+        signedCents: signFor(o) * amount,
         counts: true,
         carriedForward: false,
       };
@@ -156,7 +159,7 @@ export function buildForecast(data: AppData, today: DateStr, options: ForecastOp
       occurrence: o,
       date: carry ? forecastStart! : o.scheduledDate,
       amountCents: o.scheduledAmountCents,
-      signedCents: signFor(o.kind) * o.scheduledAmountCents,
+      signedCents: signFor(o) * o.scheduledAmountCents,
       counts: true,
       carriedForward: carry,
     };
@@ -171,26 +174,39 @@ export function entriesInRange(forecast: Forecast, start: DateStr, end: DateStr)
   return forecast.entries.filter((e) => e.date >= start && e.date <= end);
 }
 
-export interface DayRow {
-  date: DateStr;
+/**
+ * Money for a set of entries, in the app's three parts: external income,
+ * external outflows, and net allocations to Strategic Reserves (allocations
+ * minus releases; negative when more is released than set aside). Every
+ * entry lands in exactly one part, so nothing is counted twice:
+ * netCents = inCents − outCents − reservedCents (available cash flow).
+ */
+export interface MoneyTotals {
   inCents: Cents;
   outCents: Cents;
+  reservedCents: Cents;
   netCents: Cents;
+}
+
+export interface DayRow extends MoneyTotals {
+  date: DateStr;
   /** Running tally after this day's transactions; null on or before the anchor. */
   tallyCents: Cents | null;
   entries: ForecastEntry[];
 }
 
-/** Income/outflow/net for a set of entries. Canceled entries are excluded. */
-export function totals(entries: ForecastEntry[]): { inCents: Cents; outCents: Cents; netCents: Cents } {
+/** See `MoneyTotals`. Canceled entries are excluded. */
+export function totals(entries: ForecastEntry[]): MoneyTotals {
   let inCents = 0;
   let outCents = 0;
+  let reservedCents = 0;
   for (const e of entries) {
     if (!e.counts) continue;
-    if (e.signedCents > 0) inCents += e.signedCents;
+    if (e.occurrence.kind === 'reserve') reservedCents -= e.signedCents;
+    else if (e.signedCents > 0) inCents += e.signedCents;
     else outCents -= e.signedCents;
   }
-  return { inCents, outCents, netCents: inCents - outCents };
+  return { inCents, outCents, reservedCents, netCents: inCents - outCents - reservedCents };
 }
 
 /**
@@ -230,14 +246,23 @@ export function tallyOn(forecast: Forecast, date: DateStr): Cents | null {
 
 export interface PeriodKpis {
   incomeCents: Cents;
+  /** External outflows: bills, subscriptions, liability payments, varied spending. */
   outflowCents: Cents;
+  /** Net allocations to Strategic Reserves. */
+  reservesCents: Cents;
+  /** Operating cash flow: income − outflows. */
+  operatingCents: Cents;
+  /** Available cash flow: operating − net reserves. */
   netCents: Cents;
 }
 
-/** Projected income, projected expenses (incl. liability payments), and cash flow (income − expenses) for [start, end]. */
+function kpisOf(t: MoneyTotals): PeriodKpis {
+  return { incomeCents: t.inCents, outflowCents: t.outCents, reservesCents: t.reservedCents, operatingCents: t.inCents - t.outCents, netCents: t.netCents };
+}
+
+/** Income, outflows, net reserves, operating and available cash flow for [start, end]. */
 export function periodKpis(forecast: Forecast, start: DateStr, end: DateStr): PeriodKpis {
-  const t = totals(entriesInRange(forecast, start, end));
-  return { incomeCents: t.inCents, outflowCents: t.outCents, netCents: t.netCents };
+  return kpisOf(totals(entriesInRange(forecast, start, end)));
 }
 
 export interface LowPoint {
@@ -315,7 +340,9 @@ export function timingGapsAhead(forecast: Forecast, days = GAP_LOOKAHEAD_DAYS): 
  * A gap is often a matter of timing (a bill due before the next paycheck)
  * rather than of spending, so no single entry is singled out as its cause.
  *
- * Always: beforeCents + inflowCents − outflowCents = lowestCents.
+ * Always: beforeCents + inflowCents − outflowCents = lowestCents. Here
+ * "out" means anything that lowers the running total, reserve allocations
+ * included, and "in" anything that raises it, reserve releases included.
  */
 export interface GapExplanation extends TimingGap {
   /** Running total at the end of the day before the gap ($0 when the gap starts on the first forecast day). */
@@ -385,7 +412,7 @@ export function weekSummaries(forecast: Forecast, start: DateStr, end: DateStr):
     const we = minDate(endOfWeek(ws), end);
     const days = rows.filter((r) => r.date >= ws && r.date <= we);
     const t = totals(days.flatMap((d) => d.entries));
-    out.push({ start: ws, end: we, days, incomeCents: t.inCents, outflowCents: t.outCents, netCents: t.netCents, endTallyCents: days[days.length - 1]?.tallyCents ?? null });
+    out.push({ start: ws, end: we, days, ...kpisOf(t), endTallyCents: days[days.length - 1]?.tallyCents ?? null });
   }
   return out;
 }

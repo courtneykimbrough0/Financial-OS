@@ -36,7 +36,7 @@ function mount(adapter: StorageAdapter) {
 
 const addItem = (n: number) =>
   act(() => {
-    store.run((d, c) => addOneTime(d, { kind: 'bill', description: `Bill ${n}`, amountCents: 1000, date: '2026-10-20' }, c, `one-${n}`));
+    store.run((d, c) => addOneTime(d, { kind: 'varied', description: `Bill ${n}`, amountCents: 1000, date: '2026-10-20' }, c, `one-${n}`));
   });
 
 const stored = async (adapter: StorageAdapter) => (await adapter.load()).records.map((r) => r.description);
@@ -63,7 +63,7 @@ class SlowAdapter extends MemoryAdapter {
 function withItems(...names: string[]): AppData {
   let d = emptyData();
   for (const [i, name] of names.entries()) {
-    const r = addOneTime(d, { kind: 'bill', description: name, amountCents: 500, date: '2026-10-20' }, { today: TODAY, now: `${TODAY}T12:00:00Z` }, `seed-${i}`);
+    const r = addOneTime(d, { kind: 'varied', description: name, amountCents: 500, date: '2026-10-20' }, { today: TODAY, now: `${TODAY}T12:00:00Z` }, `seed-${i}`);
     if (!r.ok) throw new Error(r.error);
     d = r.data;
   }

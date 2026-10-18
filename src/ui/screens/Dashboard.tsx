@@ -294,7 +294,7 @@ export function Dashboard() {
         <Modal title="How cash flow and the running total work" onClose={() => setSheet(null)}>
           <div className="stack">
             <p>
-              <strong>Cash flow</strong> is income minus expenses (including savings) for the period you’re looking at.
+              <strong>Cash flow</strong> is income minus spending and what you set aside in Strategic Reserves, for the period you’re looking at. Reserves stay yours; they’re just not available to spend.
             </p>
             <p>
               The <strong>running total</strong> starts at $0 on {formatMedium(forecast.anchor)}, the day before your next expected payday ({formatMedium(forecast.forecastStart)}), and adds money in and subtracts money out
@@ -482,7 +482,13 @@ function CashFlowHero({
           {formatSignedMoney(plan.cashFlowCents)}
         </p>
         <p className="hero-sub">
-          <span className="amount-in">{formatMoneyIn(plan.incomeCents)}</span> in · <span className="amount-out">{formatMoneyOut(plan.expensesCents)}</span> out
+          <span className="amount-in">{formatMoneyIn(plan.incomeCents)}</span> in · <span className="amount-out">{formatMoneyOut(plan.outflowCents)}</span> out
+          {plan.reservesCents !== 0 && (
+            <>
+              {' · '}
+              <span className="amount-reserve">{formatMoney(Math.abs(plan.reservesCents))}</span> {plan.reservesCents > 0 ? 'set aside' : 'from reserves'}
+            </>
+          )}
         </p>
         {payday && (
           <div className="hero-stat">
@@ -541,6 +547,7 @@ function dayAriaLabel(row: DayRow | undefined, date: DateStr, isLow: boolean): s
   if (!row) return bits.join('. ');
   if (row.inCents) bits.push(`money in ${formatMoney(row.inCents)}`);
   if (row.outCents) bits.push(`money out ${formatMoney(row.outCents)}`);
+  if (row.reservedCents) bits.push(row.reservedCents > 0 ? `set aside ${formatMoney(row.reservedCents)}` : `from reserves ${formatMoney(-row.reservedCents)}`);
   const overdue = row.entries.filter((e) => e.occurrence.displayStatus === 'overdue').length;
   if (overdue) bits.push(`${overdue} overdue`);
   const done = row.entries.filter((e) => e.occurrence.status === 'completed').length;
@@ -551,8 +558,9 @@ function dayAriaLabel(row: DayRow | undefined, date: DateStr, isLow: boolean): s
 }
 
 /** Chip style for one direction of money on a day: filled when every item is done, outlined while any is expected. */
-function chipState(entries: ForecastEntry[], dir: 'in' | 'out'): 'done' | 'expected' {
-  const items = entries.filter((e) => e.counts && (dir === 'in' ? e.signedCents > 0 : e.signedCents < 0));
+function chipState(entries: ForecastEntry[], dir: 'in' | 'out' | 'reserve'): 'done' | 'expected' {
+  const isReserve = (e: ForecastEntry) => e.occurrence.kind === 'reserve';
+  const items = entries.filter((e) => e.counts && (dir === 'reserve' ? isReserve(e) : !isReserve(e) && (dir === 'in' ? e.signedCents > 0 : e.signedCents < 0)));
   return items.length > 0 && items.every((e) => e.occurrence.status === 'completed') ? 'done' : 'expected';
 }
 
@@ -617,6 +625,7 @@ function Calendar({
                     </span>
                     <span className="cal-chips" aria-hidden="true">
                       {row && row.outCents > 0 && <span className={`chip chip-out chip-${chipState(row.entries, 'out')}`}>−{formatCompact(row.outCents)}</span>}
+                      {row && row.reservedCents !== 0 && <span className={`chip chip-reserve chip-${chipState(row.entries, 'reserve')}`}>{row.reservedCents > 0 ? '−' : '+'}{formatCompact(Math.abs(row.reservedCents))}</span>}
                       {row && row.inCents > 0 && <span className={`chip chip-in chip-${chipState(row.entries, 'in')}`}>+{formatCompact(row.inCents)}</span>}
                     </span>
                   </button>
@@ -633,7 +642,8 @@ function Calendar({
 function CalendarKey() {
   const items: [ReactNode, string][] = [
     [<span className="chip chip-in chip-expected legend-chip">+$1.8k</span>, 'Money in (green)'],
-    [<span className="chip chip-out chip-expected legend-chip">−$350</span>, 'Money out: expenses, including savings (indigo)'],
+    [<span className="chip chip-out chip-expected legend-chip">−$350</span>, 'Money out: bills, subscriptions, liabilities and spending (indigo)'],
+    [<span className="chip chip-reserve chip-expected legend-chip">−$100</span>, 'Set aside in Strategic Reserves (teal)'],
     [<span className="chip chip-out chip-done legend-chip">−$350</span>, 'Filled chip: everything that day is done (received or paid)'],
     [<span className="chip chip-out chip-expected legend-chip">−$350</span>, 'Outlined chip: still expected'],
     [<Icon icon={AlertCircle} size={18} className="flag-overdue" />, 'Overdue: the date passed and it hasn’t been recorded'],
@@ -679,9 +689,15 @@ function WeekList({ forecast, start, end, lowDate, onDay }: { forecast: Forecast
                       <span className="amount amount-in">{formatMoneyIn(w.incomeCents)}</span>
                     </span>
                     <span>
-                      <span className="sr-only">Expenses </span>
+                      <span className="sr-only">Spending </span>
                       <span className="amount amount-out">{formatMoneyOut(w.outflowCents)}</span>
                     </span>
+                    {w.reservesCents !== 0 && (
+                      <span>
+                        <span className="sr-only">{w.reservesCents > 0 ? 'Set aside ' : 'From reserves '}</span>
+                        <span className="amount amount-reserve">{formatSignedMoney(-w.reservesCents)}</span>
+                      </span>
+                    )}
                     <span className={w.netCents < 0 ? 'week-net negative' : 'week-net'}>Net {formatSignedMoney(w.netCents)}</span>
                     <span className={negative ? 'week-tally negative' : 'week-tally'}>
                       {negative && <Icon icon={TrendingDown} size={14} />}
@@ -740,6 +756,12 @@ function Timeline({
                   <span className="tl-cell">
                     <span className="tl-label">Out</span>
                     <span className="amount amount-out">{r.outCents ? `−${formatMoney(r.outCents)}` : '—'}</span>
+                    {r.reservedCents !== 0 && (
+                      <span className="amount amount-reserve">
+                        {formatSignedMoney(-r.reservedCents)}
+                        <span className="sr-only">{r.reservedCents > 0 ? ' set aside' : ' from reserves'}</span>
+                      </span>
+                    )}
                   </span>
                   <span className="tl-cell">
                     <span className="tl-label">Net</span>
@@ -783,12 +805,12 @@ function EntryButton({ e, onOpen }: { e: ForecastEntry; onOpen: (id: string) => 
         <span className="entry-title">{o.description}</span>
         <span className="entry-tags">
           <KindTag kind={o.kind} />
-          <StatusBadge status={o.displayStatus} kind={o.kind} />
+          <StatusBadge status={o.displayStatus} kind={o.kind} release={o.release} />
         </span>
         {sub && <span className="entry-sub">{sub}</span>}
       </span>
       <span className="entry-side">
-        <FlowAmount kind={o.kind} cents={e.amountCents} strike={!e.counts} />
+        <FlowAmount kind={o.kind} cents={e.amountCents} strike={!e.counts} release={o.release} />
         <Icon icon={ChevronRight} size={18} className="chevron" />
       </span>
     </button>
@@ -806,6 +828,12 @@ function DayTotals({ row }: { row: DayRow }) {
         <dt>Money out</dt>
         <dd className="amount-out">{row.outCents ? `−${formatMoney(row.outCents)}` : '—'}</dd>
       </div>
+      {row.reservedCents !== 0 && (
+        <div>
+          <dt>{row.reservedCents > 0 ? 'Set aside' : 'From reserves'}</dt>
+          <dd className="amount-reserve">{formatSignedMoney(-row.reservedCents)}</dd>
+        </div>
+      )}
       <div>
         <dt>Running total</dt>
         <dd className={row.tallyCents !== null && row.tallyCents < 0 ? 'negative' : ''}>

@@ -8,7 +8,7 @@ const USER = 'user-1';
 const clock = { today: '2026-10-11', now: '2026-10-11T12:00:00Z' };
 
 function withBill(data: AppData, name: string): AppData {
-  const r = addOneTime(data, { kind: 'bill', description: name, amountCents: 1000, date: '2026-10-20' }, clock, name);
+  const r = addOneTime(data, { kind: 'varied', description: name, amountCents: 1000, date: '2026-10-20' }, clock, name);
   if (!r.ok) throw new Error(r.error);
   return r.data;
 }

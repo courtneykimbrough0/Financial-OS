@@ -133,7 +133,7 @@ describe('undoing a payment or cancellation', () => {
   });
 
   it('undoing a one-time payment keeps the one-time item', () => {
-    let d = unwrap(ops.addOneTime(baseline(), { kind: 'bill', description: 'Vet', amountCents: usd(240), date: '2026-10-20' }, clockAt(TODAY), 'vet'));
+    let d = unwrap(ops.addOneTime(baseline(), { kind: 'varied', description: 'Vet', amountCents: usd(240), date: '2026-10-20' }, clockAt(TODAY), 'vet'));
     d = pay(d, 'vet', 250, '2026-10-20');
     d = unwrap(ops.restoreOccurrence(d, 'vet', clockAt('2026-10-20')));
     expect(history(d, 'vet', '2026-10-20')).toEqual({ expected: ['2026-10-20', 240], scheduled: ['2026-10-20', 240], actual: null });

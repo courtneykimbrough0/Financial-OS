@@ -199,14 +199,14 @@ describe('the review summary', () => {
     expect(rows(sum.overdue)).toEqual([['Paycheck', '2026-10-15', 1800]]);
     expect(sum.overdue[0]!.occurrence.status).toBe('scheduled');
     expect(sum.cashFlow).toEqual(periodKpis(f, '2026-10-18', '2026-10-24'));
-    expect(sum.cashFlow).toEqual({ incomeCents: usd(210), outflowCents: 0, netCents: usd(210) });
+    expect(sum.cashFlow).toEqual({ incomeCents: usd(210), outflowCents: 0, reservesCents: 0, operatingCents: usd(210), netCents: usd(210) });
     expect(sum.gaps).toEqual([]);
   });
 
   it('for a month: every expected item in it, with cash flow and any timing gap', () => {
     // By Nov 1: $1,800 + 3 × $200 − $60 + $1,800 − $1,200 = $2,940. A $3,000 repair on Nov 3 → −$60 until Fri Nov 6 (+$200).
     let d = withCadence(data(), 'monthly');
-    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Car repair', amountCents: usd(3000), date: '2026-11-03' }, clockAt(SETUP), 'repair'));
+    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Car repair', amountCents: usd(3000), date: '2026-11-03' }, clockAt(SETUP), 'repair'));
     const today = '2026-11-01';
     const s = reviewStatus(d, today);
     const f = buildForecast(d, today, { through: s.period!.end });
@@ -219,7 +219,7 @@ describe('the review summary', () => {
     ]);
     // Paychecks Nov 12, 26; side job every Friday: Nov 6, 13, 20, 27.
     expect(sum.expectedIncome.map((e) => e.amountCents / 100)).toEqual([200, 1800, 200, 200, 1800, 200]);
-    expect(sum.cashFlow).toEqual({ incomeCents: usd(4400), outflowCents: usd(4260), netCents: usd(140) });
+    expect(sum.cashFlow).toEqual({ incomeCents: usd(4400), outflowCents: usd(4260), reservesCents: 0, operatingCents: usd(140), netCents: usd(140) });
     expect(sum.gaps.map((g) => [g.start, g.end, g.lowestCents / 100])).toEqual([['2026-11-03', '2026-11-05', -60]]);
     expect(tallyOn(f, '2026-11-03')).toBe(usd(-60));
   });

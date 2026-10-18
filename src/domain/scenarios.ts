@@ -34,8 +34,8 @@ export type ScenarioChange =
   | { kind: 'occurrence-date'; occurrenceId: string; date: DateStr }
   /** A recurring item's amount from one of its payment dates on (for example a higher liability payment). */
   | { kind: 'recurring-amount'; sourceId: string; amountCents: Cents; from: DateStr }
-  /** A hypothetical recurring savings contribution. */
-  | { kind: 'recurring-savings'; description: string; amountCents: Cents; schedule: ScenarioSchedule }
+  /** A hypothetical recurring allocation to Strategic Reserves. */
+  | { kind: 'recurring-reserve'; description: string; amountCents: Cents; schedule: ScenarioSchedule }
   /** Hypothetical recurring income (for income that might arrive once, use `one-time-income`). Never confirmed. */
   | { kind: 'hypothetical-income'; description: string; amountCents: Cents; schedule: ScenarioSchedule };
 
@@ -62,10 +62,13 @@ export interface ScenarioCashFlow {
   confirmedIncomeCents: Cents;
   /** Income only this scenario adds. */
   hypotheticalIncomeCents: Cents;
+  /** External outflows (reserves are not among them). */
   outflowCents: Cents;
-  /** All income minus money out. */
+  /** Net allocations to Strategic Reserves. */
+  reservesCents: Cents;
+  /** Available cash flow: all income minus outflows and net reserves. */
   netCents: Cents;
-  /** Confirmed income minus money out: the cash flow if the hypothetical income doesn't arrive. */
+  /** Available cash flow without the hypothetical income: the cash flow if it doesn't arrive. */
   netWithoutHypotheticalCents: Cents;
 }
 
@@ -94,7 +97,7 @@ export interface ScenarioResult {
   reason: 'no-forecast' | 'anchor-changed' | 'before-payday' | null;
   limitations: string[];
   /** Scenario minus baseline. */
-  differences: { incomeCents: Cents; outflowCents: Cents; netCents: Cents; lowestCents: Cents | null; endingCents: Cents | null };
+  differences: { incomeCents: Cents; outflowCents: Cents; reservesCents: Cents; netCents: Cents; lowestCents: Cents | null; endingCents: Cents | null };
   newGaps: GapExplanation[];
   worsenedGaps: GapExplanation[];
   reducedGaps: GapExplanation[];
@@ -152,7 +155,7 @@ function applyChange(data: AppData, change: ScenarioChange, index: number, clock
       const err = notPast(change.date);
       if (err) return err;
       const income = change.kind === 'one-time-income';
-      const next = unwrap(ops.addOneTime(data, { kind: income ? 'income' : 'bill', description: change.description, amountCents: change.amountCents, date: change.date }, clock, id));
+      const next = unwrap(ops.addOneTime(data, { kind: income ? 'income' : 'varied', description: change.description, amountCents: change.amountCents, date: change.date }, clock, id));
       if (typeof next === 'string') return next;
       return {
         data: next,
@@ -164,7 +167,7 @@ function applyChange(data: AppData, change: ScenarioChange, index: number, clock
       if (!source || source.kind !== 'liability') return 'Choose one of your liability payments.';
       const err = notPast(change.date);
       if (err) return err;
-      const next = unwrap(ops.addOneTime(data, { kind: 'bill', description: `Extra payment: ${source.description}`, amountCents: change.amountCents, date: change.date }, clock, id));
+      const next = unwrap(ops.addOneTime(data, { kind: 'varied', description: `Extra payment: ${source.description}`, amountCents: change.amountCents, date: change.date }, clock, id));
       if (typeof next === 'string') return next;
       // The app has no one-time liability items yet; on this copy only, the validated record takes the liability kind.
       const withKind = { ...next, records: next.records.map((r) => (r.id === id ? { ...r, kind: 'liability' as TransactionKind } : r)) };
@@ -212,18 +215,18 @@ function applyChange(data: AppData, change: ScenarioChange, index: number, clock
         assumption: { change, label: `${source.description}: ${formatMoney(version.amountCents)} → ${formatMoney(change.amountCents)} each time from ${formatMedium(change.from)}`, direction: income ? 'in' : 'out', amountCents: change.amountCents, recurrence: 'recurring', income: income ? 'confirmed' : null, dates: sourceDates(next, source.id, change.from) },
       };
     }
-    case 'recurring-savings':
+    case 'recurring-reserve':
     case 'hypothetical-income': {
       const income = change.kind === 'hypothetical-income';
       const schedule = resolveSchedule(data, change.schedule, clock.today);
       if (typeof schedule === 'string') return schedule;
-      const next = unwrap(ops.addSource(data, { kind: income ? 'income' : 'savings', description: change.description, amountCents: change.amountCents, startDate: schedule.startDate, rule: schedule.rule }, clock, id));
+      const next = unwrap(ops.addSource(data, { kind: income ? 'income' : 'reserve', description: change.description, amountCents: change.amountCents, startDate: schedule.startDate, rule: schedule.rule }, clock, id));
       if (typeof next === 'string') return next;
       return {
         data: next,
         assumption: {
           change,
-          label: `${change.description.trim()}: ${income ? '+' : '−'}${formatMoney(change.amountCents)} ${describeRule(schedule.rule, schedule.startDate).toLowerCase()} from ${formatMedium(schedule.startDate)}${income ? ' (hypothetical)' : ''}`,
+          label: `${change.description.trim()}: ${income ? '+' : '−'}${formatMoney(change.amountCents)}${income ? '' : ' set aside'} ${describeRule(schedule.rule, schedule.startDate).toLowerCase()} from ${formatMedium(schedule.startDate)}${income ? ' (hypothetical)' : ''}`,
           direction: income ? 'in' : 'out',
           amountCents: change.amountCents,
           recurrence: 'recurring',
@@ -246,6 +249,7 @@ function cashFlow(f: Forecast, start: DateStr, end: DateStr): ScenarioCashFlow {
     confirmedIncomeCents: k.incomeCents - hypothetical,
     hypotheticalIncomeCents: hypothetical,
     outflowCents: k.outflowCents,
+    reservesCents: k.reservesCents,
     netCents: k.netCents,
     netWithoutHypotheticalCents: k.netCents - hypothetical,
   };
@@ -298,6 +302,7 @@ export function evaluateScenario(data: AppData, changes: ScenarioChange[], clock
   const money = {
     incomeCents: scenario.cashFlow.confirmedIncomeCents + scenario.cashFlow.hypotheticalIncomeCents - (baseline.cashFlow.confirmedIncomeCents + baseline.cashFlow.hypotheticalIncomeCents),
     outflowCents: scenario.cashFlow.outflowCents - baseline.cashFlow.outflowCents,
+    reservesCents: scenario.cashFlow.reservesCents - baseline.cashFlow.reservesCents,
     netCents: scenario.cashFlow.netCents - baseline.cashFlow.netCents,
   };
   const base = { assumptions, period: { start: clock.today, end, runningTotalFrom: start }, baseline, scenario };
@@ -391,7 +396,7 @@ function baselineOnly(data: AppData, clock: ops.Clock, options: { through?: Date
       comparable,
       reason: comparable ? null : 'no-forecast',
       limitations: comparable ? [] : ['There’s no upcoming income to start a running total from, so only cash flow is compared.'],
-      differences: { incomeCents: 0, outflowCents: 0, netCents: 0, lowestCents: comparable ? 0 : null, endingCents: comparable ? 0 : null },
+      differences: { incomeCents: 0, outflowCents: 0, reservesCents: 0, netCents: 0, lowestCents: comparable ? 0 : null, endingCents: comparable ? 0 : null },
       newGaps: [],
       worsenedGaps: [],
       reducedGaps: [],

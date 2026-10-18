@@ -15,7 +15,7 @@ import { GapsSheet } from '../components/gaps';
 const TODAY = '2026-10-11';
 const clock = clockAt(TODAY);
 const paid = () => source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1000, '2026-10-15', { type: 'biweekly' }, 'pay');
-const oneTime = (d: AppData, description: string, dollars: number, date: string, kind: 'bill' | 'income' = 'bill') =>
+const oneTime = (d: AppData, description: string, dollars: number, date: string, kind: 'varied' | 'income' = 'varied') =>
   unwrap(ops.addOneTime(d, { kind, description, amountCents: usd(dollars), date }, clock, `one-${description.toLowerCase().replace(/ /g, '-')}`));
 
 function show(d: AppData, onWhatIf?: (id: string) => void) {

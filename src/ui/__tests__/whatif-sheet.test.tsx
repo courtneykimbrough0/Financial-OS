@@ -20,8 +20,8 @@ const clock = clockAt(TODAY);
 
 function seed(): AppData {
   let d = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1000, '2026-10-15', { type: 'biweekly' }, 'pay');
-  d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(1300), date: '2026-10-20' }, clock, 'repair'));
-  return unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Tuition', amountCents: usd(1500), date: '2026-11-30' }, clock, 'tuition'));
+  d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(1300), date: '2026-10-20' }, clock, 'repair'));
+  return unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Tuition', amountCents: usd(1500), date: '2026-11-30' }, clock, 'tuition'));
 }
 
 let store: ReturnType<typeof useStore>;
@@ -124,7 +124,7 @@ describe('WhatIfSheet', () => {
     await setDate(user, '2026-10-30');
     await user.click(screen.getByRole('button', { name: 'Apply change…' }));
     act(() => {
-      store.run((d, c) => ops.addOneTime(d, { kind: 'bill', description: 'Vet', amountCents: usd(90), date: '2026-10-22' }, c, 'vet'));
+      store.run((d, c) => ops.addOneTime(d, { kind: 'varied', description: 'Vet', amountCents: usd(90), date: '2026-10-22' }, c, 'vet'));
     });
     await user.click(screen.getByRole('button', { name: 'Apply change' }));
     expect(screen.getByText('Your forecast changed after this preview. Check the updated preview before applying.')).toBeInTheDocument();
@@ -208,7 +208,7 @@ describe('a shortfall further out than 90 days', () => {
   it('is previewed over the period being viewed', async () => {
     // Taxes of $9,500 on Feb 10, 2027 after nine $1,000 paychecks: −$500 until Feb 18.
     const paidOnly = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1000, '2026-10-15', { type: 'biweekly' }, 'pay');
-    const data = unwrap(ops.addOneTime(paidOnly, { kind: 'bill', description: 'Taxes', amountCents: usd(9500), date: '2027-02-10' }, clock, 'taxes'));
+    const data = unwrap(ops.addOneTime(paidOnly, { kind: 'varied', description: 'Taxes', amountCents: usd(9500), date: '2027-02-10' }, clock, 'taxes'));
     const { user } = await open('taxes', data, '2027-02-28');
     await setDate(user, '2027-02-18');
     expect(preview()).toHaveTextContent('The timing gap Feb 10 – 17 would be gone.');

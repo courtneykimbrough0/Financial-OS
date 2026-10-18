@@ -6,7 +6,7 @@ import { formatMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { periodPlan } from '../../domain/plan';
 import { describeRule } from '../../domain/recurrence';
-import { liabilityPrefix, type OccurrenceRecord, type RecurringSource, type TransactionKind } from '../../domain/types';
+import { liabilityPrefix, type OccurrenceRecord, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useAccount } from '../../state/account';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
@@ -21,7 +21,7 @@ import { navigate } from '../router';
 
 interface StepDef {
   name: string;
-  kinds: TransactionKind[];
+  kinds: RecurringKind[];
   title: string;
   body: string;
 }
@@ -38,7 +38,7 @@ const STEPS: StepDef[] = [
     name: 'Bills',
     kinds: ['bill'],
     title: 'What bills do you pay?',
-    body: 'Rent, utilities, phone, insurance, and other regular bills. Add one-time expenses here too, like a car repair.',
+    body: 'Rent, utilities, phone, insurance, and other regular bills. Add one-time spending here too, like a car repair.',
   },
   {
     name: 'Subscriptions',
@@ -53,35 +53,35 @@ const STEPS: StepDef[] = [
     body: 'Regular payments on a card, loan, or line of credit. Skip this if you have none.',
   },
   {
-    name: 'Savings',
-    kinds: ['savings'],
+    name: 'Reserves',
+    kinds: ['reserve'],
     title: 'What do you set aside?',
-    body: 'Money you move into savings on a schedule. It counts as an expense, so cash flow shows what’s left after it. Optional: you can add it later.',
+    body: 'Strategic Reserves: money you set aside on a schedule and keep. Cash flow shows what’s available after it. Optional: you can add it later.',
   },
   { name: 'Review', kinds: [], title: 'Check everything over', body: 'Tap anything to change it before you start.' },
 ];
 const REVIEW = STEPS.length - 1;
-const STEP_OF: Record<TransactionKind, number> = { income: 1, bill: 2, subscription: 3, liability: 4, savings: 5 };
+const STEP_OF: Record<RecurringKind, number> = { income: 1, bill: 2, subscription: 3, liability: 4, reserve: 5 };
 
-const KIND_SECTION: Record<TransactionKind, { label: string; add: string; addAnother: string; empty: string }> = {
+const KIND_SECTION: Record<RecurringKind, { label: string; add: string; addAnother: string; empty: string }> = {
   income: { label: 'Income', add: 'Add income', addAnother: 'Add another income', empty: 'No income added yet' },
   bill: { label: 'Bills', add: 'Add a bill', addAnother: 'Add another bill', empty: 'No bills added yet' },
   subscription: { label: 'Subscriptions', add: 'Add a subscription', addAnother: 'Add another subscription', empty: 'No subscriptions added yet' },
   liability: { label: 'Liability payments', add: 'Add a payment', addAnother: 'Add another payment', empty: 'No liability payments added yet' },
-  savings: { label: 'Savings', add: 'Add savings', addAnother: 'Add more savings', empty: 'No savings added yet' },
+  reserve: { label: 'Strategic Reserves', add: 'Add a reserve', addAnother: 'Add another reserve', empty: 'No reserves added yet' },
 };
 
 /** Sheet state shared by the setup steps: add a new item, or edit one already added. */
-type OneTimeKind = 'income' | 'bill';
+type OneTimeKind = 'income' | 'varied';
 type SetupSheet =
-  | { mode: 'add'; kind: TransactionKind }
+  | { mode: 'add'; kind: RecurringKind }
   | { mode: 'edit'; source: RecurringSource }
   | { mode: 'add-once'; kind: OneTimeKind }
   | { mode: 'once'; record: OccurrenceRecord };
 
-/** One-time items of a group (income, or any expense). */
-const oneTimes = (records: OccurrenceRecord[], income: boolean) =>
-  records.filter((r) => r.sourceId === null && (r.kind === 'income') === income).sort((a, b) => (a.scheduledDate < b.scheduledDate ? -1 : 1));
+/** One-time items of a kind. */
+const oneTimes = (records: OccurrenceRecord[], kind: TransactionKind) =>
+  records.filter((r) => r.sourceId === null && r.kind === kind).sort((a, b) => (a.scheduledDate < b.scheduledDate ? -1 : 1));
 
 function OneTimeRow({ r, onOpen }: { r: OccurrenceRecord; onOpen: () => void }) {
   return (
@@ -138,7 +138,7 @@ function SetupSheetView({ sheet, onClose }: { sheet: SetupSheet; onClose: () => 
   }
   if (sheet.mode === 'add-once') {
     return (
-      <Modal title={sheet.kind === 'income' ? 'Add one-time income' : 'Add one-time expense'} onClose={onClose}>
+      <Modal title={sheet.kind === 'income' ? 'Add one-time income' : 'Add varied spending'} onClose={onClose}>
         <OneTimeForm kind={sheet.kind} onDone={onClose} />
       </Modal>
     );
@@ -189,7 +189,7 @@ function SetupSheetView({ sheet, onClose }: { sheet: SetupSheet; onClose: () => 
 }
 
 /** Items of one kind: a list card plus an add button, or an empty card with the add button. */
-function KindSection({ kind, onSheet }: { kind: TransactionKind; onSheet: (s: SetupSheet) => void }) {
+function KindSection({ kind, onSheet }: { kind: RecurringKind; onSheet: (s: SetupSheet) => void }) {
   const { data } = useStore();
   const items = data.sources.filter((s) => s.kind === kind);
   const copy = KIND_SECTION[kind];
@@ -221,16 +221,16 @@ function KindSection({ kind, onSheet }: { kind: TransactionKind; onSheet: (s: Se
 
 function OneTimeSection({ income, onSheet }: { income: boolean; onSheet: (s: SetupSheet) => void }) {
   const { data } = useStore();
-  const items = oneTimes(data.records, income);
-  const kind: OneTimeKind = income ? 'income' : 'bill';
-  const label = income ? 'One-time income' : 'One-time expenses';
+  const kind: OneTimeKind = income ? 'income' : 'varied';
+  const items = oneTimes(data.records, kind);
+  const label = income ? 'One-time income' : 'Varied spending';
   return (
     <section className="stack-sm" aria-labelledby={`setup-once-${kind}`}>
       <SectionLabel
         id={`setup-once-${kind}`}
         action={
           <button type="button" className="button small link" onClick={() => onSheet({ mode: 'add-once', kind })} aria-haspopup="dialog">
-            <Icon icon={Plus} size={16} /> {income ? 'Add one-time income' : 'Add one-time expense'}
+            <Icon icon={Plus} size={16} /> {income ? 'Add one-time income' : 'Add spending'}
           </button>
         }
       >
@@ -249,7 +249,7 @@ function OneTimeSection({ income, onSheet }: { income: boolean; onSheet: (s: Set
   );
 }
 
-function KindStep({ kind, onSheet }: { kind: TransactionKind; onSheet: (s: SetupSheet) => void }) {
+function KindStep({ kind, onSheet }: { kind: RecurringKind; onSheet: (s: SetupSheet) => void }) {
   return (
     <div className="stack-lg">
       <KindSection kind={kind} onSheet={onSheet} />
@@ -273,12 +273,12 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
   // Payments due before the running total starts: in cash flow, not in the running total.
   const beforePayday = forecast.anchor && forecast.anchor >= today ? entriesInRange(forecast, today, forecast.anchor).filter((e) => e.counts && e.signedCents < 0) : [];
   const beforeTotal = beforePayday.reduce((n, e) => n + e.amountCents, 0);
-  const groups: [string, TransactionKind[]][] = [
+  const groups: [string, RecurringKind[]][] = [
     ['Income', ['income']],
     ['Bills', ['bill']],
     ['Subscriptions', ['subscription']],
     ['Liability payments', ['liability']],
-    ['Savings', ['savings']],
+    ['Strategic Reserves', ['reserve']],
   ];
 
   return (
@@ -338,8 +338,8 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
 
       {groups.map(([label, kinds]) => {
         const items = data.sources.filter((s) => kinds.includes(s.kind));
-        // One-time expenses are added on the Bills step, so they're listed there.
-        const once = label === 'Income' ? oneTimes(data.records, true) : label === 'Bills' ? oneTimes(data.records, false) : [];
+        // Varied spending is added on the Bills step, so it's listed there.
+        const once = label === 'Income' ? oneTimes(data.records, 'income') : label === 'Bills' ? oneTimes(data.records, 'varied') : [];
         return (
           <section key={label} className="stack-sm" aria-labelledby={`review-${kinds[0]}`}>
             <SectionLabel
@@ -458,7 +458,7 @@ export function Onboarding() {
         <div className="stack">
           <ul className="card list-card checklist">
             <li>Add when you expect to get paid</li>
-            <li>Add your main bills and loan payments. Subscriptions and savings can wait</li>
+            <li>Add your main bills and loan payments. Subscriptions and reserves can wait</li>
             <li>See your cash flow for each pay period and your running total day by day</li>
             <li>Record what actually happens, and the forecast updates</li>
           </ul>

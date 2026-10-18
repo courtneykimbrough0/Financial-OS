@@ -15,7 +15,7 @@ const TODAY = '2026-10-11';
 const clock = clockAt(TODAY);
 const paid = () => source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1000, '2026-10-15', { type: 'biweekly' }, 'pay');
 const oneTime = (d: AppData, description: string, dollars: number, date: string) =>
-  unwrap(ops.addOneTime(d, { kind: 'bill', description, amountCents: usd(dollars), date }, clock, `one-${description.toLowerCase()}`));
+  unwrap(ops.addOneTime(d, { kind: 'varied', description, amountCents: usd(dollars), date }, clock, `one-${description.toLowerCase()}`));
 
 /** Car repair $1,300 on Oct 20 → −$300 until the Oct 29 paycheck ($700). Tuition $1,500 on Nov 30. */
 function withRepair(): AppData {
@@ -243,7 +243,7 @@ describe('applying a previewed change', () => {
 
   it('refuses a preview made on data that has changed since', () => {
     const previewedOn = rent();
-    const changed = unwrap(ops.addOneTime(previewedOn, { kind: 'bill', description: 'Vet', amountCents: usd(90), date: '2026-10-22' }, clock));
+    const changed = unwrap(ops.addOneTime(previewedOn, { kind: 'varied', description: 'Vet', amountCents: usd(90), date: '2026-10-22' }, clock));
     expect(applyPreviewedChange(changed, previewedOn, { kind: 'move', occurrenceId: 'rent@2026-10-20', date: '2026-10-30' }, clock)).toEqual({
       ok: false,
       error: 'Your forecast changed after this preview. Check the updated preview before applying.',

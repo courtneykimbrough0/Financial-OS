@@ -31,7 +31,7 @@ export function richPlan(): AppData {
   d = source(d, '2026-06-20', 'bill', 'Phone', 60, '2026-07-25', { type: 'monthly' }, 'phone');
   d = unwrap(ops.addSource(d, { kind: 'liability', liabilityType: 'loan', description: 'Car loan', amountCents: usd(410), startDate: '2026-06-15', rule: { type: 'custom', interval: 2, unit: 'month' }, tags: ['Car'] }, clockAt('2026-06-01'), 'loan'));
   d = source(d, '2026-05-01', 'subscription', 'Streaming', 15.99, '2026-05-01', { type: 'twiceMonthly', days: [1, 15] }, 'stream');
-  d = source(d, '2026-06-01', 'savings', 'Emergency fund', 50, '2026-06-06', { type: 'weekly' }, 'save');
+  d = source(d, '2026-06-01', 'reserve', 'Emergency fund', 50, '2026-06-06', { type: 'weekly' }, 'save');
 
   // Recorded payments on electricity: early, on time, late and different amounts.
   for (const [date, dollars, actual] of [
@@ -61,8 +61,8 @@ export function richPlan(): AppData {
   // One-time items: received, expected, and canceled.
   d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Tax refund', amountCents: usd(640), date: '2026-09-15', tags: ['Taxes'] }, clockAt('2026-09-01'), 'one-refund'));
   d = unwrap(ops.recordActual(d, 'one-refund', { amountCents: usd(612.4), date: '2026-09-18' }, clock));
-  d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Car repair', amountCents: usd(800), date: '2026-11-10' }, clock, 'one-repair'));
-  d = unwrap(ops.addOneTime(d, { kind: 'savings', description: 'Holiday fund', amountCents: usd(100), date: '2026-12-01' }, clock, 'one-holiday'));
+  d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Car repair', amountCents: usd(800), date: '2026-11-10' }, clock, 'one-repair'));
+  d = unwrap(ops.addOneTime(d, { kind: 'reserve', description: 'Holiday fund', amountCents: usd(100), date: '2026-12-01' }, clock, 'one-holiday'));
   d = unwrap(ops.cancelOccurrence(d, 'one-holiday', '', clock));
   // Review rhythm: on payday, the current one done.
   d = unwrap(ops.setReviewCadence(d, 'payday'));
@@ -95,8 +95,7 @@ export function legacyPlan(): AppData {
       },
       {
         id: 'src-old-gym',
-        kind: 'expense',
-        category: 'health',
+        kind: 'bill',
         description: 'Gym',
         versions: [{ id: 'ver-old-2', startDate: '2026-09-10', amountCents: 4000, rule: { type: 'monthly' } }],
         active: false,
@@ -109,7 +108,7 @@ export function legacyPlan(): AppData {
       {
         id: 'src-old-gym@2026-09-10',
         sourceId: 'src-old-gym',
-        kind: 'spending',
+        kind: 'bill',
         description: 'Gym',
         expectedDate: '2026-09-10',
         expectedAmountCents: 4000,

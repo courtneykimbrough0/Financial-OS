@@ -64,7 +64,7 @@ async function signUp(devices = 0) {
 }
 
 const adapterFor = (sb: SupabaseClient) => new SupabaseStorageAdapter(sb);
-const repair = (d: AppData, dollars: number, id = 'one-repair') => unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(dollars), date: '2026-11-05' }, clock, id));
+const repair = (d: AppData, dollars: number, id = 'one-repair') => unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(dollars), date: '2026-11-05' }, clock, id));
 /** A plan already stored for a new user, at revision 1, through a replace (as a migration would). */
 async function withPlan(plan: AppData, devices = 0) {
   const u = await signUp(devices);

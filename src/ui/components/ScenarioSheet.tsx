@@ -19,7 +19,7 @@ import { useStore } from '../../state/store';
 import { Field, Icon, Modal, MoneyInput, SectionLabel } from './common';
 import { GapChanges, Money } from './comparison';
 
-type ChangeType = 'income' | 'expense' | 'move' | 'amount' | 'liability' | 'savings' | 'variable';
+type ChangeType = 'income' | 'expense' | 'move' | 'amount' | 'liability' | 'reserve' | 'variable';
 
 const TYPES: { type: ChangeType; label: string; hint: string }[] = [
   { type: 'income', label: 'Additional income', hint: 'Money that might come in once' },
@@ -27,7 +27,7 @@ const TYPES: { type: ChangeType; label: string; hint: string }[] = [
   { type: 'move', label: 'Move an expected payment', hint: 'One upcoming payment on another date' },
   { type: 'amount', label: 'Change an expected amount', hint: 'One upcoming payment at another amount' },
   { type: 'liability', label: 'Increase a liability payment', hint: 'A higher payment from a date on' },
-  { type: 'savings', label: 'Set aside savings', hint: 'An amount on a schedule' },
+  { type: 'reserve', label: 'Build reserves', hint: 'An amount set aside on a schedule' },
   { type: 'variable', label: 'Explore variable income', hint: 'Low, expected and high amounts' },
 ];
 
@@ -48,8 +48,8 @@ function typeOf(c: ScenarioChange): ChangeType {
       return 'amount';
     case 'recurring-amount':
       return 'liability';
-    case 'recurring-savings':
-      return 'savings';
+    case 'recurring-reserve':
+      return 'reserve';
   }
 }
 
@@ -80,7 +80,7 @@ function changeLabel(c: ScenarioChange, data: AppData, today: DateStr): string {
     }
     case 'recurring-amount':
       return `${data.sources.find((s) => s.id === c.sourceId)?.description ?? 'Payment'}: ${formatMoney(c.amountCents)} from ${formatMedium(c.from)}`;
-    case 'recurring-savings':
+    case 'recurring-reserve':
       return `${c.description}: ${formatMoney(c.amountCents)} ${c.schedule === 'each-paycheck' ? 'each payday' : `${FREQUENCY_LABEL[frequencyOf(c.schedule)].toLowerCase()} from ${formatMedium(c.schedule.startDate)}`}`;
     case 'hypothetical-income':
       return `${c.description}: +${formatMoney(c.amountCents)}`;
@@ -491,8 +491,8 @@ function IncomeCases({ cases }: { cases: Record<IncomeCaseName, ScenarioResult> 
 // Entering a change
 // ---------------------------------------------------------------------------
 
-const FREQUENCIES: Record<'savings' | 'variable', Frequency[]> = {
-  savings: ['paycheck', 'weekly', 'biweekly', 'monthly'],
+const FREQUENCIES: Record<'reserve' | 'variable', Frequency[]> = {
+  reserve: ['paycheck', 'weekly', 'biweekly', 'monthly'],
   variable: ['once', 'weekly', 'biweekly', 'monthly'],
 };
 
@@ -518,14 +518,14 @@ function ChangeForm({
   const firstLiability = options.liabilities[0];
 
   const [description, setDescription] = useState(
-    c && 'description' in c ? c.description : range ? range.description : type === 'income' ? 'Extra income' : type === 'expense' ? 'Unexpected expense' : type === 'savings' ? 'Savings' : 'Variable income',
+    c && 'description' in c ? c.description : range ? range.description : type === 'income' ? 'Extra income' : type === 'expense' ? 'Unexpected expense' : type === 'reserve' ? 'Reserves' : 'Variable income',
   );
   const [amount, setAmount] = useState(c && 'amountCents' in c ? centsToInput(c.amountCents) : type === 'amount' && firstOcc ? centsToInput(firstOcc.amountCents) : type === 'liability' && firstLiability ? centsToInput(firstLiability.amountCents) : '');
-  const [date, setDate] = useState<DateStr>(c && 'date' in c ? c.date : range?.date ?? (c?.kind === 'recurring-savings' && c.schedule !== 'each-paycheck' ? c.schedule.startDate : range && range.schedule && range.schedule !== 'each-paycheck' ? range.schedule.startDate : type === 'move' && firstOcc ? firstOcc.date : today));
+  const [date, setDate] = useState<DateStr>(c && 'date' in c ? c.date : range?.date ?? (c?.kind === 'recurring-reserve' && c.schedule !== 'each-paycheck' ? c.schedule.startDate : range && range.schedule && range.schedule !== 'each-paycheck' ? range.schedule.startDate : type === 'move' && firstOcc ? firstOcc.date : today));
   const [occurrenceId, setOccurrenceId] = useState(c && 'occurrenceId' in c ? c.occurrenceId : (firstOcc?.id ?? ''));
   const [sourceId, setSourceId] = useState(c?.kind === 'recurring-amount' ? c.sourceId : (firstLiability?.sourceId ?? ''));
   const [from, setFrom] = useState(c?.kind === 'recurring-amount' ? c.from : (firstLiability?.dates[0] ?? ''));
-  const [frequency, setFrequency] = useState<Frequency>(c?.kind === 'recurring-savings' ? frequencyOf(c.schedule) : range ? frequencyOf(range.schedule) : type === 'savings' ? 'paycheck' : 'once');
+  const [frequency, setFrequency] = useState<Frequency>(c?.kind === 'recurring-reserve' ? frequencyOf(c.schedule) : range ? frequencyOf(range.schedule) : type === 'reserve' ? 'paycheck' : 'once');
   const [low, setLow] = useState(range ? centsToInput(range.lowCents) : '');
   const [expected, setExpected] = useState(range ? centsToInput(range.expectedCents) : '');
   const [high, setHigh] = useState(range ? centsToInput(range.highCents) : '');
@@ -541,16 +541,16 @@ function ChangeForm({
       if (v === null || v < 0 || (!allowZero && v === 0)) e[key] = allowZero ? 'Enter $0 or more.' : 'Enter an amount above $0.';
       return v ?? 0;
     };
-    const needsDate = type === 'income' || type === 'expense' || type === 'move' || ((type === 'savings' || type === 'variable') && frequency !== 'paycheck');
+    const needsDate = type === 'income' || type === 'expense' || type === 'move' || ((type === 'reserve' || type === 'variable') && frequency !== 'paycheck');
     if (needsDate && !date) e.date = 'Choose a date.';
-    if ((type === 'income' || type === 'expense' || type === 'savings' || type === 'variable') && !description.trim()) e.description = 'Enter a short name.';
+    if ((type === 'income' || type === 'expense' || type === 'reserve' || type === 'variable') && !description.trim()) e.description = 'Enter a short name.';
     let value: ScenarioChange | IncomeRange | null = null;
     if (type === 'income') value = { kind: 'one-time-income', description: description.trim(), amountCents: cents(amount, 'amount'), date };
     if (type === 'expense') value = { kind: 'one-time-expense', description: description.trim(), amountCents: cents(amount, 'amount'), date };
     if (type === 'move') value = { kind: 'occurrence-date', occurrenceId, date };
     if (type === 'amount') value = { kind: 'occurrence-amount', occurrenceId, amountCents: cents(amount, 'amount') };
     if (type === 'liability') value = { kind: 'recurring-amount', sourceId, amountCents: cents(amount, 'amount'), from };
-    if (type === 'savings') value = { kind: 'recurring-savings', description: description.trim(), amountCents: cents(amount, 'amount'), schedule: scheduleFor(frequency, date)! };
+    if (type === 'reserve') value = { kind: 'recurring-reserve', description: description.trim(), amountCents: cents(amount, 'amount'), schedule: scheduleFor(frequency, date)! };
     if (type === 'variable') {
       const schedule = scheduleFor(frequency, date);
       value = { description: description.trim(), schedule, ...(schedule === null ? { date } : {}), lowCents: cents(low, 'low', true), expectedCents: cents(expected, 'expected'), highCents: cents(high, 'high') };
@@ -573,7 +573,7 @@ function ChangeForm({
       }}
     >
       <h3>{title}</h3>
-      {(type === 'income' || type === 'expense' || type === 'savings' || type === 'variable') && (
+      {(type === 'income' || type === 'expense' || type === 'reserve' || type === 'variable') && (
         <Field label="Name" error={errors.description}>
           {(p) => <input {...p} value={description} maxLength={60} onChange={(ev) => setDescription(ev.target.value)} />}
         </Field>
@@ -638,7 +638,7 @@ function ChangeForm({
         </>
       )}
       {type !== 'move' && type !== 'variable' && (
-        <Field label={type === 'amount' || type === 'liability' ? 'New amount' : type === 'savings' ? 'Amount each time' : 'Amount'} error={errors.amount}>
+        <Field label={type === 'amount' || type === 'liability' ? 'New amount' : type === 'reserve' ? 'Amount each time' : 'Amount'} error={errors.amount}>
           {(p) => <MoneyInput {...p} value={amount} onChange={setAmount} />}
         </Field>
       )}
@@ -655,7 +655,7 @@ function ChangeForm({
           </Field>
         </div>
       )}
-      {(type === 'savings' || type === 'variable') && (
+      {(type === 'reserve' || type === 'variable') && (
         <Field label="How often">
           {(p) => (
             <select {...p} value={frequency} onChange={(ev) => setFrequency(ev.target.value as Frequency)}>
@@ -668,8 +668,8 @@ function ChangeForm({
           )}
         </Field>
       )}
-      {(type === 'income' || type === 'expense' || type === 'move' || ((type === 'savings' || type === 'variable') && frequency !== 'paycheck')) && (
-        <Field label={type === 'move' ? 'New date' : (type === 'savings' || type === 'variable') && frequency !== 'once' ? 'First date' : 'Date'} error={errors.date}>
+      {(type === 'income' || type === 'expense' || type === 'move' || ((type === 'reserve' || type === 'variable') && frequency !== 'paycheck')) && (
+        <Field label={type === 'move' ? 'New date' : (type === 'reserve' || type === 'variable') && frequency !== 'once' ? 'First date' : 'Date'} error={errors.date}>
           {(p) => <input {...p} type="date" min={today} value={date} onChange={(ev) => setDate(ev.target.value)} />}
         </Field>
       )}

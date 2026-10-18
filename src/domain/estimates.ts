@@ -23,9 +23,9 @@
  *     payments counted.
  *
  * At least three payments are needed. A suggestion must differ from the
- * current estimate by at least $5 and 5%. Income and savings are not
+ * current estimate by at least $5 and 5%. Income and reserves are not
  * estimated: future income counts only when the person enters it, and a
- * savings deposit is the person's choice.
+ * reserve allocation is the person's choice.
  */
 import { addDays, formatMedium, parts, type DateStr } from './dates';
 import { formatMoney, type Cents } from './money';
@@ -114,7 +114,7 @@ export interface EstimateSuggestion {
 }
 
 export type NoSuggestionReason =
-  | 'not-estimated' // income, savings, or an item that's turned off
+  | 'not-estimated' // income, reserves, or an item that's turned off
   | 'upcoming-change' // the person has already set a change that starts later
   | 'no-upcoming' // nothing outstanding to apply it to
   | 'insufficient-history'

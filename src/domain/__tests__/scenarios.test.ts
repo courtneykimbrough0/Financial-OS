@@ -41,7 +41,7 @@ describe('the baseline', () => {
     expect(r.baseline).toMatchObject({
       forecastStart: '2026-10-23',
       anchor: '2026-10-22',
-      cashFlow: { confirmedIncomeCents: 700000, hypotheticalIncomeCents: 0, outflowCents: 540000, netCents: 160000, netWithoutHypotheticalCents: 160000 },
+      cashFlow: { confirmedIncomeCents: 700000, hypotheticalIncomeCents: 0, outflowCents: 540000, reservesCents: 0, netCents: 160000, netWithoutHypotheticalCents: 160000 },
       lowest: { date: '2026-11-01', tallyCents: -80000 },
       endingCents: 160000,
     });
@@ -58,10 +58,10 @@ describe('one-time changes', () => {
     expect(r.assumptions).toEqual([
       { change: { kind: 'one-time-income', description: 'Bonus', amountCents: 50000, date: '2026-11-01' }, label: 'Bonus: +$500.00 once on Nov 1, 2026 (hypothetical)', direction: 'in', amountCents: 50000, recurrence: 'one-time', dates: ['2026-11-01'], income: 'hypothetical', inRunningTotal: true },
     ]);
-    expect(r.scenario.cashFlow).toEqual({ confirmedIncomeCents: 700000, hypotheticalIncomeCents: 50000, outflowCents: 540000, netCents: 210000, netWithoutHypotheticalCents: 160000 });
+    expect(r.scenario.cashFlow).toEqual({ confirmedIncomeCents: 700000, hypotheticalIncomeCents: 50000, outflowCents: 540000, reservesCents: 0, netCents: 210000, netWithoutHypotheticalCents: 160000 });
     // Nov 1: 1,000 − 300 + 500 − 1,500 = −300; every later total is $500 higher.
     expect(r.scenario.lowest).toEqual({ date: '2026-11-01', tallyCents: -30000 });
-    expect(r.differences).toEqual({ incomeCents: 50000, outflowCents: 0, netCents: 50000, lowestCents: 50000, endingCents: 50000 });
+    expect(r.differences).toEqual({ incomeCents: 50000, outflowCents: 0, reservesCents: 0, netCents: 50000, lowestCents: 50000, endingCents: 50000 });
     expect(r.reducedGaps.map(gap)).toEqual([
       ['2026-11-01', '2026-11-05', -30000, '2026-11-06'],
       ['2026-12-01', '2026-12-03', -10000, '2026-12-04'],
@@ -81,7 +81,7 @@ describe('one-time changes', () => {
     ]);
     expect(r.newGaps.map((g) => g.start)).toEqual(['2026-11-10', '2027-01-01']);
     expect(r.worsenedGaps.map((g) => g.start)).toEqual(['2026-12-01']);
-    expect(r.differences).toEqual({ incomeCents: 0, outflowCents: 80000, netCents: -80000, lowestCents: -60000, endingCents: -80000 });
+    expect(r.differences).toEqual({ incomeCents: 0, outflowCents: 80000, reservesCents: 0, netCents: -80000, lowestCents: -60000, endingCents: -80000 });
     expect(r.scenario.lowest).toEqual({ date: '2026-12-01', tallyCents: -140000 });
   });
 
@@ -106,10 +106,10 @@ describe('one-time changes', () => {
     const up = run([{ kind: 'occurrence-amount', occurrenceId: 'rent@2026-12-01', amountCents: usd(1700) }]);
     expect(up.assumptions[0]!.label).toBe('Rent on Dec 1, 2026: $1,500.00 → $1,700.00');
     expect(up.worsenedGaps.map(gap)).toEqual([['2026-12-01', '2026-12-03', -80000, '2026-12-04']]);
-    expect(up.differences).toEqual({ incomeCents: 0, outflowCents: 20000, netCents: -20000, lowestCents: 0, endingCents: -20000 });
+    expect(up.differences).toEqual({ incomeCents: 0, outflowCents: 20000, reservesCents: 0, netCents: -20000, lowestCents: 0, endingCents: -20000 });
     const down = run([{ kind: 'occurrence-amount', occurrenceId: 'rent@2026-12-01', amountCents: usd(1000) }]);
     expect(down.reducedGaps.map(gap)).toEqual([['2026-12-01', '2026-12-03', -10000, '2026-12-04']]);
-    expect(down.differences).toEqual({ incomeCents: 0, outflowCents: -50000, netCents: 50000, lowestCents: 0, endingCents: 50000 });
+    expect(down.differences).toEqual({ incomeCents: 0, outflowCents: -50000, reservesCents: 0, netCents: 50000, lowestCents: 0, endingCents: 50000 });
   });
 });
 
@@ -131,13 +131,13 @@ describe('several changes together', () => {
     expect(r.newGaps.map((g) => g.start)).toEqual(['2026-11-10']);
     expect(r.reducedGaps.map((g) => g.start)).toEqual(['2026-11-01']);
     expect(r.resolvedGaps.map((g) => g.start)).toEqual(['2026-12-01']);
-    expect(r.differences).toEqual({ incomeCents: 50000, outflowCents: 80000, netCents: -30000, lowestCents: 50000, endingCents: -30000 });
+    expect(r.differences).toEqual({ incomeCents: 50000, outflowCents: 80000, reservesCents: 0, netCents: -30000, lowestCents: 50000, endingCents: -30000 });
   });
 
   it('reconciles exactly with buildForecast on the same changes made by hand', () => {
     let d = plan();
     d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Bonus', amountCents: usd(500), date: '2026-11-01' }, clock));
-    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Car repair', amountCents: usd(800), date: '2026-11-10' }, clock));
+    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Car repair', amountCents: usd(800), date: '2026-11-10' }, clock));
     d = unwrap(ops.rescheduleOccurrence(d, 'rent@2026-12-01', { date: '2026-12-04', amountCents: usd(1500) }, clock));
     const f = buildForecast(d, TODAY);
     const r = run(changes);
@@ -184,13 +184,13 @@ describe('recurring changes', () => {
     expect(r.assumptions[0]).toMatchObject({ label: 'Car loan: $300.00 → $450.00 each time from Nov 28, 2026', recurrence: 'recurring', amountCents: 45000, dates: ['2026-11-28', '2026-12-28'], inRunningTotal: true });
     // Nov 28 750; Dec 1 −750.
     expect(r.worsenedGaps.map(gap)).toEqual([['2026-12-01', '2026-12-03', -75000, '2026-12-04']]);
-    expect(r.differences).toEqual({ incomeCents: 0, outflowCents: 30000, netCents: -30000, lowestCents: 0, endingCents: -30000 });
+    expect(r.differences).toEqual({ incomeCents: 0, outflowCents: 30000, reservesCents: 0, netCents: -30000, lowestCents: 0, endingCents: -30000 });
   });
 
-  it('savings from each paycheck', () => {
-    const r = run([{ kind: 'recurring-savings', description: 'Emergency fund', amountCents: usd(100), schedule: 'each-paycheck' }]);
+  it('reserves from each paycheck: set aside, not spent', () => {
+    const r = run([{ kind: 'recurring-reserve', description: 'Emergency fund', amountCents: usd(100), schedule: 'each-paycheck' }]);
     expect(r.assumptions[0]).toMatchObject({
-      label: 'Emergency fund: −$100.00 every 2 weeks from Oct 23, 2026',
+      label: 'Emergency fund: −$100.00 set aside every 2 weeks from Oct 23, 2026',
       direction: 'out',
       recurrence: 'recurring',
       dates: ['2026-10-23', '2026-11-06', '2026-11-20', '2026-12-04', '2026-12-18', '2027-01-01', '2027-01-15'],
@@ -200,13 +200,13 @@ describe('recurring changes', () => {
       ['2026-11-01', '2026-11-05', -90000, '2026-11-06'],
       ['2026-12-01', '2026-12-03', -90000, '2026-12-04'],
     ]);
-    expect(r.differences).toEqual({ incomeCents: 0, outflowCents: 70000, netCents: -70000, lowestCents: -10000, endingCents: -70000 });
+    expect(r.differences).toEqual({ incomeCents: 0, outflowCents: 0, reservesCents: 70000, netCents: -70000, lowestCents: -10000, endingCents: -70000 });
   });
 
   it('across month ends and the year end', () => {
     const r = run(
       [
-        { kind: 'recurring-savings', description: 'Car fund', amountCents: usd(50), schedule: { startDate: '2026-10-31', rule: { type: 'monthly' } } },
+        { kind: 'recurring-reserve', description: 'Car fund', amountCents: usd(50), schedule: { startDate: '2026-10-31', rule: { type: 'monthly' } } },
         { kind: 'recurring-amount', sourceId: 'loan', amountCents: usd(350), from: '2026-12-28' },
       ],
       plan(),
@@ -217,8 +217,8 @@ describe('recurring changes', () => {
       ['2026-10-31', '2026-11-30', '2026-12-31', '2027-01-31', '2027-02-28'],
       ['2026-12-28', '2027-01-28', '2027-02-28'],
     ]);
-    // 5 × $50 + 3 × $50 more.
-    expect(r.differences.outflowCents).toBe(40000);
+    // 5 × $50 set aside; 3 × $50 more paid.
+    expect([r.differences.reservesCents, r.differences.outflowCents]).toEqual([25000, 15000]);
   });
 });
 
@@ -237,7 +237,7 @@ describe('variable income', () => {
       expect.objectContaining({ label: 'Delivery tips: +$60.00 every week from Oct 24, 2026 (hypothetical)', income: 'hypothetical', incomeCase: 'expected', recurrence: 'recurring' }),
     ]);
     expect(expected.assumptions[0]!.dates).toHaveLength(13);
-    expect(expected.scenario.cashFlow).toEqual({ confirmedIncomeCents: 700000, hypotheticalIncomeCents: 78000, outflowCents: 540000, netCents: 238000, netWithoutHypotheticalCents: 160000 });
+    expect(expected.scenario.cashFlow).toEqual({ confirmedIncomeCents: 700000, hypotheticalIncomeCents: 78000, outflowCents: 540000, reservesCents: 0, netCents: 238000, netWithoutHypotheticalCents: 160000 });
     // Expected: Nov 1 −800 + 2 × 60 = −680; Dec 1 −600 + 6 × 60 = −240.
     expect(expected.scenario.gaps.map((g) => [g.start, g.lowestCents])).toEqual([
       ['2026-11-01', -68000],
@@ -249,7 +249,7 @@ describe('variable income', () => {
     expect(high.scenario.endingCents).toBe(316000);
     // Low: $0, so the plan as it is.
     expect(low.assumptions).toEqual([expect.objectContaining({ label: 'Delivery tips: $0.00 (low case, hypothetical)', amountCents: 0, income: 'hypothetical', incomeCase: 'low' })]);
-    expect(low.differences).toEqual({ incomeCents: 0, outflowCents: 0, netCents: 0, lowestCents: 0, endingCents: 0 });
+    expect(low.differences).toEqual({ incomeCents: 0, outflowCents: 0, reservesCents: 0, netCents: 0, lowestCents: 0, endingCents: 0 });
     expect(low.scenario).toEqual(low.baseline);
   });
 
@@ -290,7 +290,7 @@ describe('confirmed and hypothetical income', () => {
 describe('forecast anchor', () => {
   it('moving the next payday makes the running totals not comparable', () => {
     const r = run([{ kind: 'occurrence-date', occurrenceId: 'pay@2026-10-23', date: '2026-10-26' }]);
-    expect(r).toMatchObject({ comparable: false, reason: 'anchor-changed', differences: { incomeCents: 0, outflowCents: 0, netCents: 0, lowestCents: null, endingCents: null } });
+    expect(r).toMatchObject({ comparable: false, reason: 'anchor-changed', differences: { incomeCents: 0, outflowCents: 0, reservesCents: 0, netCents: 0, lowestCents: null, endingCents: null } });
     expect(r.limitations[0]).toBe('This scenario moves your next payday from Oct 23, 2026 to Oct 26, 2026, so the running totals start on different days and can’t be compared directly.');
   });
 
@@ -305,7 +305,7 @@ describe('forecast anchor', () => {
     expect(r.comparable).toBe(true);
     expect(r.assumptions[0]!.inRunningTotal).toBe(false);
     expect(r.limitations).toEqual(['Groceries: −$50.00 once on Oct 19, 2026: dates before your next payday (Oct 23, 2026) count in cash flow but not in the running total, which starts that day.']);
-    expect(r.differences).toEqual({ incomeCents: 0, outflowCents: 5000, netCents: -5000, lowestCents: 0, endingCents: 0 });
+    expect(r.differences).toEqual({ incomeCents: 0, outflowCents: 5000, reservesCents: 0, netCents: -5000, lowestCents: 0, endingCents: 0 });
   });
 });
 
@@ -326,7 +326,7 @@ describe('the plan is never changed', () => {
         { kind: 'occurrence-amount', occurrenceId: 'rent@2026-12-01', amountCents: usd(1700) },
         { kind: 'occurrence-date', occurrenceId: 'loan@2026-11-28', date: '2026-12-02' },
         { kind: 'recurring-amount', sourceId: 'loan', amountCents: usd(400), from: '2026-12-28' },
-        { kind: 'recurring-savings', description: 'Savings', amountCents: usd(100), schedule: 'each-paycheck' },
+        { kind: 'recurring-reserve', description: 'Savings', amountCents: usd(100), schedule: 'each-paycheck' },
         { kind: 'extra-liability-payment', sourceId: 'loan', amountCents: usd(100), date: '2026-11-15' },
       ],
       d,
@@ -338,7 +338,7 @@ describe('the plan is never changed', () => {
   it('gives identical results every time', () => {
     const changes: ScenarioChange[] = [
       { kind: 'one-time-expense', description: 'Car repair', amountCents: usd(800), date: '2026-11-10' },
-      { kind: 'recurring-savings', description: 'Savings', amountCents: usd(100), schedule: 'each-paycheck' },
+      { kind: 'recurring-reserve', description: 'Savings', amountCents: usd(100), schedule: 'each-paycheck' },
     ];
     expect(run(changes)).toEqual(run(changes));
   });
@@ -378,7 +378,7 @@ describe('invalid assumptions', () => {
     const pending = unwrap(ops.changeSourceSchedule(plan(), 'loan', { startDate: '2026-12-28', amountCents: usd(350), rule: { type: 'monthly' } }, clock));
     expect(err([{ kind: 'recurring-amount', sourceId: 'loan', amountCents: 100, from: '2026-11-28' }], pending)).toBe('Car loan already has a change set for Dec 28, 2026, so a scenario can’t change its amount yet.');
     const noPay = source(unwrap(ops.completeOnboarding(ops.emptyData())), TODAY, 'bill', 'Rent', 1500, '2026-11-01', { type: 'monthly' }, 'rent');
-    expect(err([{ kind: 'recurring-savings', description: 'Savings', amountCents: 100, schedule: 'each-paycheck' }], noPay)).toBe('There’s no main paycheck to follow. Choose dates instead.');
+    expect(err([{ kind: 'recurring-reserve', description: 'Savings', amountCents: 100, schedule: 'each-paycheck' }], noPay)).toBe('There’s no main paycheck to follow. Choose dates instead.');
   });
 });
 

@@ -5,7 +5,7 @@ import type { PeriodPlan } from '../../domain/plan';
 import type { TransactionKind } from '../../domain/types';
 import { Icon, SectionLabel } from './common';
 
-/** The single headline number for a period: income minus expenses. */
+/** The single headline number for a period: available cash flow (income minus spending and money set aside). */
 export function CashFlowBanner({ plan }: { plan: PeriodPlan | null }) {
   const negative = plan !== null && plan.cashFlowCents < 0;
   return (
@@ -22,28 +22,29 @@ export function CashFlowBanner({ plan }: { plan: PeriodPlan | null }) {
   );
 }
 
-function Row({ label, value, tone, level = 0, strong = false }: { label: string; value: string; tone?: 'in' | 'out' | 'neg'; level?: 0 | 1; strong?: boolean }) {
+function Row({ label, value, tone, level = 0, strong = false }: { label: string; value: string; tone?: 'in' | 'out' | 'reserve' | 'neg'; level?: 0 | 1; strong?: boolean }) {
   return (
     <div className={`breakdown-row${level ? ' sub' : ''}${strong ? ' strong' : ''}`}>
       <dt>{label}</dt>
-      <dd className={tone === 'in' ? 'amount-in' : tone === 'out' ? 'amount-out' : tone === 'neg' ? 'negative-text' : ''}>{value}</dd>
+      <dd className={tone === 'in' ? 'amount-in' : tone === 'out' ? 'amount-out' : tone === 'reserve' ? 'amount-reserve' : tone === 'neg' ? 'negative-text' : ''}>{value}</dd>
     </div>
   );
 }
 
-const EXPENSE_ROWS: [Exclude<TransactionKind, 'income'>, string][] = [
+const OUTFLOW_ROWS: [Exclude<TransactionKind, 'income' | 'reserve'>, string][] = [
   ['bill', 'Bills'],
   ['subscription', 'Subscriptions'],
   ['liability', 'Liability payments'],
-  ['savings', 'Savings'],
+  ['varied', 'Varied spending'],
 ];
 
 /**
- * Income, expenses by category, and cash flow for a period. Categories with
- * nothing in the period are left out.
+ * Income, spending by classification, Strategic Reserves, and cash flow for a
+ * period. Reserves are their own line: money set aside, never spending.
+ * Classifications with nothing in the period are left out.
  */
 export function PeriodBreakdown({ plan, title, showRange = true }: { plan: PeriodPlan; title: string; showRange?: boolean }) {
-  const rows = EXPENSE_ROWS.filter(([kind]) => plan.byKind[kind] > 0);
+  const rows = OUTFLOW_ROWS.filter(([kind]) => plan.byKind[kind] > 0);
   return (
     <section className="stack-sm" aria-labelledby="breakdown-period">
       <SectionLabel id="breakdown-period">{title}</SectionLabel>
@@ -51,13 +52,13 @@ export function PeriodBreakdown({ plan, title, showRange = true }: { plan: Perio
         {showRange && <p className="hint">{formatRange(plan.start, plan.end)}</p>}
         <dl className="breakdown">
           <Row label="Income" value={formatSignedMoney(plan.incomeCents)} tone="in" />
-          <Row label="Expenses" value={plan.expensesCents ? `−${formatMoney(plan.expensesCents)}` : formatMoney(0)} tone="out" />
+          <Row label="Spending" value={plan.outflowCents ? `−${formatMoney(plan.outflowCents)}` : formatMoney(0)} tone="out" />
           {rows.map(([kind, label]) => (
             <Row key={kind} label={label} value={formatMoney(plan.byKind[kind])} level={1} />
           ))}
+          {plan.reservesCents !== 0 && <Row label={plan.reservesCents > 0 ? 'Set aside in reserves' : 'Used from reserves'} value={formatSignedMoney(-plan.reservesCents)} tone="reserve" />}
           <Row label="Cash flow" value={formatSignedMoney(plan.cashFlowCents)} tone={plan.cashFlowCents < 0 ? 'neg' : undefined} strong />
         </dl>
-        <p className="hint">Cash flow is income minus expenses, including savings. It counts repeating and one-time items dated in this period.</p>
       </div>
     </section>
   );

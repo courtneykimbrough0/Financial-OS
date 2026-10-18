@@ -1,60 +1,133 @@
-import { AlertCircle, ChevronRight, CircleCheck, CircleOff, Plus } from 'lucide-react';
-import { useMemo, useState } from 'react';
-import { addDays, formatMedium, type DateStr } from '../../domain/dates';
-import { formatMoney } from '../../domain/money';
-import { resolveOccurrences } from '../../domain/occurrences';
-import * as ops from '../../domain/operations';
-import { describeRule } from '../../domain/recurrence';
-import { liabilityPrefix, mainPaycheckId, type AppData, type Occurrence, type RecurringSource, type TransactionKind } from '../../domain/types';
-import { useStore } from '../../state/store';
-import { EmptyState, FlowAmount, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
-import { KIND_COPY, MainPaycheckPicker, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm } from '../components/forms';
-import { EstimateCallout, EstimateSheet, useEstimateSuggestion } from '../components/EstimateSheet';
-import { OccurrenceSheet } from '../components/OccurrenceSheet';
+import {
+  AlertCircle,
+  ChevronRight,
+  CircleCheck,
+  CircleOff,
+  Plus,
+} from "lucide-react";
+import { useMemo, useState } from "react";
+import { addDays, formatMedium, type DateStr } from "../../domain/dates";
+import { formatMoney } from "../../domain/money";
+import { resolveOccurrences } from "../../domain/occurrences";
+import * as ops from "../../domain/operations";
+import { describeRule } from "../../domain/recurrence";
+import {
+  liabilityPrefix,
+  mainPaycheckId,
+  ONE_TIME_KINDS,
+  RECURRING_KINDS,
+  type AppData,
+  type OneTimeKind,
+  type Occurrence,
+  type RecurringKind,
+  type RecurringSource,
+  type TransactionKind,
+} from "../../domain/types";
+import { useStore } from "../../state/store";
+import {
+  EmptyState,
+  FlowAmount,
+  Icon,
+  KindAvatar,
+  Modal,
+  SectionLabel,
+  StatusBadge,
+  TagList,
+  useToast,
+} from "../components/common";
+import {
+  KIND_COPY,
+  MainPaycheckPicker,
+  nextScheduledDate,
+  OneTimeForm,
+  ReactivateForm,
+  SourceForm,
+} from "../components/forms";
+import {
+  EstimateCallout,
+  EstimateSheet,
+  useEstimateSuggestion,
+} from "../components/EstimateSheet";
+import { OccurrenceSheet } from "../components/OccurrenceSheet";
+
+const isRecurringKind = (k: TransactionKind): k is RecurringKind =>
+  (RECURRING_KINDS as readonly string[]).includes(k);
+const isOneTimeKind = (k: TransactionKind): k is OneTimeKind =>
+  (ONE_TIME_KINDS as readonly string[]).includes(k);
 
 const SCREEN_COPY: Record<
   TransactionKind,
-  { title: string; intro: string; recurringHeading: string; addRecurring: string; empty: string; oneTime: { heading: string; empty: string } | null }
+  {
+    title: string;
+    intro: string;
+    recurringHeading: string;
+    addRecurring: string;
+    empty: string;
+    oneTime: { heading: string; empty: string } | null;
+  }
 > = {
   income: {
-    title: 'Income',
-    intro: 'Money you expect to receive, like wages or benefits.',
-    recurringHeading: 'Recurring income',
-    addRecurring: 'Add recurring income',
-    empty: 'Add a paycheck or other regular income to start your forecast.',
-    oneTime: { heading: 'One-time income', empty: 'Add things like a tax refund or a gift. They count once.' },
+    title: "Income",
+    intro: "Money you expect to receive, like wages or benefits.",
+    recurringHeading: "Recurring income",
+    addRecurring: "Add recurring income",
+    empty: "Add a paycheck or other regular income to start your forecast.",
+    oneTime: {
+      heading: "One-time income",
+      empty: "Add things like a tax refund or a gift. They count once.",
+    },
   },
   bill: {
-    title: 'Bills',
-    intro: 'Regular bills like rent, utilities, phone, and insurance.',
-    recurringHeading: 'Recurring bills',
-    addRecurring: 'Add bill',
-    empty: 'Add regular bills like rent, utilities, phone, or insurance.',
-    oneTime: { heading: 'One-time expenses', empty: 'Add a bill that happens once, like a medical bill. It counts once.' },
+    title: "Bills",
+    intro: "Regular bills like rent, utilities, phone, and insurance.",
+    recurringHeading: "Recurring bills",
+    addRecurring: "Add bill",
+    empty: "Add regular bills like rent, utilities, phone, or insurance.",
+    oneTime: null,
   },
   subscription: {
-    title: 'Subscriptions',
-    intro: 'Services that charge you on a schedule.',
-    recurringHeading: 'Subscriptions',
-    addRecurring: 'Add subscription',
-    empty: 'Add streaming services, apps, and memberships that renew on a schedule.',
+    title: "Subscriptions",
+    intro: "Services that charge you on a schedule.",
+    recurringHeading: "Subscriptions",
+    addRecurring: "Add subscription",
+    empty:
+      "Add streaming services, apps, and memberships that renew on a schedule.",
     oneTime: null,
   },
   liability: {
-    title: 'Liabilities',
-    intro: 'Regular payments on things you owe, like a car loan, student loan, or credit card. Each payment counts once as money going out.',
-    recurringHeading: 'Liability payments',
-    addRecurring: 'Add liability payment',
-    empty: 'Add payments like a car loan, student loan, or credit card payment.',
+    title: "Liabilities",
+    intro:
+      "Regular payments on things you owe, like a car loan, student loan, or credit card. Each payment counts once as money going out.",
+    recurringHeading: "Liability payments",
+    addRecurring: "Add liability payment",
+    empty:
+      "Add payments like a car loan, student loan, or credit card payment.",
     oneTime: null,
   },
-  savings: {
-    title: 'Savings',
-    intro: 'Money you plan to set aside on a schedule. It counts as an expense.',
-    recurringHeading: 'Recurring savings',
-    addRecurring: 'Add savings',
-    empty: 'Add regular amounts you set aside, like an emergency fund.',
-    oneTime: { heading: 'One-time savings', empty: 'Add a single deposit you plan to make. It counts once.' },
+  reserve: {
+    title: "Strategic Reserves",
+    intro:
+      "Money you set aside on purpose and keep. It lowers what’s available to spend, and it stays yours.",
+    recurringHeading: "Recurring reserves",
+    addRecurring: "Add reserve",
+    empty: "Add amounts you set aside regularly, like an emergency fund.",
+    oneTime: {
+      heading: "One-time reserves",
+      empty:
+        "Set aside a single amount, or use some of your reserves. It counts once.",
+    },
+  },
+  varied: {
+    title: "Varied spending",
+    intro: "Spending that happens once, like a car repair or a gift.",
+    recurringHeading: "",
+    addRecurring: "",
+    empty: "",
+    oneTime: {
+      heading: "Varied spending",
+      empty:
+        "Add spending that happens once, like a car repair. It counts once.",
+    },
   },
 };
 
@@ -62,37 +135,78 @@ const SCREEN_COPY: Record<
  * Occurrences of one source from the last 60 days through the next 90 days,
  * plus any older ones that are still overdue.
  */
-function sourceOccurrences(data: AppData, source: RecurringSource, today: DateStr): Occurrence[] {
+function sourceOccurrences(
+  data: AppData,
+  source: RecurringSource,
+  today: DateStr,
+): Occurrence[] {
   const from = addDays(today, -60);
   const to = addDays(today, 90);
   const inWindow = (d: DateStr | null) => d !== null && d >= from && d <= to;
   return sourceHistory(data, source, today, to)
-    .filter((o) => inWindow(o.scheduledDate) || inWindow(o.actualDate) || o.displayStatus === 'overdue')
-    .sort((a, b) => (a.scheduledDate < b.scheduledDate ? -1 : a.scheduledDate > b.scheduledDate ? 1 : 0));
+    .filter(
+      (o) =>
+        inWindow(o.scheduledDate) ||
+        inWindow(o.actualDate) ||
+        o.displayStatus === "overdue",
+    )
+    .sort((a, b) =>
+      a.scheduledDate < b.scheduledDate
+        ? -1
+        : a.scheduledDate > b.scheduledDate
+          ? 1
+          : 0,
+    );
 }
 
-function sourceHistory(data: AppData, source: RecurringSource, today: DateStr, to: DateStr): Occurrence[] {
+function sourceHistory(
+  data: AppData,
+  source: RecurringSource,
+  today: DateStr,
+  to: DateStr,
+): Occurrence[] {
   const first = source.versions[0]!.startDate;
-  return resolveOccurrences({ ...data, sources: [source] }, first < today ? first : today, to, today).filter((o) => o.sourceId === source.id);
+  return resolveOccurrences(
+    { ...data, sources: [source] },
+    first < today ? first : today,
+    to,
+    today,
+  ).filter((o) => o.sourceId === source.id);
 }
 
-function OccurrenceRow({ o, onOpen }: { o: Occurrence; onOpen: (id: string) => void }) {
-  const amount = o.status === 'completed' ? o.actualAmountCents! : o.scheduledAmountCents;
-  const date = o.status === 'completed' ? o.actualDate! : o.scheduledDate;
+function OccurrenceRow({
+  o,
+  onOpen,
+}: {
+  o: Occurrence;
+  onOpen: (id: string) => void;
+}) {
+  const amount =
+    o.status === "completed" ? o.actualAmountCents! : o.scheduledAmountCents;
+  const date = o.status === "completed" ? o.actualDate! : o.scheduledDate;
   return (
     <button type="button" className="entry" onClick={() => onOpen(o.id)}>
       <KindAvatar kind={o.kind} size="sm" />
       <span className="entry-main">
         <span className="entry-title">{formatMedium(date)}</span>
-        {o.sourceId === null && <span className="entry-sub">{o.description}</span>}
-        {o.status === 'completed' && (o.actualAmountCents !== o.expectedAmountCents || o.actualDate !== o.expectedDate) && (
-          <span className="entry-sub">
-            Expected {formatMoney(o.expectedAmountCents)} on {formatMedium(o.expectedDate)}
-          </span>
+        {o.sourceId === null && (
+          <span className="entry-sub">{o.description}</span>
         )}
+        {o.status === "completed" &&
+          (o.actualAmountCents !== o.expectedAmountCents ||
+            o.actualDate !== o.expectedDate) && (
+            <span className="entry-sub">
+              Expected {formatMoney(o.expectedAmountCents)} on{" "}
+              {formatMedium(o.expectedDate)}
+            </span>
+          )}
       </span>
       <span className="entry-side">
-        <FlowAmount kind={o.kind} cents={amount} strike={o.status === 'canceled'} />
+        <FlowAmount
+          kind={o.kind}
+          cents={amount}
+          strike={o.status === "canceled"}
+        />
         <StatusBadge status={o.displayStatus} kind={o.kind} />
       </span>
       <Icon icon={ChevronRight} size={18} className="chevron" />
@@ -100,7 +214,15 @@ function OccurrenceRow({ o, onOpen }: { o: Occurrence; onOpen: (id: string) => v
   );
 }
 
-function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdit: () => void; onOpen: (id: string) => void }) {
+function SourceCard({
+  source,
+  onEdit,
+  onOpen,
+}: {
+  source: RecurringSource;
+  onEdit: () => void;
+  onOpen: (id: string) => void;
+}) {
   const { data, today, run } = useStore();
   const toast = useToast();
   const [expanded, setExpanded] = useState(false);
@@ -109,17 +231,24 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
   const [reviewingEstimate, setReviewingEstimate] = useState(false);
   const suggestion = useEstimateSuggestion(source);
   const current = source.versions[source.versions.length - 1]!;
-  const occurrences = useMemo(() => (expanded ? sourceOccurrences(data, source, today) : []), [expanded, data, source, today]);
+  const occurrences = useMemo(
+    () => (expanded ? sourceOccurrences(data, source, today) : []),
+    [expanded, data, source, today],
+  );
   const overdueCount = useMemo(
-    () => sourceHistory(data, source, today, today).filter((o) => o.displayStatus === 'overdue').length,
+    () =>
+      sourceHistory(data, source, today, today).filter(
+        (o) => o.displayStatus === "overdue",
+      ).length,
     [data, source, today],
   );
   const next = source.active ? nextScheduledDate(source, today) : null;
   const pending = source.versions.filter((v) => v.startDate > today);
-  const upcomingChange = pending.length > 0 && source.versions.length > 1 ? pending[0] : null;
+  const upcomingChange =
+    pending.length > 0 && source.versions.length > 1 ? pending[0] : null;
 
   return (
-    <li className={`card source-card${source.active ? '' : ' inactive'}`}>
+    <li className={`card source-card${source.active ? "" : " inactive"}`}>
       <div className="source-top">
         <KindAvatar kind={source.kind} />
         <div className="source-name">
@@ -128,7 +257,9 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
             {liabilityPrefix(source)}
             {describeRule(current.rule, current.startDate)}
           </p>
-          {source.id === mainPaycheckId(data) && <span className="badge badge-main">Main paycheck</span>}
+          {source.id === mainPaycheckId(data) && (
+            <span className="badge badge-main">Main paycheck</span>
+          )}
           <TagList tags={source.tags} />
         </div>
         <div className="source-amount">
@@ -151,44 +282,75 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
               Next: <strong>{formatMedium(next)}</strong>
             </>
           ) : (
-            'No upcoming dates'
+            "No upcoming dates"
           )
         ) : (
-          `Turned off ${source.endDate ? `on ${formatMedium(source.endDate)}` : ''}. Not included in future forecasts.`
+          `Turned off ${source.endDate ? `on ${formatMedium(source.endDate)}` : ""}. Not included in future forecasts.`
         )}
       </p>
       {upcomingChange && (
         <p className="hint">
-          Scheduled change: {formatMoney(upcomingChange.amountCents)}, {describeRule(upcomingChange.rule, upcomingChange.startDate).toLowerCase()}, starting {formatMedium(upcomingChange.startDate)}.
+          Scheduled change: {formatMoney(upcomingChange.amountCents)},{" "}
+          {describeRule(
+            upcomingChange.rule,
+            upcomingChange.startDate,
+          ).toLowerCase()}
+          , starting {formatMedium(upcomingChange.startDate)}.
         </p>
       )}
-      {suggestion && <EstimateCallout suggestion={suggestion} onOpen={() => setReviewingEstimate(true)} />}
+      {suggestion && (
+        <EstimateCallout
+          suggestion={suggestion}
+          onOpen={() => setReviewingEstimate(true)}
+        />
+      )}
       {overdueCount > 0 && (
         <p className="callout callout-warn small">
-          <Icon icon={AlertCircle} size={16} /> 
-          {overdueCount} overdue {overdueCount === 1 ? 'payment needs' : 'payments need'} an update.
+          <Icon icon={AlertCircle} size={16} />
+          {overdueCount} overdue{" "}
+          {overdueCount === 1 ? "payment needs" : "payments need"} an update.
         </p>
       )}
       <div className="card-actions">
-        <button type="button" className="button small secondary" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-          {expanded ? 'Hide dates' : 'See dates'}
+        <button
+          type="button"
+          className="button small secondary"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? "Hide dates" : "See dates"}
         </button>
-        <button type="button" className="button small secondary" onClick={onEdit}>
+        <button
+          type="button"
+          className="button small secondary"
+          onClick={onEdit}
+        >
           Edit
         </button>
         {source.active ? (
-          <button type="button" className="button small secondary" onClick={() => setConfirmOff(true)}>
+          <button
+            type="button"
+            className="button small secondary"
+            onClick={() => setConfirmOff(true)}
+          >
             Turn off
           </button>
         ) : (
-          <button type="button" className="button small secondary" onClick={() => setReactivating(true)}>
+          <button
+            type="button"
+            className="button small secondary"
+            onClick={() => setReactivating(true)}
+          >
             Turn on
           </button>
         )}
       </div>
       {expanded && (
         <div className="source-occurrences">
-          <p className="hint">Last 60 days and next 90 days. Select one to record what happened or change just that date.</p>
+          <p className="hint">
+            Last 60 days and next 90 days. Select one to record what happened or
+            change just that date.
+          </p>
           {occurrences.length === 0 ? (
             <p className="muted">No dates in this window.</p>
           ) : (
@@ -203,21 +365,35 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
         </div>
       )}
       {confirmOff && (
-        <Modal title={`Turn off ${source.description}?`} onClose={() => setConfirmOff(false)}>
+        <Modal
+          title={`Turn off ${source.description}?`}
+          onClose={() => setConfirmOff(false)}
+        >
           <div className="stack">
-            <p>It will stop appearing in your forecast from today. Everything you’ve already recorded stays, and any overdue payments stay visible until you update them.</p>
+            <p>
+              It will stop appearing in your forecast from today. Everything
+              you’ve already recorded stays, and any overdue payments stay
+              visible until you update them.
+            </p>
             <div className="form-actions">
-              <button type="button" className="button secondary" onClick={() => setConfirmOff(false)} data-autofocus>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => setConfirmOff(false)}
+                data-autofocus
+              >
                 Keep it on
               </button>
               <button
                 type="button"
                 className="button danger"
                 onClick={() => {
-                  const r = run((d, c) => ops.deactivateSource(d, source.id, c));
+                  const r = run((d, c) =>
+                    ops.deactivateSource(d, source.id, c),
+                  );
                   setConfirmOff(false);
                   if (r.ok) toast(`${source.description} turned off.`);
-                  else toast(r.error, 'error');
+                  else toast(r.error, "error");
                 }}
               >
                 Turn off
@@ -226,10 +402,21 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
           </div>
         </Modal>
       )}
-      {reviewingEstimate && <EstimateSheet sourceId={source.id} onClose={() => setReviewingEstimate(false)} />}
+      {reviewingEstimate && (
+        <EstimateSheet
+          sourceId={source.id}
+          onClose={() => setReviewingEstimate(false)}
+        />
+      )}
       {reactivating && (
-        <Modal title={`Turn on ${source.description}`} onClose={() => setReactivating(false)}>
-          <ReactivateForm source={source} onDone={() => setReactivating(false)} />
+        <Modal
+          title={`Turn on ${source.description}`}
+          onClose={() => setReactivating(false)}
+        >
+          <ReactivateForm
+            source={source}
+            onDone={() => setReactivating(false)}
+          />
         </Modal>
       )}
     </li>
@@ -237,20 +424,42 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
 }
 
 /** One kind's list. `embedded` drops the screen header when shown inside another screen's tabs. */
-export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKind; embedded?: boolean }) {
+export function SourcesScreen({
+  kind,
+  embedded = false,
+}: {
+  kind: TransactionKind;
+  embedded?: boolean;
+}) {
   const { data, today } = useStore();
   const copy = SCREEN_COPY[kind];
-  const [adding, setAdding] = useState<'recurring' | 'one-time' | null>(null);
+  const recurring = isRecurringKind(kind);
+  const [adding, setAdding] = useState<"recurring" | "one-time" | null>(null);
   const [editing, setEditing] = useState<RecurringSource | null>(null);
   const [sheetId, setSheetId] = useState<string | null>(null);
 
-  const sources = data.sources.filter((s) => s.kind === kind).sort((a, b) => Number(b.active) - Number(a.active) || a.description.localeCompare(b.description));
+  const sources = data.sources
+    .filter((s) => s.kind === kind)
+    .sort(
+      (a, b) =>
+        Number(b.active) - Number(a.active) ||
+        a.description.localeCompare(b.description),
+    );
   const oneTimes = data.records
     .filter((r) => r.sourceId === null && r.kind === kind)
-    .map((r) => ({ ...r, displayStatus: r.status === 'scheduled' && r.scheduledDate < today ? ('overdue' as const) : r.status, virtual: false }))
+    .map((r) => ({
+      ...r,
+      displayStatus:
+        r.status === "scheduled" && r.scheduledDate < today
+          ? ("overdue" as const)
+          : r.status,
+      virtual: false,
+    }))
     .sort((a, b) => (a.scheduledDate < b.scheduledDate ? 1 : -1));
-  const upcomingOneTimes = oneTimes.filter((o) => o.status === 'scheduled').reverse();
-  const pastOneTimes = oneTimes.filter((o) => o.status !== 'scheduled');
+  const upcomingOneTimes = oneTimes
+    .filter((o) => o.status === "scheduled")
+    .reverse();
+  const pastOneTimes = oneTimes.filter((o) => o.status !== "scheduled");
 
   return (
     <div className="stack-lg">
@@ -263,38 +472,54 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
         </header>
       )}
 
-      <section className="stack" aria-labelledby="recurring-heading">
-        <SectionLabel
-          id="recurring-heading"
-          action={
-            <button type="button" className="button primary small" onClick={() => setAdding('recurring')}>
-              <Icon icon={Plus} size={16} /> {copy.addRecurring}
-            </button>
-          }
-        >
-          {copy.recurringHeading}
-        </SectionLabel>
-        {kind === 'income' && <MainPaycheckPicker />}
-        {sources.length === 0 ? (
-          <EmptyState title={`No ${copy.recurringHeading.toLowerCase()} yet`}>
-            <p>{copy.empty}</p>
-          </EmptyState>
-        ) : (
-          <ul className="card-list">
-            {sources.map((s) => (
-              <SourceCard key={s.id} source={s} onEdit={() => setEditing(s)} onOpen={setSheetId} />
-            ))}
-          </ul>
-        )}
-      </section>
+      {recurring && (
+        <section className="stack" aria-labelledby="recurring-heading">
+          <SectionLabel
+            id="recurring-heading"
+            action={
+              <button
+                type="button"
+                className="button primary small"
+                onClick={() => setAdding("recurring")}
+              >
+                <Icon icon={Plus} size={16} /> {copy.addRecurring}
+              </button>
+            }
+          >
+            {copy.recurringHeading}
+          </SectionLabel>
+          {kind === "income" && <MainPaycheckPicker />}
+          {sources.length === 0 ? (
+            <EmptyState title={`No ${copy.recurringHeading.toLowerCase()} yet`}>
+              <p>{copy.empty}</p>
+            </EmptyState>
+          ) : (
+            <ul className="card-list">
+              {sources.map((s) => (
+                <SourceCard
+                  key={s.id}
+                  source={s}
+                  onEdit={() => setEditing(s)}
+                  onOpen={setSheetId}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {copy.oneTime && (
         <section className="stack" aria-labelledby="onetime-heading">
           <SectionLabel
             id="onetime-heading"
             action={
-              <button type="button" className="button secondary small" onClick={() => setAdding('one-time')}>
-                <Icon icon={Plus} size={16} /> Add one-time
+              <button
+                type="button"
+                className="button secondary small"
+                onClick={() => setAdding("one-time")}
+              >
+                <Icon icon={Plus} size={16} />{" "}
+                {recurring ? "Add one-time" : "Add spending"}
               </button>
             }
           >
@@ -335,48 +560,88 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
         </section>
       )}
 
-      {adding === 'recurring' && (
+      {adding === "recurring" && isRecurringKind(kind) && (
         <Modal title={copy.addRecurring} onClose={() => setAdding(null)}>
           <SourceForm kind={kind} onDone={() => setAdding(null)} />
         </Modal>
       )}
-      {adding === 'one-time' && kind !== 'subscription' && kind !== 'liability' && (
-        <Modal title={`Add one-time ${KIND_COPY[kind].noun}`} onClose={() => setAdding(null)}>
+      {adding === "one-time" && isOneTimeKind(kind) && (
+        <Modal
+          title={
+            recurring
+              ? `Add one-time ${KIND_COPY[kind].noun}`
+              : "Add varied spending"
+          }
+          onClose={() => setAdding(null)}
+        >
           <OneTimeForm kind={kind} onDone={() => setAdding(null)} />
         </Modal>
       )}
       {editing && (
-        <Modal title={`Edit ${editing.description}`} onClose={() => setEditing(null)}>
-          <SourceForm kind={kind} source={editing} onDone={() => setEditing(null)} />
+        <Modal
+          title={`Edit ${editing.description}`}
+          onClose={() => setEditing(null)}
+        >
+          <SourceForm
+            kind={editing.kind}
+            source={editing}
+            onDone={() => setEditing(null)}
+          />
         </Modal>
       )}
-      {sheetId && <OccurrenceSheet occurrenceId={sheetId} onClose={() => setSheetId(null)} />}
+      {sheetId && (
+        <OccurrenceSheet
+          occurrenceId={sheetId}
+          onClose={() => setSheetId(null)}
+        />
+      )}
     </div>
   );
 }
 
 const EXPENSE_TABS: { kind: TransactionKind; label: string }[] = [
-  { kind: 'bill', label: 'Bills' },
-  { kind: 'subscription', label: 'Subscriptions' },
-  { kind: 'savings', label: 'Savings' },
+  { kind: "bill", label: "Bills" },
+  { kind: "subscription", label: "Subscriptions" },
+  { kind: "varied", label: "Varied" },
 ];
 
-/** Expenses screen: bills, subscriptions, and savings, one pill tab each. Liabilities have their own screen. */
-export function ExpensesScreen({ initial = 'bill' }: { initial?: TransactionKind }) {
+/** Expenses screen: bills, subscriptions and varied spending, one pill tab each. Liabilities and reserves have their own screens. */
+export function ExpensesScreen({
+  initial = "bill",
+}: {
+  initial?: TransactionKind;
+}) {
   const [tab, setTab] = useState<TransactionKind>(initial);
   return (
     <div className="stack-lg">
       <header className="screen-header">
         <h1>Expenses</h1>
       </header>
-      <div className="pill-tabs pill-tabs-3" role="tablist" aria-label="Expense type">
+      <div
+        className="pill-tabs pill-tabs-3"
+        role="tablist"
+        aria-label="Expense type"
+      >
         {EXPENSE_TABS.map((t) => (
-          <button key={t.kind} type="button" role="tab" id={`expense-tab-${t.kind}`} aria-selected={tab === t.kind} aria-controls="expense-panel" className={tab === t.kind ? 'active' : ''} onClick={() => setTab(t.kind)}>
+          <button
+            key={t.kind}
+            type="button"
+            role="tab"
+            id={`expense-tab-${t.kind}`}
+            aria-selected={tab === t.kind}
+            aria-controls="expense-panel"
+            className={tab === t.kind ? "active" : ""}
+            onClick={() => setTab(t.kind)}
+          >
             {t.label}
           </button>
         ))}
       </div>
-      <div id="expense-panel" role="tabpanel" aria-labelledby={`expense-tab-${tab}`}>
+      <div
+        id="expense-panel"
+        role="tabpanel"
+        aria-labelledby={`expense-tab-${tab}`}
+      >
         <SourcesScreen key={tab} kind={tab} embedded />
       </div>
     </div>

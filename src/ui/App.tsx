@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { CreditCard, HandCoins, LayoutGrid, Receipt, RefreshCw, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
+import { CreditCard, HandCoins, LayoutGrid, PiggyBank, Receipt, RefreshCw, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
 import { useDataMode } from '../state/mode';
 import { useAccountSlot } from '../state/slots';
 import { useStore } from '../state/store';
@@ -18,10 +18,8 @@ const NAV: { route: Route; label: string; icon: LucideIcon }[] = [
   { route: 'income', label: 'Income', icon: HandCoins },
   { route: 'expenses', label: 'Expenses', icon: Receipt },
   { route: 'liabilities', label: 'Liabilities', icon: CreditCard },
+  { route: 'reserves', label: 'Reserves', icon: PiggyBank },
 ];
-
-/** Savings is a tab inside Expenses; its route highlights the Expenses tab. */
-const navRoute = (r: Route): Route => (r === 'savings' ? 'expenses' : r);
 
 export function App() {
   const { data } = useStore();
@@ -38,7 +36,7 @@ export function App() {
     income: 'Income',
     expenses: 'Expenses',
     liabilities: 'Liabilities',
-    savings: 'Savings',
+    reserves: 'Strategic Reserves',
     settings: 'Settings',
     onboarding: 'Get started',
   };
@@ -61,7 +59,7 @@ export function App() {
         {showNav && (
           <nav className="top-nav" aria-label="Main">
             {NAV.map((n) => (
-              <a key={n.route} href={`#/${n.route}`} aria-current={navRoute(route) === n.route ? 'page' : undefined}>
+              <a key={n.route} href={`#/${n.route}`} aria-current={route === n.route ? 'page' : undefined}>
                 {n.label}
               </a>
             ))}
@@ -82,7 +80,7 @@ export function App() {
         {route === 'dashboard' && <Dashboard />}
         {route === 'income' && <SourcesScreen key="income" kind="income" />}
         {route === 'expenses' && <ExpensesScreen key="expenses" />}
-        {route === 'savings' && <ExpensesScreen key="savings" initial="savings" />}
+        {route === 'reserves' && <SourcesScreen key="reserve" kind="reserve" />}
         {route === 'liabilities' && <SourcesScreen key="liability" kind="liability" />}
         {route === 'settings' && <Settings />}
         <RecoveredChangesNotice />
@@ -91,7 +89,7 @@ export function App() {
       {showNav && (
         <nav className="bottom-nav" aria-label="Main">
           {NAV.map((n) => (
-            <a key={n.route} href={`#/${n.route}`} aria-current={navRoute(route) === n.route ? 'page' : undefined}>
+            <a key={n.route} href={`#/${n.route}`} aria-current={route === n.route ? 'page' : undefined}>
               <Icon icon={n.icon} size={24} className="nav-icon" />
               {n.label}
             </a>

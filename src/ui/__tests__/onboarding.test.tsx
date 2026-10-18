@@ -87,13 +87,13 @@ describe('the minimum useful setup', () => {
     await addItem(user, 'Add a bill', rent);
     expect(cashFlow()).toHaveTextContent('Cash flowFirst pay period · Oct 23 – Nov 5−$500.00');
 
-    // Subscriptions, liabilities and savings can wait.
+    // Subscriptions, liabilities and reserves can wait.
     await user.click(screen.getByRole('button', { name: 'Skip to review' }));
     expect(screen.getByRole('heading', { name: 'Check everything over' })).toHaveFocus();
     expect(screen.getByText('Next expected payday').closest('section')).toHaveTextContent('Next expected paydayOct 23in 7 days');
     expect(screen.getByText(/Lowest running total before Nov 5:/).closest('span')).toHaveTextContent('Lowest running total before Nov 5: −$500.00 · Nov 1');
     expect(screen.getByRole('button', { name: /1 timing gap ahead/ })).toBeInTheDocument();
-    for (const label of ['Subscriptions', 'Liability payments', 'Savings']) {
+    for (const label of ['Subscriptions', 'Liability payments', 'Strategic Reserves']) {
       expect(screen.getByRole('region', { name: label }).querySelector('.review-empty')).toHaveTextContent(/^None added\.$/);
     }
 

@@ -54,6 +54,12 @@ export function PeriodReviewSheet({ onOpen, onClose }: { onOpen: (occurrenceId: 
             <dt>Money out</dt>
             <dd className="amount-out">{formatMoneyOut(cashFlow.outflowCents)}</dd>
           </div>
+          {cashFlow.reservesCents !== 0 && (
+            <div>
+              <dt>{cashFlow.reservesCents > 0 ? 'Set aside' : 'From reserves'}</dt>
+              <dd className="amount-reserve">{formatSignedMoney(-cashFlow.reservesCents)}</dd>
+            </div>
+          )}
           <div>
             <dt>Cash flow</dt>
             <dd className={cashFlow.netCents < 0 ? 'negative' : ''}>{formatSignedMoney(cashFlow.netCents)}</dd>
@@ -109,7 +115,7 @@ function Group({ label, hint, entries, today, onOpen }: { label: string; hint?: 
             const o = e.occurrence;
             const when =
               o.status === 'completed'
-                ? `${doneVerb(o.kind)[0]!.toUpperCase()}${doneVerb(o.kind).slice(1)} ${formatMedium(o.actualDate!)}`
+                ? `${doneVerb(o)[0]!.toUpperCase()}${doneVerb(o).slice(1)} ${formatMedium(o.actualDate!)}`
                 : o.displayStatus === 'overdue'
                   ? `Expected ${formatMedium(o.scheduledDate)} · not recorded`
                   : o.scheduledDate === today

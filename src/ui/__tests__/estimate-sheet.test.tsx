@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { clockAt, source, unwrap, usd } from '../../domain/__tests__/helpers';
 import { buildForecast } from '../../domain/forecast';
 import * as ops from '../../domain/operations';
-import type { AppData, RecurrenceRule, TransactionKind } from '../../domain/types';
+import type { AppData, RecurrenceRule, RecurringKind } from '../../domain/types';
 import { MemoryAdapter } from '../../state/storage';
 import { StoreProvider, useStore } from '../../state/store';
 import { SaveStatusBar } from '../components/backup';
@@ -21,7 +21,7 @@ import { SourcesScreen } from '../screens/SourcesScreen';
 const TODAY = '2026-10-16';
 const clock = clockAt(TODAY);
 
-function add(d: AppData, kind: TransactionKind, name: string, dollars: number, start: string, id: string, rule: RecurrenceRule = { type: 'monthly' }) {
+function add(d: AppData, kind: RecurringKind, name: string, dollars: number, start: string, id: string, rule: RecurrenceRule = { type: 'monthly' }) {
   return source(d, start, kind, name, dollars, start, rule, id);
 }
 function pay(d: AppData, id: string, payments: [string, number][]): AppData {
@@ -33,7 +33,7 @@ function outlook(): AppData {
   let d = unwrap(ops.completeOnboarding(ops.emptyData()));
   d = add(d, 'income', 'Paycheck', 1000, '2026-10-23', 'pay', { type: 'biweekly' });
   d = add(d, 'bill', 'Rent', 1500, '2026-11-01', 'rent');
-  d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Car insurance', amountCents: usd(940), date: '2027-01-02' }, clock, 'ins'));
+  d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Car insurance', amountCents: usd(940), date: '2027-01-02' }, clock, 'ins'));
   d = add(d, 'bill', 'Electricity', 180, '2026-04-03', 'elec');
   return pay(d, 'elec', [
     ['2026-04-03', 210],
@@ -52,7 +52,7 @@ function Spy() {
   return null;
 }
 
-async function mount(data: AppData, kind: TransactionKind = 'bill') {
+async function mount(data: AppData, kind: RecurringKind = 'bill') {
   const adapter = new MemoryAdapter(data);
   render(
     <StoreProvider adapter={adapter} today={TODAY}>
@@ -140,7 +140,7 @@ describe('where suggestions appear', () => {
     expect(reviewButton('Water')).toBeNull();
   });
 
-  it('not for income or savings, however different their history', async () => {
+  it('not for income or reserves, however different their history', async () => {
     let d = unwrap(ops.completeOnboarding(ops.emptyData()));
     d = add(d, 'income', 'Paycheck', 1800, '2026-08-07', 'pay', { type: 'biweekly' });
     d = pay(d, 'pay', [
@@ -150,7 +150,7 @@ describe('where suggestions appear', () => {
       ['2026-09-18', 2200],
       ['2026-10-02', 2150],
     ]);
-    d = add(d, 'savings', 'Emergency fund', 100, '2026-07-20', 'save');
+    d = add(d, 'reserve', 'Emergency fund', 100, '2026-07-20', 'save');
     d = pay(d, 'save', [
       ['2026-07-20', 150],
       ['2026-08-20', 150],
@@ -160,7 +160,7 @@ describe('where suggestions appear', () => {
     expect(card('Paycheck')).not.toHaveTextContent('Suggest');
     expect(screen.queryByRole('button', { name: /Review the suggestion/ })).toBeNull();
     cleanup();
-    await mount(d, 'savings');
+    await mount(d, 'reserve');
     expect(card('Emergency fund')).not.toHaveTextContent('Suggest');
     expect(screen.queryByRole('button', { name: /Review the suggestion/ })).toBeNull();
   });

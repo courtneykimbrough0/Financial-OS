@@ -316,12 +316,12 @@ describe('the development copy on local Supabase', () => {
     await sheet.getByLabel('Amount you expect to pay').fill('1,200');
     await sheet.getByLabel('Next due date').fill('2026-11-01');
     await sheet.getByRole('button', { name: 'Save' }).click();
-    await page.getByRole('button', { name: 'Add one-time expense' }).click();
-    sheet = page.getByRole('dialog', { name: 'Add one-time expense' });
+    await page.getByRole('button', { name: 'Add spending' }).click();
+    sheet = page.getByRole('dialog', { name: 'Add varied spending' });
     await sheet.getByLabel('Description').fill('Car repair');
     await sheet.getByLabel('Expected amount').fill('100');
     await sheet.getByLabel('Expected date').fill('2026-10-26');
-    await sheet.getByRole('button', { name: /Add one-time/ }).click();
+    await sheet.getByRole('button', { name: 'Add spending' }).click();
     await page.getByText('One time · Oct 26, 2026').waitFor();
     await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByRole('heading', { name: 'What subscriptions renew?' }).waitFor();

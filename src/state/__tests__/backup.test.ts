@@ -8,7 +8,7 @@ const clock = { today: '2026-10-11', now: '2026-10-11T12:00:00Z' };
 function data() {
   let r = addSource(emptyData(), { kind: 'income', description: 'Pay', amountCents: 180000, startDate: '2026-10-15', rule: { type: 'biweekly' }, tags: ['Work'] }, clock, 'pay');
   if (!r.ok) throw new Error(r.error);
-  r = addOneTime({ ...r.data, onboardingComplete: true, revision: 7 }, { kind: 'bill', description: 'Repair', amountCents: 5000, date: '2026-10-20' }, clock, 'rep');
+  r = addOneTime({ ...r.data, onboardingComplete: true, revision: 7 }, { kind: 'varied', description: 'Repair', amountCents: 5000, date: '2026-10-20' }, clock, 'rep');
   if (!r.ok) throw new Error(r.error);
   return r.data;
 }
@@ -53,7 +53,7 @@ describe('a backup reproduces the forecast', () => {
     for (const date of ['2026-07-25', '2026-08-25', '2026-09-25']) d = u(ops.recordActual(d, `phone@${date}`, { amountCents: 6500, date }, c('2026-10-16')));
     d = u(dismissEstimate(d, analyzeEstimate(d, 'phone', '2026-10-16').suggestion!, c('2026-10-16')));
     d = u(ops.changeSourceSchedule(d, 'pay', { startDate: '2026-10-30', amountCents: 110000, rule: { type: 'biweekly' } }, c('2026-10-16')));
-    d = u(ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: 8000, date: '2026-11-03' }, c('2026-10-16'), 'rep'));
+    d = u(ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: 8000, date: '2026-11-03' }, c('2026-10-16'), 'rep'));
     d = { ...u(ops.setReviewCadence(d, 'payday')), onboardingComplete: true, revision: 12 };
     const restored = readBackup(createBackup(d).text).data;
     expect(restored).toEqual(d);

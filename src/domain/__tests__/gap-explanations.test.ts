@@ -16,7 +16,7 @@ const clock = clockAt(TODAY);
 function paid(): AppData {
   return source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1000, '2026-10-15', { type: 'biweekly' }, 'pay');
 }
-const oneTime = (d: AppData, description: string, dollars: number, date: string, kind: 'bill' | 'income' = 'bill') =>
+const oneTime = (d: AppData, description: string, dollars: number, date: string, kind: 'varied' | 'income' = 'varied') =>
   unwrap(ops.addOneTime(d, { kind, description, amountCents: usd(dollars), date }, clock, `one-${description.toLowerCase()}`));
 
 /** [description, date, dollars] for a list of entries. */

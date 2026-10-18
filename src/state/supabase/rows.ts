@@ -13,12 +13,12 @@
  */
 import { isValidDateStr, type DateStr } from '../../domain/dates';
 import { validateRule } from '../../domain/recurrence';
-import { type AppData, type OccurrenceRecord, type RecurrenceRule, type RecurringSource, type ReviewCadence, type ScheduleVersion, type StoredStatus, type TransactionKind } from '../../domain/types';
+import { ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OccurrenceRecord, type RecurrenceRule, type RecurringKind, type RecurringSource, type ReviewCadence, type ScheduleVersion, type StoredStatus, type TransactionKind } from '../../domain/types';
 
 export interface SourceRow {
   id: string;
   position: number;
-  kind: TransactionKind;
+  kind: RecurringKind;
   description: string;
   tags: string[];
   liability_type: RecurringSource['liabilityType'] | null;
@@ -104,15 +104,21 @@ function ruleFrom(v: VersionRow): RecurrenceRule {
 }
 
 /**
- * True when the plan has accounts or item assignments. The database has no
- * place for them yet (roadmap, accounts phase AC-S), so the adapter refuses
- * such a save instead of dropping them.
+ * True when the plan has accounts, item assignments, transfers or reserve
+ * releases. The database has no place for them yet (roadmap, accounts phase
+ * AC-S), so the adapter refuses such a save rather than silently dropping
+ * them.
  */
 export function hasAccountData(data: AppData): boolean {
-  return (data.accounts?.length ?? 0) > 0 || data.sources.some((s) => s.accountId !== undefined) || data.records.some((r) => r.accountId !== undefined);
+  return (
+    (data.accounts?.length ?? 0) > 0 ||
+    (data.transfers?.length ?? 0) > 0 ||
+    data.sources.some((s) => s.accountId !== undefined) ||
+    data.records.some((r) => r.accountId !== undefined || r.release !== undefined)
+  );
 }
 
-export const ACCOUNTS_NOT_STORED = 'This plan has accounts, which can’t be saved to this storage yet. Nothing was saved.';
+export const ACCOUNTS_NOT_STORED = 'This plan has accounts, transfers or reserve releases, which can’t be saved to this storage yet. Nothing was saved.';
 
 /** The plan as the rows save_plan expects. Doesn't validate; see `checkForMigration`. */
 export function toRows(data: AppData): PlanRows {
@@ -268,7 +274,7 @@ export interface MigrationIssue {
 const MAX_CENTS = 100_000_000_00;
 const isCents = (n: unknown) => Number.isSafeInteger(n) && (n as number) > 0 && (n as number) <= MAX_CENTS;
 const isTimestamp = (s: unknown) => typeof s === 'string' && !Number.isNaN(Date.parse(s));
-const KINDS: TransactionKind[] = ['income', 'bill', 'subscription', 'liability', 'savings'];
+
 
 /**
  * Everything in a plan (already through `migrate`) that the database would
@@ -289,7 +295,7 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
     if (sourceIds.has(s.id)) error(`${where}: the id is used twice.`);
     sourceIds.add(s.id);
     if (s.id.includes('@') || s.id.length === 0 || s.id.length > 200) error(`${where}: the id can't be used (empty, too long, or contains @).`);
-    if (!KINDS.includes(s.kind)) error(`${where}: unknown kind.`);
+    if (!(RECURRING_KINDS as readonly string[]).includes(s.kind)) error(`${where}: unknown kind.`);
     if (!text(s.description)) error(`${where}: the description is empty or longer than 200 characters.`);
     if (s.tags.length > 10) error(`${where}: more than 10 tags.`);
     if (s.mainPaycheck) mains += 1;
@@ -322,7 +328,7 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
     if (r.sourceId !== null) {
       if (!sourceIds.has(r.sourceId)) error(`${where}: its item no longer exists.`);
       if (r.id !== `${r.sourceId}@${r.expectedDate}`) error(`${where}: the id doesn't match its item and original date.`);
-    } else if (!['income', 'bill', 'savings'].includes(r.kind)) {
+    } else if (!(ONE_TIME_KINDS as readonly string[]).includes(r.kind)) {
       error(`${where}: a one-time item can't be a ${r.kind}.`);
     }
     if (!text(r.description)) error(`${where}: the description is empty or longer than 200 characters.`);
@@ -340,6 +346,6 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
   const all = [...data.sources.flatMap((s) => [s.createdAt, s.updatedAt]), ...data.records.flatMap((r) => [r.createdAt, r.updatedAt, r.completedAt, r.canceledAt])];
   if (all.some((t) => t !== null && isTimestamp(t) && canonicalTimestamp(t) !== t)) normalized('Some times will be stored as ISO-8601 UTC with milliseconds.');
   if (data.isSample) error('Sample data is never stored in an account.');
-  if (hasAccountData(data)) error('Accounts and account assignments can’t be stored in Supabase yet.');
+  if (hasAccountData(data)) error('Accounts, account assignments, transfers and reserve releases can’t be stored in Supabase yet.');
   return issues;
 }

@@ -23,7 +23,7 @@ async function mount(adapter: StorageAdapter) {
 
 const addItem = (n: number) =>
   act(() => {
-    store.run((d, c) => addOneTime(d, { kind: 'bill', description: `Bill ${n}`, amountCents: 1000, date: '2026-10-20' }, c, `one-${n}`));
+    store.run((d, c) => addOneTime(d, { kind: 'varied', description: `Bill ${n}`, amountCents: 1000, date: '2026-10-20' }, c, `one-${n}`));
   });
 
 /** Adapter whose saves wait until the test releases them, to observe in-flight behavior. */
@@ -102,7 +102,7 @@ describe('StoreProvider saving', () => {
     await waitFor(() => expect(store.saveStatus).toBe('conflict'));
     let blocked: ReturnType<typeof store.run> | null = null;
     act(() => {
-      blocked = store.run((d, c) => addOneTime(d, { kind: 'bill', description: 'x', amountCents: 100, date: '2026-10-21' }, c));
+      blocked = store.run((d, c) => addOneTime(d, { kind: 'varied', description: 'x', amountCents: 100, date: '2026-10-21' }, c));
     });
     expect(blocked).toMatchObject({ ok: false });
     await act(async () => store.reload());

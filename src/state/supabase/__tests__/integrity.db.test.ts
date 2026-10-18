@@ -110,7 +110,7 @@ describe('each event counts once, as itself', () => {
     const { user, data } = stored();
     let back = saveOk(user, unwrap(ops.recordActual(data, 'elec@2026-10-03', { amountCents: usd(230), date: '2026-10-03' }, clock)));
     back = saveOk(user, back);
-    back = saveOk(user, unwrap(ops.addOneTime(back, { kind: 'bill', description: 'Repair', amountCents: usd(80), date: '2026-11-05' }, clock, 'one-rep')));
+    back = saveOk(user, unwrap(ops.addOneTime(back, { kind: 'varied', description: 'Repair', amountCents: usd(80), date: '2026-11-05' }, clock, 'one-rep')));
     expect(rowsFor(user, 'elec@2026-10-03')).toBe(1);
     expect(entries(back, 'elec@2026-10-03')).toEqual([['2026-10-03', 23000, true]]);
     expect(back.revision).toBe(4);
@@ -129,6 +129,29 @@ describe('each event counts once, as itself', () => {
     const direct = sql('owner', `insert into public.occurrence_records (workspace_id, id, position, source_id, kind, description, expected_date, expected_amount_cents, scheduled_date, scheduled_amount_cents, status, created_at, updated_at)
       values ('${ws}', 'elec@2026-10-03', 9, 'elec', 'bill', 'Electricity', '2026-10-03', 18000, '2026-10-03', 18000, 'scheduled', now(), now());`);
     expect(direct.code).toBe('23505');
+  });
+});
+
+describe('the six classifications', () => {
+  it('stores reserves and varied spending, and refuses retired kinds, one-time obligations and recurring varied spending', () => {
+    const { user, data } = stored();
+    let d = source(data, TODAY, 'reserve', 'Emergency fund', 100, '2026-10-24', { type: 'biweekly' }, 'res');
+    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(80), date: '2026-11-05' }, clock, 'one-rep'));
+    d = unwrap(ops.addOneTime(d, { kind: 'reserve', description: 'Bonus set aside', amountCents: usd(300), date: '2026-11-06' }, clock, 'one-res'));
+    const back = saveOk(user, d);
+    expect(back.sources.find((s) => s.id === 'res')!.kind).toBe('reserve');
+    expect(back.records.map((r) => [r.id, r.kind])).toEqual([
+      ['one-rep', 'varied'],
+      ['one-res', 'reserve'],
+    ]);
+    const rows = toRows(back);
+    const one = rows.records.find((r) => r.id === 'one-rep')!;
+    // A restore (replace) may write any record, so only the table's own rules can refuse these.
+    const rec = (kind: string) => savePlan(user, back.revision, { ...rows, records: rows.records.map((r) => (r.id === one.id ? { ...r, kind } : r)) as never }, { mode: 'replace' });
+    for (const kind of ['bill', 'subscription', 'liability', 'savings']) expect([kind, rec(kind).code]).toEqual([kind, '23514']);
+    const src = (kind: string) => savePlan(user, back.revision, { ...rows, sources: rows.sources.map((s) => (s.id === 'res' ? { ...s, kind } : s)) as never }, { mode: 'replace' });
+    for (const kind of ['varied', 'savings']) expect(src(kind).code).toBe('23514');
+    expect(load(user)).toEqual(back);
   });
 });
 

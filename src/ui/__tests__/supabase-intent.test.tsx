@@ -35,7 +35,7 @@ function current(): AppData {
 function backup(): { data: AppData; text: string } {
   let d = unwrap(ops.completeOnboarding(ops.emptyData()));
   d = source(d, TODAY, 'income', 'Salary', 2400, '2026-10-30', { type: 'monthly' }, 'sal');
-  d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(300), date: '2026-11-04' }, clock, 'rep'));
+  d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(300), date: '2026-11-04' }, clock, 'rep'));
   return { data: d, text: createBackup(d, new Date(2026, 9, 16, 9)).text };
 }
 
@@ -84,7 +84,7 @@ afterEach(() => {
 describe('ordinary changes', () => {
   it('are saved as updates, one at a time, each on the revision before', async () => {
     const { fake } = await mount();
-    act(() => void store.run((d, c) => ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(80), date: '2026-11-05' }, c, 'one-a')));
+    act(() => void store.run((d, c) => ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(80), date: '2026-11-05' }, c, 'one-a')));
     await waitFor(() => expect(store.saveStatus).toBe('idle'));
     act(() => void store.run((d) => ops.setReviewCadence(d, 'weekly')));
     await waitFor(() => expect(saves(fake)).toEqual([

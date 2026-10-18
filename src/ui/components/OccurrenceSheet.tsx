@@ -10,11 +10,11 @@ import { navigate, type Route } from '../router';
 import { Field, FlowAmount, FormError, Icon, KindAvatar, Modal, MoneyInput, StatusBadge, useToast } from './common';
 
 /** The screen where a recurring item's schedule is edited. */
-const SOURCE_ROUTE: Record<TransactionKind, Route> = { income: 'income', bill: 'expenses', subscription: 'expenses', liability: 'liabilities', savings: 'savings' };
+const SOURCE_ROUTE: Record<TransactionKind, Route> = { income: 'income', bill: 'expenses', subscription: 'expenses', liability: 'liabilities', reserve: 'reserves', varied: 'expenses' };
 
 type Mode = 'view' | 'record' | 'correct' | 'reschedule' | 'cancel' | 'delete';
 
-const doneVerb = (o: Occurrence) => kindDoneVerb(o.kind);
+const doneVerb = (o: Occurrence) => kindDoneVerb(o);
 
 /** "1 day late", "2 days early", "on time" */
 function timing(expected: DateStr, actual: DateStr): string {

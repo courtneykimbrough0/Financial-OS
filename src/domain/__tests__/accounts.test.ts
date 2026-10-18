@@ -20,8 +20,8 @@ function plan(d: AppData = ops.emptyData()): AppData {
   d = source(d, TODAY, 'bill', 'Rent', 1200, '2026-10-20', { type: 'monthly' }, 'rent');
   d = source(d, TODAY, 'subscription', 'Streaming', 15, '2026-10-22', { type: 'monthly' }, 'stream');
   d = source(d, TODAY, 'liability', 'Car loan', 350, '2026-10-26', { type: 'monthly' }, 'car');
-  d = source(d, TODAY, 'savings', 'Emergency fund', 100, '2026-10-16', { type: 'biweekly' }, 'save');
-  return unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Car repair', amountCents: usd(700), date: '2026-10-31' }, clock, 'repair'));
+  d = source(d, TODAY, 'reserve', 'Emergency fund', 100, '2026-10-16', { type: 'biweekly' }, 'save');
+  return unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Car repair', amountCents: usd(700), date: '2026-10-31' }, clock, 'repair'));
 }
 
 describe('creating accounts', () => {
@@ -43,7 +43,7 @@ describe('creating accounts', () => {
 
   it('rejects an unknown type, and an empty, too long or repeated name', () => {
     const d = withAccounts();
-    for (const type of ['spending', 'savings', 'routing', ''] as unknown as AccountType[]) {
+    for (const type of ['spending', 'reserve', 'routing', ''] as unknown as AccountType[]) {
       expect(ops.addAccount(d, { name: 'X', type }, clock)).toEqual({ ok: false, error: 'Choose income, distribution or payment.' });
     }
     expect(ops.addAccount(d, { name: '   ', type: 'payment' }, clock)).toEqual({ ok: false, error: 'Enter a name for the account.' });
@@ -88,7 +88,7 @@ describe('assigning items to accounts', () => {
     expect(ops.assignAccount(d, 'pay', 'acct-bills', clock)).toEqual({ ok: false, error: 'Income goes to an income account.' });
     expect(ops.assignAccount(d, 'rent', 'acct-income', clock)).toEqual({ ok: false, error: 'Payments come from a payment account.' });
     expect(ops.assignAccount(d, 'rent', 'acct-reserves', clock)).toEqual({ ok: false, error: 'Payments come from a payment account.' });
-    expect(ops.assignAccount(d, 'save', 'acct-bills', clock)).toEqual({ ok: false, error: 'Savings is held in a distribution account.' });
+    expect(ops.assignAccount(d, 'save', 'acct-bills', clock)).toEqual({ ok: false, error: 'Strategic reserves are held in a distribution account.' });
     expect(ops.assignAccount(d, 'rent', 'missing', clock)).toEqual({ ok: false, error: 'That account no longer exists.' });
     expect(ops.assignAccount(d, 'missing', 'acct-bills', clock)).toEqual({ ok: false, error: 'That item no longer exists.' });
     // A recurring occurrence follows its item; it can't be assigned on its own.

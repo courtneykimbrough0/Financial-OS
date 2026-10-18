@@ -169,7 +169,7 @@ describe('the review', () => {
 
   it('shows the cash flow reviewSummary gives, and any timing gap', async () => {
     let d = data('monthly');
-    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Car repair', amountCents: usd(2500), date: '2026-11-03' }, clockAt(SETUP), 'repair'));
+    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Car repair', amountCents: usd(2500), date: '2026-11-03' }, clockAt(SETUP), 'repair'));
     const { user } = await mount(new MemoryAdapter(d), '2026-11-01');
     const period = reviewStatus(d, '2026-11-01').period!;
     const sum = reviewSummary(buildForecast(d, '2026-11-01', { through: period.end }), period);
@@ -177,7 +177,7 @@ describe('the review', () => {
     const sheet = screen.getByRole('dialog', { name: 'Monthly look-ahead review' });
     expect(sheet).toHaveTextContent(`Money in+${formatMoney(sum.cashFlow.incomeCents)}Money out−${formatMoney(sum.cashFlow.outflowCents)}Cash flow`);
     // Nov: paychecks Nov 12, 26 (+$3,600); rent, repair, phone (−$3,760): −$160.
-    expect(sum.cashFlow).toEqual({ incomeCents: usd(3600), outflowCents: usd(3760), netCents: usd(-160) });
+    expect(sum.cashFlow).toEqual({ incomeCents: usd(3600), outflowCents: usd(3760), reservesCents: 0, operatingCents: usd(-160), netCents: usd(-160) });
     expect(sheet).toHaveTextContent('Cash flow−$160.00');
     expect(sum.gaps.map((g) => g.start)).toEqual(['2026-11-03']);
     expect(within(sheet).getByRole('region', { name: 'Timing gaps' })).toHaveTextContent(`Nov 3 – 11: down to ${formatMoney(sum.gaps[0]!.lowestCents)}, back to $0 or more on Nov 12`);

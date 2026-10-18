@@ -38,7 +38,7 @@ const unwrap = (r: { ok: true; data: AppData } | { ok: false; error: string }) =
 
 /** A forecast with a bill, weekly reviews, and this week's review completed. */
 function reviewed(): AppData {
-  let d = unwrap(addOneTime(emptyData(), { kind: 'bill', description: 'Rent', amountCents: 120000, date: '2026-11-01' }, clock, 'rent'));
+  let d = unwrap(addOneTime(emptyData(), { kind: 'varied', description: 'Rent', amountCents: 120000, date: '2026-11-01' }, clock, 'rent'));
   d = unwrap(setReviewCadence(d, 'weekly'));
   return unwrap(completeReview(d, clock));
 }
@@ -94,7 +94,7 @@ describe('accounts while the rhythm is left out of account saves', () => {
     const otherStorage = new MemoryStorage();
     const older = new CloudAdapter(server, 'user-1', otherStorage);
     const loaded = await older.load();
-    const changed = unwrap(addOneTime(loaded, { kind: 'bill', description: 'Phone', amountCents: 6000, date: '2026-10-25' }, clock, 'phone'));
+    const changed = unwrap(addOneTime(loaded, { kind: 'varied', description: 'Phone', amountCents: 6000, date: '2026-10-25' }, clock, 'phone'));
     expect(await older.save(changed, loaded.revision)).toEqual({ ok: true, revision: 2 });
     expect((server.row!.data as AppData).review).toEqual(reviewed().review);
     expect((server.row!.data as AppData).records.map((r) => r.description)).toEqual(['Rent', 'Phone']);

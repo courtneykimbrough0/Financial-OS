@@ -106,7 +106,7 @@ describe('opening and closing', () => {
       'Move an expected paymentOne upcoming payment on another date',
       'Change an expected amountOne upcoming payment at another amount',
       'Increase a liability paymentA higher payment from a date on',
-      'Set aside savingsAn amount on a schedule',
+      'Build reservesAn amount set aside on a schedule',
       'Explore variable incomeLow, expected and high amounts',
       'Cancel',
     ]);
@@ -168,14 +168,14 @@ describe('one change', () => {
     expect(rows(within(c).getByRole('table'))[3]).toEqual(['Ending running total', '$1,600.00', '$1,300.00']);
   });
 
-  it('savings from each payday', async () => {
+  it('reserves from each payday', async () => {
     const { user } = await mount();
     await open(user);
-    await add(user, 'Set aside savings', { 'Amount each time': '100' });
-    expect(changes()).toEqual(['Savings: $100.00 each payday']);
+    await add(user, 'Build reserves', { 'Amount each time': '100' });
+    expect(changes()).toEqual(['Reserves: $100.00 each payday']);
     const c = comparison();
     expect(within(within(c).getByRole('region', { name: 'What this assumes' })).getByRole('listitem')).toHaveTextContent(
-      'Savings: −$100.00 every 2 weeks from Oct 23, 2026Recurring · Dates in this period: Oct 23, Nov 6, Nov 20, Dec 4, Dec 18, Jan 1, Jan 15',
+      'Reserves: −$100.00 set aside every 2 weeks from Oct 23, 2026Recurring · Dates in this period: Oct 23, Nov 6, Nov 20, Dec 4, Dec 18, Jan 1, Jan 15',
     );
     expect(rows(within(c).getByRole('table')).slice(1)).toEqual([
       ['Cash flow', '+$1,600.00', '+$900.00'],
@@ -319,7 +319,7 @@ describe('the plan stays as it is', () => {
     await open(user);
     await add(user, 'Unexpected expense', { Name: 'Car repair', Amount: '800', Date: '2026-11-10' });
     await add(user, 'Change an expected amount', { Payment: 'rent@2026-12-01', 'New amount': '1700' });
-    await add(user, 'Set aside savings', { 'Amount each time': '100' });
+    await add(user, 'Build reserves', { 'Amount each time': '100' });
     expect(store.data).toBe(loaded);
     await user.click(within(sheet()).getByRole('button', { name: 'Done' }));
     expect(store.data).toBe(loaded);
