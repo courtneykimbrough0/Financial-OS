@@ -161,7 +161,7 @@ Rules:
 - Transfers between a person's own accounts are not new income or spending in a consolidated view, and internal allocation of money is not, in itself, an external expense.
   - **Current product decision:** scheduled **savings** deposits count as expenses in cash flow (README: "savings is treated as an expense" — the product owner's call). Changing that to an internal allocation is a decision for the product owner in roadmap Step 9. Don't change it silently.
 - A low or negative **running total** is a forecast condition to explain (a timing gap), not a data error.
-- **Where the running total starts** (decided October 2026; the code doesn't do this yet, see roadmap Phase A1): the day before the earliest eligible upcoming income, whichever source it comes from. Entry order never decides it, and the main paycheck organizes pay periods without excluding earlier income. Uncertain or speculative income never sets the start.
+- **Where the running total starts** (decided and implemented October 2026, Phase A1): the day before the earliest eligible upcoming income, whichever source it comes from. Entry order never decides it, and the main paycheck organizes pay periods without excluding earlier income. Uncertain or speculative income never sets the start.
 - Batch confirmation applies only to the selected records. An event is never marked actual merely because it was expected.
 - Undo, corrections, batch operations, imports, and resets never silently alter unrelated records.
 - **Uncertain future income is never counted as confirmed cash flow** just because past income suggests it may arrive. Income counts in the forecast only when the person has entered it as expected (a recurring or one-time item) or recorded it.

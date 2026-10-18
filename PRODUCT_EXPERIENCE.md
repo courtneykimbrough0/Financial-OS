@@ -557,15 +557,13 @@ Add ─────────────────────────�
 
 ---
 
-## 8. Forecast start (Confirmed decision; Defect today)
+## 8. Forecast start (Confirmed; Implemented in Phase A1)
 
 **Decision.** The running total starts on the **earliest eligible upcoming income event**, not on whichever income was entered first or marked main. The anchor stays at $0 on the day before.
 
 The **main paycheck** no longer decides where the running total starts. It is proposed for removal altogether (decision Q2), with a replacement for each use (REDUCTION-AUDIT §5.4).
 
-**Today.** `buildForecast` starts the running total at the next payday of `mainPaycheckId`: the income marked main, else the first active income in entry order. Income from other sources before that day falls outside the running total. A real timing gap can stay hidden: the audit reproduces a hidden $600 gap.
-
-Root cause, algorithm, impact and tests: [docs/PRODUCT-AUDIT.md](docs/PRODUCT-AUDIT.md) §6. Implementation is roadmap Phase A1.
+**Fixed (Phase A1).** `buildForecast` used to start the running total at the main paycheck's next payday, so earlier income from other sources fell outside it and a real timing gap could stay hidden. It now takes the earliest outstanding or received-today occurrence of any active recurring income (overdue included, for every source alike). Root cause and analysis: [docs/PRODUCT-AUDIT.md](docs/PRODUCT-AUDIT.md) §6; tests: `src/domain/__tests__/forecast-start.test.ts`.
 
 ---
 
@@ -576,7 +574,7 @@ The structural decisions (Q1–Q7) are in [docs/REDUCTION-AUDIT.md](docs/REDUCTI
 | # | Decision | Recommended default |
 | --- | --- | --- |
 | D1 | Can one-time expected income start the running total? | **No.** Recurring income only, for now. One-time income still counts once it's inside the running total. Revisit when "possible" income exists. |
-| D2 | Can overdue income start the running total? | While the main paycheck exists: only its overdue payday does, as today; other sources only from today on. If Q2 removes it: **no overdue income starts the running total**. Overdue items are still carried to the start. |
+| D2 | Can overdue income start the running total? | **Decided in Phase A1: yes, from any source alike** (a late payment hasn't arrived yet). This keeps the rule free of any income hierarchy, and is the rule the main paycheck already followed. Overdue items before the start are still carried to it. |
 | D3 | ~~Which income is the main paycheck~~ | Superseded by REDUCTION-AUDIT Q2 (remove it). Entry order never decides anything financial. |
 | D4 | ~~Home's default period~~ | Superseded by Q1: the week view opens the app; Forecast defaults to this month. |
 | D5 | Tab names | **This week, Forecast, Activity, Plan** (follows Q1). |
