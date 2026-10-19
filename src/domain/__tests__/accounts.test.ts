@@ -136,7 +136,7 @@ describe('accounts and the forecast', () => {
     const b = buildForecast(withAll, TODAY);
     const strip = (f: typeof a) => f.entries.map((e) => [e.occurrence.id, e.date, e.signedCents, e.counts]);
     expect(strip(b)).toEqual(strip(a));
-    expect([b.anchor, b.forecastStart, b.mainSourceId]).toEqual([a.anchor, a.forecastStart, a.mainSourceId]);
+    expect([b.anchor, b.forecastStart]).toEqual([a.anchor, a.forecastStart]);
     // Every day's money and running total (the rows embed the items themselves, whose account and edit time differ).
     const days = (f: typeof a) => dailyTimeline(f, '2026-10-01', '2026-12-31').map((r) => [r.date, r.inCents, r.outCents, r.netCents, r.tallyCents, r.entries.map((e) => e.occurrence.id)]);
     expect(days(b)).toEqual(days(a));

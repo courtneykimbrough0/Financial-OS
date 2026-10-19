@@ -176,12 +176,11 @@ export function migrate(raw: unknown): AppData {
     revision,
     onboardingComplete: Boolean(doc.onboardingComplete),
     ...(doc.isSample ? { isSample: true } : {}),
-    sources: sources.map(({ liabilityType, mainPaycheck, estimateDismissal, accountId, ...s }) => ({
+    sources: sources.map(({ liabilityType, mainPaycheck: _mp, estimateDismissal, accountId, ...s }: any) => ({
       ...s,
       kind: s.kind,
       // Keep a liability type only when it is one of the three allowed values; the edit form asks for it otherwise.
       ...(s.kind === 'liability' && liabilityType && LIABILITY_TYPES.includes(liabilityType) ? { liabilityType } : {}),
-      ...(s.kind === 'income' && mainPaycheck === true ? { mainPaycheck: true } : {}),
       ...(readDismissal(estimateDismissal) ? { estimateDismissal: readDismissal(estimateDismissal) } : {}),
       ...keptAccount(accounts, s.kind, accountId),
       tags: Array.isArray(s.tags) ? s.tags : [],

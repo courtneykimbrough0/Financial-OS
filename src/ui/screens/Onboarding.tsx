@@ -11,7 +11,7 @@ import { useAccount } from '../../state/account';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
 import { FlowAmount, FormError, Icon, KindAvatar, Modal, SectionLabel, TagList, useToast } from '../components/common';
-import { KIND_COPY, MainPaycheckPicker, OneTimeForm, SourceForm } from '../components/forms';
+import { KIND_COPY, OneTimeForm, SourceForm } from '../components/forms';
 import { TimingGapsBanner } from '../components/gaps';
 import { CashFlowBanner, PeriodBreakdown, TagBreakdown } from '../components/plan';
 import { useAccountSlot } from '../../state/slots';
@@ -253,7 +253,6 @@ function KindStep({ kind, onSheet }: { kind: RecurringKind; onSheet: (s: SetupSh
   return (
     <div className="stack-lg">
       <KindSection kind={kind} onSheet={onSheet} />
-      {kind === 'income' && <MainPaycheckPicker />}
       {(kind === 'income' || kind === 'bill') && <OneTimeSection income={kind === 'income'} onSheet={onSheet} />}
       <p className="hint center">Tap an item to change or remove it.</p>
     </div>
@@ -460,7 +459,7 @@ export function Onboarding() {
           <ul className="card list-card checklist">
             <li>Add when you expect to get paid</li>
             <li>Add your main bills and loan payments. Subscriptions and reserves can wait</li>
-            <li>See your cash flow for each pay period and your running total day by day</li>
+            <li>See your cash flow ahead and your running total day by day</li>
             <li>Record what actually happens, and the forecast updates</li>
           </ul>
           <p className="hint center">

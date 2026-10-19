@@ -165,10 +165,10 @@ describe('Plan', () => {
 });
 
 describe('Forecast', () => {
-  it('has Month, Paycheck and Custom views and no separate Week tab; a period still opens its weeks and days', async () => {
+  it('has Month and Custom views and no separate Week tab; a period still opens its weeks and days', async () => {
     const user = await open('#/forecast');
     const views = await screen.findByRole('tablist', { name: 'Forecast view' });
-    expect(within(views).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Month', 'Paycheck', 'Custom']);
+    expect(within(views).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Month', 'Custom']);
     const week = screen.getByRole('button', { name: /^Oct 11 – 17/ });
     await user.click(week);
     await user.click(screen.getByRole('button', { name: 'Show details for Friday, October 16, 2026' }));

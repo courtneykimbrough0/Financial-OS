@@ -14,7 +14,7 @@ export const clock = clockAt(TODAY);
 
 /**
  * Every kind of item and every persisted field: a schedule change, a main
- * paycheck that isn't the first income, a liability with a type and a custom
+ * a liability with a type and a custom
  * rule, twice-monthly and weekly rules, an item turned off and on again
  * (a pause), recorded payments (early, late, different amount), a moved and a
  * canceled occurrence, a moved occurrence the schedule no longer produces
@@ -25,7 +25,6 @@ export function richPlan(): AppData {
   let d = unwrap(ops.completeOnboarding(ops.emptyData()));
   d = source(d, '2026-06-01', 'income', 'Paycheck', 1000, '2026-06-05', { type: 'biweekly' }, 'pay');
   d = source(d, '2026-09-01', 'income', 'Side job', 150, '2026-09-05', { type: 'weekly' }, 'side');
-  d = unwrap(ops.setMainPaycheck(d, 'side', clockAt('2026-09-01')));
   d = source(d, '2026-05-20', 'bill', 'Rent', 1500, '2026-06-01', { type: 'monthly' }, 'rent');
   d = source(d, '2026-03-20', 'bill', 'Electricity', 180, '2026-04-03', { type: 'monthly' }, 'elec');
   d = source(d, '2026-06-20', 'bill', 'Phone', 60, '2026-07-25', { type: 'monthly' }, 'phone');

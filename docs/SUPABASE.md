@@ -33,7 +33,7 @@ auth.users 1─1 workspaces 1─* sources 1─* schedule_versions
   - an actual exists exactly when an occurrence is completed;
   - a cancel time exists exactly when it's canceled;
   - recurring items are income, bills, subscriptions, liabilities or reserves; one-time items are income, varied spending or reserves (migration `20261018000002`);
-  - at most one main paycheck;
+  - `main_paycheck` is always `false` (column retained for schema compatibility; the concept was removed in Phase R1);
   - a liability type only on liability payments;
   - estimate dismissals are complete or absent;
   - an item that's on has no end date.
@@ -101,7 +101,7 @@ A timeout doesn't prove a save failed.
 - **`toRows(appData)`** builds the request body for `save_plan`; **`fromRows(loaded)`** turns `load_plan`'s result back into AppData. Both are pure.
 - **Everything financial round-trips exactly.** That includes absent optional fields: no liability type stays absent.
 - **Three things come back in canonical form (`canonicalize`):** times as ISO-8601 UTC with milliseconds (what the app writes anyway), schedule versions in start order, and pauses in date order. The forecast doesn't change.
-- **The source order is stored (`position`)**, because with no main paycheck marked, the first active income starts pay periods.
+- **The source order is stored (`position`)**; the earliest active income's first upcoming date anchors the forecast start.
 - **`checkForMigration(appData)`** lists everything the database would refuse: orphaned records, ids that don't match their source and date, repeated ids, completed records without actuals, invalid times, and so on. It also lists what will be stored in canonical form. Today's `migrate` is more lenient than the database, so run this before migrating.
 
 ## Adapter (`src/state/supabase/adapter.ts`)
@@ -205,7 +205,7 @@ An approved, isolated hosted test project can be used deliberately: through an a
 ## Migration and rollback
 
 - **Migration path (development data):** download a backup from the current app, then restore it into the Supabase-backed app (a `replace` save into the new, empty workspace). Run `checkForMigration` first.
-- **Verified by the equivalence tests:** the stored plan equals the canonical original, and `buildForecast`, timing gaps, pay periods, the lowest running total, estimate suggestions, the Home view, and variances are identical today and 30, 90, 180 and 365 days ahead.
+- **Verified by the equivalence tests:** the stored plan equals the canonical original, and `buildForecast`, timing gaps, the lowest running total, estimate suggestions, the Home view, and variances are identical today and 30, 90, 180 and 365 days ahead.
 - **Rollback:** the device copy and Firestore documents aren't touched. A backup downloaded from the Supabase-backed app (the same format, round-trip tested) restores into the current app.
   - If both copies changed after migrating, neither overwrites the other automatically. The person picks which backup to restore, and can keep the other as a file.
 

@@ -168,21 +168,15 @@ describe('one change', () => {
     expect(rows(within(c).getByRole('table'))[3]).toEqual(['Ending running total', '$1,600.00', '$1,300.00']);
   });
 
-  it('reserves from each payday', async () => {
+  it('reserves on a monthly schedule', async () => {
     const { user } = await mount();
     await open(user);
     await add(user, 'Build reserves', { 'Amount each time': '100' });
-    expect(changes()).toEqual(['Reserves: $100.00 each payday']);
+    expect(changes()).toEqual(['Reserves: $100.00 every month from Oct 16, 2026']);
     const c = comparison();
     expect(within(within(c).getByRole('region', { name: 'What this assumes' })).getByRole('listitem')).toHaveTextContent(
-      'Reserves: −$100.00 set aside every 2 weeks from Oct 23, 2026Recurring · Dates in this period: Oct 23, Nov 6, Nov 20, Dec 4, Dec 18, Jan 1, Jan 15',
+      'Reserves: −$100.00 set aside monthly on the 16th from Oct 16, 2026Recurring · Dates in this period: Oct 16, Nov 16, Dec 16, Jan 16',
     );
-    expect(rows(within(c).getByRole('table')).slice(1)).toEqual([
-      ['Cash flow', '+$1,600.00', '+$900.00'],
-      ['Lowest running total', '−$800.00 on Nov 1', '−$900.00 on Nov 1'],
-      ['Ending running total', '$1,600.00', '$900.00'],
-      ['Timing gaps', '2', '2'],
-    ]);
   });
 
   it('moving an existing payment, chosen from what’s already expected', async () => {

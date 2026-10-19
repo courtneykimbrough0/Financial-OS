@@ -182,7 +182,7 @@ try {
 
   step('forecast: no separate Week tab (Home has the week); a custom range covers one week, with a running total each day');
   const views = page.getByRole('tablist', { name: 'Forecast view' });
-  assert.deepEqual(await views.getByRole('tab').allInnerTexts(), ['Month', 'Paycheck', 'Custom']);
+  assert.deepEqual(await views.getByRole('tab').allInnerTexts(), ['Month', 'Custom']);
   await views.getByRole('tab', { name: 'Custom', exact: true }).click();
   await page.getByLabel('Start date').fill('2026-10-18');
   await page.getByLabel('End date').fill('2026-10-24');
@@ -194,16 +194,6 @@ try {
   const weekDays = await page.locator('.week-days .timeline').innerText();
   assert.match(weekDays, /Sun, Oct 18[\s\S]*Running total\s+\$1,800\.00[\s\S]*Tue, Oct 20[\s\S]*Running total\s+\$1,450\.00[\s\S]*Sat, Oct 24/);
   await shot('04b-forecast-week');
-
-  step('forecast: paycheck view keeps the running total, week by week');
-  await page.getByRole('tab', { name: 'Paycheck', exact: true }).click();
-  await page.getByRole('button', { name: 'Next pay period' }).click();
-  await page.getByRole('heading', { name: 'Oct 29 – Nov 11' }).waitFor();
-  const firstWeek = page.locator('.week-row').first();
-  assert.match(await firstWeek.innerText(), /Oct 29 – 31[\s\S]*Running total \$3,190\.00/);
-  await firstWeek.click();
-  assert.match(await page.locator('.week-days .timeline > li').first().innerText(), /Thu, Oct 29[\s\S]*Running total\s+\$3,190\.00/);
-  await shot('05-dashboard-paycheck');
 
   step('forecast: custom range validation');
   await page.getByRole('tab', { name: 'Custom', exact: true }).click();
@@ -710,7 +700,7 @@ try {
     await addItem(/^Add (a|another) bill$/, 'What is this bill?', 'Rent', 'Amount you expect to pay', '1000', 'Next due date', '2026-10-22', 'monthly');
     await p2.getByRole('button', { name: 'Skip to review' }).click();
     await p2.getByRole('heading', { name: 'Check everything over' }).waitFor();
-    assert.match(await p2.locator('.review-hero').innerText(), /Oct 19\s*in 8 days[\s\S]*Lowest running total before Nov 9: −\$600\.00 · Oct 22/);
+    assert.match(await p2.locator('.review-hero').innerText(), /Oct 19\s*in 8 days[\s\S]*Lowest running total before Nov 1: −\$600\.00 · Oct 22/);
     await p2.getByRole('button', { name: /1 timing gap ahead/ }).waitFor();
     assert.equal(await p2.getByText(/due before your next payday/).count(), 0);
     await p2.getByRole('button', { name: 'See my forecast' }).click();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildForecast, dailyTimeline, entriesInRange, monthWeekSummaries, paycheckCycles, periodKpis, tallyOn, timingGapsAhead } from '../forecast';
+import { buildForecast, dailyTimeline, entriesInRange, monthWeekSummaries, periodKpis, tallyOn, timingGapsAhead } from '../forecast';
 import * as ops from '../operations';
 import { periodPlan } from '../plan';
 import { clockAt, source, unwrap, usd } from './helpers';
@@ -45,14 +45,6 @@ describe('one-time income and expenses across every view', () => {
     expect(periodKpis(f, '2026-10-25', '2026-10-31')).toEqual({ incomeCents: usd(1800), outflowCents: usd(360), reservesCents: 0, operatingCents: usd(1440), netCents: usd(1440) });
     const weeks = monthWeekSummaries(f, '2026-10-01');
     expect(weeks.reduce((s, w) => s + w.netCents, 0)).toBe(usd(3740));
-    // Pay periods: the one-time gift counts inside the period but does not start a new one.
-    const cycles = paycheckCycles(f, 2);
-    expect(cycles.map((c) => [c.start, c.end])).toEqual([
-      ['2026-10-15', '2026-10-28'],
-      ['2026-10-29', '2026-11-11'],
-    ]);
-    expect(periodKpis(f, cycles[0]!.start, cycles[0]!.end)).toEqual({ incomeCents: usd(2300), outflowCents: usd(360), reservesCents: 0, operatingCents: usd(1940), netCents: usd(1940) });
-    expect(periodKpis(f, cycles[1]!.start, cycles[1]!.end)).toEqual({ incomeCents: usd(1800), outflowCents: 0, reservesCents: 0, operatingCents: usd(1800), netCents: usd(1800) });
     // Custom range starting mid-forecast carries the tally including the gift.
     expect(dailyTimeline(f, '2026-10-23', '2026-10-30')[0]!.tallyCents).toBe(usd(2300));
   });

@@ -125,7 +125,7 @@ export function toRows(data: AppData): PlanRows {
     description: s.description,
     tags: s.tags,
     liability_type: s.liabilityType ?? null,
-    main_paycheck: s.mainPaycheck === true,
+    main_paycheck: false,
     active: s.active,
     end_date: s.endDate,
     dismissed_current_cents: s.estimateDismissal?.currentCents ?? null,
@@ -189,7 +189,6 @@ export function fromRows(plan: LoadedPlan): AppData {
       description: s.description,
       tags: s.tags ?? [],
       ...(s.liability_type ? { liabilityType: s.liability_type } : {}),
-      ...(s.main_paycheck ? { mainPaycheck: true } : {}),
       versions: (versionsOf.get(s.id) ?? []).sort(byStart),
       active: s.active,
       endDate: s.end_date,
@@ -281,7 +280,6 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
 
   const sourceIds = new Set<string>();
   const versionIds = new Set<string>();
-  let mains = 0;
   data.sources.forEach((s, i) => {
     const where = `Item ${i + 1} (${s.id})`;
     if (sourceIds.has(s.id)) error(`${where}: the id is used twice.`);
@@ -290,7 +288,6 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
     if (!(RECURRING_KINDS as readonly string[]).includes(s.kind)) error(`${where}: unknown kind.`);
     if (!text(s.description)) error(`${where}: the description is empty or longer than 200 characters.`);
     if (s.tags.length > 10) error(`${where}: more than 10 tags.`);
-    if (s.mainPaycheck) mains += 1;
     if (s.active && s.endDate !== null) error(`${where}: it's on but has an end date.`);
     if (!isTimestamp(s.createdAt) || !isTimestamp(s.updatedAt)) error(`${where}: a created or updated time isn't a valid time.`);
     if (s.versions.length === 0) error(`${where}: it has no schedule.`);
@@ -310,8 +307,6 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
     if (s.pausedRanges.some((p) => !(isValidDateStr(p.from) && isValidDateStr(p.until) && p.until > p.from))) error(`${where}: a turned-off stretch has invalid dates.`);
     if (s.pausedRanges.some((p, j) => j > 0 && p.from < s.pausedRanges[j - 1]!.from)) normalized(`${where}: turned-off stretches will be stored in date order.`);
   });
-  if (mains > 1) error('More than one item is marked as the main paycheck.');
-
   const recordIds = new Set<string>();
   data.records.forEach((r, i) => {
     const where = `Record ${i + 1} (${r.id})`;

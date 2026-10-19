@@ -7,7 +7,6 @@ import {
   monthWeekSummaries,
   negativeStretches,
   overdueEntries,
-  paycheckCycles,
   periodKpis,
   tallyOn,
   type Forecast,
@@ -65,41 +64,14 @@ describe('forecast anchor and running tally', () => {
     ]);
   });
 
-  it('starts the running total at the earliest income, whichever is the main paycheck', () => {
+  it('starts the running total at the earliest income, not the first one entered', () => {
     let d = baseline();
     d = source(d, TODAY, 'income', 'Side job', 300, '2026-10-13', { type: 'monthly' }, 'income-side');
-    // The first income added is the main paycheck unless another is chosen, but
-    // the side job is paid first, so the running total starts the day before it.
     const f = buildForecast(d, TODAY);
-    expect(f.mainSourceId).toBe(PAY);
     expect(f.anchor).toBe('2026-10-12');
     expect(f.forecastStart).toBe('2026-10-13');
     expect(tallyOn(f, '2026-10-13')).toBe(usd(300));
     expect(tallyOn(f, '2026-10-15')).toBe(usd(2100));
-    // Pay periods still follow the main paycheck.
-    expect(paycheckCycles(f)[0]!.start).toBe('2026-10-15');
-
-    // Choosing the side job as the main paycheck changes pay periods, not the start.
-    const switched = buildForecast(unwrap(ops.setMainPaycheck(d, 'income-side', clockAt(TODAY))), TODAY);
-    expect(switched.mainSourceId).toBe('income-side');
-    expect(switched.anchor).toBe('2026-10-12');
-    expect(tallyOn(switched, '2026-10-13')).toBe(usd(300));
-    expect(tallyOn(switched, '2026-10-15')).toBe(usd(2100));
-    expect(paycheckCycles(switched)[0]!.start).toBe('2026-10-13');
-  });
-
-  it('allows only active income as the main paycheck, and only one at a time', () => {
-    let d = baseline();
-    d = source(d, TODAY, 'income', 'Side job', 300, '2026-10-13', { type: 'monthly' }, 'income-side');
-    const c = clockAt(TODAY);
-    d = unwrap(ops.setMainPaycheck(d, 'income-side', c));
-    d = unwrap(ops.setMainPaycheck(d, PAY, c));
-    expect(d.sources.filter((s) => s.mainPaycheck).map((s) => s.id)).toEqual([PAY]);
-    expect(ops.setMainPaycheck(d, RENT, c)).toMatchObject({ ok: false });
-    // Turning the main paycheck off falls back to the next active income.
-    d = unwrap(ops.deactivateSource(d, PAY, c));
-    expect(buildForecast(d, TODAY).mainSourceId).toBe('income-side');
-    expect(ops.setMainPaycheck(d, PAY, c)).toMatchObject({ ok: false });
   });
 
   it('keeps the same anchor and tally in every view', () => {
@@ -107,12 +79,9 @@ describe('forecast anchor and running tally', () => {
     const month = dailyTimeline(f, '2026-11-01', '2026-11-30').find((r) => r.date === '2026-11-05')!;
     const week = dailyTimeline(f, '2026-11-01', '2026-11-07').find((r) => r.date === '2026-11-05')!;
     const custom = dailyTimeline(f, '2026-11-05', '2026-11-05')[0]!;
-    const cycle = paycheckCycles(f).find((c) => c.start <= '2026-11-05' && c.end >= '2026-11-05')!;
-    const cycleRow = dailyTimeline(f, cycle.start, cycle.end).find((r) => r.date === '2026-11-05')!;
     expect(month.tallyCents).toBe(usd(1990));
     expect(week.tallyCents).toBe(usd(1990));
     expect(custom.tallyCents).toBe(usd(1990));
-    expect(cycleRow.tallyCents).toBe(usd(1990));
     // Requesting a longer horizon does not change the anchor or the values.
     const longer = buildForecast(baseline(), TODAY, { through: '2028-01-01' });
     expect(longer.anchor).toBe(f.anchor);
@@ -162,7 +131,6 @@ describe('forecast anchor and running tally', () => {
     expect(f.issue).toBe('no-recurring-income');
     expect(f.anchor).toBeNull();
     expect(dailyTimeline(f, '2026-10-01', '2026-11-30').every((r) => r.tallyCents === null)).toBe(true);
-    expect(paycheckCycles(f)).toEqual([]);
     // Period totals are still available; they do not depend on the anchor.
     expect(periodKpis(f, '2026-10-01', '2026-11-30').outflowCents).toBe(usd(1200));
   });
@@ -423,7 +391,6 @@ describe('one-time transactions', () => {
     const refunds = f.entries.filter((e) => e.occurrence.description === 'Tax refund');
     expect(refunds).toHaveLength(1);
     expect(refunds[0]!.date).toBe('2026-11-03');
-    expect(paycheckCycles(f).some((c) => c.start === '2026-11-03')).toBe(false);
   });
 
   it('can be deleted; recurring occurrences cannot', () => {
@@ -467,56 +434,6 @@ describe('period KPIs and summaries', () => {
   });
 });
 
-describe('paycheck-to-paycheck cycles', () => {
-  it('runs from each payday to the day before the next', () => {
-    const f = buildForecast(baseline(), TODAY);
-    const cycles = paycheckCycles(f, 3);
-    expect(cycles.map((c) => [c.start, c.end])).toEqual([
-      ['2026-10-15', '2026-10-28'],
-      ['2026-10-29', '2026-11-11'],
-      ['2026-11-12', '2026-11-25'],
-    ]);
-  });
-
-  it('does not reset the tally at the start of each cycle', () => {
-    const f = buildForecast(baseline(), TODAY);
-    const second = paycheckCycles(f)[1]!;
-    const rows = dailyTimeline(f, second.start, second.end);
-    expect(rows[0]!.tallyCents).toBe(usd(3190));
-    expect(periodKpis(f, second.start, second.end)).toEqual({ incomeCents: usd(1800), outflowCents: usd(1200), reservesCents: 0, operatingCents: usd(600), netCents: usd(600) });
-  });
-
-  it('starts pay periods only on the main paycheck; other income lands inside them', () => {
-    let d = baseline();
-    d = source(d, TODAY, 'income', 'Benefits', 400, '2026-11-03', { type: 'monthly' }, 'income-benefits');
-    const f = buildForecast(d, TODAY);
-    const cycles = paycheckCycles(f, 4);
-    expect(cycles.map((c) => [c.start, c.end, c.paydayEntries.map((e) => e.occurrence.description).join('+')])).toEqual([
-      ['2026-10-15', '2026-10-28', 'Paycheck'],
-      ['2026-10-29', '2026-11-11', 'Paycheck'],
-      ['2026-11-12', '2026-11-25', 'Paycheck'],
-      ['2026-11-26', '2026-12-09', 'Paycheck'],
-    ]);
-    const second = entriesInRange(f, cycles[1]!.start, cycles[1]!.end).filter((e) => e.occurrence.kind === 'income');
-    expect(second.map((e) => `${e.date} ${e.occurrence.description}`)).toEqual(['2026-10-29 Paycheck', '2026-11-03 Benefits']);
-  });
-
-  it('gives a household paid on back-to-back days one pay period, not a one-day one', () => {
-    // Paid Wednesday and Thursday every week.
-    let d = source(ops.emptyData(), TODAY, 'income', 'My pay', 900, '2026-10-14', { type: 'weekly' }, 'mine');
-    d = source(d, TODAY, 'income', 'Partner pay', 800, '2026-10-15', { type: 'weekly' }, 'partner');
-    const cycles = paycheckCycles(buildForecast(d, TODAY), 2);
-    expect(cycles.map((c) => [c.start, c.end])).toEqual([
-      ['2026-10-14', '2026-10-20'],
-      ['2026-10-21', '2026-10-27'],
-    ]);
-  });
-
-  it('uses the actual date of a late paycheck as the cycle boundary', () => {
-    const d = unwrap(ops.recordActual(baseline(), id(PAY, '2026-10-15'), { amountCents: usd(1650), date: '2026-10-16' }, clockAt('2026-10-16')));
-    expect(paycheckCycles(buildForecast(d, '2026-10-16'), 1)[0]).toMatchObject({ start: '2026-10-16', end: '2026-10-28' });
-  });
-});
 
 describe('time zone independence', () => {
   it('produces identical forecasts in every host time zone', () => {

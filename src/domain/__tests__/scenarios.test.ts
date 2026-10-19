@@ -188,7 +188,7 @@ describe('recurring changes', () => {
   });
 
   it('reserves from each paycheck: set aside, not spent', () => {
-    const r = run([{ kind: 'recurring-reserve', description: 'Emergency fund', amountCents: usd(100), schedule: 'each-paycheck' }]);
+    const r = run([{ kind: 'recurring-reserve', description: 'Emergency fund', amountCents: usd(100), schedule: { startDate: '2026-10-23', rule: { type: 'biweekly' } } }]);
     expect(r.assumptions[0]).toMatchObject({
       label: 'Emergency fund: −$100.00 set aside every 2 weeks from Oct 23, 2026',
       direction: 'out',
@@ -269,7 +269,7 @@ describe('variable income', () => {
 });
 
 describe('confirmed and hypothetical income', () => {
-  it('hypothetical recurring income never becomes the main paycheck or changes confirmed income', () => {
+  it('hypothetical recurring income never changes confirmed income', () => {
     const r = run([{ kind: 'hypothetical-income', description: 'Side gig', amountCents: usd(200), schedule: { startDate: '2026-10-20', rule: { type: 'weekly' } } }]);
     expect(r.comparable).toBe(true);
     expect(r.scenario.forecastStart).toBe('2026-10-23');
@@ -325,7 +325,7 @@ describe('the plan is never changed', () => {
         { kind: 'occurrence-amount', occurrenceId: 'rent@2026-12-01', amountCents: usd(1700) },
         { kind: 'occurrence-date', occurrenceId: 'loan@2026-11-28', date: '2026-12-02' },
         { kind: 'recurring-amount', sourceId: 'loan', amountCents: usd(400), from: '2026-12-28' },
-        { kind: 'recurring-reserve', description: 'Savings', amountCents: usd(100), schedule: 'each-paycheck' },
+        { kind: 'recurring-reserve', description: 'Savings', amountCents: usd(100), schedule: { startDate: '2026-10-23', rule: { type: 'biweekly' } } },
         { kind: 'extra-liability-payment', sourceId: 'loan', amountCents: usd(100), date: '2026-11-15' },
       ],
       d,
@@ -337,7 +337,7 @@ describe('the plan is never changed', () => {
   it('gives identical results every time', () => {
     const changes: ScenarioChange[] = [
       { kind: 'one-time-expense', description: 'Car repair', amountCents: usd(800), date: '2026-11-10' },
-      { kind: 'recurring-reserve', description: 'Savings', amountCents: usd(100), schedule: 'each-paycheck' },
+      { kind: 'recurring-reserve', description: 'Savings', amountCents: usd(100), schedule: { startDate: '2026-10-23', rule: { type: 'biweekly' } } },
     ];
     expect(run(changes)).toEqual(run(changes));
   });
@@ -371,13 +371,11 @@ describe('invalid assumptions', () => {
     ).toBe('Change each transaction only once in a scenario.');
   });
 
-  it('refuses a recorded occurrence, a pending schedule change, and paycheck savings with no paycheck', () => {
+  it('refuses a recorded occurrence and a pending schedule change', () => {
     const paid = unwrap(ops.recordActual(plan(), 'loan@2026-10-28', { amountCents: usd(300), date: TODAY }, clock));
     expect(err([{ kind: 'occurrence-amount', occurrenceId: 'loan@2026-10-28', amountCents: 100 }], paid)).toBe('Car loan on Oct 28, 2026 has already been recorded or canceled.');
     const pending = unwrap(ops.changeSourceSchedule(plan(), 'loan', { startDate: '2026-12-28', amountCents: usd(350), rule: { type: 'monthly' } }, clock));
     expect(err([{ kind: 'recurring-amount', sourceId: 'loan', amountCents: 100, from: '2026-11-28' }], pending)).toBe('Car loan already has a change set for Dec 28, 2026, so a scenario can’t change its amount yet.');
-    const noPay = source(unwrap(ops.completeOnboarding(ops.emptyData())), TODAY, 'bill', 'Rent', 1500, '2026-11-01', { type: 'monthly' }, 'rent');
-    expect(err([{ kind: 'recurring-reserve', description: 'Savings', amountCents: 100, schedule: 'each-paycheck' }], noPay)).toBe('There’s no main paycheck to follow. Choose dates instead.');
   });
 });
 

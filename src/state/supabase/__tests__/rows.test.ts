@@ -15,7 +15,7 @@ describe('mapping a plan to rows and back', () => {
     const rows = toRows(richPlan());
     expect(rows.sources.map((s) => [s.id, s.position, s.kind, s.main_paycheck, s.liability_type])).toEqual([
       ['pay', 0, 'income', false, null],
-      ['side', 1, 'income', true, null],
+      ['side', 1, 'income', false, null],
       ['rent', 2, 'bill', false, null],
       ['elec', 3, 'bill', false, null],
       ['phone', 4, 'bill', false, null],
@@ -88,8 +88,8 @@ describe('checking a plan before migrating', () => {
       ...d,
       sources: [
         { ...d.sources[0]!, versions: [] },
-        { ...d.sources[1]!, mainPaycheck: true },
-        { ...d.sources[2]!, mainPaycheck: true, kind: 'income', id: 'rent@x' },
+        { ...d.sources[1]! },
+        { ...d.sources[2]!, kind: 'income', id: 'rent@x' },
         { ...d.sources[3]!, versions: [{ ...d.sources[3]!.versions[0]!, id: '' }, { ...d.sources[3]!.versions[0]!, id: 'v2', amountCents: 0 }] },
         ...d.sources.slice(4),
       ],
@@ -108,7 +108,6 @@ describe('checking a plan before migrating', () => {
       'Item 4 (elec), schedule 1: it has no id.',
       'Item 4 (elec): two schedules start on 2026-04-03.',
       'Item 4 (elec), schedule 2: the amount must be above $0 and at most $100,000,000.',
-      'More than one item is marked as the main paycheck.',
       "Record 1 (elec@2026-01-01): the id doesn't match its item and original date.",
       "Record 2 (elec@2026-05-03): an actual must be recorded exactly when it's done.",
       'Record 3 (gone@2026-06-03): its item no longer exists.',

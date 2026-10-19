@@ -26,7 +26,6 @@ import {
   negativeStretches,
   explainTimingGaps,
   GAP_LOOKAHEAD_DAYS,
-  paycheckCycles,
   weekSummaries,
   type DayRow,
   type Forecast,
@@ -37,7 +36,7 @@ import {
 import { formatCompact, formatMoney, formatMoneyIn, formatMoneyOut, formatSignedMoney } from '../../domain/money';
 import { periodPlan, type PeriodPlan } from '../../domain/plan';
 import { useStore } from '../../state/store';
-import { EmptyState, Icon, Modal, SectionLabel } from '../components/common';
+import { Icon, Modal, SectionLabel } from '../components/common';
 import { EntryButton, PeriodNav, shortDay } from '../components/entries';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 import { ScenarioSheet } from '../components/ScenarioSheet';
@@ -48,11 +47,10 @@ import { DayTransfers } from '../components/money-accounts';
 import { consumeForecastDate, navigate, parseForecastDate } from '../router';
 
 /** Forecast views. The week has its own place on Home; here each period lists its weeks, and a week opens its days. */
-type View = 'month' | 'cycle' | 'custom';
+type View = 'month' | 'custom';
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'month', label: 'Month' },
-  { id: 'cycle', label: 'Paycheck' },
   { id: 'custom', label: 'Custom' },
 ];
 
@@ -78,7 +76,6 @@ export function Forecast() {
   const { data, today } = useStore();
   const [view, setView] = useState<View>('month');
   const [focus, setFocus] = useState<DateStr>(() => consumeForecastDate() ?? parseForecastDate() ?? today);
-  const [cycleIndex, setCycleIndex] = useState(0);
   const [customStart, setCustomStart] = useState<DateStr>(today);
   const [customEnd, setCustomEnd] = useState<DateStr>(addDays(today, 30));
   const [selected, setSelected] = useState<DateStr | null>(null);
@@ -98,9 +95,7 @@ export function Forecast() {
   }, [view, focus, customStart, customEnd, customError]);
 
   const forecast = useMemo(() => buildForecast(data, today, { through: fixedRange?.[1] }), [data, today, fixedRange]);
-  const cycles = useMemo(() => paycheckCycles(forecast), [forecast]);
-  const cycle = cycles[Math.min(cycleIndex, Math.max(cycles.length - 1, 0))];
-  const range: [DateStr, DateStr] | null = view === 'cycle' ? (cycle ? [cycle.start, cycle.end] : null) : fixedRange;
+  const range = fixedRange;
 
   const openOccurrence = (id: string, back: Sheet | null = null) => setSheet({ kind: 'occurrence', id, back });
   const openDay = (date: DateStr) => {
@@ -153,29 +148,6 @@ export function Forecast() {
             onToday={focus.slice(0, 7) !== today.slice(0, 7) ? () => setFocus(today) : undefined}
           />
         )}
-        {view === 'cycle' &&
-          (cycle ? (
-            <div className="stack-sm">
-              <PeriodNav
-                label={formatRange(cycle.start, cycle.end)}
-                prevLabel="Previous pay period"
-                nextLabel="Next pay period"
-                onPrev={cycleIndex > 0 ? () => setCycleIndex(cycleIndex - 1) : undefined}
-                onNext={cycleIndex < cycles.length - 1 ? () => setCycleIndex(cycleIndex + 1) : undefined}
-              />
-              <p className="hint center">
-                Pay period {cycleIndex + 1} of {cycles.length} · starts with {cycle.paydayEntries.map((e) => e.occurrence.description).join(' and ')} · next main payday {formatShort(addDays(cycle.end, 1))}
-              </p>
-            </div>
-          ) : (
-            <EmptyState title="Pay periods aren’t available yet">
-              <p>
-                {forecast.issue
-                  ? 'Add a recurring income with its next payment date. Pay periods run from one main payday to the next.'
-                  : 'We need at least two upcoming main paydays to show a pay period. Check that your main paycheck is turned on.'}
-              </p>
-            </EmptyState>
-          ))}
         {view === 'custom' && (
           <div className="custom-range">
             <div className="field">
