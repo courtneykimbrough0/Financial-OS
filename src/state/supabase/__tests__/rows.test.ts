@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { buildForecast } from '../../../domain/forecast';
-import * as ops from '../../../domain/operations';
 import type { AppData } from '../../../domain/types';
 import { canonicalize, checkForMigration, fromRows, toRows, type LoadedPlan } from '../rows';
 import { allPlans, legacyPlan, richPlan, TODAY } from './fixtures';
@@ -35,15 +34,14 @@ describe('mapping a plan to rows and back', () => {
     expect(rows.records.find((r) => r.id === 'elec@2026-06-03')).toMatchObject({ expected_date: '2026-06-03', expected_amount_cents: 18000, actual_date: '2026-06-09', actual_amount_cents: 20500, status: 'completed' });
     expect(rows.records.find((r) => r.id === 'elec@2026-11-03')).toMatchObject({ expected_date: '2026-11-03', scheduled_date: '2026-11-06', scheduled_amount_cents: 20000, status: 'scheduled' });
     expect(rows.records.find((r) => r.id === 'one-refund')).toMatchObject({ source_id: null, kind: 'income', tags: ['Taxes'], actual_amount_cents: 61240 });
-    expect([rows.review_cadence, rows.review_handled_on, rows.review_outcome, rows.onboarding_complete]).toEqual(['payday', TODAY, 'completed', true]);
+    expect(rows.onboarding_complete).toBe(true);
   });
 
-  it('keeps "no review rhythm chosen" apart from a rhythm set to off', () => {
-    const none = smallNoReview();
-    expect('review' in fromRows(loaded(none))).toBe(false);
-    expect(toRows(none)).toMatchObject({ review_cadence: null, review_handled_on: null, review_outcome: null });
-    const off = legacyPlan();
-    expect(fromRows(loaded(off)).review).toEqual({ cadence: 'off', handledOn: null, outcome: null });
+  it('ignores a review rhythm an earlier version stored, and never writes one', () => {
+    const rows = toRows(richPlan());
+    expect(Object.keys(rows).filter((k) => k.startsWith('review'))).toEqual([]);
+    const back = fromRows({ ...loaded(richPlan()), review_cadence: 'weekly', review_handled_on: TODAY, review_outcome: 'completed' } as Parameters<typeof fromRows>[0]);
+    expect('review' in back).toBe(false);
   });
 
   it('doesn’t add optional fields that were absent', () => {
@@ -58,14 +56,6 @@ describe('mapping a plan to rows and back', () => {
     expect('isSample' in fromRows({ ...r, workspace_id: 'ws', revision: 0, schema_version: 2 })).toBe(false);
   });
 });
-
-function smallNoReview(): AppData {
-  return unwrapOk(ops.completeOnboarding(ops.emptyData()));
-}
-function unwrapOk(r: ops.Result) {
-  if (!r.ok) throw new Error(r.error);
-  return r.data;
-}
 
 describe('canonical form', () => {
   it('changes only timestamp formatting and ordering, never the forecast', () => {

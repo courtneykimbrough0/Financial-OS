@@ -310,9 +310,8 @@ describe('forecast anchor', () => {
 });
 
 describe('the plan is never changed', () => {
-  it('sources, records, history, review rhythm and dismissals stay exactly as they were', () => {
+  it('sources, records, history and dismissals stay exactly as they were', () => {
     let d = plan();
-    d = unwrap(ops.setReviewCadence(d, 'weekly'));
     d = source(d, '2026-06-03', 'bill', 'Phone', 60, '2026-06-25', { type: 'monthly' }, 'phone');
     for (const date of ['2026-07-25', '2026-08-25', '2026-09-25']) d = unwrap(ops.recordActual(d, `phone@${date}`, { amountCents: usd(65), date }, clock));
     d = unwrap(ops.recordActual(d, 'phone@2026-06-25', { amountCents: usd(60), date: '2026-06-25' }, clock));

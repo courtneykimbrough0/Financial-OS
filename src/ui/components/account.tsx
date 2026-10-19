@@ -228,7 +228,7 @@ export function DeviceDataOffer() {
     }
     setDismissed(true);
     toast('Your forecast is now saved to your account.');
-    navigate(local.onboardingComplete ? 'dashboard' : 'onboarding');
+    navigate(local.onboardingComplete ? 'home' : 'onboarding');
   };
 
   return (

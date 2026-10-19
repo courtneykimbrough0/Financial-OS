@@ -11,7 +11,7 @@ The PostgreSQL storage for Financial OS, the storage adapter that uses it, and a
 
 | Table | Holds | Key |
 | --- | --- | --- |
-| `workspaces` | One plan: owner, revision, onboarding, review rhythm | `id`; `owner_id` unique |
+| `workspaces` | One plan: owner, revision, onboarding (the retired review columns stay, unused) | `id`; `owner_id` unique |
 | `sources` | Recurring items, in the app's order (`position`), with any estimate dismissal | (`workspace_id`, `id`) |
 | `schedule_versions` | Each item's dated amounts and recurrence rules | (`workspace_id`, `id`); unique (`workspace_id`, `source_id`, `start_date`) |
 | `source_pauses` | Stretches an item was turned off | (`workspace_id`, `source_id`, `from_date`) |
@@ -70,7 +70,7 @@ All four run with `search_path = ''`, name every object by schema, and can be ca
 | --- | --- | --- |
 | `update` | Every ordinary change | Only removals the app's own operations make: at most one item (never one with recorded history) and one one-time entry per save; recurring records only by undo. An existing record's original prediction (`expected_*`), source and kind can't change, existing schedule versions can't be rewritten, and setup can't be reopened. An empty or truncated plan therefore can't erase a populated one. |
 | `replace` | Restore from a backup | The whole plan is replaced, history included. |
-| `reset` | Start over | Only an empty plan back in setup (the review rhythm may stay). |
+| `reset` | Start over | Only an empty plan back in setup . |
 
 The database can't know that someone confirmed a restore or a start over: the app asks for confirmation and offers a backup first. What the database does guarantee is that only the owner can do it, only against the revision they were shown, only with a valid plan, and only when the mode is named.
 
@@ -99,7 +99,7 @@ A timeout doesn't prove a save failed.
 ## Mapping (`src/state/supabase/rows.ts`)
 
 - **`toRows(appData)`** builds the request body for `save_plan`; **`fromRows(loaded)`** turns `load_plan`'s result back into AppData. Both are pure.
-- **Everything financial round-trips exactly.** That includes absent optional fields: no review rhythm stays absent and differs from "off"; no liability type stays absent.
+- **Everything financial round-trips exactly.** That includes absent optional fields: no liability type stays absent.
 - **Three things come back in canonical form (`canonicalize`):** times as ISO-8601 UTC with milliseconds (what the app writes anyway), schedule versions in start order, and pauses in date order. The forecast doesn't change.
 - **The source order is stored (`position`)**, because with no main paycheck marked, the first active income starts pay periods.
 - **`checkForMigration(appData)`** lists everything the database would refuse: orphaned records, ids that don't match their source and date, repeated ids, completed records without actuals, invalid times, and so on. It also lists what will be stored in canonical form. Today's `migrate` is more lenient than the database, so run this before migrating.
@@ -129,7 +129,7 @@ Loading throws an Error with the same messages; the store shows its load-failure
 
 ### Save intent in the app (`src/state/store.tsx`)
 
-- **Ordinary changes** (`run`), including undo and batches, are always saved as `update`.
+- **Ordinary changes** (`run`), including undoing one item and batches of due items, are always saved as `update`.
 - **Restore a backup** and **Start over** use `replacePlan(op, 'replace' | 'reset')`. The adapter says it is online-first (`onlineFirst`), so the store:
   1. runs it only when every earlier change is saved (otherwise: "Your latest change hasn’t been saved yet…"), and combines nothing into it;
   2. keeps the saved plan on screen and other changes waiting until `save_plan` confirms it; the dialog shows Restoring… / Erasing… and its buttons are disabled, so a second click sends nothing;
@@ -205,7 +205,7 @@ An approved, isolated hosted test project can be used deliberately: through an a
 ## Migration and rollback
 
 - **Migration path (development data):** download a backup from the current app, then restore it into the Supabase-backed app (a `replace` save into the new, empty workspace). Run `checkForMigration` first.
-- **Verified by the equivalence tests:** the stored plan equals the canonical original, and `buildForecast`, timing gaps, pay periods, the lowest running total, estimate suggestions, the review status and summary, and variances are identical today and 30, 90, 180 and 365 days ahead.
+- **Verified by the equivalence tests:** the stored plan equals the canonical original, and `buildForecast`, timing gaps, pay periods, the lowest running total, estimate suggestions, the Home view, and variances are identical today and 30, 90, 180 and 365 days ahead.
 - **Rollback:** the device copy and Firestore documents aren't touched. A backup downloaded from the Supabase-backed app (the same format, round-trip tested) restores into the current app.
   - If both copies changed after migrating, neither overwrites the other automatically. The person picks which backup to restore, and can keep the other as a file.
 
@@ -252,7 +252,7 @@ Last run by hand (October 2026): Supabase CLI 2.121.0, Supabase Postgres 17.11.0
 
 `e2e/supabase.e2e.test.ts` drives built copies of the app in Chromium against a local stack. It has the same requirements as `test:supabase`, and `scripts/local-supabase.mjs` applies the same checks. Every test signs in through the app's sign-in screen.
 
-- **Setup and everyday use:** an empty workspace, setup (income, a bill, varied spending, a liability payment), a recorded payment, undo, a raise from a date, a moved occurrence, a review rhythm and a completed review, a restore, a dismissed estimate suggestion, and start over. After each one, Supabase holds exactly what's on screen, and a reload brings back the same plan, the same dashboard and identical forecasts. Every save is confirmed; all are `update` except one `replace` and one `reset`.
+- **Setup and everyday use:** an empty workspace, setup (income, a bill, varied spending, a liability payment), a recorded payment, undo, a raise from a date, a moved occurrence, a restore, a dismissed estimate suggestion, and start over. After each one, Supabase holds exactly what's on screen, and a reload brings back the same plan, the same dashboard and identical forecasts. Every save is confirmed; all are `update` except one `replace` and one `reset`.
 - **Conflicts and retries:**
   - two devices signed in to one account: the second save gets a conflict and isn't shown as saved, the first is kept, the unsaved change can still be downloaded, and Reload shows the latest;
   - a reply lost after commit: shown as not saved, warns before leaving, Try again reuses the save id and applies once;
@@ -284,7 +284,7 @@ Last run by hand (October 2026): Supabase CLI 2.121.0, Supabase Postgres 17.11.0
   - discarding and leaving the page;
   - each account's confirmed plan intact afterwards.
 - **Isolation:** two accounts can't reach each other's plans, and signed-out callers reach nothing.
-- **Migration:** a plan from the device-storage app, downloaded with its backup button, restored into an empty Supabase workspace. `checkForMigration` passes first, and everything arrives exactly: ids, original predictions, current expectations, actuals, schedule versions, pauses, estimate dismissals, review settings, onboarding, forecasts and timing gaps. The Supabase copy's backup then restores into device storage again (rollback).
+- **Migration:** a plan from the device-storage app, downloaded with its backup button, restored into an empty Supabase workspace. `checkForMigration` passes first, and everything arrives exactly: ids, original predictions, current expectations, actuals, schedule versions, pauses, estimate dismissals, onboarding, forecasts and timing gaps. The Supabase copy's backup then restores into device storage again (rollback).
 - **The default build:** no Supabase code, no requests to it.
 
 ## Performance

@@ -34,6 +34,15 @@ describe('CloudAdapter', () => {
     expect(names(server.row!.data)).toEqual(['B']);
   });
 
+  it('opens an account document that still holds a review rhythm, and saves without it', async () => {
+    server.row = { data: { ...withBill(emptyData(), 'Rent'), review: { cadence: 'payday', handledOn: null, outcome: null } } as unknown as AppData, revision: 3 };
+    const loaded = await adapter.load();
+    expect(names(loaded)).toEqual(['Rent']);
+    expect('review' in loaded).toBe(false);
+    expect(await adapter.save(withBill(loaded, 'Phone'), 3)).toEqual({ ok: true, revision: 4 });
+    expect(server.row!.data).not.toHaveProperty('review');
+  });
+
   it('keeps a device copy and opens from it offline', async () => {
     await adapter.load();
     await adapter.save(withBill(emptyData(), 'Rent'), 0);

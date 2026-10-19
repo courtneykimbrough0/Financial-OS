@@ -260,6 +260,11 @@ function kpisOf(t: MoneyTotals): PeriodKpis {
   return { incomeCents: t.inCents, outflowCents: t.outCents, reservesCents: t.reservedCents, operatingCents: t.inCents - t.outCents, netCents: t.netCents };
 }
 
+/** `PeriodKpis` for any set of entries (for example only the recorded ones in a range). Canceled entries are excluded. */
+export function kpisOfEntries(entries: ForecastEntry[]): PeriodKpis {
+  return kpisOf(totals(entries));
+}
+
 /** Income, outflows, net reserves, operating and available cash flow for [start, end]. */
 export function periodKpis(forecast: Forecast, start: DateStr, end: DateStr): PeriodKpis {
   return kpisOf(totals(entriesInRange(forecast, start, end)));
@@ -472,24 +477,4 @@ export function overdueEntries(forecast: Forecast): ForecastEntry[] {
   return forecast.entries
     .filter((e) => e.occurrence.displayStatus === 'overdue')
     .sort((a, b) => (a.occurrence.scheduledDate < b.occurrence.scheduledDate ? -1 : a.occurrence.scheduledDate > b.occurrence.scheduledDate ? 1 : compareEntries(a, b)));
-}
-
-export interface ReviewGroups {
-  /** Outstanding items whose date has passed or is today: these need an update. */
-  attention: ForecastEntry[];
-  /** Outstanding items due after today through the end of this week (Saturday). */
-  upcoming: ForecastEntry[];
-}
-
-/** Outstanding items to review, oldest first: what needs attention, then the rest of this week. */
-export function reviewEntries(forecast: Forecast): ReviewGroups {
-  const { today } = forecast;
-  const weekEnd = endOfWeek(today);
-  const outstanding = forecast.entries
-    .filter((e) => e.occurrence.status === 'scheduled' && e.occurrence.scheduledDate <= weekEnd)
-    .sort((a, b) => (a.occurrence.scheduledDate < b.occurrence.scheduledDate ? -1 : a.occurrence.scheduledDate > b.occurrence.scheduledDate ? 1 : compareEntries(a, b)));
-  return {
-    attention: outstanding.filter((e) => e.occurrence.scheduledDate <= today),
-    upcoming: outstanding.filter((e) => e.occurrence.scheduledDate > today),
-  };
 }

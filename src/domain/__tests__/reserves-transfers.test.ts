@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { accountBalance, accountTransfers, transferShortfall, transfersDue, transfersInRange } from '../balances';
+import { homeView } from '../home';
+import { accountBalance, accountTransfers, transferShortfall, transfersInRange } from '../balances';
 import { buildForecast, dailyTimeline, periodKpis, timingGapsAhead } from '../forecast';
 import * as ops from '../operations';
 import { periodPlan } from '../plan';
@@ -123,13 +124,11 @@ describe('transfers between accounts', () => {
     let d = unwrap(ops.addTransfer(accounts(), { fromAccountId: 'income', toAccountId: 'reserves', amountCents: usd(250), date: '2026-10-08' }, 'expected', clock, 'late'));
     d = unwrap(ops.addTransfer(d, { fromAccountId: 'income', toAccountId: 'bills', amountCents: usd(900), date: '2026-10-14' }, 'expected', clock, 'soon'));
     d = unwrap(ops.addTransfer(d, { fromAccountId: 'income', toAccountId: 'bills', amountCents: usd(100), date: '2026-10-01' }, 'recorded', clock, 'done'));
-    const due = transfersDue(d, '2026-10-20', '2026-10-24');
-    expect(due.attention.map((t) => [t.id, t.status])).toEqual([
-      ['late', 'expected'],
-      ['soon', 'expected'],
-    ]);
-    expect(due.upcoming).toEqual([]);
-    expect(transfersDue(d, TODAY, '2026-10-17').upcoming.map((t) => t.id)).toEqual(['soon']);
+    const v = homeView(d, '2026-10-20');
+    expect(v.attention.filter((i) => i.type === 'transfer').map((i) => i.id)).toEqual(['late', 'soon']);
+    expect(v.comingUp.filter((i) => i.type === 'transfer')).toEqual([]);
+    expect(d.transfers!.filter((t) => t.status === 'expected').map((t) => t.id)).toEqual(['late', 'soon']);
+    expect(homeView(d, TODAY).comingUp.filter((i) => i.type === 'transfer').map((i) => i.id)).toEqual(['soon']);
   });
 
   it('records an expected transfer with what actually moved, once', () => {

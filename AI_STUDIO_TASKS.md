@@ -33,11 +33,7 @@ Firebase project: `financial-os-505002`. Firestore database: `ai-studio-financia
 - [x] Checked `(default)` database: Verified that project `financial-os-505002` does not have a `(default)` database (returned `5 NOT_FOUND`); only the named database exists.
 - [ ] Confirm by signing in, adding an item, and reloading: the item is still there.
 
-- [ ] **Deploy again to turn on the review rhythm for accounts.** (Not planned: Firebase is legacy, so signed-in review rhythms wait for the Supabase migration. Kept for reference.) This version of `firestore.rules` accepts the optional `review` field. Until it is live, the app keeps the review rhythm off for signed-in people (`REVIEW_RHYTHM_IN_ACCOUNTS = false` in `src/state/features.ts`), so saves keep working. To turn it on:
-  1. Deploy `firestore.rules` to the named database (only the rules).
-  2. Check it: sign in, open the browser console on the app and confirm a normal change still saves; then in the Firebase console's Rules playground, simulate an update to `financialData/{your uid}` that includes `review: { cadence: 'weekly', handledOn: null, outcome: null }` and confirm it is allowed.
-  3. Set `REVIEW_RHYTHM_IN_ACCOUNTS` to `true`, run the checks in AGENTS.md section H, and publish.
-  Rhythms chosen on a device before this aren't in the account; people choose one again once they're signed in.
+- [x] Review rhythm for accounts: no longer needed. The review rhythm was removed from the app (roadmap H2); the rules still accept the optional `review` field for older documents.
 
 ## 3. Turn on Google sign-in
 

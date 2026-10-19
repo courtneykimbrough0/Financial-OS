@@ -54,11 +54,10 @@ describe('a backup reproduces the forecast', () => {
     d = u(dismissEstimate(d, analyzeEstimate(d, 'phone', '2026-10-16').suggestion!, c('2026-10-16')));
     d = u(ops.changeSourceSchedule(d, 'pay', { startDate: '2026-10-30', amountCents: 110000, rule: { type: 'biweekly' } }, c('2026-10-16')));
     d = u(ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: 8000, date: '2026-11-03' }, c('2026-10-16'), 'rep'));
-    d = { ...u(ops.setReviewCadence(d, 'payday')), onboardingComplete: true, revision: 12 };
+    d = { ...d, onboardingComplete: true, revision: 12 };
     const restored = readBackup(createBackup(d).text).data;
     expect(restored).toEqual(d);
     expect(restored.sources.find((s) => s.id === 'phone')!.estimateDismissal).toEqual({ currentCents: 6000, proposedCents: 6500, through: '2026-09-25' });
-    expect(restored.review).toEqual({ cadence: 'payday', handledOn: null, outcome: null });
     expect(buildForecast(restored, '2026-10-16')).toEqual(buildForecast(d, '2026-10-16'));
   });
 });

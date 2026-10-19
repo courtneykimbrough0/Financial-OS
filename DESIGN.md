@@ -95,7 +95,7 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
 
 The dashboard shows only summaries. Detail opens in a bottom sheet:
 
-- **Overdue banner:** a one-line amber pill ("1 transaction needs an update ›") that opens the overdue list.
+- **Home** (the opening screen) carries what needs attention (see README, Home); the forecast screen no longer has an overdue banner.
 - **Hero card:** cash flow for the period (large, signed; red with a trend-down icon when negative) with money in and out beneath it, then the lowest running total, a one-line timing-gap or all-clear callout, and the next expected payday. The (i) button explains cash flow and the running total.
 - **Calendar card:** the grid, then a "Calendar key" link that opens the key.
 - **Breakdown card:** income, expenses with one indented row per category that has something in the period, and cash flow.

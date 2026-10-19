@@ -67,8 +67,6 @@ export function firebaseBackend(db: Firestore, userId: string): CloudBackend {
             onboardingComplete: Boolean(data.onboardingComplete),
             sources: data.sources,
             records: data.records,
-            // Written only once a rhythm is chosen, so saves stay valid under rules deployed before this field existed.
-            ...(data.review ? { review: data.review } : {}),
             updatedAt: serverTimestamp(),
           });
           return revision;

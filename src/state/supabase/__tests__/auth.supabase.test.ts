@@ -264,9 +264,9 @@ describe('with the app’s request guard bypassed, the server still keeps each a
     // Plain HTTP, no supabase-js and no guard: the owner mark claims B, and the plan carries B's ids.
     const raw = (path: string, body: unknown, method = 'POST') =>
       fetch(`${URL}/rest/v1/${path}`, { method, headers: { apikey: KEY, Authorization: `Bearer ${aToken}`, 'Content-Type': 'application/json', 'x-financial-os-owner': bAccount.userId, Prefer: 'return=representation' }, body: JSON.stringify(body) });
-    const save = await raw('rpc/save_plan', { p_base_revision: 1, p_save_id: crypto.randomUUID(), p_mode: 'replace', p_plan: { ...toRows(smallPlan()), workspace_id: wsB, owner_id: bAccount.userId, review_cadence: 'weekly' } });
+    const save = await raw('rpc/save_plan', { p_base_revision: 1, p_save_id: crypto.randomUUID(), p_mode: 'replace', p_plan: { ...toRows({ ...smallPlan(), onboardingComplete: false }), workspace_id: wsB, owner_id: bAccount.userId } });
     expect(save.status).toBe(200);
-    expect((await new SupabaseStorageAdapter(a).load()).review?.cadence).toBe('weekly');
+    expect((await new SupabaseStorageAdapter(a).load()).onboardingComplete).toBe(false);
     expect(await new SupabaseStorageAdapter(b).load()).toEqual(bPlan);
     // Reads and direct writes into B's workspace.
     for (const t of TABLES) {

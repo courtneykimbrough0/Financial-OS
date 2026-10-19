@@ -247,22 +247,6 @@ export interface Occurrence extends OccurrenceRecord {
   virtual: boolean;
 }
 
-/** How often the person wants to review their outlook. "off" (the default) means never prompted. */
-export type ReviewCadence = 'off' | 'weekly' | 'payday' | 'monthly';
-export const REVIEW_CADENCES: ReviewCadence[] = ['off', 'weekly', 'payday', 'monthly'];
-
-/**
- * Review rhythm. Only the latest handling is kept: a review period counts as
- * done once `handledOn` is on or after its start, so missed periods never
- * pile up.
- */
-export interface ReviewSettings {
-  cadence: ReviewCadence;
-  /** The day the latest review was completed or skipped, or null. */
-  handledOn: DateStr | null;
-  outcome: 'completed' | 'skipped' | null;
-}
-
 export interface AppData {
   schemaVersion: 2;
   /**
@@ -276,8 +260,6 @@ export interface AppData {
   isSample?: boolean;
   sources: RecurringSource[];
   records: OccurrenceRecord[];
-  /** Absent until the person chooses a review rhythm (then saved with the rest). */
-  review?: ReviewSettings;
   /** The person's accounts. Absent until the first one is added; items work without any. */
   accounts?: Account[];
   /** Money moved between the person's own accounts. Absent until the first one. */

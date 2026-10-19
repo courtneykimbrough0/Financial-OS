@@ -415,7 +415,7 @@ export function Onboarding() {
 
   const finish = () => {
     run((d) => ops.completeOnboarding(d));
-    navigate('dashboard');
+    navigate('home');
   };
 
   const next = () => {
@@ -469,7 +469,7 @@ export function Onboarding() {
             type="button"
             className="button link full"
             onClick={() => {
-              void enterSample().then(() => navigate('dashboard'));
+              void enterSample().then(() => navigate('home'));
             }}
           >
             Explore with sample data

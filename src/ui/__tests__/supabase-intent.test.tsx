@@ -81,12 +81,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const tweak = (id: string) => (d: AppData, c: ops.Clock) => ops.addOneTime(d, { kind: 'varied', description: 'Snack', amountCents: usd(5), date: '2026-11-09' }, c, id);
+
 describe('ordinary changes', () => {
   it('are saved as updates, one at a time, each on the revision before', async () => {
     const { fake } = await mount();
     act(() => void store.run((d, c) => ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(80), date: '2026-11-05' }, c, 'one-a')));
     await waitFor(() => expect(store.saveStatus).toBe('idle'));
-    act(() => void store.run((d) => ops.setReviewCadence(d, 'weekly')));
+    act(() => void store.run(tweak('one-b')));
     await waitFor(() => expect(saves(fake)).toEqual([
       ['update', 5, 'save-1'],
       ['update', 6, 'save-2'],
@@ -94,14 +96,11 @@ describe('ordinary changes', () => {
     expect(fake.workspace!.revision).toBe(7);
   });
 
-  it('undo and batch changes stay updates', async () => {
+  it('recording an item, and undoing it, stay updates', async () => {
     const { fake } = await mount();
-    const ids = ['pay@2026-10-23', 'rent@2026-11-01'];
-    const before = store.data;
-    act(() => void store.run((d, c) => ops.recordAsExpected(d, ids, c)));
+    act(() => void store.run((d, c) => ops.recordActual(d, 'pay@2026-10-23', { amountCents: usd(1000), date: c.today }, c)));
     await waitFor(() => expect(store.saveStatus).toBe('idle'));
-    const after = store.data;
-    act(() => void store.run((d) => ops.undoBatch(d, before, after, ids)));
+    act(() => void store.run((d, c) => ops.restoreOccurrence(d, 'pay@2026-10-23', c)));
     await waitFor(() => expect(saves(fake)).toHaveLength(2));
     await waitFor(() => expect(store.saveStatus).toBe('idle'));
     expect(saves(fake).map(([mode]) => mode)).toEqual(['update', 'update']);
@@ -122,15 +121,15 @@ describe('restoring a backup', () => {
     expect(names(store.data)).toEqual(['Paycheck', 'Rent']);
     expect(screen.queryByText('Backup restored.')).toBeNull();
     // Nothing else can change meanwhile.
-    expect(store.run((d) => ops.setReviewCadence(d, 'weekly'))).toEqual({ ok: false, error: 'Wait until this finishes saving, or cancel it.' });
+    expect(store.run(tweak('one-c'))).toEqual({ ok: false, error: 'Wait until this finishes saving, or cancel it.' });
     fake.hold = false;
     act(() => fake.release());
     expect(await screen.findByText('Backup restored.')).toBeInTheDocument();
     expect(saves(fake)).toEqual([['replace', 5, 'save-1']]);
     expect(store.data).toEqual({ ...b.data, revision: 6 });
-    expect(window.location.hash).toBe('#/dashboard');
+    expect(window.location.hash).toBe('#/home');
     // The next ordinary change is an update again.
-    act(() => void store.run((d) => ops.setReviewCadence(d, 'monthly')));
+    act(() => void store.run(tweak('one-d')));
     await waitFor(() => expect(saves(fake)).toEqual([['replace', 5, 'save-1'], ['update', 6, 'save-2']]));
   });
 
@@ -209,7 +208,7 @@ describe('restoring a backup', () => {
 
   it('a conflict: nothing is replaced, and the page offers Reload', async () => {
     const { fake, user } = await mount();
-    fake.externalSave({ ...fake.workspace!.plan, review_cadence: 'weekly' });
+    fake.externalSave({ ...fake.workspace!.plan });
     await upload(user, backup().text);
     await user.click(within(restoreDialog()).getByRole('button', { name: 'Replace with backup' }));
     const message = 'Your data was changed somewhere else, such as another device. Reload to see the latest version.';
@@ -221,13 +220,12 @@ describe('restoring a backup', () => {
     expect(bar).toHaveTextContent(message);
     await user.click(within(bar).getByRole('button', { name: 'Reload' }));
     await waitFor(() => expect(store.data.revision).toBe(6));
-    expect(store.data.review).toEqual({ cadence: 'weekly', handledOn: null, outcome: null });
   });
 
   it('waits for an earlier unsaved change: refused, nothing combined', async () => {
     const { fake, user } = await mount();
     fake.failNext('network-before');
-    act(() => void store.run((d) => ops.setReviewCadence(d, 'weekly')));
+    act(() => void store.run(tweak('one-e')));
     await waitFor(() => expect(store.saveStatus).toBe('error'));
     await upload(user, backup().text);
     await user.click(within(restoreDialog()).getByRole('button', { name: 'Replace with backup' }));

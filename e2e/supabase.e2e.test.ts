@@ -339,7 +339,7 @@ describe('the development copy on local Supabase', () => {
     await page.getByRole('heading', { name: 'What do you set aside?' }).waitFor();
     await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByRole('button', { name: 'See my forecast' }).click();
-    await page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
+    await page.getByRole('heading', { name: /^Home/ }).waitFor();
     let d = await savedAndReloaded(page, saves);
     expect(d.onboardingComplete).toBe(true);
     expect(d.sources.map((s) => [s.kind, s.description, s.liabilityType ?? null, s.versions.map((v) => [v.startDate, v.amountCents, v.rule.type])])).toEqual([
@@ -351,11 +351,10 @@ describe('the development copy on local Supabase', () => {
 
     // 7. A day later the paycheck is overdue: record it as received, late and smaller.
     await page.clock.setFixedTime(new Date(2026, 9, 16, 9, 0));
-    await page.goto(`${DEV}#/dashboard`);
+    await page.goto(`${DEV}#/home`);
     await page.reload();
     await loaded(page);
-    await page.getByRole('button', { name: '1 transaction needs an update' }).click();
-    await page.getByRole('dialog').locator('.entry').first().click();
+    await page.getByRole('region', { name: 'Needs attention' }).locator('.entry').first().click();
     let occ = page.getByRole('dialog', { name: 'Paycheck' });
     await occ.getByRole('button', { name: 'Mark received', exact: true }).click();
     await occ.getByLabel('Amount received').fill('1750');
@@ -410,19 +409,6 @@ describe('the development copy on local Supabase', () => {
     d = await savedAndReloaded(page, saves);
     const moved = recordOf(d, 'Rent', '2026-11-01')!;
     expect([moved.expectedDate, moved.scheduledDate, moved.scheduledAmountCents, moved.status]).toEqual(['2026-11-01', '2026-11-03', 120000, 'scheduled']);
-
-    // 12–13. A weekly review rhythm, and this week's review marked done.
-    await page.goto(`${DEV}#/settings`);
-    await page.getByRole('heading', { name: 'Review rhythm' }).waitFor();
-    await page.getByRole('radio', { name: /^Off/ }).focus();
-    await page.keyboard.press('ArrowDown');
-    expect(await page.getByRole('radio', { name: /^Weekly/ }).isChecked()).toBe(true);
-    await page.goto(`${DEV}#/dashboard`);
-    await page.getByRole('button', { name: 'Your weekly review is ready' }).click();
-    await page.getByRole('dialog', { name: 'Weekly review' }).getByRole('button', { name: 'Mark review done' }).click();
-    await page.getByText('Review done.').waitFor();
-    d = await savedAndReloaded(page, saves);
-    expect(d.review).toEqual({ cadence: 'weekly', handledOn: '2026-10-16', outcome: 'completed' });
 
     // 14. Restore a backup: sent as a replace; the backup's plan exactly.
     const household = householdBackup();
@@ -934,7 +920,7 @@ describe('two tabs on one device', () => {
     // This tab now shows B's plan (the browser has one session), and never A's.
     await expect.poll(async () => (await sessionOf(a.page)).user.id).toBe(b.userId);
     // This tab follows the other tab's sign-in on its own schedule: wait until it shows B's app, then look.
-    await a.page.getByText('1 transaction needs an update').waitFor();
+    await a.page.getByRole('region', { name: 'Needs attention' }).waitFor();
     await loaded(a.page);
     await a.page.goto(`${DEV}#/expenses`);
     await a.page.getByRole('heading', { name: 'Phone' }).waitFor();
@@ -1035,10 +1021,7 @@ describe('two tabs on one device', () => {
     const hold = await holdNextSave(a.page);
     await payPhone(a.page);
     await hold.arrived;
-    await a.page.goto(`${DEV}#/settings`);
-    await a.page.getByRole('heading', { name: 'Review rhythm' }).waitFor();
-    await a.page.getByRole('radio', { name: /^Off/ }).focus();
-    await a.page.keyboard.press('ArrowDown');
+    await changeRent(a.page, '1600');
     // B signs in in the other tab; then A's first save completes and the queued one would follow.
     const tab2 = await newTab(a.page, at);
     await switchTo(tab2.page, b);
@@ -1048,7 +1031,7 @@ describe('two tabs on one device', () => {
     expect(await planOf(b)).toEqual(bBefore);
     // A's account has the first change (sent before the switch, with A's session); the second is set aside, not lost.
     const aPlan = await planOf(a.account);
-    expect([phoneRecord(aPlan)!.actualAmountCents, aPlan.review ?? null]).toEqual([15000, null]);
+    expect([phoneRecord(aPlan)!.actualAmountCents, rentVersions(aPlan)]).toEqual([15000, rentVersions(contested())]);
     expect(a.saves.log).toEqual([['update', 1, 200]]);
     await unlock(a.page, a.account);
     // A's plan moved on since those edits began (its first change landed), so they aren't written over it; they can be downloaded.
@@ -1056,7 +1039,7 @@ describe('two tabs on one device', () => {
     await a.page.getByText(`${a.account.email}’s plan changed since these edits, so they weren’t saved over it. Download them to compare.`).waitFor();
     const [download] = await Promise.all([a.page.waitForEvent('download'), recoveryPanel(a.page).getByRole('button', { name: 'Download them' }).click()]);
     const kept = readBackup(readFileSync(await download.path(), 'utf8')).data;
-    expect([phoneRecord(kept)!.actualAmountCents, kept.review]).toEqual([15000, { cadence: 'weekly', handledOn: null, outcome: null }]);
+    expect([phoneRecord(kept)!.actualAmountCents, rentVersions(kept)]).toEqual([15000, rentVersions(contested()) + 1]);
     expect(await planOf(b)).toEqual(bBefore);
     await a.page.context().close();
   });
@@ -1073,7 +1056,7 @@ describe('two tabs on one device', () => {
     await recoveryPanel(a.page).waitFor();
     // Meanwhile A's plan changes on another device.
     const elsewhere = await planOf(a.account);
-    const { error } = await asUser(a.account.session.access_token).rpc('save_plan', { p_base_revision: elsewhere.revision, p_save_id: crypto.randomUUID(), p_mode: 'update', p_plan: { ...toRows(elsewhere), review_cadence: 'monthly' } });
+    const { error } = await asUser(a.account.session.access_token).rpc('save_plan', { p_base_revision: elsewhere.revision, p_save_id: crypto.randomUUID(), p_mode: 'update', p_plan: toRows(elsewhere) });
     expect(error).toBeNull();
     const newer = await planOf(a.account);
     await unlock(a.page, a.account);
@@ -1161,9 +1144,7 @@ describe('two tabs: requests, recovery and pending restores', () => {
     const hold = await holdNextSave(a.page);
     await payPhone(a.page);
     await hold.arrived;
-    await a.page.goto(`${DEV}#/settings`);
-    await a.page.getByRole('radio', { name: /^Off/ }).focus();
-    await a.page.keyboard.press('ArrowDown');
+    await changeRent(a.page, '1600');
     // Tab A's clock passes its token's expiry, so its next request refreshes first: with the browser's (now B's) session.
     await a.page.clock.setFixedTime(new Date(Date.now() + TWO_HOURS));
     const tab2 = await newTab(a.page, at);
@@ -1403,10 +1384,11 @@ function contested(): AppData {
   } as AppData;
 }
 
+const rentVersions = (d: AppData) => d.sources.find((s) => s.id === 'rent')!.versions.length;
+
 async function payPhone(page: Any, dollars = '150') {
-  await page.goto(`${DEV}#/dashboard`);
-  await page.getByRole('button', { name: '1 transaction needs an update' }).click();
-  await page.getByRole('dialog').locator('.entry').first().click();
+  await page.goto(`${DEV}#/home`);
+  await page.getByRole('region', { name: 'Needs attention' }).locator('.entry').first().click();
   const occ = page.getByRole('dialog', { name: 'Phone' });
   await occ.getByRole('button', { name: 'Mark paid', exact: true }).click();
   await occ.getByLabel('Amount paid').fill(dollars);
@@ -1614,7 +1596,7 @@ describe('moving a plan from device storage to Supabase through a backup', () =>
       want.records.map((r) => [r.expectedDate, r.expectedAmountCents, r.scheduledDate, r.scheduledAmountCents, r.status, r.actualDate, r.actualAmountCents]),
     );
     expect(db.sources.map((s) => [s.versions, s.pausedRanges, s.estimateDismissal ?? null])).toEqual(want.sources.map((s) => [s.versions, s.pausedRanges, s.estimateDismissal ?? null]));
-    expect([db.review, db.onboardingComplete]).toEqual([original.review, true]);
+    expect(db.onboardingComplete).toBe(true);
     sameForecasts(original, db);
     // What the app shows after a reload is the same.
     await dev.page.reload();

@@ -237,20 +237,19 @@ describe('AC2: accounts on items, deleting accounts, balances and transfers', ()
     expect(within(screen.getByRole('dialog', { name: 'Bills' })).getByRole('button', { name: 'Delete' })).toBeInTheDocument();
   });
 
-  it('a planned transfer whose date has passed waits on the dashboard until it is recorded', async () => {
+  it('a planned transfer whose date has passed waits in Needs attention until it is recorded', async () => {
     let d = unwrap(ops.addTransfer(withAccounts(), { fromAccountId: 'acct-income', toAccountId: 'acct-reserves', amountCents: 10000, date: '2026-10-09' }, 'expected', clock, 'late'));
     d = unwrap(ops.addTransfer(d, { fromAccountId: 'acct-income', toAccountId: 'acct-bills', amountCents: 120000, date: '2026-10-15' }, 'expected', clock, 'soon'));
-    const user = await renderAt('dashboard', d);
-    await user.click(await screen.findByRole('button', { name: '1 transfer to record' }));
-    let sheet = screen.getByRole('dialog', { name: 'Transfers' });
-    expect(within(sheet).getByRole('region', { name: 'Not recorded yet' })).toHaveTextContent('Paycheck account → ReservesOct 9, 2026 · Not recorded$100.00');
-    expect(within(sheet).getByRole('region', { name: 'Later this week' })).toHaveTextContent('Paycheck account → BillsOct 15, 2026 · Planned$1,200.00');
+    const user = await renderAt('home', d);
+    const attention = await screen.findByRole('region', { name: 'Needs attention' });
+    expect(attention).toHaveTextContent('Paycheck account → ReservesOct 9, 2026 · Not recorded$100.00');
+    expect(within(attention).queryByText(/Paycheck account → Bills/)).toBeNull();
+    expect(screen.getByRole('region', { name: 'Coming up' })).toHaveTextContent('Paycheck account → BillsOct 15, 2026 · Planned$1,200.00');
     expect(stored().transfers!.find((t) => t.id === 'late')!.status).toBe('expected');
-    await user.click(within(sheet).getByRole('button', { name: /Paycheck account → Reserves/ }));
+    await user.click(within(attention).getByRole('button', { name: /Paycheck account → Reserves/ }));
     await user.click(within(screen.getByRole('dialog', { name: 'Planned transfer' })).getByRole('button', { name: 'Record as moved' }));
     await waitFor(() => expect(stored().transfers!.find((t) => t.id === 'late')).toMatchObject({ status: 'recorded', date: '2026-10-09', amountCents: 10000 }));
-    sheet = screen.getByRole('dialog', { name: 'Transfers' });
-    expect(within(sheet).queryByRole('region', { name: 'Not recorded yet' })).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Needs attention' })).toBeNull());
   });
 });
 
