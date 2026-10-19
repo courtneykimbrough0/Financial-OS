@@ -99,7 +99,7 @@ describe('accounts in Settings and on item forms', () => {
     d = unwrap(ops.addAccount(d, { name: 'Paycheck account', type: 'income' }, clock, 'acct-income'));
     d = unwrap(ops.addAccount(d, { name: 'Bills', type: 'payment' }, clock, 'acct-bills'));
     d = unwrap(ops.addAccount(d, { name: 'Everyday', type: 'payment' }, clock, 'acct-everyday'));
-    const user = await renderAt('expenses', d);
+    const user = await renderAt('plan/expenses', d);
 
     await user.click(await screen.findByRole('button', { name: 'Edit' }));
     const sheet = screen.getByRole('dialog', { name: 'Edit Rent' });
@@ -117,7 +117,7 @@ describe('accounts in Settings and on item forms', () => {
   });
 
   it('with no suitable account, the form has no account choice at all', async () => {
-    const user = await renderAt('income', plan());
+    const user = await renderAt('plan/income', plan());
     await user.click(await screen.findByRole('button', { name: 'Edit' }));
     expect(within(screen.getByRole('dialog', { name: 'Edit Paycheck' })).queryByLabelText('Account (optional)')).toBeNull();
   });
@@ -144,13 +144,13 @@ describe('AC2: accounts on items, deleting accounts, balances and transfers', ()
   });
 
   it('shows an item’s account on its row', async () => {
-    await renderAt('expenses', withAccounts());
+    await renderAt('plan/expenses', withAccounts());
     const card = (await screen.findByRole('heading', { name: 'Rent' })).closest('li')!;
     expect(card).toHaveTextContent('Account: Bills');
   });
 
   it('a one-time item can be given an account when it is added', async () => {
-    const user = await renderAt('expenses', withAccounts());
+    const user = await renderAt('plan/expenses', withAccounts());
     await user.click(await screen.findByRole('tab', { name: 'Varied' }));
     await user.click(screen.getByRole('button', { name: 'Add spending' }));
     const sheet = screen.getByRole('dialog', { name: 'Add varied spending' });
@@ -163,7 +163,7 @@ describe('AC2: accounts on items, deleting accounts, balances and transfers', ()
   });
 
   it('a one-time reserve can set money aside or use it', async () => {
-    const user = await renderAt('reserves', withAccounts());
+    const user = await renderAt('plan/reserves', withAccounts());
     await user.click(await screen.findByRole('button', { name: 'Add one-time' }));
     const sheet = screen.getByRole('dialog', { name: 'Add one-time reserve' });
     await user.click(within(sheet).getByRole('radio', { name: 'Use reserves' }));
@@ -281,7 +281,7 @@ describe('regressions', () => {
   it('the Supabase development build, which can’t store releases yet, doesn’t offer “Use reserves”', async () => {
     const slot: AccountSlot = { Card: () => null, Line: () => null, Guard: () => null, dataNote: '' };
     await new LocalStorageAdapter().save(plan(), 0);
-    window.location.hash = '#/reserves';
+    window.location.hash = '#/plan/reserves';
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(
       <AccountSlotContext.Provider value={slot}>
@@ -300,7 +300,7 @@ describe('regressions', () => {
 
   it('a release shows as money coming back on its item sheet', async () => {
     const d = unwrap(ops.addOneTime(plan(), { kind: 'reserve', description: 'Toward the repair', amountCents: 30000, date: '2026-10-20', release: true }, clock, 'use'));
-    const user = await renderAt('reserves', d);
+    const user = await renderAt('plan/reserves', d);
     await user.click(await screen.findByRole('button', { name: /Toward the repair/ }));
     expect(within(screen.getByRole('dialog')).getAllByText('+$300.00').length).toBeGreaterThan(0);
   });

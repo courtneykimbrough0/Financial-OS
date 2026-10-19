@@ -176,7 +176,7 @@ async function savedAndReloaded(page: Any, saves: ReturnType<typeof track>): Pro
   const before = await onScreen(page);
   const db = await stored(page);
   expect(plan(db)).toEqual(plan(canonicalize(before)));
-  await page.goto(`${DEV}#/dashboard`);
+  await page.goto(`${DEV}#/forecast`);
   const dashboard = before.onboardingComplete ? await page.locator('main').innerText() : null;
   await page.reload();
   await loaded(page);
@@ -188,7 +188,13 @@ async function savedAndReloaded(page: Any, saves: ReturnType<typeof track>): Pro
   return after;
 }
 
-const nav = (page: Any, name: string) => page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name }).click();
+/** Opens a main tab (Home, Forecast, Plan) or a Plan section (Income, Expenses, Liabilities, Reserves). */
+const nav = async (page: Any, name: string) => {
+  const main = page.getByRole('navigation', { name: 'Main' }).last();
+  if (['Home', 'Forecast', 'Plan'].includes(name)) return main.getByRole('link', { name }).click();
+  await main.getByRole('link', { name: 'Plan' }).click();
+  await page.getByRole('navigation', { name: 'Plan' }).getByRole('link', { name }).click();
+};
 const card = (page: Any, name: string) => page.locator('.source-card', { has: page.getByRole('heading', { name }) });
 const recordOf = (d: AppData, sourceDescription: string, expectedDate: string) => {
   const s = d.sources.find((x) => x.description === sourceDescription)!;
@@ -529,7 +535,7 @@ describe('accounts in the development copy', () => {
     expect(plan_(await onScreen(reopened))).toEqual(plan);
     // Another device: sign in, same plan, no setup to repeat.
     const other = await open(DEV, at, { as: first.account });
-    await other.page.goto(`${DEV}#/dashboard`);
+    await other.page.goto(`${DEV}#/forecast`);
     await other.page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
     expect(plan_(await onScreen(other.page))).toEqual(plan);
     await ctx.close();
@@ -667,7 +673,7 @@ describe('accounts in the development copy', () => {
     const b = await newAccount();
     const { page } = await open(DEV, at, { as: a });
     await seed(page, { ...contested(), sources: contested().sources.map((s) => (s.id === 'phone' ? { ...s, description: 'Alpha phone' } : s)) });
-    await page.goto(`${DEV}#/expenses`);
+    await page.goto(`${DEV}#/plan/expenses`);
     await page.getByText('Alpha phone').first().waitFor();
     await signOutUi(page);
     // Watch everything B's session renders, from sign-in to the loaded plan.
@@ -911,7 +917,7 @@ describe('two tabs on one device', () => {
   it('another account signs in in the other tab with nothing unsaved: this tab follows it, never showing the first plan, and nothing is set aside', async () => {
     const a = await open(DEV, at);
     await seed(a.page, { ...contested(), sources: contested().sources.map((x) => (x.id === 'phone' ? { ...x, description: 'Alpha phone' } : x)) });
-    await a.page.goto(`${DEV}#/expenses`);
+    await a.page.goto(`${DEV}#/plan/expenses`);
     await a.page.getByText('Alpha phone').first().waitFor();
     const b = await newAccount();
     await seedAccount(b, contested());
@@ -922,7 +928,7 @@ describe('two tabs on one device', () => {
     // This tab follows the other tab's sign-in on its own schedule: wait until it shows B's app, then look.
     await a.page.getByRole('region', { name: 'Needs attention' }).waitFor();
     await loaded(a.page);
-    await a.page.goto(`${DEV}#/expenses`);
+    await a.page.goto(`${DEV}#/plan/expenses`);
     await a.page.getByRole('heading', { name: 'Phone' }).waitFor();
     expect(await appText(a.page)).not.toContain('Alpha phone');
     expect(await recoveryPanel(a.page).count()).toBe(0);

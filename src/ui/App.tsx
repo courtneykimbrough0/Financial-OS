@@ -1,26 +1,24 @@
 import { useEffect } from 'react';
-import { CreditCard, HandCoins, House, LayoutGrid, PiggyBank, Receipt, RefreshCw, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
+import { ClipboardList, House, ChartLine, RefreshCw, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
 import { useDataMode } from '../state/mode';
 import { useAccountSlot } from '../state/slots';
 import { useStore } from '../state/store';
 import { DeviceDataOffer, RecoveredChangesNotice } from './components/account';
 import { SaveStatusBar } from './components/backup';
 import { Icon } from './components/common';
-import { navigate, useRoute, type Route } from './router';
+import { navigate, useRoute, type PlanSection, type Route } from './router';
 import { useWaitingUpdate } from './update';
-import { Dashboard } from './screens/Dashboard';
+import { Forecast } from './screens/Forecast';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
 import { Settings } from './screens/Settings';
-import { ExpensesScreen, SourcesScreen } from './screens/SourcesScreen';
+import { Plan } from './screens/Plan';
 
-const NAV: { route: Route; label: string; icon: LucideIcon }[] = [
-  { route: 'home', label: 'Home', icon: House },
-  { route: 'dashboard', label: 'Forecast', icon: LayoutGrid },
-  { route: 'income', label: 'Income', icon: HandCoins },
-  { route: 'expenses', label: 'Expenses', icon: Receipt },
-  { route: 'liabilities', label: 'Liabilities', icon: CreditCard },
-  { route: 'reserves', label: 'Reserves', icon: PiggyBank },
+/** Main navigation. Plan opens its first section; any Plan section counts as Plan. */
+const NAV: { route: Route; label: string; icon: LucideIcon; current: (r: Route) => boolean }[] = [
+  { route: 'home', label: 'Home', icon: House, current: (r) => r === 'home' },
+  { route: 'forecast', label: 'Forecast', icon: ChartLine, current: (r) => r === 'forecast' },
+  { route: 'plan/income', label: 'Plan', icon: ClipboardList, current: (r) => r.startsWith('plan/') },
 ];
 
 export function App() {
@@ -35,11 +33,11 @@ export function App() {
 
   const titles: Record<Route, string> = {
     home: 'Home',
-    dashboard: 'Forecast',
-    income: 'Income',
-    expenses: 'Expenses',
-    liabilities: 'Liabilities',
-    reserves: 'Strategic Reserves',
+    forecast: 'Forecast',
+    'plan/income': 'Income · Plan',
+    'plan/expenses': 'Expenses · Plan',
+    'plan/liabilities': 'Liabilities · Plan',
+    'plan/reserves': 'Strategic Reserves · Plan',
     settings: 'Settings',
     onboarding: 'Get started',
   };
@@ -62,7 +60,7 @@ export function App() {
         {showNav && (
           <nav className="top-nav" aria-label="Main">
             {NAV.map((n) => (
-              <a key={n.route} href={`#/${n.route}`} aria-current={route === n.route ? 'page' : undefined}>
+              <a key={n.route} href={`#/${n.route}`} aria-current={n.current(route) ? 'page' : undefined}>
                 {n.label}
               </a>
             ))}
@@ -81,11 +79,8 @@ export function App() {
         {data.isSample && <SampleBanner />}
         {route === 'onboarding' && <Onboarding />}
         {route === 'home' && <Home />}
-        {route === 'dashboard' && <Dashboard />}
-        {route === 'income' && <SourcesScreen key="income" kind="income" />}
-        {route === 'expenses' && <ExpensesScreen key="expenses" />}
-        {route === 'reserves' && <SourcesScreen key="reserve" kind="reserve" />}
-        {route === 'liabilities' && <SourcesScreen key="liability" kind="liability" />}
+        {route === 'forecast' && <Forecast />}
+        {route.startsWith('plan/') && <Plan section={route.slice('plan/'.length) as PlanSection} />}
         {route === 'settings' && <Settings />}
         <RecoveredChangesNotice />
         <DeviceDataOffer />
@@ -93,7 +88,7 @@ export function App() {
       {showNav && (
         <nav className="bottom-nav" aria-label="Main">
           {NAV.map((n) => (
-            <a key={n.route} href={`#/${n.route}`} aria-current={route === n.route ? 'page' : undefined}>
+            <a key={n.route} href={`#/${n.route}`} aria-current={n.current(route) ? 'page' : undefined}>
               <Icon icon={n.icon} size={24} className="nav-icon" />
               {n.label}
             </a>

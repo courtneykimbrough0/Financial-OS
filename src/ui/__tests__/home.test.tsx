@@ -79,8 +79,8 @@ describe('Home layout', () => {
       </DataModeProvider>,
     );
     await screen.findByRole('heading', { level: 1, name: /^Home/ });
-    expect(within(screen.getAllByRole('navigation', { name: 'Main' })[0]!).getAllByRole('link').map((a) => a.textContent)).toEqual(['Home', 'Forecast', 'Income', 'Expenses', 'Liabilities', 'Reserves']);
-    expect(screen.getByRole('link', { name: 'Full forecast and calendar' })).toHaveAttribute('href', '#/dashboard');
+    expect(within(screen.getAllByRole('navigation', { name: 'Main' })[0]!).getAllByRole('link').map((a) => a.textContent)).toEqual(['Home', 'Forecast', 'Plan']);
+    expect(screen.getByRole('link', { name: 'Full forecast and calendar' })).toHaveAttribute('href', '#/forecast');
   });
 
   it('shows no review, rhythm, undo or overdue-banner controls anywhere', async () => {
@@ -89,7 +89,7 @@ describe('Home layout', () => {
     await user.click(screen.getAllByRole('checkbox')[0]!);
     for (const text of [/Undo/, /Review this week/, /review is ready/i, /need an update/, /Mark review/, /Skip review/]) expect(screen.queryByText(text)).toBeNull();
     expect(screen.queryByRole('button', { name: /Undo/ })).toBeNull();
-    window.location.hash = '#/dashboard';
+    window.location.hash = '#/forecast';
     await screen.findByRole('heading', { level: 1, name: /Your cash flow/ });
     expect(screen.queryByText(/need an update/)).toBeNull();
     expect(screen.queryByRole('button', { name: /review/i })).toBeNull();

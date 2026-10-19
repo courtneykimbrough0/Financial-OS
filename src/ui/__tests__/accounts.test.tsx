@@ -198,7 +198,7 @@ describe('accounts', () => {
 
     const auth = new FakeAuth(server);
     auth.user = USER;
-    window.location.hash = '#/dashboard';
+    window.location.hash = '#/forecast';
     const created: string[] = [];
     URL.createObjectURL = () => {
       created.push('blob');

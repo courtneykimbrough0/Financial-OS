@@ -10,7 +10,7 @@ import { navigate, type Route } from '../router';
 import { Field, FlowAmount, FormError, Icon, KindAvatar, Modal, MoneyInput, StatusBadge, useToast } from './common';
 
 /** The screen where a recurring item's schedule is edited. */
-const SOURCE_ROUTE: Record<TransactionKind, Route> = { income: 'income', bill: 'expenses', subscription: 'expenses', liability: 'liabilities', reserve: 'reserves', varied: 'expenses' };
+const SOURCE_ROUTE: Record<TransactionKind, Route> = { income: 'plan/income', bill: 'plan/expenses', subscription: 'plan/expenses', liability: 'plan/liabilities', reserve: 'plan/reserves', varied: 'plan/expenses' };
 
 type Mode = 'view' | 'record' | 'correct' | 'reschedule' | 'cancel' | 'delete';
 
