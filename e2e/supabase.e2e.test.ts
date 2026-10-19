@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { addDays } from '../src/domain/dates';
-import { buildForecast, explainTimingGaps, paycheckCycles } from '../src/domain/forecast';
+import { buildForecast, explainTimingGaps } from '../src/domain/forecast';
 import type { AppData } from '../src/domain/types';
 import { createBackup, readBackup } from '../src/state/backup';
 import { richPlan } from '../src/state/supabase/__tests__/fixtures';
@@ -165,7 +165,6 @@ function sameForecasts(a: AppData, b: AppData) {
     const fb = buildForecast(b, day);
     expect(fb).toEqual(fa);
     expect(explainTimingGaps(fb)).toEqual(explainTimingGaps(fa));
-    expect(paycheckCycles(fb)).toEqual(paycheckCycles(fa));
   }
 }
 

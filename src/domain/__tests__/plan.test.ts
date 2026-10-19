@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildForecast, paycheckCycles, periodKpis } from '../forecast';
+import { buildForecast, periodKpis } from '../forecast';
 import * as ops from '../operations';
 import { periodPlan } from '../plan';
 import { buildSampleData } from '../sample';
@@ -29,9 +29,9 @@ function data() {
 describe('cash flow for a period', () => {
   it('is income minus outflows (bills, subscriptions, liabilities, varied spending) minus net reserves, repeating and one-time', () => {
     const f = buildForecast(data(), TODAY);
-    const cycle = paycheckCycles(f, 1)[0]!;
-    expect([cycle.start, cycle.end]).toEqual(['2026-10-15', '2026-10-28']);
-    const p = periodPlan(f, cycle.start, cycle.end);
+    const cycleStart = '2026-10-15';
+    const cycleEnd = '2026-10-28';
+    const p = periodPlan(f, cycleStart, cycleEnd);
     expect(p.incomeCents).toBe(usd(2300));
     expect(p.byKind).toEqual({ income: usd(2300), bill: usd(60), subscription: usd(10.99), liability: usd(350), reserve: usd(100), varied: usd(300) });
     // Reserves are not spending: operating cash flow leaves them out, available cash flow takes them off.

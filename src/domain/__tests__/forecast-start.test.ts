@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildForecast, entriesInRange, firstPeriod, paycheckCycles, periodKpis, tallyOn, timingGapsAhead } from '../forecast';
+import { buildForecast, entriesInRange, firstPeriod, periodKpis, tallyOn, timingGapsAhead } from '../forecast';
 import * as ops from '../operations';
 import { evaluateScenario } from '../scenarios';
 import type { AppData } from '../types';
@@ -49,14 +49,6 @@ describe('the running total starts at the earliest income', () => {
     }
   });
 
-  it('a main paycheck chosen later in the month changes pay periods, not the start', () => {
-    const d = unwrap(ops.setMainPaycheck(twoPaychecks('early-first'), LATE, clock));
-    const f = buildForecast(d, TODAY);
-    expect(f.mainSourceId).toBe(LATE);
-    expect(f.forecastStart).toBe('2026-10-19');
-    expect(paycheckCycles(f)[0]).toMatchObject({ start: '2026-10-27', end: '2026-11-09' });
-  });
-
   it('closely spaced paydays: the earlier one starts the running total and both count', () => {
     let d = source(ops.emptyData(), TODAY, 'income', 'Thursday job', 600, '2026-10-15', { type: 'weekly' }, 'thu');
     d = source(d, TODAY, 'income', 'Wednesday job', 500, '2026-10-14', { type: 'weekly' }, 'wed');
@@ -65,8 +57,6 @@ describe('the running total starts at the earliest income', () => {
     expect(f.forecastStart).toBe('2026-10-14');
     expect(tallyOn(f, '2026-10-14')).toBe(usd(550));
     expect(tallyOn(f, '2026-10-15')).toBe(usd(1150));
-    // Pay periods still run on the main paycheck (the first entered), so no one-day periods.
-    expect(paycheckCycles(f)[0]).toMatchObject({ start: '2026-10-15', end: '2026-10-21' });
   });
 
   it('different frequencies: a weekly side job before a monthly salary', () => {
@@ -83,7 +73,7 @@ describe('the running total starts at the earliest income', () => {
     let d = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1800, '2026-10-15', { type: 'biweekly' }, 'pay');
     d = source(d, TODAY, 'bill', 'Phone', 60, '2026-10-25', { type: 'monthly' }, 'phone');
     const f = buildForecast(d, TODAY);
-    expect([f.anchor, f.forecastStart, f.mainSourceId]).toEqual(['2026-10-14', '2026-10-15', 'pay']);
+    expect([f.anchor, f.forecastStart]).toEqual(['2026-10-14', '2026-10-15']);
     expect(tallyOn(f, '2026-10-25')).toBe(usd(1740));
   });
 });
@@ -174,7 +164,7 @@ describe('what doesn’t move the start', () => {
 
 describe('the first period setup describes', () => {
   it('runs from the earliest income to the end of the first pay period', () => {
-    expect(firstPeriod(buildForecast(twoPaychecks('late-first'), TODAY))).toEqual(['2026-10-19', '2026-11-09']);
+    expect(firstPeriod(buildForecast(twoPaychecks('late-first'), TODAY))).toEqual(['2026-10-19', '2026-11-01']);
     const single = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1800, '2026-10-15', { type: 'biweekly' }, 'pay');
     expect(firstPeriod(buildForecast(single, TODAY))).toEqual(['2026-10-15', '2026-10-28']);
     expect(firstPeriod(buildForecast(ops.emptyData(), TODAY))).toBeNull();

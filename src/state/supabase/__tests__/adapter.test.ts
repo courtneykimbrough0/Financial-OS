@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { usd, unwrap } from '../../../domain/__tests__/helpers';
 import { addDays } from '../../../domain/dates';
 import { analyzeEstimate, dismissEstimate } from '../../../domain/estimates';
-import { buildForecast, explainTimingGaps, paycheckCycles } from '../../../domain/forecast';
+import { buildForecast, explainTimingGaps } from '../../../domain/forecast';
 import * as ops from '../../../domain/operations';
 import type { AppData } from '../../../domain/types';
 import type { StorageAdapter } from '../../storage';
@@ -138,7 +138,7 @@ describe('saving', () => {
     for (const day of [0, 30, 90, 180, 365].map((n) => addDays(TODAY, n))) {
       const f = (d: AppData) => {
         const fc = buildForecast(d, day);
-        return [fc, explainTimingGaps(fc), paycheckCycles(fc)];
+        return [fc, explainTimingGaps(fc)];
       };
       expect(f(back)).toEqual(f({ ...plan, revision: 1 }));
     }

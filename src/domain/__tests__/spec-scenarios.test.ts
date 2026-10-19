@@ -12,7 +12,7 @@ import {
   monthWeekSummaries,
   negativeStretches,
   overdueEntries,
-  paycheckCycles,
+
   periodKpis,
   tallyOn,
   totals,
@@ -297,13 +297,6 @@ describe('K. View changes', () => {
       check(dailyTimeline(f, startOfWeek(date), endOfWeek(date)));
       check(dailyTimeline(f, date, addDays(date, 9)));
     }
-    const cycles = paycheckCycles(f);
-    expect(cycles.length).toBeGreaterThan(4);
-    for (const c of cycles) check(dailyTimeline(f, c.start, c.end));
-    // A later cycle opens with the carried-over tally, not $0 plus its payday.
-    const later = cycles[3]!;
-    const firstRow = dailyTimeline(f, later.start, later.end)[0]!;
-    expect(firstRow.tallyCents).not.toBe(firstRow.netCents);
     // Rebuilding with a longer horizon (as a far-off custom range does) keeps the same anchor and values.
     const far = buildForecast(d, today, { through: '2028-06-30' });
     expect(far.anchor).toBe(f.anchor);
@@ -334,11 +327,6 @@ describe('L. Date and recurrence boundaries', () => {
     const row = dailyTimeline(f, '2026-11-13', '2026-11-13')[0]!;
     expect(row.entries.map((e) => e.occurrence.description)).toEqual(['Job A', 'Job B', 'Car insurance']);
     expect(row.netCents).toBe(usd(1150));
-    // Pay periods follow the main paycheck (Job A, biweekly); Job B's weekly pay lands inside them.
-    expect(paycheckCycles(f, 2).map((c) => [c.start, c.end])).toEqual([
-      ['2026-11-13', '2026-11-26'],
-      ['2026-11-27', '2026-12-10'],
-    ]);
   });
 
   it('split date ranges match the whole range with no duplicates or gaps', () => {

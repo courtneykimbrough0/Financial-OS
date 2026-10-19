@@ -11,7 +11,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, describe, expect, it } from 'vitest';
 import { usd, unwrap } from '../../../domain/__tests__/helpers';
 import { addDays } from '../../../domain/dates';
-import { buildForecast, explainTimingGaps, paycheckCycles } from '../../../domain/forecast';
+import { buildForecast, explainTimingGaps } from '../../../domain/forecast';
 import * as ops from '../../../domain/operations';
 import type { AppData } from '../../../domain/types';
 import { SupabaseStorageAdapter } from '../adapter';
@@ -128,7 +128,6 @@ describe('through real Supabase Auth and API', () => {
       const b = buildForecast(back, day);
       expect(b).toEqual(a);
       expect(explainTimingGaps(b)).toEqual(explainTimingGaps(a));
-      expect(paycheckCycles(b)).toEqual(paycheckCycles(a));
     }
   });
 

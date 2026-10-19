@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildForecast } from '../../domain/forecast';
-import { mainPaycheckId } from '../../domain/types';
+import { hasActiveIncome } from '../../domain/types';
 import { DataModeProvider } from '../../state/mode';
 import { useStore } from '../../state/store';
 import { ToastProvider } from '../components/common';
@@ -151,14 +151,11 @@ describe('the review', () => {
     expect(store.data.sources.find((s) => s.description === 'Rent')!.versions.map((v) => v.amountCents)).toEqual([140000]);
   });
 
-  it('with two incomes, the main paycheck sets the payday', async () => {
+  it('with two incomes, the earliest one sets the payday', async () => {
     const user = await start();
     await addItem(user, 'Add income', paycheck);
     await addItem(user, 'Add another income', [['What is this income?', 'Side job'], ['Amount you expect to receive', '200'], ['How often?', 'weekly'], ['Next payment date', '2026-10-19']]);
-    const picker = screen.getByRole('group', { name: 'Main paycheck' });
-    expect(within(picker).getByRole('radio', { name: 'Paycheck' })).toBeChecked();
-    await user.click(within(picker).getByRole('radio', { name: 'Side job' }));
-    expect(mainPaycheckId(store.data)).toBe(store.data.sources.find((s) => s.description === 'Side job')!.id);
+    expect(hasActiveIncome(store.data)).toBe(true);
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('button', { name: 'Skip to review' }));
     expect(screen.getByText('Next expected payday').closest('section')).toHaveTextContent('Next expected paydayOct 19in 3 days');

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays } from '../../../domain/dates';
 import { estimateSuggestions } from '../../../domain/estimates';
-import { buildForecast, dailyTimeline, explainTimingGaps, lowestPoint, paycheckCycles } from '../../../domain/forecast';
+import { buildForecast, dailyTimeline, explainTimingGaps, lowestPoint } from '../../../domain/forecast';
 import { variance } from '../../../domain/occurrences';
 import type { AppData } from '../../../domain/types';
 import { createBackup, readBackup } from '../../backup';
@@ -17,7 +17,7 @@ function outcomes(d: AppData, today: string) {
   return {
     forecast: f,
     gaps: explainTimingGaps(f),
-    cycles: paycheckCycles(f),
+
     lowest: start ? lowestPoint(dailyTimeline(f, start, addDays(start, 89))) : null,
     suggestions: estimateSuggestions(d, today),
     home: homeView(d, today),

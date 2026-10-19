@@ -70,11 +70,11 @@ describe('timing gaps at the end of setup', () => {
     await reachReview(d);
 
     expect(screen.getByText('Next expected payday').closest('section')).toHaveTextContent('Oct 19in 8 days');
-    expect(screen.getByText(/Lowest running total before Nov 9:/).closest('span')).toHaveTextContent('Lowest running total before Nov 9: −$600.00 · Oct 22');
+    expect(screen.getByText(/Lowest running total before Nov 1:/).closest('span')).toHaveTextContent('Lowest running total before Nov 1: −$600.00 · Oct 22');
     expect(screen.getByRole('button', { name: /1 timing gap ahead/ })).toBeInTheDocument();
     // Rent comes after the first income, so it isn't described as due before payday.
     expect(screen.queryByText(/due before your next payday/)).toBeNull();
-    // Cash flow covers Oct 19 – Nov 9: $400 + $900 + $400 − $1,000.
-    expect(document.querySelector('.left-to-spend')).toHaveTextContent('Cash flowFirst pay period · Oct 19 – Nov 9+$700.00');
+    // Cash flow covers Oct 19 – Nov 1: $400 + $900 − $1,000.
+    expect(document.querySelector('.left-to-spend')).toHaveTextContent('Cash flowFirst pay period · Oct 19 – Nov 1+$300.00');
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildForecast, dailyTimeline, paycheckCycles, periodKpis, tallyOn, timingGapsAhead, type Forecast } from '../forecast';
+import { buildForecast, dailyTimeline, periodKpis, tallyOn, timingGapsAhead, type Forecast } from '../forecast';
 import { expandSource } from '../occurrences';
 import * as ops from '../operations';
 import type { AppData, RecurrenceRule } from '../types';
@@ -183,18 +183,14 @@ describe('schedules across year ends', () => {
   });
 });
 
-describe('pay periods and the next payday', () => {
-  it('several paydays in one week: only the main paycheck starts a pay period, and each counts once', () => {
+describe('multiple income sources and the next payday', () => {
+  it('several paydays in one week: each income source counts once in the running total', () => {
     let d = ops.emptyData();
     d = source(d, TODAY, 'income', 'Main job', 1000, '2026-10-12', { type: 'biweekly' }, 'main');
     for (const [i, day] of ['2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16'].entries()) {
       d = source(d, TODAY, 'income', `Gig ${i + 1}`, 100, day, { type: 'biweekly' }, `gig${i}`);
     }
     const f = buildForecast(d, TODAY);
-    expect(paycheckCycles(f).slice(0, 2).map((c) => [c.start, c.end])).toEqual([
-      ['2026-10-12', '2026-10-25'],
-      ['2026-10-26', '2026-11-08'],
-    ]);
     expect(ledger(f, '2026-10-12', '2026-10-18').map((r) => r[2])).toEqual([1000, 1100, 1200, 1300, 1400]);
   });
 
