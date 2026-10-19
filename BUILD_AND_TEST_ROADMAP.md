@@ -52,7 +52,7 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | Audit recommendations (not yet approved) | docs/REDUCTION-AUDIT.md §3 and decisions §7 |
 | Deferred features | PRODUCT_EXPERIENCE.md §10; Step 8's deferred imports; Step 9 |
 
-### Home (progress, actions, what's coming) — H1 and H2 complete (October 2026); H3 next, not authorized
+### Home (progress, actions, what's coming) — H1 and H2 merged to `main` (October 2026); H3 planned below, not authorized
 
 Goal: within about 30 seconds of opening the app, a person can tell (1) whether their cash flow is improving, declining or steady, (2) what needs attention now, and (3) what's coming. It carries out phases R2, C1, C2 and C4 below in a tighter order, and adds no financial data, inputs or engine.
 
@@ -80,8 +80,8 @@ Previous and next week stay one tap away. The month calendar, breakdown, tag tot
 
 **Sequence (each its own authorized task, with tests):**
 - **H1. Home selector (complete, October 2026).** `homeView` in `src/domain/home.ts` (FINANCIAL_ENGINE.md, Home): progress (this month and last month, recorded and projected, a like-for-like month-to-date comparison and a labeled projected-versus-recorded one), attention, coming up, happened and later gaps, including transfers, reserves and accounts. Domain tests only (`home`, 22). No interface change.
-- **H2. Opening screen (complete, October 2026).** `Home` (`src/ui/screens/Home.tsx`, route `#/home`, first in the navigation and the screen after setup, restore and sample data): progress, Needs attention, a week navigator over Coming up and Happened, built from `homeView(data, today, { weekOf })`. `weekOf` is separate from `today`, so moving weeks never changes overdue items, progress or Needs attention. Removed: review completion and skip, the review rhythm (all options, its Settings control and `REVIEW_RHYTHM_IN_ACCOUNTS`), the weekly and period review sheets, the overdue banner, the review entry, the transfers entry, batch Undo (`undoBatch`) and `transfersDue`. Batch recording and moving take only items due today or earlier. The old dashboard keeps its place as **Forecast** (route `#/dashboard`) with its Month, Week, Paycheck and Custom views, calendar, breakdown, scenarios and the rest, untouched until H3. The stored `review` field is dropped on load and never written; the Supabase `review_*` columns stay, unused, and the Firestore rules still accept the optional field. Tests: 32 domain (`home`), 7 `batch`, 25 component (`ui/home`), browser smoke steps.
-- **H3. Forecast tab and navigation.** Month calendar, gaps, breakdown, tag totals, custom range and scenarios under Forecast; tabs This week, Forecast, Plan (Activity later, C3); redirects from old routes. Complexity: medium.
+- **H2. Opening screen (complete and merged, October 2026; PR #4 `3fac4ac`, PR #5 `fe8b13d`).** `Home` (`src/ui/screens/Home.tsx`, route `#/home`, first in the navigation and the screen after setup, restore and sample data): progress, Needs attention, a week navigator over Coming up and Happened, built from `homeView(data, today, { weekOf })`. `weekOf` is separate from `today`, so moving weeks never changes overdue items, progress or Needs attention. Removed: review completion and skip, the review rhythm (all options, its Settings control and `REVIEW_RHYTHM_IN_ACCOUNTS`), the weekly and period review sheets, the overdue banner, the review entry, the transfers entry, batch Undo (`undoBatch`) and `transfersDue`. Batch recording and moving take only items due today or earlier. The old dashboard keeps its place as **Forecast** (route `#/dashboard`) with its Month, Week, Paycheck and Custom views, calendar, breakdown, scenarios and the rest, untouched until H3. The stored `review` field is dropped on load and never written; the Supabase `review_*` columns stay, unused, and the Firestore rules still accept the optional field. Tests: 32 domain (`home`), 7 `batch`, 25 component (`ui/home`), browser smoke steps.
+- **H3. Forecast tab and navigation (plan above).** Month calendar, gaps, breakdown, tag totals, custom range and scenarios under Forecast; tabs This week, Forecast, Plan (Activity later, C3); redirects from old routes. Complexity: medium.
 - **H4. Conditional visibility and wording** on the screens touched (C4, B1 for those screens). Complexity: low.
 - Later, separately: R1 (main paycheck), C3 (Activity), C5 (Plan and setup), C6 (one "See what happens if…"), D (visual redesign).
 
@@ -89,7 +89,28 @@ Previous and next week stay one tap away. The month calendar, breakdown, tag tot
 
 **Decided for H2 (as built):** progress leads with recorded month to date against the same days of last month, with the projected month as a second, labeled line (Projected against last month's recorded result); expected income that is not recorded appears in Needs attention as "Expected — not recorded", never as late; "coming up" is the viewed week, and for the current week it runs through Tuesday of next week.
 
-**Left for H3:** the Forecast tab and navigation (the dashboard still carries its own Month, Week, Paycheck and Custom views, its calendar, breakdown, scenarios and What if…); a decision on whether to drop the Supabase `review_*` columns in a later migration (after every client is past H2); the main paycheck (separate); and a retirement date for `overdueEntries` if nothing else uses it.
+**H3 plan (Forecast and navigation; proposed, not authorized).** Goal: Home answers "what matters now"; Forecast holds the detail behind it; neither asks for more work. No new calculation, screen logic or metric.
+
+*What exists to reuse.* The Forecast screen is today's dashboard (`Dashboard.tsx`, route `#/dashboard`): Month / Week / Paycheck / Custom views, the cash-flow hero with its timing-gap line, the calendar and key, breakdown, tag totals, the week list or day timeline, the day sheet, the gap and What if… sheets, and "Explore a scenario". Plan screens are `SourcesScreen.tsx` (Income, Liabilities, Reserves) and `ExpensesScreen`; accounts and transfers live in Settings and in item sheets. Shared parts already exist: `PeriodNav`, `EntryButton` (`components/entries.tsx`), `GapsSheet`, `OccurrenceSheet`.
+
+*Sequence (each step shippable, with tests):*
+1. **Routes first.** Add `forecast` (and `plan`) routes; `#/dashboard` and the four kind routes (`income`, `expenses`, `liabilities`, `reserves`) redirect so saved links and tests keep working. No visible change yet.
+2. **Navigation.** Bottom bar and top nav become Home, Forecast, Plan, with Settings as the gear. This removes today's six-item bar (Liabilities and Reserves are tight at 390px). Needs the Plan screen from step 3, so ship 2 and 3 together.
+3. **Plan screen.** One screen with a segmented control (Income, Expenses, Liabilities, Reserves) that hosts the existing `SourcesScreen` / `ExpensesScreen` unchanged. Accounts stay in Settings until C5.
+4. **Forecast trimming (only what Home now covers).** Drop the Week tab (Home's week navigator and the Month view's week list cover it). Keep Month, Paycheck (until R1 removes it) and Custom, the calendar, breakdown, tags, scenarios and What if…. Hide the breakdown and tag sections when empty (C4).
+5. **Home to Forecast links.** "Full forecast and calendar" opens Forecast on the month of the week being viewed; a timing gap row can open Forecast's gap sheet. `laterGaps` from `homeView` is not shown on Home by design; Forecast's hero and gap sheet are where later gaps appear, so step 4 must keep that line.
+6. **Regression tests.** Route redirects, nav, Plan segments, each removed or moved control reachable from its new place, the browser smoke test and the Supabase browser suite updated for the new routes, and a check that no financial figure changes (Forecast month total still equals Home's projected month).
+
+*Mobile.* Three nav items fit comfortably; the segmented control scrolls horizontally on narrow screens rather than wrapping. Forecast keeps its single column.
+
+*Conditional visibility.* Sections with nothing to show are hidden (breakdown, tag totals, gap line, empty week list); no zero-value placeholders.
+
+*Genuine decisions for the product owner.*
+1. Drop the Forecast Week tab? (Recommended: yes, Home and the week list cover it.)
+2. A Plan tab grouping Income / Expenses / Liabilities / Reserves, or keep them as separate top-level items? (Recommended: Plan, to keep the bar to three.)
+3. Rename the route `dashboard` to `forecast` with a redirect, or keep both names? (Recommended: rename with a redirect.)
+
+**Also open, outside H3:** whether to drop the unused Supabase `review_*` columns in a later migration (after every client is past H2); the main paycheck (separate, R1); and a retirement date for `overdueEntries` if nothing else uses it.
 
 ### Phases
 
