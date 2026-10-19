@@ -10,7 +10,7 @@ Read next: [BUILD_AND_TEST_ROADMAP.md](BUILD_AND_TEST_ROADMAP.md) (the order of 
 
 Product-owner decision, October 2026. This section is the authoritative statement of the mission and philosophy; other documents point here.
 
-**Mission.** Financial OS helps people establish a personal financial operating system that supports financial independence through consistent habits and increasing financial resilience. People shouldn't need to become accountants, understand complicated financial concepts, or treat everyday money decisions like a second job. The software handles the complexity wherever practical.
+**Mission.** Financial OS is a cash-flow operating system. It helps people establish practical, sustainable financial habits and strengthen their financial resilience, with greater financial independence as the long-term direction. People shouldn't need to become accountants, understand complicated financial concepts, or treat everyday money decisions like a second job. The software handles the complexity wherever practical.
 
 **Core philosophy.** Financial resilience is built through repeated, sustainable financial habits. Good habits, kept up over a long enough time, produce results that reinforce further progress. Financial OS makes those habits easier to establish, repeat and maintain: it helps people understand their circumstances, anticipate changes, make informed decisions and learn from what actually happened, without constant attention, unnecessary data entry or elaborate routines.
 
@@ -23,6 +23,8 @@ Financial independence is the long-term direction; financial resilience is the p
 
 **Governing standard.** *Financial OS should make managing money easier than not using Financial OS.* Judge this by real workflows, not by feature counts or visual minimalism.
 
+**Operating philosophy.** Deliver about 80% of the practical benefit for about 20% of the effort, for the person using it and in how features are built. It's a way of choosing what to build and how much to ask of people, not a numerical scoring system for features.
+
 ### A1. Information model
 
 Three complementary perspectives, each with its own job. They complement one another and don't duplicate information.
@@ -31,9 +33,11 @@ Three complementary perspectives, each with its own job. They complement one ano
 | --- | --- | --- |
 | **Projections** | What's possible? | The consequences of expected income, expenses, obligations and planned decisions: running totals, timing gaps, scenarios. Projections are never confirmed transactions, and people are never asked to confirm future amounts or dates that can't reasonably be known before they happen. |
 | **Recorded activity** | What happened? | The factual history of financial events, kept distinguishable from projections. It preserves financial accuracy (original expectation, latest expectation, actual; section D) without imposing administrative work, and lets people see outcomes, patterns and the consequences of earlier decisions. |
-| **The week view** | What do I do now? | Connects recorded activity with upcoming projections for the current week: what has happened, what's expected next, what needs attention, what may need a decision. It's an intentional part of the product, never removed just because a continuous forecast exists, and never an extra budgeting system, administrative checklist or redundant dashboard. |
+| **Home and the week view** | What do I do now? | Connects recorded activity with upcoming projections for the current week: what has happened, what's expected next, what needs attention, what may need a decision. Home is the opening screen and carries the week view (implemented in roadmap H2). It's an intentional part of the product, never removed just because a continuous forecast exists, and never an extra budgeting system, administrative checklist or redundant dashboard. |
 
-*Projections show what's possible. Recorded activity shows what happened. The week view helps people decide what to do now.*
+*Projections show what's possible. Recorded activity shows what happened. Home and the week view help people see what to do now.*
+
+**Home priorities, in order:** (1) progress (how cash flow is changing), (2) actions that need attention, (3) relevant upcoming activity. Recorded activity from the week gives context below them.
 
 ### A2. Design principles
 
@@ -46,6 +50,7 @@ Three complementary perspectives, each with its own job. They complement one ano
 - **Simplicity through subtraction.** A feature must justify the complexity it adds. Remove, simplify or consolidate what doesn't; never remove essential functionality just to have fewer screens.
 - **Complexity belongs in the software.** Internal sophistication is welcome when it improves reliability or saves effort; implementation details never become user-facing concepts.
 - **Habits over administrative rituals.** Make useful, repeatable behaviors easier. Extra confirmations, checklists or review requirements are not habit formation.
+- **Use what the system already knows; ask only for what's genuinely needed; show only what helps.** Don't repeat in text what the screen already shows, and don't add artificial engagement (streaks, mandatory check-ins, acknowledgements just to clear an item).
 - **No unnecessary undo complexity.** Don't build visible undo histories, complex recovery workflows or extra interface states without demonstrated need. Keep the safeguards that prevent data loss or wrong financial records. A genuine financial correction (this wasn't actually paid; the amount was different) is an ordinary edit, distinct from undoing an interface action.
 
 ### A3. What this means in practice
@@ -55,6 +60,7 @@ Three complementary perspectives, each with its own job. They complement one ano
 - Explain important recommendations briefly, with more detail on request.
 - Preserve history: what was expected, what changed, what actually happened.
 - Stay free of rigid budget philosophies, unnecessary categories, excessive notifications and unnecessary account setup.
+- Keep the long-term direction (more resilience, more independence) behind the scenes: no mandatory stages, levels or milestones, and no financial scores or unrelated metrics. Cash flow is the primary measure.
 - It's a projection tool for the big picture. It doesn't track every penny, and it doesn't show a bank balance.
 
 Alpha, beta and general release are testing phases with growing groups of people, not separate feature sets. Let evidence from real users justify adding, simplifying, changing or removing features.
@@ -100,7 +106,7 @@ These decisions replace earlier infrastructure plans. Don't reopen them in a tas
 - **Online-first.** Financial OS will be an online-first PWA. The backend is the source of truth for saved data. There is no parallel offline database, no later synchronization, and no permanent device-copy conflict reconciliation. Temporary in-memory state is fine for editing, showing an immediate forecast and retrying a failed save. People are always told when a change hasn't been saved, and the app never reports a save the backend refused or failed. Installing the PWA and caching the app's own files stay.
 - **Authentication is deferred** until the core financial features are finished. Deferring the sign-in screens never allows public access to financial records: once Supabase holds data, every record is limited to its owner.
 - **The forecast engine stays independent of storage.** `src/domain/` never imports a storage provider; persistence stays behind `StorageAdapter`.
-- **Firebase/Firestore, Cloud Run hosting and offline synchronization are legacy.** They keep the current version running and will be removed during the Supabase migration, not before. Until then: don't deploy Firestore rules, request Firebase credentials, turn on `REVIEW_RHYTHM_IN_ACCOUNTS`, add Firebase storage features or change Firebase sign-in. Keep the current app working, and keep the documentation needed to run it.
+- **Firebase/Firestore, Cloud Run hosting and offline synchronization are legacy.** They keep the current version running and will be removed during the Supabase migration, not before. Until then: don't deploy Firestore rules, request Firebase credentials, add Firebase storage features or change Firebase sign-in. Keep the current app working, and keep the documentation needed to run it.
 
 **Development order:**
 
@@ -122,9 +128,9 @@ Preserve the existing architecture; don't rebuild it without a reason the produc
 | Area | Where | Notes |
 | --- | --- | --- |
 | Stack | TypeScript (strict), React 19, Vite, vite-plugin-pwa | npm only; `package-lock.json` is committed |
-| Domain logic | `src/domain/` | Pure TypeScript, no React. `dates.ts`, `money.ts`, `types.ts`, `recurrence.ts`, `occurrences.ts`, `forecast.ts` (`buildForecast` and everything derived from it), `operations.ts` (every state change), `plan.ts` (cash flow per period), `preview.ts` (what-if previews), `cadence.ts` (review rhythm), `estimates.ts` (estimate suggestions), `scenarios.ts` (several hypothetical changes), `sample.ts` |
+| Domain logic | `src/domain/` | Pure TypeScript, no React. `dates.ts`, `money.ts`, `types.ts`, `recurrence.ts`, `occurrences.ts`, `forecast.ts` (`buildForecast` and everything derived from it), `operations.ts` (every state change), `plan.ts` (cash flow per period), `home.ts` (what Home shows, `homeView`), `balances.ts` (account balances and transfers), `preview.ts` (what-if previews), `estimates.ts` (estimate suggestions), `scenarios.ts` (several hypothetical changes), `sample.ts` |
 | State and persistence | `src/state/` | `storage.ts` (`StorageAdapter`, validation, `migrate`), `store.tsx` (applies operations, background saving, conflicts), `cloud.ts` (account storage with an on-device copy; legacy), `firebase.ts` (Google sign-in and Firestore, loaded on demand; legacy), `account.tsx`, `backup.ts`, `mode.tsx` (sample vs real data) |
-| UI | `src/ui/` | `screens/`, `components/`, a hash router (`router.ts`) |
+| UI | `src/ui/` | `screens/`, `components/`, a hash router (`router.ts`). Navigation: Home (`#/home`, the opening screen), Forecast (`#/dashboard`), Income, Expenses, Liabilities, Reserves; Settings behind the gear |
 | Hosting (legacy) | `server.mjs`, `Dockerfile` | Cloud Run serves the built app and forwards Firebase sign-in pages through its own address. To be replaced by Vercel |
 | Data and sign-in (legacy) | Firebase | Google sign-in; Firestore document `financialData/{uid}` in the named database; rules in `firestore.rules`. To be replaced by Supabase |
 | Future storage (not connected) | `supabase/`, `src/state/supabase/` | PostgreSQL schema, access rules and `load_plan` / `save_plan`, with the app-to-rows mapping. See docs/SUPABASE.md |
@@ -138,7 +144,7 @@ Rules:
 - **Deterministic and testable.** Domain calculations take "today" (and a clock, for operations) as inputs and never read the system clock themselves. The only clock reads in `src/domain/` are the `todayLocal()` helper the UI calls and ID generation.
 - **State changes go through `operations.ts`** as pure functions that return new data or a validation error.
 - **Before changing a persisted type or schema**, inspect and update together (the Firebase items stay on this list while the current version runs on Firebase; keeping them correct isn't new Firebase work): validation and `migrate` in `storage.ts`, backups (`backup.ts`), the on-device copy (`cloud.ts`), Firestore writes (`firebase.ts`), `firestore.rules`, `security_spec.md`, `firebase-blueprint.json`, and the rules tests. Existing data must keep loading; add migration tests.
-- **Accounts in storage:** device storage and backups keep `accounts` and `accountId`. Firebase account saves leave them out while `ACCOUNTS_IN_SIGNED_IN_SAVES` is false (the live rules accept a fixed set of fields), and the Supabase adapter refuses a plan that has them until the schema has a place for them (roadmap AC-S). Never drop them silently.
+- **Accounts in storage:** device storage and backups keep `accounts` and `accountId`. Firebase account saves leave them out while `ACCOUNTS_IN_SIGNED_IN_SAVES` is false (the live rules accept a fixed set of fields), and the Supabase adapter refuses a plan that has accounts, assignments, transfers or reserve releases until the schema has a place for them (roadmap AC-S). Never drop them silently.
 - **Firebase imports only in `src/state/firebase.ts`**, so device-only builds never download Firebase.
 - **Keep the revision check** in both `firebaseBackend.save` (a transaction) and the rules (exactly +1). It stops a stale device from overwriting newer data.
 - **No personal data in errors or logs** (email, uid, provider details, financial values).
@@ -201,7 +207,7 @@ Product terms are fixed; use them consistently in UI, docs, and tests:
 
 - **Cash flow** — available cash flow for a period: income minus external outflows minus net Strategic Reserve allocations.
 - **Running total** — the day-by-day cumulative total from the forecast anchor. Never call it a "balance".
-- **Main paycheck** — the income whose paydays start pay periods. *Under review for removal* (docs/REDUCTION-AUDIT.md); until a decision, it must not exclude other income from the running total (section D).
+- **Main paycheck** — the income whose paydays start pay periods. *Decided for removal* (product owner, October 2026; roadmap R1, not yet done); until then, it must not exclude other income from the running total (section D).
 - **Expected / Overdue / Done**, **Money in / Money out**, **Lowest running total**, **Timing gap**.
 
 The six financial classifications are Income, Bills, Subscriptions, Liabilities (liability payments: card, loan, or line of credit), Strategic Reserves and Varied Spending. Bills, subscriptions and liabilities are recurring; varied spending is one-time. Use "Strategic Reserves", never "savings", and "liability", never the alternative term. No classification is labeled "other", "misc", or anything similarly vague. Tags are optional and created only by the person; none are built in.
@@ -225,11 +231,11 @@ Use deterministic test data and fixed dates (pass "today" explicitly; pin the br
 - Recurring schedule changes and effective dates.
 - Cancellation, rescheduling, actuals, stored overrides, and duplicate prevention.
 - Original-prediction preservation and variance.
-- Undo and batch-operation correctness.
+- Batch-operation correctness (due items only) and per-item corrections.
 - Scenario consistency and internal-transfer handling (once those exist).
 
 **Component and integration tests** (`src/ui/__tests__/`, `src/state/__tests__/`)
-- A person can inspect a warning, understand its cause, edit an amount or date, confirm events, undo, and see the forecast update.
+- A person can inspect a warning, understand its cause, edit an amount or date, confirm events, correct a recorded event, and see the forecast update.
 - Loading, empty, error, offline, pending-save, conflict, and recovery states.
 - UI shows shared domain output instead of duplicating financial logic.
 - Mobile and accessibility behavior for important flows, where the setup allows.
@@ -264,11 +270,21 @@ Check `package.json` before running anything; scripts can change. Currently:
 
 For any coherent code change, run `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build` at minimum. Also run `npm run e2e` for user-facing flows, state changes, navigation, or persistence, and `npm run test:rules` for storage or security changes when the emulator can run. If a command can't be run, say so and why; never report it as passing.
 
-**CI** (`.github/workflows/ci.yml`) runs every command above on each pull request and on pushes to `main`, in five jobs: checks (typecheck, lint, tests, build), the browser smoke test, the database tests on the runner's PostgreSQL, the Firestore rules on the emulator, and the Supabase integration and browser suites against a local stack started with the Supabase CLI (its public key only; never a hosted project). When a command can't run in your environment, its CI job is the evidence; report which.
+**CI** (`.github/workflows/ci.yml`) runs on every pull request and on every push to `main`, in five jobs:
+1. typecheck, lint, unit tests and build (`npm run typecheck`, `lint`, `test`, `build`);
+2. the browser smoke test (`npm run e2e`);
+3. the database tests on the runner's PostgreSQL (`npm run test:db`);
+4. the Firestore rules on the emulator (`npm run test:rules`);
+5. the Supabase integration and browser suites (`npm run test:supabase`, `e2e:supabase`) against a local stack started with the Supabase CLI (its public key only; never a hosted project).
+
+When a command can't run in your environment, its CI job is the evidence; report which, and never report a check that didn't run.
 
 **Repository practice**
 - Use npm. Only change `package-lock.json` by running `npm install`; keep every entry's `resolved` and `integrity` fields. Never add `bun.lock` or another lockfile.
-- The working branch is `ccr-12ec4965-6tzwgr` (GitHub's default branch, which AI Studio syncs with). Pull before starting and before pushing; never force-push or rewrite shared history.
+- **`main` is the permanent default and integration branch.** Start each feature or fix on its own branch from the current `main` (a stacked branch only when the product owner authorizes it), and open its pull request against `main`.
+- Work reaches `main` only through a reviewed pull request, merged once CI passes on the final state being merged (re-check after a base change or retarget). Don't push directly to `main`.
+- Pull before starting and before pushing. Never force-push or rewrite shared history; resolve routine conflicts with a merge.
+- A finished branch is merged or closed; it's never documented as the place to work. (Before October 2026 the working branch was `ccr-12ec4965-6tzwgr`; it is merged and retired.)
 - Commit messages describe the change and why. Keep each commit to one coherent change.
 - Don't run the Vite dev server in production; Cloud Run runs `server.mjs` (`npm start`).
 

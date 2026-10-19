@@ -80,20 +80,20 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
 - **Cash flow bar:** a pill-shaped card pinned under the header during setup, labeled "Cash flow" with the period it covers (in setup, "First pay period · Oct 15 – 28"). The value is green, or red with a trend-down icon when negative, and changes are announced to screen readers.
 - **Breakdown list:** label/value rows with sub-rows indented in secondary text and the key total on a heavier divider (used for the monthly breakdown and totals by tag).
 - **Tags:** small outlined pills with a tag icon. In forms they become removable chips, entered through a text field with an Add button. The only suggestions are tags the user has already created.
-- **Kind avatars:** income (banknote, green), bill (receipt, indigo), subscription (repeat, blue), liability (card, violet), savings (piggy bank, teal).
+- **Kind avatars:** income (banknote, green), bill (receipt, indigo), subscription (repeat, blue), liability (card, violet), Strategic Reserves (piggy bank, teal).
 - **Timing-gap banner:** a red-outlined card with a warning triangle ("2 timing gaps ahead · Next 90 days"), shown only when the tally goes below $0. It opens a sheet listing each gap's dates, length, and lowest amount. Its wording describes the gap and gives no advice.
 - **Choice pills:** a required single choice (e.g. liability type: Card, Loan, Line of credit) shown as equal-width pills backed by native radio buttons. The selected pill is light, and all pills get a red outline if nothing is chosen on save.
-- **Navigation:** four tabs: Dashboard, Income, Expenses (Bills, Subscriptions, Savings), and Liabilities.
+- **Navigation:** six tabs: Home, Forecast, Income, Expenses (Bills, Subscriptions, Varied), Liabilities and Reserves; Settings behind the gear. (Roadmap H3 proposes reducing these to Home, Forecast and Plan.)
 - **Pill tabs:** two options inside a raised pill track, used within cards. The active option is light.
 - **Totals strip / sheet stats:** three centered label-over-value columns, with values aligned on one baseline.
 - **Callouts:** soft-tinted rounded blocks (info, warn, danger, ok) that always lead with an icon or a bold phrase.
 - **Switch:** a pill track that turns green when on, built on a native checkbox with `role="switch"`.
-- **Selection checkbox:** a native checkbox in a 44px tap target, to the left of an entry row, for picking several items (the review list). The row itself still opens the item. Batch actions sit in a sticky bar at the bottom of the sheet and appear only when something is selected.
+- **Selection checkbox:** a native checkbox in a 44px tap target, to the left of an entry row, for picking several due items (Home's Needs attention). The row itself still opens the item. Batch actions appear below the list only when something is selected.
 - **Toasts:** light pills with an icon at the top of the screen, so they never cover sheet or step buttons. They are announced through a live region.
 
 ## Layout pattern: summary on the page, details in sheets
 
-The dashboard shows only summaries. Detail opens in a bottom sheet:
+Home and the Forecast screen show only summaries. Detail opens in a bottom sheet:
 
 - **Home** (the opening screen) carries what needs attention (see README, Home); the forecast screen no longer has an overdue banner.
 - **Hero card:** cash flow for the period (large, signed; red with a trend-down icon when negative) with money in and out beneath it, then the lowest running total, a one-line timing-gap or all-clear callout, and the next expected payday. The (i) button explains cash flow and the running total.

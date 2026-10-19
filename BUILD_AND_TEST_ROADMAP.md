@@ -10,7 +10,7 @@ Each step lists:
 - **Tests** — what must be covered.
 - **Exit criteria** — what must be true before dependent steps start.
 
-"Today" notes describe the code as of commit `957cdc2` (October 2026). Verify them; they will drift.
+"Today" notes inside the steps describe the code as of commit `957cdc2` (October 2026) and are kept as written; they drift. **Current state** below and the Status section are the up-to-date record.
 
 ## Current priority: product experience (October 2026)
 
@@ -52,11 +52,37 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | Audit recommendations (not yet approved) | docs/REDUCTION-AUDIT.md §3 and decisions §7 |
 | Deferred features | PRODUCT_EXPERIENCE.md §10; Step 8's deferred imports; Step 9 |
 
+### Current state (verified October 19, 2026; `main` at `fe8b13d`)
+
+`main` is the default and integration branch (AGENTS.md section H). CI (`.github/workflows/ci.yml`, five jobs) passed on both merge commits below.
+
+| Work | Status | Where |
+| --- | --- | --- |
+| PR #4, account distribution and cash-flow architecture | **Complete**, merged as `3fac4ac` | AC1–AC4, AC5 in part, CI, seven integration fixes |
+| PR #5, Home (H1 selector, H2 opening screen) | **Complete**, merged as `fe8b13d` | H1, H2; R2 and C1 done through them |
+| H3, Forecast and navigation | **Planned**, not authorized | Plan and decisions below |
+| H4, conditional visibility and wording | **Planned** | After H3 |
+| A1, where the running total starts | **Complete** | Status |
+| A2, defects D3 and D5 | **Planned** (still open in the code; D4 no longer applies) | Phase A2 |
+| R1, remove the main paycheck and Paycheck view | **Planned** (decided, Q2) | Phase R1 |
+| R2, remove review states, rhythm and batch Undo | **Complete** (in H2) | Phase R2 |
+| C1, the week view | **Complete** (as Home, H2) | Phase C1 |
+| C2, navigation | **In part** (Home and Forecast are separate); the rest is H3 | Phases C2, H3 |
+| C3 Activity, C4 visibility, C5 Plan screens, C6 one "See what happens if…", B1 wording, D redesign | **Planned** | Phases |
+| E, income expansion | **Planned**, needs separate approval and decision D8 | Phase E |
+| AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
+| AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
+| AC6 payoff support, recurring planned transfers | **Deferred** (need specifications or decisions) | Phase AC, conflicts |
+| Step 9 virtual allocations; Phase F (hosted Supabase, Firebase cutover, offline-sync removal, Vercel) | **Deferred** (paused by the product experience decision) | Phase F, Step 10 |
+| Steps 3 and 5 (review list, review rhythm) | **Superseded** by Home (H2) | Status |
+
 ### Home (progress, actions, what's coming) — H1 and H2 merged to `main` (October 2026); H3 planned below, not authorized
 
 Goal: within about 30 seconds of opening the app, a person can tell (1) whether their cash flow is improving, declining or steady, (2) what needs attention now, and (3) what's coming. It carries out phases R2, C1, C2 and C4 below in a tighter order, and adds no financial data, inputs or engine.
 
-**Assessment of today's dashboard (`Dashboard.tsx`, October 2026).** One screen stacks: the date; an overdue banner *or* a "Review this week" button; the review-rhythm entry; the transfers entry; "Explore a scenario"; a Month / Week / Paycheck / Custom switch; the cash-flow hero (cash flow, in / out / set aside, lowest running total, timing gap, next payday); a calendar with a key; the breakdown; tag totals; and the period's weeks or days. Problems:
+*Historical: the assessment and plan from here through "Dependencies" were written before H1 and are kept as the record of the decision; they name code (`reviewEntries`, `transfersDue`, the review sheets) that H2 later removed. The H1 and H2 entries under "Sequence" describe what was built.*
+
+**Assessment of the dashboard before Home (`Dashboard.tsx`, October 2026).** One screen stacks: the date; an overdue banner *or* a "Review this week" button; the review-rhythm entry; the transfers entry; "Explore a scenario"; a Month / Week / Paycheck / Custom switch; the cash-flow hero (cash flow, in / out / set aside, lowest running total, timing gap, next payday); a calendar with a key; the breakdown; tag totals; and the period's weeks or days. Problems:
 - **Progress isn't shown.** Cash flow is for the selected period only, with nothing to compare it with, so "improving or declining" can't be read.
 - **Actions are scattered** across up to four separate entry points (overdue banner, review button, rhythm entry, transfers entry), each opening its own sheet. A shortfall a planned transfer would cause shows only after opening the transfers list.
 - **Week information is duplicated**: the Week tab, the week list under every period, the "Review this week" sheet and the period review all list the same items.
@@ -123,11 +149,11 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 **Rules for every phase:**
 - Each phase is its own authorized task, small enough to verify on its own, with tests in the same change.
 - Only A1 changes a calculation.
-- Phases R1–R2 need the product owner's approval of the matching decision (Q2–Q4); until then they stay proposals.
+- R1 and R2 had to wait for decisions Q2–Q4. The product owner approved them (October 2026): R2 is complete (in H2) and R1 is planned.
 
 #### A. Financial correctness
 
-**A1. The running total starts at the earliest eligible upcoming income** (defects D1 and D2). Complexity: **medium**.
+**A1. The running total starts at the earliest eligible upcoming income** (defects D1 and D2). **Complete (October 2026).** Complexity: **medium**.
 - **Scope:**
   - The algorithm in docs/PRODUCT-AUDIT.md §6.3, with defaults D1 and D2 (PRODUCT_EXPERIENCE.md §9).
   - `Forecast` gains `nextMainPayday`, while the main paycheck still exists.
@@ -147,7 +173,7 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
   - an e2e step for the reproduction.
 - **Excluded:** layout; removing the main paycheck (R1); "cash available now".
 
-**A2. Small verified defects** (D3, D5). Complexity: **low**.
+**A2. Small verified defects** (D3, D5). **Planned**: both still present (`OccurrenceSheet.tsx` shows the raw kind in "Delete this one-time …"; `enterSample` failures are unhandled). D4 no longer applies (the rhythm entry was removed in H2). Complexity: **low**.
 - **Scope:**
   - the one-time item's delete label uses its own words;
   - a failed switch to sample data shows a message.
@@ -164,7 +190,7 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 - **Data:** stored `mainPaycheck` / `main_paycheck` stay readable and are ignored. No schema change until the Supabase cutover.
 - **Dependencies:** A1.
 - **Files:**
-  - `types.ts`, `forecast.ts` (`paycheckCycles` callers), `cadence.ts`, `scenarios.ts`, `operations.ts`;
+  - `types.ts`, `forecast.ts` (`paycheckCycles` callers), `scenarios.ts`, `operations.ts` (`cadence.ts` was removed in H2);
   - `forms.tsx`, `SourcesScreen.tsx`, `Dashboard.tsx`, `Onboarding.tsx`, `ScenarioSheet.tsx`.
 - **Acceptance:** no screen mentions a main paycheck; forecasts are identical to A1's.
 - **Tests:**
@@ -191,7 +217,7 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 
 #### C. Structure (simplify, consolidate, relocate)
 
-**C1. The week view** (REDUCTION-AUDIT §5.2, PRODUCT_EXPERIENCE.md §3.2). Complexity: **medium–high**.
+**C1. The week view** (REDUCTION-AUDIT §5.2, PRODUCT_EXPERIENCE.md §3.2). **Complete as Home (H2, October 2026).** Complexity: **medium–high**.
 - **Scope:**
   - The week view replaces the dashboard's Week tab, the "Review this week" sheet and the overdue banner.
   - Its sections: forecast line, Needs attention (overdue from any date, plus today), Coming up, Happened (with expected-vs-actual), Early next week.
@@ -210,7 +236,7 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
   - e2e: record and move from the week view.
 - **Excluded:** visual redesign; new data.
 
-**C2. Navigation and the remaining dashboard** (Q1; PRODUCT_EXPERIENCE.md §3.1, §3.3). Complexity: **medium**.
+**C2. Navigation and the remaining dashboard** (Q1; PRODUCT_EXPERIENCE.md §3.1, §3.3). **In part:** Home and Forecast are separate (H2); the rest is H3. Complexity: **medium**.
 - **Scope:**
   - The tabs This week, Forecast, Activity and Plan; Plan for now is today's Income / Expenses / Liabilities screens behind one tab.
   - Forecast holds the month calendar, gaps, "See what happens if…" and the range chip.
@@ -285,7 +311,7 @@ Specification: PRODUCT_EXPERIENCE.md section 11. Each phase is separately author
 - **AC3. Transfers (expected and recorded) (complete, October 2026).**
   - `Transfer` (id, source, destination, amount, date, `expected` or `recorded`, audit times) with `addTransfer`, `recordTransfer`, `updateTransfer` and `deleteTransfer`; one atomic entry per transfer, so no one-sided record exists.
   - Any direction between two different accounts (corrections and rebalancing included). Never income or spending; the forecast never reads transfers.
-  - A planned transfer stays planned until recorded; the dashboard lists those due and this week's. Recording takes the amount and date it actually had.
+  - A planned transfer stays planned until recorded; Home lists those due (Needs attention) and this week's (Coming up). Recording takes the amount and date it actually had.
   - Not built: recurring or rule-based transfers ("each payday, move $X"). Entering them with minimal effort is still an open product decision (below).
 - **AC4. Strategic Reserves as an internal allocation (complete, October 2026).**
   - Decided by the Development-State Directive: reserve allocations lower available cash flow and the running total, and are never external outflows. Releases ("Use reserves") return money to available cash flow.
@@ -341,8 +367,8 @@ Since the product experience decision above, this order is paused after the host
 ## Step 0: Establish a trustworthy baseline
 
 **Inspect**
-- Git state: current branch (`ccr-12ec4965-6tzwgr`), uncommitted work, and whether work done elsewhere (AI Studio) has been pushed.
-- `package.json` scripts, `package-lock.json` integrity fields, existing tests (`src/**/__tests__/`, `scripts/__tests__/`, `scripts/e2e-smoke.mjs`) and what they cover, test configuration (`vite.config.ts`, `vitest.rules.config.ts`, `src/test-setup.ts`), and CI (none exists today).
+- Git state: current branch (at the time of Step 0, `ccr-12ec4965-6tzwgr`; now `main`), uncommitted work, and whether work done elsewhere (AI Studio) has been pushed.
+- `package.json` scripts, `package-lock.json` integrity fields, existing tests (`src/**/__tests__/`, `scripts/__tests__/`, `scripts/e2e-smoke.mjs`) and what they cover, test configuration (`vite.config.ts`, `vitest.rules.config.ts`, `src/test-setup.ts`), and CI (none existed at Step 0; it now runs, AGENTS.md section H).
 - Architecture against [AGENTS.md](AGENTS.md) section C and [README.md](README.md); storage (`src/state/`), security (`firestore.rules`, `security_spec.md`), hosting (`server.mjs`, `Dockerfile`), and documentation.
 
 **Build or correct**
@@ -433,6 +459,8 @@ Since the product experience decision above, this order is paused after the host
 - Every warning can be traced to its causes, and every suggested action's effect is visible before it's applied.
 
 ## Step 5: Establish a configurable review cadence
+
+**Superseded (October 2026).** The review rhythm built here was removed in H2 (decision Q3); Home replaces it. Kept as the record of the step.
 
 **Inspect**
 - Existing settings (Settings screen), stored preferences (none today), and how "today" is determined (`useToday` in `store.tsx`).
@@ -619,15 +647,17 @@ Replaces the earlier plan to validate Firebase persistence and offline behavior.
 - **Step 1: complete with follow-ups.** Calculation path and test matrix: [FINANCIAL_ENGINE.md](FINANCIAL_ENGINE.md). Validation tests: `engine-validation.test.ts`. No further engine defects found.
 - **Step 2: complete.** The prediction, latest expectation and actual were already kept apart. Fixed: undoing a payment or cancellation left a stored copy that kept the old amount, so a later price change didn't apply to that occurrence. Added `variance` (`occurrences.ts`). Tests: `history.test.ts`, `state/__tests__/history-roundtrip.test.ts`.
 - **Step 3: complete.** A review list (overdue and due today first, then the rest of the week) with selection, **Mark done** as expected and **Move to a date** for several items at once, and **Undo** that reverses the whole batch exactly (`recordAsExpected`, `rescheduleSelected`, `undoBatch`, `reviewEntries`). The item sheet names the scope: “Change just this one” or “Change this and later ones”. Tests: `review.test.ts`, `ui/__tests__/review-sheet.test.tsx`, and a review step in the end-to-end test.
+  - Superseded in part (H2, October 2026): batch Undo, `undoBatch`, `reviewEntries` and the review sheet were removed; batches take only items due today or earlier, from Home's Needs attention (tests now in `batch` and `ui/home`).
 - **Step 4: complete with follow-ups.** Dashboard warning → explanation of each timing gap (`explainTimingGaps`, `gaps.tsx`) → What if… for one outstanding item: move, change amount, or skip (`previewChange`, `WhatIfSheet.tsx`) → confirmation → the change applied to that one occurrence (`applyPreviewedChange`). Previews never save; Apply needs confirmation, is refused for stale previews and for previews that can't be compared (the next payday moves, or a payment moves to before it), and states it changes only the forecast. Skipping a liability payment says the debt and what is owed don't change. Previews cover the period being viewed, never less than 90 days. Tests: `gap-explanations`, `preview`, `gaps-sheet`, `whatif-sheet`, and an end-to-end step.
   - Follow-ups: one change at a time (no combined scenarios); the app doesn't suggest which change to try; the setup review's gap banner explains gaps but has no What if…; shortfalls before the next payday stay outside the running total (cash on hand is unknown).
 - **Step 5: complete for device storage.** Signed-in (Firebase) accounts keep it off; see below. Review rhythm in Settings (off, weekly, on payday, monthly look-ahead), a quiet dashboard entry when a review is due, and a review sheet from `reviewSummary` with Mark review done and Skip (neither records payments; closing leaves it due; a different rhythm starts fresh). Nothing is sent outside the app. Tests: `cadence`, `review-persistence`, `period-review`, rules tests, and an end-to-end step.
+  - **Superseded (H2, October 2026):** the rhythm, its Settings control, the review sheets and `REVIEW_RHYTHM_IN_ACCOUNTS` were removed with their tests; a saved `review` field is dropped on load.
   - Accounts: the updated `firestore.rules` (optional `review` field) aren't confirmed deployed, so `REVIEW_RHYTHM_IN_ACCOUNTS` (`src/state/features.ts`) keeps the rhythm hidden when signed in and out of account saves, so no save is refused. With Firebase now legacy, the rules won't be deployed and the flag stays false; signed-in review rhythms arrive with the Supabase migration (Step 10b).
 - **Step 6: complete with follow-ups.** Interface: a suggestion line on the item's card (bills, subscriptions, liability payments) opens a sheet with the amounts, start date, method, explanation, limitations, the payments behind it, a forecast preview (`previewEstimate`), and Approve (with confirmation) / Dismiss / Not now. Tests: `ui/estimate-sheet`, an end-to-end step. Foundation: `estimates.ts` compares each recurring bill, subscription and liability payment's recorded payments with its estimate (steady, rising, falling, variable and seasonal rules, unusual payments left out, at least 3 payments, at least $5 and 5% difference) and returns explained suggestions with their payments, confidence and limitations. `approveEstimate` applies one through the schedule operations from the first payment that keeps the schedule's dates; `dismissEstimate` keeps the estimate and holds the suggestion back (`estimateDismissal` on the item). Income and savings aren't estimated; what income history could support is recorded in FINANCIAL_ENGINE.md. Tests: `estimates`, `state/estimate-persistence`.
   - Follow-ups: suggestions appear only on the item's card (no list across items, by design); the separate buffered planning estimate this step describes isn't built (suggestions only round up to a dollar); variable income.
 - **Step 7: complete with follow-ups.** Interface: **Explore a scenario** on the dashboard opens a sheet to add, edit and remove several changes (from existing payments where possible), compare the scenario with the forecast, see the first new or deeper shortfall even when the ending improves, and compare low, expected and high income. Nothing is saved; there's no way to apply a scenario. Tests: `ui/scenario-sheet`, an end-to-end step. Foundation: `evaluateScenario` applies several changes (one-time income and expenses, extra and higher liability payments, savings, moved dates, changed amounts, hypothetical recurring income) to a copy with the ordinary operations and compares it with the plan through `buildForecast`: assumptions, cash flow with hypothetical income separate, lowest and ending running totals, gaps with recovery dates, differences, and new or deeper shortfalls even when the ending improves. Changed paydays and moves before payday aren't compared. `evaluateIncomeCases` gives low, expected and high cases from amounts the person supplies. Tests: `scenarios`.
   - Follow-ups: applying a scenario to the plan; saving scenarios; scenarios can't change an item's schedule (only its amount from a date), turn an item off, or change a recurring item that already has a later change set; one-time liability items exist only inside scenarios.
-- **Step 8: complete (revised to manual-first).** Setup now says which steps are optional, offers **Skip to review** once there's income, and the review says when payments fall before the running total starts. Restore shows how many items will be replaced and offers a backup of the current data first. **Start over** (Settings) erases everything after confirmation, keeps the review rhythm, and offers a backup first (`startOver`). Fixed: the review's section labels used ids with spaces, so "Liability payments" had no accessible name. Imports are deferred. Tests: `onboarding`, `backup-restore`, `start-over`, `state/backup`, an end-to-end step.
+- **Step 8: complete (revised to manual-first).** Setup now says which steps are optional, offers **Skip to review** once there's income, and the review says when payments fall before the running total starts. Restore shows how many items will be replaced and offers a backup of the current data first. **Start over** (Settings) erases everything after confirmation, keeps the review rhythm (since removed, H2), and offers a backup first (`startOver`). Fixed: the review's section labels used ids with spaces, so "Liability payments" had no accessible name. Imports are deferred. Tests: `onboarding`, `backup-restore`, `start-over`, `state/backup`, an end-to-end step.
   - Follow-ups: a one-time item still has to be removed and added again to change it during setup; setup has no undo for a removed item.
 - **Step 10a: design approved.** Five financial tables with workspace ownership, the app's own ids, whole-plan saves through one function, row-level security.
 - **Step 10b-1: database foundation complete; not connected.** `supabase/migrations` (tables, checks, row-level security, `create_workspace`, `load_plan`, `save_plan` with update / replace / reset modes, revision checks and save receipts for retries), `src/state/supabase/rows.ts` (mapping and pre-migration check). Tests: `rows`, and `npm run test:db` against a local PostgreSQL (equivalence, persistence, integrity, security). See docs/SUPABASE.md.
@@ -655,11 +685,13 @@ Replaces the earlier plan to validate Firebase persistence and offline behavior.
 - **Phase A1: complete (October 2026).** The running total starts the day before the earliest outstanding or received-today income from any active recurring source, so entry order and the main paycheck no longer decide it (defect D1). Overdue income counts the same for every source; one-time income, inactive sources and hypothetical scenario income don't start it. Setup's first-period cash flow, lowest running total and before-payday note start from the same point (defect D2, `firstPeriod`). Pay periods still follow the main paycheck. Tests: `forecast-start` (15), the updated `forecast` anchor test, a setup test in `setup-timing-gaps`, and a browser step in the e2e smoke test.
 - **Accounts AC1: complete (October 2026).** Income, Distribution and Payment accounts (`types.ts`, `addAccount` / `renameAccount` / `assignAccount`), an Accounts section in Settings, an optional account on recurring item forms, validation on load, device storage and backups. Firebase saves leave accounts out (`ACCOUNTS_IN_SIGNED_IN_SAVES`) and the Supabase adapter refuses them, so nothing is silently dropped. The forecast never reads accounts. Tests: `accounts` (domain), `accounts-persistence`, `money-accounts` (UI), and an e2e step.
 - **Account distribution and cash-flow architecture: AC2, AC3, AC4 complete; AC5 partly (October 2026).** Six classifications (Strategic Reserves and Varied Spending); reserves lower available cash flow without counting as spending; operating and available cash flow; transfers (expected and recorded); optional opening balances with recorded and projected balances; account deletion; the account on item rows; transfers on the dashboard. Supabase kind constraints updated (migration `20261018000002`); Supabase still refuses accounts, transfers and releases (AC-S). Tests: `reserves-transfers` (25), updated `plan`, `accounts-persistence`, `storage`, `money-accounts` (AC2, balances, transfers, dashboard), a DB classification test, and an e2e transfer step. Next: AC-S with Phase F, or the planned-transfer decision (conflict 6).
+- **Home H1 and H2: complete, merged (October 2026).** PR #5, merge commit `fe8b13d`, on top of PR #4 (`3fac4ac`). Details in the H1 and H2 entries above. CI passed on both merge commits, and on integrated `main` the unit and component tests (665), browser smoke test, PostgreSQL (58) and Firestore rules (14) suites also passed locally.
+- **Repository governance (October 2026).** `main` is the default and integration branch; work arrives through pull requests (AGENTS.md section H). The earlier working branch `ccr-12ec4965-6tzwgr` is merged and retired.
 - **PR #4 integration verification (October 2026).** GitHub Actions CI added (`.github/workflows/ci.yml`): typecheck, lint, unit tests, build, browser smoke test, database tests, Firestore rules, and the Supabase integration and browser suites on a local stack, all green. An integration review found and fixed: the classifications migration failing on existing savings rows; recorded payments moving when an item changed accounts; projected balances leaving out items due before the opening day; "Use reserves" offered in the Supabase build, which refuses it; release amounts shown with the wrong sign on several sheets; an empty default destination in the transfer form; unbounded opening balances in storage. Each has a regression test.
 
 ## Open items
 
-- **Smaller verified defects D3–D5:** docs/REDUCTION-AUDIT.md §4; Phase A2. (D1 and D2, the forecast start, are fixed; see Status.)
+- **Smaller verified defects D3 and D5:** docs/REDUCTION-AUDIT.md §4; Phase A2. (D1 and D2, the forecast start, are fixed; D4 went with the review rhythm in H2.)
 - **Cash before payday is unknown.** The running total starts at $0 the day before the next payday, so a shortfall caused by spending before that payday can't be shown. A product decision (for example, an optional "cash available now" amount); see FINANCIAL_ENGINE.md.
 - **For the UI review** (calculations are consistent; how they are presented needs a look):
   - An early payment followed by a schedule change: both the payment and the new schedule's first payment count.
@@ -667,7 +699,6 @@ Replaces the earlier plan to validate Firebase persistence and offline behavior.
   - A canceled occurrence stays canceled while the new schedule's payment counts.
   - Deleting an item whose only saved change has been set aside is refused with a message about history that isn't visible.
 - **Rare:** "twice a month" on two days that both fall on Feb 28 or 29 gives one February payment (deliberate, tested).
-- **No CI.** Checks run only when an agent runs them.
 - **Console setup** in [AI_STUDIO_TASKS.md](AI_STUDIO_TASKS.md) is partly done. It covers legacy Firebase and Cloud Run infrastructure and is no longer a development priority; only steps needed to keep the current version running apply.
 
 ---

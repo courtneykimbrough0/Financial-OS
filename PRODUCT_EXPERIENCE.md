@@ -108,11 +108,15 @@ The structure follows the information model. The full proposal, with the reasons
 - **Settings** sits behind the gear.
 - **"+ Add"** in the top bar opens a short sheet with two choices: Add income, and Add a bill or payment. Record a payment is in the week view, where the due items are.
 - **Wide screens** move the tabs to a left rail (section 7.6).
-- **Today:** the tabs are Dashboard, Income, Expenses (Bills, Subscriptions, Varied), Liabilities and Reserves, and the week is one of four dashboard views (**Implemented**).
+- **Today:** the tabs are Home (the opening screen, carrying the week view; section 3.2), Forecast (the earlier dashboard, still with its Month / Week / Paycheck / Custom views), Income, Expenses (Bills, Subscriptions, Varied), Liabilities and Reserves (**Implemented**, roadmap H2). The Forecast, Activity and Plan structure above is roadmap H3 and later (**Proposed**).
 
 ### 3.2 The week view
 
-**Purpose (Confirmed).** It answers what has happened, what's expected next, what needs attention and what may need a decision. It's the opening screen when decision Q1 is approved. It shows the current week, with previous and next.
+**Purpose (Confirmed).** It answers what has happened, what's expected next, what needs attention and what may need a decision. It shows the current week, with previous and next.
+
+**As built (Implemented, roadmap H2, October 2026):** Home (`#/home`) is the opening screen (decision Q1). It shows, each only when it has content: **Progress** (recorded cash flow this month so far against the same days of last month, with the projected month as a second, labeled line); **Needs attention** (overdue and due-today items, expected income "Expected — not recorded", planned transfers past their date, a timing gap starting within 7 days); then a week navigator over **Coming up** (the rest of the week and, for the current week, through Tuesday of next week) and **Happened this week**. It differs from the proposal below in two ways: the forecast line became the Progress section, and early next week is part of Coming up rather than its own section. Batch recording covers only items due today or earlier. Details: FINANCIAL_ENGINE.md, Home.
+
+The original proposal:
 
 **Sections, top to bottom. Each appears only when it has content:**
 
@@ -129,7 +133,7 @@ The structure follows the information model. The full proposal, with the reasons
 - No calendar row, breakdown, tag totals or empty day rows.
 - Future weeks show projections only and never ask for confirmation.
 - Past weeks show what happened and what was missed.
-- **Engine use:** `entriesInRange`, `overdueEntries`, `reviewEntries`, `variance` and `explainTimingGaps`. A pure grouping helper with tests; no new money math.
+- **Engine use:** `entriesInRange`, `overdueEntries`, `variance` and `explainTimingGaps`. A pure grouping helper with tests; no new money math. (Built as `homeView` in `home.ts`.)
 
 ### 3.3 Forecast
 
@@ -382,7 +386,7 @@ WorkEntry {
 
 **The constraint.** Firestore rules can't be deployed while Firebase is legacy (AGENTS.md section C1). A signed-in Firebase account would have saves with new fields refused.
 
-**So:** ship new income fields behind a flag, as `REVIEW_RHYTHM_IN_ACCOUNTS` does today: available with device storage and Supabase, hidden for Firebase accounts. Alternatively, schedule income expansion after the Supabase cutover (decision D8).
+**So:** ship new income fields behind a flag, as `ACCOUNTS_IN_SIGNED_IN_SAVES` does for accounts today: available with device storage and Supabase, hidden for Firebase accounts. Alternatively, schedule income expansion after the Supabase cutover (decision D8).
 
 ---
 
@@ -663,7 +667,7 @@ Nobody chooses an arrangement; the app accommodates whatever accounts they add.
 - **Deleting an account:** with nothing assigned, one confirmation; with items assigned, the confirmation says how many and that they stay with no account. An account that a transfer moves money to or from can't be deleted until those transfers are deleted or changed, so recorded history never loses a side.
 - **Transfers:** "Move money" (with two or more accounts) records a transfer that already happened or plans one. A planned transfer can be recorded (with the amount and date it actually had), changed or deleted; a recorded one can be corrected or deleted. When the source account's balance is known, a planned transfer that would take it below $0 says how far, and nothing is moved to cover it.
 - **Balances:** optional. An opening balance is what an account held at the end of a day; from it, the recorded balance follows recorded income, payments and transfers assigned to that account, and a projected balance (always an estimate) adds what is still expected. Strategic Reserve items change no balance; only transfers move money between accounts.
-- **Dashboard:** "N transfers to record" when planned transfers are due and not recorded, or "N transfers planned this week"; tapping lists them and opens each to record it. A day's sheet lists its transfers. Transfers never change a day's totals.
+- **Home:** a planned transfer whose date has come and that isn't recorded is in Needs attention (with the shortfall it would cause, when known); later ones this week are in Coming up. Tapping one opens it to record it. On the Forecast screen, a day's sheet lists its transfers. Transfers never change a day's totals.
 - Cash flow and the running total never read accounts or transfers (tested).
 - Not available yet where the storage can't keep them: signed in with Firebase (`ACCOUNTS_IN_SIGNED_IN_SAVES`, rules accept a fixed set of fields; saves leave accounts and transfers out) and the Supabase development build (no tables yet; a save with accounts, transfers or reserve releases is refused rather than dropping them, and the build doesn't offer "Use reserves").
 
