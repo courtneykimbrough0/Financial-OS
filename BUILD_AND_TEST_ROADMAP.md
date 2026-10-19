@@ -67,8 +67,9 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | R1, remove the primary-paycheck concept and Paycheck view | **Complete** | Phase R1 |
 | R2, remove review states, rhythm and batch Undo | **Complete** (in H2) | Phase R2 |
 | C1, the week view | **Complete** (as Home, H2) | Phase C1 |
-| C2, navigation | **Complete except Activity** (Home, Forecast, Plan; Activity is C3) | Phases C2, H3 |
-| C3 Activity, C4 visibility, C5 Plan screens, C6 one "See what happens if…", B1 wording, D redesign | **Planned** | Phases |
+| C2, navigation | **Complete** (Home, Forecast, Activity, Plan) | Phases C2, H3, C3 |
+| C3, Activity view | **Complete** | Phase C3 |
+| C4 visibility, C5 Plan screens, C6 one "See what happens if…", B1 wording, D redesign | **Planned** | Phases |
 | E, income expansion | **Planned**, needs separate approval and decision D8 | Phase E |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
 | AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
@@ -109,7 +110,7 @@ Previous and next week stay one tap away. The month calendar, breakdown, tag tot
 - **H2. Opening screen (complete and merged, October 2026; PR #4 `3fac4ac`, PR #5 `fe8b13d`).** `Home` (`src/ui/screens/Home.tsx`, route `#/home`, first in the navigation and the screen after setup, restore and sample data): progress, Needs attention, a week navigator over Coming up and Happened, built from `homeView(data, today, { weekOf })`. `weekOf` is separate from `today`, so moving weeks never changes overdue items, progress or Needs attention. Removed: review completion and skip, the review rhythm (all options, its Settings control and `REVIEW_RHYTHM_IN_ACCOUNTS`), the weekly and period review sheets, the overdue banner, the review entry, the transfers entry, batch Undo (`undoBatch`) and `transfersDue`. Batch recording and moving take only items due today or earlier. The old dashboard keeps its place as **Forecast** (route `#/dashboard`) with its Month, Week, Paycheck and Custom views, calendar, breakdown, scenarios and the rest, untouched until H3. The stored `review` field is dropped on load and never written; the Supabase `review_*` columns stay, unused, and the Firestore rules still accept the optional field. Tests: 32 domain (`home`), 7 `batch`, 25 component (`ui/home`), browser smoke steps.
 - **H3. Forecast and Plan navigation (complete, October 2026; in review).** Navigation is Home, Forecast and Plan, with Settings behind the gear. `#/forecast` is canonical (`Forecast.tsx`, formerly `Dashboard.tsx`); `#/dashboard` redirects, replacing the address without a history entry. Plan (`Plan.tsx`, `#/plan/income`, `expenses`, `liabilities`, `reserves`) hosts the existing item screens unchanged; the old kind routes redirect. Forecast's Week tab is removed; Month, Paycheck and Custom each list their weeks and days, and a custom range can cover a single week. Accounts and transfers stay in Settings, item sheets and Home. No calculation changed. Decisions 1–3 below were approved as recommended. Not done from the plan: step 5's deep links from Home into a particular Forecast month or gap (Home's "Full forecast and calendar" opens the current month). Tests: `navigation` (19), updated `home`, `money-accounts` and `scenario-sheet`, the browser smoke test (redirects, Plan sections, phone-width fit) and the Supabase browser suite's navigation helper.
 - **H4. Interface simplification (complete, October 2026).** Conditional visibility: embedded section intros hidden when items exist; overdue callout shortened. Language: concise week-list hint, tighter running-total OK callout, shorter source-occurrence hint. Contextual navigation: Home's "Full forecast and calendar" carries the viewed week's start date into Forecast via `navigateToForecast`/`consumeForecastDate`; `#/forecast/YYYY-MM-DD` deep links parse to the forecast route; direct `#/forecast` and all redirects still work. Density: Home and Forecast stack spacing tightened via CSS overrides. No domain or calculation changes. Tests: `h4-simplification` (12), updated `home` (25), `occurrence-sheet` (8), `navigation` (19), browser smoke (all steps pass).
-- Later, separately: C3 (Activity), C5 (Plan and setup), C6 (one "See what happens if…"), D (visual redesign). R1 (primary-paycheck removal) is complete.
+- C3 (Activity view) is complete; see below. Later, separately: C5 (Plan and setup), C6 (one "See what happens if…"), D (visual redesign). R1 (primary-paycheck removal) is complete.
 
 **Decisions (product owner, October 2026):** the week view opens the app (Q1); progress is month over month, shown as the factual difference with no threshold; review completion states, the payday rhythm and batch Undo are removed (Q3, Q4), keeping ordinary corrections and legitimate early payments; a timing gap needs attention when it starts within 7 days, and later gaps stay visible in the forecast; the primary-paycheck concept is removed (Q2, done in R1).
 
@@ -240,7 +241,7 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
   - e2e: record and move from the week view.
 - **Excluded:** visual redesign; new data.
 
-**C2. Navigation and the remaining dashboard** (Q1; PRODUCT_EXPERIENCE.md §3.1, §3.3). **Complete except the Activity tab** (H2 and H3): Home, Forecast and Plan, with redirects from old addresses; Activity is C3. Complexity: **medium**.
+**C2. Navigation and the remaining dashboard** (Q1; PRODUCT_EXPERIENCE.md §3.1, §3.3). **Complete** (H2, H3 and C3): Home, Forecast, Activity and Plan, with redirects from old addresses. Complexity: **medium**.
 - **Scope:**
   - The tabs This week, Forecast, Activity and Plan; Plan for now is today's Income / Expenses / Liabilities screens behind one tab.
   - Forecast holds the month calendar, gaps, "See what happens if…" and the range chip.
@@ -250,11 +251,12 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 - **Tests:** routing with redirects from old hashes; the e2e smoke test updated.
 - **Excluded:** the Activity view (C3); visual redesign.
 
-**C3. The Activity view** (PRODUCT_EXPERIENCE.md §4). Complexity: **medium**.
+**C3. The Activity view** (PRODUCT_EXPERIENCE.md §4). **Complete (October 2026).** Complexity: **medium**.
 - **Scope:** recorded history with expected-vs-actual, and a month summary by kind and by tag.
 - **Dependencies:** C2.
-- **Tests:** exact-cents aggregation reconciled with recorded entries and `variance`; component and e2e tests.
+- **Tests:** exact-cents aggregation reconciled with recorded entries and `variance` (12 domain tests); component tests for rendering, kind filter, empty states and variance (8); updated navigation tests (20) and home nav assertion (1).
 - **Excluded:** forecast figures; the Earnings section (E).
+- **What was built:** `activityView` in `src/domain/activity.ts` (pure function producing a `PeriodPlan`-compatible summary from completed forecast entries), `Activity` screen in `src/ui/screens/Activity.tsx` (month navigation, summary KPIs, `PeriodBreakdown` with recorded labels, `TagBreakdown`, kind filter chips, item list with variance sub-line, occurrence sheet on tap), route `#/activity` in the nav between Forecast and Plan. No domain or calculation changes to existing code; `PeriodBreakdown` gained a `recorded` prop to swap labels.
 
 **C4. Conditional visibility** (PRODUCT_EXPERIENCE.md §5) on the screens that remain. Complexity: **low–medium**.
 - **Dependencies:** C2.

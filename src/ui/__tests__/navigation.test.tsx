@@ -51,8 +51,8 @@ afterEach(() => {
 
 describe('routes', () => {
   it('knows the canonical routes and sends earlier addresses to their new places', () => {
-    expect(['#/home', '#/forecast', '#/plan/income', '#/plan/expenses', '#/plan/liabilities', '#/plan/reserves', '#/settings', '#/onboarding'].map(parse)).toEqual([
-      'home', 'forecast', 'plan/income', 'plan/expenses', 'plan/liabilities', 'plan/reserves', 'settings', 'onboarding',
+    expect(['#/home', '#/forecast', '#/activity', '#/plan/income', '#/plan/expenses', '#/plan/liabilities', '#/plan/reserves', '#/settings', '#/onboarding'].map(parse)).toEqual([
+      'home', 'forecast', 'activity', 'plan/income', 'plan/expenses', 'plan/liabilities', 'plan/reserves', 'settings', 'onboarding',
     ]);
     expect(['#/dashboard', '#/plan', '#/income', '#/expenses', '#/liabilities', '#/reserves'].map(parse)).toEqual([
       'forecast', 'plan/income', 'plan/income', 'plan/expenses', 'plan/liabilities', 'plan/reserves',
@@ -91,6 +91,7 @@ describe('routes', () => {
 
   it.each([
     ['#/forecast', /Your cash flow/],
+    ['#/activity', 'Activity'],
     ['#/plan/reserves', 'Strategic Reserves'],
     ['#/settings', 'Settings'],
   ])('opening %s directly (or refreshing it) shows that screen', async (hash, heading) => {
@@ -108,6 +109,7 @@ describe('main navigation', () => {
       expect(within(nav).getAllByRole('link').map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
         ['Home', '#/home'],
         ['Forecast', '#/forecast'],
+        ['Activity', '#/activity'],
         ['Plan', '#/plan/income'],
       ]);
     }
@@ -190,12 +192,14 @@ describe('Forecast', () => {
 });
 
 describe('navigation never changes money', () => {
-  it('moving between Home, Forecast, Plan and Settings saves nothing', async () => {
+  it('moving between Home, Forecast, Activity, Plan and Settings saves nothing', async () => {
     const user = await open('#/home');
     await screen.findByRole('heading', { level: 1, name: /^Home/ });
     const before = localStorage.getItem(STORAGE_KEY);
     await user.click(mainNav().getByRole('link', { name: 'Forecast' }));
     await screen.findByRole('heading', { level: 1, name: /Your cash flow/ });
+    await user.click(mainNav().getByRole('link', { name: 'Activity' }));
+    await screen.findByRole('heading', { level: 1, name: 'Activity' });
     await user.click(mainNav().getByRole('link', { name: 'Plan' }));
     await screen.findByRole('heading', { level: 1, name: 'Income' });
     await user.click(screen.getByRole('link', { name: 'Settings' }));

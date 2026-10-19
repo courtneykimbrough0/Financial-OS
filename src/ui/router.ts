@@ -5,8 +5,8 @@ import type { DateStr } from '../domain/dates';
 export const PLAN_SECTIONS = ['income', 'expenses', 'liabilities', 'reserves'] as const;
 export type PlanSection = (typeof PLAN_SECTIONS)[number];
 
-export type Route = 'home' | 'forecast' | `plan/${PlanSection}` | 'settings' | 'onboarding';
-const ROUTES: Route[] = ['home', 'forecast', ...PLAN_SECTIONS.map((s) => `plan/${s}` as const), 'settings', 'onboarding'];
+export type Route = 'home' | 'forecast' | 'activity' | `plan/${PlanSection}` | 'settings' | 'onboarding';
+const ROUTES: Route[] = ['home', 'forecast', 'activity', ...PLAN_SECTIONS.map((s) => `plan/${s}` as const), 'settings', 'onboarding'];
 
 /** Earlier addresses, kept working: each opens its new place and replaces the address in the history. */
 const REDIRECTS: Record<string, Route> = {
