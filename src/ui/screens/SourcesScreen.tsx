@@ -5,10 +5,10 @@ import { formatMoney } from '../../domain/money';
 import { resolveOccurrences } from '../../domain/occurrences';
 import * as ops from '../../domain/operations';
 import { describeRule } from '../../domain/recurrence';
-import { liabilityPrefix, mainPaycheckId, ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OneTimeKind, type Occurrence, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
+import { liabilityPrefix, ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OneTimeKind, type Occurrence, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { EmptyState, FlowAmount, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
-import { KIND_COPY, MainPaycheckPicker, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm } from '../components/forms';
+import { KIND_COPY, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm } from '../components/forms';
 import { EstimateCallout, EstimateSheet, useEstimateSuggestion } from '../components/EstimateSheet';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 import { AccountLabel } from '../components/money-accounts';
@@ -141,7 +141,6 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
             {liabilityPrefix(source)}
             {describeRule(current.rule, current.startDate)}
           </p>
-          {source.id === mainPaycheckId(data) && <span className="badge badge-main">Main paycheck</span>}
           <TagList tags={source.tags} />
           <AccountLabel accountId={source.accountId} />
         </div>
@@ -290,7 +289,6 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
           >
             {copy.recurringHeading}
           </SectionLabel>
-          {kind === 'income' && <MainPaycheckPicker />}
           {sources.length === 0 ? (
             <EmptyState title={`No ${copy.recurringHeading.toLowerCase()} yet`}>
               <p>{copy.empty}</p>
