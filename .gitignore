@@ -8,3 +8,9 @@ e2e-screenshots
 
 .env.local
 .env.*.local
+dist-e2e
+dist-e2e-*
+dist-hosted-test
+bun.lock
+firebase-debug.log
+firestore-debug.log

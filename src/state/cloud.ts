@@ -1,6 +1,6 @@
 /**
  * Account storage: the user's data saved to their Financial OS account
- * (Supabase), with a copy kept on the device so the app opens and keeps
+ * (Firebase), with a copy kept on the device so the app opens and keeps
  * working without a connection.
  *
  * Every change is written to the device copy first and marked pending, then
@@ -10,12 +10,16 @@
  * unsent changes are set aside as a recovered copy the user can download, so
  * neither version is silently lost.
  */
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { emptyData } from '../domain/operations';
 import type { AppData } from '../domain/types';
+import { ACCOUNTS_IN_SIGNED_IN_SAVES, REVIEW_RHYTHM_IN_ACCOUNTS } from './features';
 import { migrate, type SaveResult, type StorageAdapter } from './storage';
 
-/** What the adapter needs from the server. Thrown errors mean it couldn't be reached. */
+/**
+ * What the adapter needs from the server. A thrown `CloudAccessError` means the
+ * server refused the request (a setup or permission problem); any other thrown
+ * error means it couldn't be reached.
+ */
 export interface CloudBackend {
   /** The stored document and its revision, or null when nothing is stored yet. */
   fetch(): Promise<{ data: unknown; revision: number } | null>;
@@ -24,25 +28,12 @@ export interface CloudBackend {
   remove(): Promise<void>;
 }
 
-const TABLE = 'financial_data';
-
-export function supabaseBackend(client: SupabaseClient, userId: string): CloudBackend {
-  return {
-    async fetch() {
-      const { data, error } = await client.from(TABLE).select('data, revision').eq('user_id', userId).maybeSingle();
-      if (error) throw new Error(error.message);
-      return data ? { data: data.data as unknown, revision: Number(data.revision) } : null;
-    },
-    async save(data, baseRevision) {
-      const { data: revision, error } = await client.rpc('save_financial_data', { p_data: data, p_base_revision: baseRevision });
-      if (error) throw new Error(error.message);
-      return revision === null ? null : Number(revision);
-    },
-    async remove() {
-      const { error } = await client.from(TABLE).delete().eq('user_id', userId);
-      if (error) throw new Error(error.message);
-    },
-  };
+/** The server was reached but refused the request, so retrying won't help. */
+export class CloudAccessError extends Error {
+  constructor(readonly code: string) {
+    super(`Account storage refused the request (${code}).`);
+    this.name = 'CloudAccessError';
+  }
 }
 
 /** The device copy: the latest data, the account revision it is based on, and whether it has unsent changes. */
@@ -55,6 +46,8 @@ export const cloudCacheKey = (userId: string) => `financial-os:account:${userId}
 const recoveredKey = (userId: string) => `${cloudCacheKey(userId)}:recovered`;
 
 export const OFFLINE_MESSAGE = 'Financial OS can’t reach your account right now. Your change is kept on this device and will be saved when you’re back online.';
+export const ACCESS_MESSAGE =
+  'Your account didn’t accept this change. Your change is kept on this device. Sign out and back in, and if this keeps happening, the app’s account setup needs attention.';
 const CONFLICT_MESSAGE = 'Your data was changed on another device or window. Reload to see the latest version.';
 
 export class CloudAdapter implements StorageAdapter {
@@ -64,7 +57,14 @@ export class CloudAdapter implements StorageAdapter {
     private readonly backend: CloudBackend,
     private readonly userId: string,
     private readonly storage: Storage = window.localStorage,
+    /** Whether saves include the review rhythm; see REVIEW_RHYTHM_IN_ACCOUNTS. */
+    private readonly includeReview: boolean = REVIEW_RHYTHM_IN_ACCOUNTS,
+    /** Whether saves include accounts and item assignments; see ACCOUNTS_IN_SIGNED_IN_SAVES. */
+    private readonly includeAccounts: boolean = ACCOUNTS_IN_SIGNED_IN_SAVES,
   ) {}
+
+  /** The review rhythm the account had when last loaded; kept on saves while `includeReview` is off. */
+  private accountReview: AppData['review'];
 
   private readCopy(): DeviceCopy | null {
     try {
@@ -103,6 +103,7 @@ export class CloudAdapter implements StorageAdapter {
       // Offline: open with the device copy. Its pending change is sent once the connection returns.
       if (copy) {
         this.pendingAfterLoad = copy.pending;
+        this.accountReview = copy.data.review;
         return copy.data;
       }
       throw err;
@@ -113,6 +114,7 @@ export class CloudAdapter implements StorageAdapter {
       if (copy.data.revision === remoteRevision) {
         // Nothing changed elsewhere since this device's change: send it now.
         this.pendingAfterLoad = true;
+        this.accountReview = remote ? migrate(remote.data).review : undefined;
         return copy.data;
       }
       this.setAside(copy.data);
@@ -120,6 +122,7 @@ export class CloudAdapter implements StorageAdapter {
 
     const data: AppData = remote ? { ...migrate(remote.data), revision: remoteRevision } : emptyData();
     this.pendingAfterLoad = false;
+    this.accountReview = data.review;
     if (remote) this.writeCopy({ data, pending: false });
     else this.storage.removeItem(cloudCacheKey(this.userId));
     return data;
@@ -130,13 +133,22 @@ export class CloudAdapter implements StorageAdapter {
   }
 
   async save(data: AppData, baseRevision: number): Promise<SaveResult> {
-    const { isSample: _sample, ...doc } = data;
+    const { isSample: _sample, review, ...rest } = data;
+    // See REVIEW_RHYTHM_IN_ACCOUNTS. While it is off, a rhythm from this device stays out of account saves
+    // (the live rules may refuse the field), but one the account already had is saved back unchanged
+    // (the rules accepted it, and leaving it out would erase it).
+    const kept = this.includeReview ? review : this.accountReview;
+    const doc = withoutAccounts(kept ? { ...rest, review: kept } : rest, this.includeAccounts);
     this.writeCopy({ data: { ...doc, revision: baseRevision }, pending: true });
     let revision: number | null;
     try {
       revision = await this.backend.save({ ...doc, schemaVersion: 2, revision: baseRevision + 1 }, baseRevision);
     } catch (err) {
-      console.error(err);
+      if (err instanceof CloudAccessError) {
+        console.error(err.message);
+        return { ok: false, reason: 'error', message: ACCESS_MESSAGE };
+      }
+      console.error('Account storage unreachable.');
       return { ok: false, reason: 'error', message: OFFLINE_MESSAGE };
     }
     // On a conflict the change stays pending on the device; the reload sets it aside.
@@ -181,4 +193,19 @@ export function hasPendingDeviceChanges(userId: string, storage: Storage = windo
   } catch {
     return false;
   }
+}
+
+/**
+ * The plan without accounts, item assignments or transfers (which need
+ * accounts), unless `include`; see ACCOUNTS_IN_SIGNED_IN_SAVES. Reserve
+ * releases are ordinary record fields and are kept.
+ */
+function withoutAccounts<T extends Omit<AppData, 'isSample' | 'review'>>(doc: T, include: boolean): T {
+  if (include) return doc;
+  const { accounts: _accounts, transfers: _transfers, ...rest } = doc;
+  return {
+    ...(rest as T),
+    sources: doc.sources.map(({ accountId: _a, ...s }) => s),
+    records: doc.records.map(({ accountId: _a, ...r }) => r),
+  };
 }

@@ -2,51 +2,63 @@ import { Tag, TrendingDown } from 'lucide-react';
 import { formatRange } from '../../domain/dates';
 import { formatMoney, formatSignedMoney } from '../../domain/money';
 import type { PeriodPlan } from '../../domain/plan';
+import type { TransactionKind } from '../../domain/types';
 import { Icon, SectionLabel } from './common';
 
-/** The single headline number for a period: income minus expenses. */
-export function LeftToSpend({ plan }: { plan: PeriodPlan | null }) {
-  const negative = plan !== null && plan.leftToSpendCents < 0;
+/** The single headline number for a period: available cash flow (income minus spending and money set aside). */
+export function CashFlowBanner({ plan }: { plan: PeriodPlan | null }) {
+  const negative = plan !== null && plan.cashFlowCents < 0;
   return (
     <div className={`left-to-spend${negative ? ' negative' : ''}`} role="status" aria-live="polite">
       <span className="lts-label">
-        Left to spend
+        Cash flow
         <span className="lts-sub">{plan ? `First pay period · ${formatRange(plan.start, plan.end)}` : 'Add income to see this'}</span>
       </span>
       <span className="lts-value">
         {negative && <Icon icon={TrendingDown} size={20} />}
-        {plan ? formatMoney(plan.leftToSpendCents) : '—'}
+        {plan ? formatSignedMoney(plan.cashFlowCents) : '—'}
       </span>
     </div>
   );
 }
 
-function Row({ label, value, tone, level = 0, strong = false }: { label: string; value: string; tone?: 'in' | 'out' | 'neg'; level?: 0 | 1; strong?: boolean }) {
+function Row({ label, value, tone, level = 0, strong = false }: { label: string; value: string; tone?: 'in' | 'out' | 'reserve' | 'neg'; level?: 0 | 1; strong?: boolean }) {
   return (
     <div className={`breakdown-row${level ? ' sub' : ''}${strong ? ' strong' : ''}`}>
       <dt>{label}</dt>
-      <dd className={tone === 'in' ? 'amount-in' : tone === 'out' ? 'amount-out' : tone === 'neg' ? 'negative-text' : ''}>{value}</dd>
+      <dd className={tone === 'in' ? 'amount-in' : tone === 'out' ? 'amount-out' : tone === 'reserve' ? 'amount-reserve' : tone === 'neg' ? 'negative-text' : ''}>{value}</dd>
     </div>
   );
 }
 
-/** Income, Expenses (bills, subscriptions, liability payments, savings), and Left to spend for a period. */
-export function PeriodBreakdown({ plan, title }: { plan: PeriodPlan; title: string }) {
+const OUTFLOW_ROWS: [Exclude<TransactionKind, 'income' | 'reserve'>, string][] = [
+  ['bill', 'Bills'],
+  ['subscription', 'Subscriptions'],
+  ['liability', 'Liability payments'],
+  ['varied', 'Varied spending'],
+];
+
+/**
+ * Income, spending by classification, Strategic Reserves, and cash flow for a
+ * period. Reserves are their own line: money set aside, never spending.
+ * Classifications with nothing in the period are left out.
+ */
+export function PeriodBreakdown({ plan, title, showRange = true }: { plan: PeriodPlan; title: string; showRange?: boolean }) {
+  const rows = OUTFLOW_ROWS.filter(([kind]) => plan.byKind[kind] > 0);
   return (
     <section className="stack-sm" aria-labelledby="breakdown-period">
       <SectionLabel id="breakdown-period">{title}</SectionLabel>
       <div className="card">
-        <p className="hint">{formatRange(plan.start, plan.end)}</p>
+        {showRange && <p className="hint">{formatRange(plan.start, plan.end)}</p>}
         <dl className="breakdown">
           <Row label="Income" value={formatSignedMoney(plan.incomeCents)} tone="in" />
-          <Row label="Expenses" value={plan.expensesCents ? `−${formatMoney(plan.expensesCents)}` : formatMoney(0)} tone="out" />
-          <Row label="Bills" value={formatMoney(plan.byKind.bill)} level={1} />
-          <Row label="Subscriptions" value={formatMoney(plan.byKind.subscription)} level={1} />
-          <Row label="Liability payments" value={formatMoney(plan.byKind.liability)} level={1} />
-          <Row label="Savings" value={formatMoney(plan.byKind.savings)} level={1} />
-          <Row label="Left to spend" value={formatMoney(plan.leftToSpendCents)} tone={plan.leftToSpendCents < 0 ? 'neg' : undefined} strong />
+          <Row label="Spending" value={plan.outflowCents ? `−${formatMoney(plan.outflowCents)}` : formatMoney(0)} tone="out" />
+          {rows.map(([kind, label]) => (
+            <Row key={kind} label={label} value={formatMoney(plan.byKind[kind])} level={1} />
+          ))}
+          {plan.reservesCents !== 0 && <Row label={plan.reservesCents > 0 ? 'Set aside in reserves' : 'Used from reserves'} value={formatSignedMoney(-plan.reservesCents)} tone="reserve" />}
+          <Row label="Cash flow" value={formatSignedMoney(plan.cashFlowCents)} tone={plan.cashFlowCents < 0 ? 'neg' : undefined} strong />
         </dl>
-        <p className="hint">Left to spend is income minus expenses. Includes repeating and one-time items dated in this period.</p>
       </div>
     </section>
   );

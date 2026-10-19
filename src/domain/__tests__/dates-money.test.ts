@@ -9,7 +9,7 @@ import {
   startOfWeek,
   todayLocal,
 } from '../dates';
-import { centsToInput, formatCompact, formatMoney, formatSignedMoney, parseMoney } from '../money';
+import { centsToInput, formatCompact, formatMoney, formatMoneyIn, formatMoneyOut, formatSignedMoney, parseMoney } from '../money';
 
 describe('date-only handling', () => {
   afterEach(() => {
@@ -80,6 +80,11 @@ describe('money', () => {
     let total = 0;
     for (let i = 0; i < 1000; i++) total += parseMoney('0.10')!;
     expect(total).toBe(10000);
+  });
+
+  it('shows a zero total as $0.00, never with a sign', () => {
+    expect([formatMoneyIn(0), formatMoneyOut(0)]).toEqual(['$0.00', '$0.00']);
+    expect([formatMoneyIn(165000), formatMoneyOut(23000)]).toEqual(['+$1,650.00', '−$230.00']);
   });
 
   it('formats consistently', () => {

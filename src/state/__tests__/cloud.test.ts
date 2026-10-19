@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { addOneTime, emptyData } from '../../domain/operations';
 import type { AppData } from '../../domain/types';
-import { CloudAdapter, cloudCacheKey, hasPendingDeviceChanges, OFFLINE_MESSAGE } from '../cloud';
+import { ACCESS_MESSAGE, CloudAdapter, cloudCacheKey, hasPendingDeviceChanges, OFFLINE_MESSAGE } from '../cloud';
 import { FakeServer } from './fake-server';
 
 const USER = 'user-1';
 const clock = { today: '2026-10-11', now: '2026-10-11T12:00:00Z' };
 
 function withBill(data: AppData, name: string): AppData {
-  const r = addOneTime(data, { kind: 'bill', description: name, amountCents: 1000, date: '2026-10-20' }, clock, name);
+  const r = addOneTime(data, { kind: 'varied', description: name, amountCents: 1000, date: '2026-10-20' }, clock, name);
   if (!r.ok) throw new Error(r.error);
   return r.data;
 }
@@ -44,6 +44,15 @@ describe('CloudAdapter', () => {
     expect(names(loaded)).toEqual(['Rent']);
     expect(loaded.revision).toBe(1);
     expect(fresh.hasUnsavedChanges()).toBe(false);
+  });
+
+  it('reports a refused save as a setup problem, not as offline, and keeps the change', async () => {
+    await adapter.load();
+    server.refuse = true;
+    expect(await adapter.save(withBill(emptyData(), 'Kept'), 0)).toEqual({ ok: false, reason: 'error', message: ACCESS_MESSAGE });
+    expect(hasPendingDeviceChanges(USER, localStorage)).toBe(true);
+    server.refuse = false;
+    expect(await adapter.save(withBill(emptyData(), 'Kept'), 0)).toEqual({ ok: true, revision: 1 });
   });
 
   it('fails to load offline only when there is no device copy', async () => {

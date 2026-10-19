@@ -3,7 +3,7 @@ import { buildForecast, paycheckCycles, periodKpis } from '../forecast';
 import * as ops from '../operations';
 import { periodPlan } from '../plan';
 import { buildSampleData } from '../sample';
-import { groupOf } from '../types';
+import { accountTypeFor, KINDS, OUTFLOW_KINDS, signFor } from '../types';
 import { clockAt, source, unwrap, usd } from './helpers';
 
 const TODAY = '2026-10-11';
@@ -11,8 +11,8 @@ const TODAY = '2026-10-11';
 /*
  * Paycheck $1,800 every 2 weeks from Oct 15. Rent $1,200 on the 1st (from Nov 1),
  * phone $60 on the 25th, music $10.99 on the 20th (subscription), car loan $350
- * on the 20th (liability), savings $100 every 2 weeks from Oct 16.
- * One-time: bonus +$500 on Oct 22, repair −$300 on Oct 27.
+ * on the 20th (liability), a $100 strategic reserve every 2 weeks from Oct 16.
+ * One-time: bonus +$500 on Oct 22, repair −$300 on Oct 27 (varied spending).
  */
 function data() {
   let d = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1800, '2026-10-15', { type: 'biweekly' }, 'pay');
@@ -20,22 +20,25 @@ function data() {
   d = source(d, TODAY, 'bill', 'Phone', 60, '2026-10-25', { type: 'monthly' }, 'phone');
   d = source(d, TODAY, 'subscription', 'Music', 10.99, '2026-10-20', { type: 'monthly' }, 'music');
   d = source(d, TODAY, 'liability', 'Car loan', 350, '2026-10-20', { type: 'monthly' }, 'car');
-  d = source(d, TODAY, 'savings', 'Emergency fund', 100, '2026-10-16', { type: 'biweekly' }, 'save');
+  d = source(d, TODAY, 'reserve', 'Emergency fund', 100, '2026-10-16', { type: 'biweekly' }, 'save');
   d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Bonus', amountCents: usd(500), date: '2026-10-22' }, clockAt(TODAY), 'bonus'));
-  d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: usd(300), date: '2026-10-27' }, clockAt(TODAY), 'repair'));
+  d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(300), date: '2026-10-27' }, clockAt(TODAY), 'repair'));
   return d;
 }
 
-describe('left to spend for a period', () => {
-  it('is income minus expenses (bills, subscriptions, liabilities, savings), repeating and one-time', () => {
+describe('cash flow for a period', () => {
+  it('is income minus outflows (bills, subscriptions, liabilities, varied spending) minus net reserves, repeating and one-time', () => {
     const f = buildForecast(data(), TODAY);
     const cycle = paycheckCycles(f, 1)[0]!;
     expect([cycle.start, cycle.end]).toEqual(['2026-10-15', '2026-10-28']);
     const p = periodPlan(f, cycle.start, cycle.end);
     expect(p.incomeCents).toBe(usd(2300));
-    expect(p.byKind).toEqual({ income: usd(2300), bill: usd(360), subscription: usd(10.99), liability: usd(350), savings: usd(100) });
-    expect(p.expensesCents).toBe(usd(820.99));
-    expect(p.leftToSpendCents).toBe(usd(1479.01));
+    expect(p.byKind).toEqual({ income: usd(2300), bill: usd(60), subscription: usd(10.99), liability: usd(350), reserve: usd(100), varied: usd(300) });
+    // Reserves are not spending: operating cash flow leaves them out, available cash flow takes them off.
+    expect(p.outflowCents).toBe(usd(720.99));
+    expect(p.reservesCents).toBe(usd(100));
+    expect(p.operatingCents).toBe(usd(1579.01));
+    expect(p.cashFlowCents).toBe(usd(1479.01));
   });
 
   it('changes with the period and matches the dashboard totals for it', () => {
@@ -49,10 +52,11 @@ describe('left to spend for a period', () => {
     for (const [start, end] of periods) {
       const p = periodPlan(f, start, end);
       const k = periodKpis(f, start, end);
-      expect([p.incomeCents, p.expensesCents, p.leftToSpendCents]).toEqual([k.incomeCents, k.outflowCents, k.netCents]);
+      expect([p.incomeCents, p.outflowCents, p.reservesCents, p.operatingCents, p.cashFlowCents]).toEqual([k.incomeCents, k.outflowCents, k.reservesCents, k.operatingCents, k.netCents]);
+      expect(p.cashFlowCents).toBe(p.incomeCents - p.outflowCents - p.reservesCents);
     }
-    expect(periodPlan(f, '2026-10-01', '2026-10-31').leftToSpendCents).toBe(usd(4100 - 920.99));
-    expect(periodPlan(f, '2026-10-18', '2026-10-24').leftToSpendCents).toBe(usd(500 - 360.99));
+    expect(periodPlan(f, '2026-10-01', '2026-10-31').cashFlowCents).toBe(usd(4100 - 920.99));
+    expect(periodPlan(f, '2026-10-18', '2026-10-24').cashFlowCents).toBe(usd(500 - 360.99));
   });
 
   it('uses actual amounts once recorded and leaves out canceled items', () => {
@@ -60,20 +64,38 @@ describe('left to spend for a period', () => {
     d = unwrap(ops.cancelOccurrence(d, 'phone@2026-10-25', '', clockAt('2026-10-15')));
     const p = periodPlan(buildForecast(d, '2026-10-15'), '2026-10-01', '2026-10-31');
     expect(p.incomeCents).toBe(usd(1650 + 1800 + 500));
-    expect(p.byKind.bill).toBe(usd(300));
+    expect(p.byKind.bill).toBe(0);
+    expect(p.byKind.varied).toBe(usd(300));
   });
 
   it('goes negative when expenses exceed income in the period', () => {
     let d = source(ops.emptyData(), TODAY, 'income', 'Pay', 1000, '2026-10-15', { type: 'monthly' }, 'p');
     d = source(d, TODAY, 'bill', 'Rent', 1200, '2026-10-20', { type: 'monthly' }, 'r');
-    expect(periodPlan(buildForecast(d, TODAY), '2026-10-15', '2026-11-14').leftToSpendCents).toBe(usd(-200));
+    expect(periodPlan(buildForecast(d, TODAY), '2026-10-15', '2026-11-14').cashFlowCents).toBe(usd(-200));
   });
 });
 
-describe('categories', () => {
-  it('are Income and Expenses; savings is an expense', () => {
-    expect(groupOf('income')).toBe('income');
-    for (const k of ['bill', 'subscription', 'liability', 'savings'] as const) expect(groupOf(k)).toBe('expenses');
+describe('classifications', () => {
+  it('are the six approved ones; reserves are not an outflow', () => {
+    expect(KINDS).toEqual(['income', 'bill', 'subscription', 'liability', 'reserve', 'varied']);
+    expect(OUTFLOW_KINDS).toEqual(['bill', 'subscription', 'liability', 'varied']);
+    expect(KINDS.map((kind) => [kind, signFor({ kind })])).toEqual([
+      ['income', 1],
+      ['bill', -1],
+      ['subscription', -1],
+      ['liability', -1],
+      ['reserve', -1],
+      ['varied', -1],
+    ]);
+    expect(signFor({ kind: 'reserve', release: true })).toBe(1);
+    expect(KINDS.map(accountTypeFor)).toEqual(['income', 'payment', 'payment', 'payment', 'distribution', 'payment']);
+  });
+
+  it('keep recurring obligations recurring and varied spending one-time', () => {
+    const clock = clockAt(TODAY);
+    expect(ops.addSource(ops.emptyData(), { kind: 'varied' as never, description: 'X', amountCents: 100, startDate: TODAY, rule: { type: 'monthly' } }, clock)).toMatchObject({ ok: false });
+    for (const kind of ['bill', 'subscription', 'liability'] as never[]) expect(ops.addOneTime(ops.emptyData(), { kind, description: 'X', amountCents: 100, date: TODAY }, clock)).toMatchObject({ ok: false });
+    expect(ops.addOneTime(ops.emptyData(), { kind: 'varied', description: 'X', amountCents: 100, date: TODAY, release: true }, clock)).toEqual({ ok: false, error: 'Only a strategic reserve can be released.' });
   });
 });
 
@@ -95,7 +117,7 @@ describe('tags', () => {
     d = unwrap(ops.addSource(d, { kind: 'income', description: 'Pay', amountCents: usd(2000), startDate: '2026-10-15', rule: { type: 'monthly' }, tags: ['Work'] }, clockAt(TODAY), 'p'));
     d = unwrap(ops.addSource(d, { kind: 'bill', description: 'Rent', amountCents: usd(1200), startDate: '2026-10-16', rule: { type: 'monthly' }, tags: ['Housing'] }, clockAt(TODAY), 'r'));
     d = unwrap(ops.addSource(d, { kind: 'bill', description: 'Power', amountCents: usd(100), startDate: '2026-10-20', rule: { type: 'monthly' }, tags: ['housing'] }, clockAt(TODAY), 'e'));
-    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Console', amountCents: usd(400), date: '2026-10-25', tags: ['Gaming', 'fun'] }, clockAt(TODAY)));
+    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Console', amountCents: usd(400), date: '2026-10-25', tags: ['Gaming', 'fun'] }, clockAt(TODAY)));
     expect(ops.allTags(d)).toEqual(['fun', 'Gaming', 'Housing', 'Work']);
     const byTag = Object.fromEntries(periodPlan(buildForecast(d, TODAY), '2026-10-15', '2026-11-14').byTag.map((t) => [t.tag, [t.inCents, t.outCents, t.count]]));
     expect(byTag).toEqual({

@@ -40,6 +40,16 @@ export function formatSignedMoney(cents: Cents): string {
   return cents > 0 ? `+${formatMoney(cents)}` : formatMoney(cents);
 }
 
+/** A money-in total: "+$1,650.00", or "$0.00" when there is none. */
+export function formatMoneyIn(cents: Cents): string {
+  return cents === 0 ? formatMoney(0) : `+${formatMoney(cents)}`;
+}
+
+/** A money-out total (given as a positive amount): "−$230.00", or "$0.00" when there is none. */
+export function formatMoneyOut(cents: Cents): string {
+  return cents === 0 ? formatMoney(0) : `−${formatMoney(cents)}`;
+}
+
 /** Value suitable for pre-filling an amount input: "1650.00". */
 export function centsToInput(cents: Cents): string {
   const sign = cents < 0 ? '-' : '';

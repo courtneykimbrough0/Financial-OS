@@ -1,10 +1,12 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   AlertCircle,
   Banknote,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Info,
   TrendingDown,
 } from 'lucide-react';
@@ -32,22 +34,35 @@ import {
   buildForecast,
   dailyTimeline,
   lowestPoint,
-  monthWeekSummaries,
   negativeStretches,
   overdueEntries,
+  reviewEntries,
+  explainTimingGaps,
+  GAP_LOOKAHEAD_DAYS,
   paycheckCycles,
-  periodKpis,
+  weekSummaries,
   type DayRow,
   type Forecast,
   type ForecastEntry,
   type LowPoint,
   type NegativeStretch,
 } from '../../domain/forecast';
-import { formatCompact, formatMoney, formatSignedMoney } from '../../domain/money';
-import { doneVerb } from '../../domain/types';
+import { formatCompact, formatMoney, formatMoneyIn, formatMoneyOut, formatSignedMoney } from '../../domain/money';
+import { periodPlan, type PeriodPlan } from '../../domain/plan';
 import { useStore } from '../../state/store';
 import { EmptyState, FlowAmount, Icon, KindAvatar, KindTag, Modal, SectionLabel, StatusBadge } from '../components/common';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
+import { ReviewSheet } from '../components/ReviewSheet';
+import { PeriodReviewSheet } from '../components/PeriodReviewSheet';
+import { ScenarioSheet } from '../components/ScenarioSheet';
+import { CADENCE_LABEL } from '../components/rhythm';
+import { reviewStatus } from '../../domain/cadence';
+import { useAccount } from '../../state/account';
+import { REVIEW_RHYTHM_IN_ACCOUNTS } from '../../state/features';
+import { GapsSheet } from '../components/gaps';
+import { WhatIfSheet } from '../components/WhatIfSheet';
+import { PeriodBreakdown, TagBreakdown } from '../components/plan';
+import { DayTransfers, TransfersDue } from '../components/money-accounts';
 import { navigate } from '../router';
 
 type View = 'month' | 'week' | 'cycle' | 'custom';
@@ -71,16 +86,17 @@ function tallyText(cents: number | null): string {
 
 /**
  * Which bottom sheet is open. Details live in sheets so the dashboard itself
- * stays short: tap a day, a week, or the overdue banner to see more. An
+ * stays short: tap a day or the overdue banner to see more. An
  * occurrence opened from another sheet returns to it when closed.
  */
 type Sheet =
   | { kind: 'day'; date: DateStr }
-  | { kind: 'week'; start: DateStr; end: DateStr }
-  | { kind: 'overdue' }
+  | { kind: 'review'; title: string; closeIfEmpty?: boolean }
+  | { kind: 'period-review' }
   | { kind: 'occurrence'; id: string; back: Sheet | null }
   | { kind: 'about-tally' }
-  | { kind: 'calendar-key' };
+  | { kind: 'calendar-key' }
+  | { kind: 'scenario' };
 
 export function Dashboard() {
   const { data, today } = useStore();
@@ -112,6 +128,15 @@ export function Dashboard() {
   const range: [DateStr, DateStr] | null = view === 'cycle' ? (cycle ? [cycle.start, cycle.end] : null) : fixedRange;
 
   const overdue = overdueEntries(forecast);
+  const overdueTitle = overdue.length === 1 ? '1 transaction needs an update' : `${overdue.length} transactions need an update`;
+  const review = reviewEntries(forecast);
+  const account = useAccount();
+  // Reviews only where the rhythm can be chosen and saved (see REVIEW_RHYTHM_IN_ACCOUNTS).
+  const rhythm = !account || data.isSample || REVIEW_RHYTHM_IN_ACCOUNTS ? reviewStatus(data, today, forecast) : null;
+  const toReview = review.attention.length + review.upcoming.length;
+  useEffect(() => {
+    if (sheet?.kind === 'review' && sheet.closeIfEmpty && toReview === 0) setSheet(null);
+  }, [sheet, toReview]);
   const openOccurrence = (id: string, back: Sheet | null = null) => setSheet({ kind: 'occurrence', id, back });
   const openDay = (date: DateStr) => {
     setSelected(date);
@@ -128,13 +153,33 @@ export function Dashboard() {
       </header>
 
       {forecast.issue && <IssueCard forecast={forecast} />}
-      {overdue.length > 0 && (
-        <button type="button" className="overdue-banner" onClick={() => setSheet({ kind: 'overdue' })}>
+      {overdue.length > 0 ? (
+        <button type="button" className="overdue-banner" onClick={() => setSheet({ kind: 'review', title: overdueTitle })}>
           <Icon icon={AlertCircle} size={20} />
-          <span>{overdue.length === 1 ? '1 transaction needs an update' : `${overdue.length} transactions need an update`}</span>
+          <span>{overdueTitle}</span>
+          <Icon icon={ChevronRight} size={18} />
+        </button>
+      ) : (
+        toReview > 0 &&
+        !rhythm?.due && (
+          <button type="button" className="button small secondary review-start" onClick={() => setSheet({ kind: 'review', title: 'Review this week' })}>
+            Review this week · {toReview}
+          </button>
+        )
+      )}
+
+      <TransfersDue />
+
+      {rhythm?.due && (
+        <button type="button" className="rhythm-entry" onClick={() => setSheet({ kind: 'period-review' })} aria-haspopup="dialog">
+          <span>Your {CADENCE_LABEL[rhythm.cadence].toLowerCase()} review is ready</span>
           <Icon icon={ChevronRight} size={18} />
         </button>
       )}
+
+      <button type="button" className="button small secondary scenario-entry" onClick={() => setSheet({ kind: 'scenario' })} aria-haspopup="dialog">
+        Explore a scenario
+      </button>
 
       <div className="segmented" role="tablist" aria-label="Dashboard view">
         {VIEWS.map((v) => (
@@ -188,15 +233,15 @@ export function Dashboard() {
                 onNext={cycleIndex < cycles.length - 1 ? () => setCycleIndex(cycleIndex + 1) : undefined}
               />
               <p className="hint center">
-                Pay period {cycleIndex + 1} of {cycles.length} · starts with {cycle.paydayEntries.map((e) => e.occurrence.description).join(' and ')} · next income {formatShort(addDays(cycle.end, 1))}
+                Pay period {cycleIndex + 1} of {cycles.length} · starts with {cycle.paydayEntries.map((e) => e.occurrence.description).join(' and ')} · next main payday {formatShort(addDays(cycle.end, 1))}
               </p>
             </div>
           ) : (
             <EmptyState title="Pay periods aren’t available yet">
               <p>
                 {forecast.issue
-                  ? 'Add a recurring income with its next payment date. Pay periods run from one expected payday to the next.'
-                  : 'We need at least two upcoming paydays to show a pay period. Check that your recurring income is turned on.'}
+                  ? 'Add a recurring income with its next payment date. Pay periods run from one main payday to the next.'
+                  : 'We need at least two upcoming main paydays to show a pay period. Check that your main paycheck is turned on.'}
               </p>
             </EmptyState>
           ))}
@@ -227,36 +272,42 @@ export function Dashboard() {
             today={today}
             selected={selected && selected >= range[0] && selected <= range[1] ? selected : null}
             onDay={openDay}
-            onWeek={(start, end) => setSheet({ kind: 'week', start, end })}
             onInfo={(kind) => setSheet({ kind })}
           />
         )}
       </section>
 
-      {sheet?.kind === 'occurrence' && <OccurrenceSheet occurrenceId={sheet.id} onClose={() => setSheet(sheet.back)} />}
+      {sheet?.kind === 'occurrence' && (
+        // Back to the review list after handling an item, unless that left nothing to review.
+        <OccurrenceSheet occurrenceId={sheet.id} onClose={() => setSheet(sheet.back?.kind === 'review' ? { ...sheet.back, closeIfEmpty: true } : sheet.back)} />
+      )}
       {sheet?.kind === 'day' && (
         <DaySheet forecast={forecast} date={sheet.date} onClose={() => setSheet(null)} onOpen={(id) => openOccurrence(id, sheet)} />
       )}
-      {sheet?.kind === 'week' && (
-        <WeekSheet forecast={forecast} start={sheet.start} end={sheet.end} onClose={() => setSheet(null)} onOpen={(id) => openOccurrence(id, sheet)} />
-      )}
-      {sheet?.kind === 'overdue' && (
-        <Modal title={overdue.length === 1 ? '1 transaction needs an update' : `${overdue.length} transactions need an update`} onClose={() => setSheet(null)}>
-          <OverdueList entries={overdue} onOpen={(id) => openOccurrence(id, overdue.length > 1 ? sheet : null)} />
-        </Modal>
+      {sheet?.kind === 'period-review' && <PeriodReviewSheet onOpen={(id) => openOccurrence(id, sheet)} onClose={() => setSheet(null)} />}
+      {sheet?.kind === 'review' && !(sheet.closeIfEmpty && toReview === 0) && (
+        <ReviewSheet
+          forecast={forecast}
+          title={sheet.title}
+          onOpen={(id) => openOccurrence(id, sheet)}
+          onClose={() => setSheet(null)}
+        />
       )}
       {sheet?.kind === 'about-tally' && forecast.anchor && forecast.forecastStart && (
-        <Modal title="How projected cash flow works" onClose={() => setSheet(null)}>
+        <Modal title="How cash flow and the running total work" onClose={() => setSheet(null)}>
           <div className="stack">
             <p>
-              Projected cash flow starts at $0 on {formatMedium(forecast.anchor)}, the day before your next expected payday ({formatMedium(forecast.forecastStart)}), and adds money in and subtracts money out
-              day by day.
+              <strong>Cash flow</strong> is income minus spending and what you set aside in Strategic Reserves, for the period you’re looking at. Reserves stay yours; they’re just not available to spend.
             </p>
-            <p>It shows timing, separate from your bank balance. A number below $0 means scheduled money out runs ahead of money in by that amount.</p>
-            <p className="hint">Days on or before {formatMedium(forecast.anchor)} show “—” in place of a projected cash flow.</p>
+            <p>
+              The <strong>running total</strong> starts at $0 on {formatMedium(forecast.anchor)}, the day before your next expected payday ({formatMedium(forecast.forecastStart)}), and adds money in and subtracts money out
+              day by day. It shows timing, separate from your bank balance. Below $0 means scheduled money out runs ahead of money in by that amount.
+            </p>
+            <p className="hint">Days on or before {formatMedium(forecast.anchor)} show “—” in place of a running total. Payments due before your next payday count in that period’s cash flow but aren’t in the running total, because the app doesn’t know how much money you have now.</p>
           </div>
         </Modal>
       )}
+      {sheet?.kind === 'scenario' && <ScenarioSheet onClose={() => setSheet(null)} />}
       {sheet?.kind === 'calendar-key' && (
         <Modal title="Calendar key" onClose={() => setSheet(null)}>
           <CalendarKey />
@@ -276,7 +327,7 @@ function IssueCard({ forecast }: { forecast: Forecast }) {
       </p>
       <p>
         {forecast.issue === 'no-recurring-income'
-          ? 'Your running cash flow starts the day before your next expected payday, so we need at least one recurring income (like a paycheck or benefits) with its next payment date.'
+          ? 'Your running total starts the day before your next expected payday, so we need at least one recurring income (like a paycheck or benefits) with its next payment date.'
           : 'None of your recurring income has an upcoming payment. Check its next payment date.'}{' '}
         Totals for each period are still shown below.
       </p>
@@ -285,34 +336,6 @@ function IssueCard({ forecast }: { forecast: Forecast }) {
           Go to Income
         </button>
       </div>
-    </div>
-  );
-}
-
-function OverdueList({ entries, onOpen }: { entries: ForecastEntry[]; onOpen: (id: string) => void }) {
-  return (
-    <div className="stack">
-      <p className="muted">These dates have passed. Record what happened, or change the expected date. They stay in your forecast until you do.</p>
-      <ul className="entry-list overdue-list">
-        {entries.map((e) => (
-          <li key={e.occurrence.id}>
-            <button type="button" className="entry" onClick={() => onOpen(e.occurrence.id)}>
-              <KindAvatar kind={e.occurrence.kind} />
-              <span className="entry-main">
-                <span className="entry-title">{e.occurrence.description}</span>
-                <span className="entry-sub">Expected {formatMedium(e.occurrence.scheduledDate)}</span>
-              </span>
-              <span className="entry-side">
-                <FlowAmount kind={e.occurrence.kind} cents={e.amountCents} />
-                <span className="entry-action">
-                  Mark {doneVerb(e.occurrence.kind)}
-                  <Icon icon={ChevronRight} size={14} />
-                </span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
@@ -359,7 +382,6 @@ function PeriodBody({
   today,
   selected,
   onDay,
-  onWeek,
   onInfo,
 }: {
   forecast: Forecast;
@@ -368,103 +390,155 @@ function PeriodBody({
   today: DateStr;
   selected: DateStr | null;
   onDay: (d: DateStr) => void;
-  onWeek: (start: DateStr, end: DateStr) => void;
   onInfo: (kind: 'about-tally' | 'calendar-key') => void;
 }) {
   const [start, end] = range;
   const rows = useMemo(() => dailyTimeline(forecast, start, end), [forecast, start, end]);
-  const kpis = periodKpis(forecast, start, end);
+  const plan = useMemo(() => periodPlan(forecast, start, end), [forecast, start, end]);
   const low = lowestPoint(rows);
   const negatives = negativeStretches(rows);
 
   return (
     <>
-      <TallyHero forecast={forecast} low={low} negatives={negatives} today={today} onInfo={() => onInfo('about-tally')} />
+      <CashFlowHero forecast={forecast} plan={plan} low={low} negatives={negatives} range={range} today={today} onInfo={() => onInfo('about-tally')} />
 
       <div className="calendar-card">
         <Calendar rows={rows} start={start} end={end} today={today} selected={selected} lowDate={low?.date ?? null} onSelect={onDay} />
-        <dl className="kpis totals-strip" aria-label={`Totals for ${formatRange(start, end)}`}>
-          <div>
-            <dt>Projected income</dt>
-            <dd className="amount-in">{formatMoney(kpis.incomeCents)}</dd>
-          </div>
-          <div>
-            <dt>Projected expenses</dt>
-            <dd className="amount-out">{formatMoney(kpis.outflowCents)}</dd>
-          </div>
-          <div>
-            <dt>Left to spend</dt>
-            <dd className={kpis.netCents < 0 ? 'negative' : ''}>{formatSignedMoney(kpis.netCents)}</dd>
-          </div>
-        </dl>
         <div className="calendar-actions">
-          <p className="hint">Expenses include savings. Left to spend is income minus expenses for this period. Tap a day for details.</p>
+          <p className="hint">Tap a day for details.</p>
           <button type="button" className="button small link" onClick={() => onInfo('calendar-key')}>
             <Icon icon={Info} size={16} /> Calendar key
           </button>
         </div>
       </div>
 
-      <Breakdown forecast={forecast} rows={rows} view={view} start={start} lowDate={low?.date ?? null} onDay={onDay} onWeek={onWeek} />
+      <PeriodBreakdown plan={plan} title="Breakdown" showRange={false} />
+      <TagBreakdown plan={plan} />
+
+      {view === 'week' ? (
+        <section aria-labelledby="days-heading" className="stack-sm">
+          <SectionLabel id="days-heading">Day by day</SectionLabel>
+          <div className="card list-card">
+            <Timeline rows={rows} lowDate={low?.date ?? null} onSelect={onDay} anchor={forecast.anchor} anyBeforeAnchor={rows.some((r) => r.tallyCents === null)} />
+          </div>
+        </section>
+      ) : (
+        <WeekList forecast={forecast} start={start} end={end} lowDate={low?.date ?? null} onDay={onDay} />
+      )}
     </>
   );
 }
 
-/** The headline card: the lowest projected cash flow in view, any timing gap, and the next expected payday. */
-function TallyHero({ forecast, low, negatives, today, onInfo }: { forecast: Forecast; low: LowPoint | null; negatives: NegativeStretch[]; today: DateStr; onInfo: () => void }) {
-  if (!forecast.anchor || !forecast.forecastStart) return null;
+/** Explains every timing gap that overlaps the period in view. */
+function PeriodGapsSheet({ forecast, range, onClose }: { forecast: Forecast; range: [DateStr, DateStr]; onClose: () => void }) {
+  const [start, end] = range;
+  const gaps = useMemo(() => {
+    if (!forecast.forecastStart) return [];
+    const days = Math.max(GAP_LOOKAHEAD_DAYS, diffDays(forecast.forecastStart, end) + 1);
+    return explainTimingGaps(forecast, days).filter((g) => g.end >= start && g.start <= end);
+  }, [forecast, start, end]);
+  const [whatIf, setWhatIf] = useState<string | null>(null);
+  if (whatIf) return <WhatIfSheet occurrenceId={whatIf} through={end} onBack={() => setWhatIf(null)} onDone={onClose} />;
+  if (gaps.length === 0) return null;
+  return <GapsSheet gaps={gaps} horizonEnd={forecast.horizonEnd} onClose={onClose} onWhatIf={setWhatIf} />;
+}
+
+/**
+ * The headline card: cash flow (income minus expenses) for the period in view,
+ * then the lowest running total, any timing gap, and the next expected payday.
+ */
+function CashFlowHero({
+  forecast,
+  plan,
+  low,
+  negatives,
+  range,
+  today,
+  onInfo,
+}: {
+  forecast: Forecast;
+  plan: PeriodPlan;
+  low: LowPoint | null;
+  negatives: NegativeStretch[];
+  range: [DateStr, DateStr];
+  today: DateStr;
+  onInfo: () => void;
+}) {
+  const [showGaps, setShowGaps] = useState(false);
   const payday = forecast.forecastStart;
-  const daysToPayday = diffDays(today, payday);
+  const daysToPayday = payday ? diffDays(today, payday) : 0;
   const worst = negatives.reduce<NegativeStretch | null>((w, n) => (w === null || n.lowestCents < w.lowestCents ? n : w), null);
+  const negative = plan.cashFlowCents < 0;
   return (
     <section className="card hero" aria-labelledby="hero-label">
       <div className="hero-body">
         <div className="hero-top">
           <p className="hero-label" id="hero-label">
-            Lowest projected cash flow
+            Cash flow
           </p>
-          <button type="button" className="icon-button small-icon" onClick={onInfo} aria-label="How projected cash flow works">
+          <button type="button" className="icon-button small-icon" onClick={onInfo} aria-label="How cash flow and the running total work">
             <Icon icon={Info} size={20} />
           </button>
         </div>
-        {low ? (
-          <p className={`hero-value${low.tallyCents < 0 ? ' negative' : ''}`}>
-            {low.tallyCents < 0 && <Icon icon={TrendingDown} size={28} />}
-            {formatMoney(low.tallyCents)}
-            <span className="hero-when">on {formatShort(low.date)}</span>
-          </p>
-        ) : (
-          <p className="hero-sub">This period ends before your projected cash flow begins on {formatMedium(payday)}.</p>
+        <p className={`hero-value${negative ? ' negative' : ''}`}>
+          {negative && <Icon icon={TrendingDown} size={28} />}
+          {formatSignedMoney(plan.cashFlowCents)}
+        </p>
+        <p className="hero-sub">
+          <span className="amount-in">{formatMoneyIn(plan.incomeCents)}</span> in · <span className="amount-out">{formatMoneyOut(plan.outflowCents)}</span> out
+          {plan.reservesCents !== 0 && (
+            <>
+              {' · '}
+              <span className="amount-reserve">{formatMoney(Math.abs(plan.reservesCents))}</span> {plan.reservesCents > 0 ? 'set aside' : 'from reserves'}
+            </>
+          )}
+        </p>
+        {payday && (
+          <div className="hero-stat">
+            <span className="muted">Lowest running total</span>
+            {low ? (
+              <span className={low.tallyCents < 0 ? 'negative-text' : ''}>
+                <strong>{formatMoney(low.tallyCents)}</strong>
+                <span className="muted"> · {formatShort(low.date)}</span>
+              </span>
+            ) : (
+              <span className="muted">Starts {formatShort(payday)}</span>
+            )}
+          </div>
         )}
         {worst && (
-          <p className="callout callout-danger gap-line" role="note">
+          <button type="button" className="callout callout-danger gap-line" onClick={() => setShowGaps(true)} aria-haspopup="dialog">
             <Icon icon={TrendingDown} size={16} />
             <span>
               <strong>Timing gap ahead</strong> · {formatRange(worst.start, worst.end)}, by up to {formatMoney(-worst.lowestCents)}
               {negatives.length > 1 && ` (+${negatives.length - 1} more)`}
             </span>
-          </p>
+            <Icon icon={ChevronRight} size={16} />
+          </button>
         )}
+        {showGaps && <PeriodGapsSheet forecast={forecast} range={range} onClose={() => setShowGaps(false)} />}
         {low && !worst && (
           <p className="callout callout-ok gap-line">
             <Icon icon={Check} size={16} />
-            <span>Stays at or above $0 this period</span>
+            <span>Running total stays at or above $0 this period</span>
           </p>
         )}
       </div>
-      <div className="hero-footer">
-        <Icon icon={Banknote} size={22} className="hero-footer-icon" />
-        <span>
-          {daysToPayday > 1
-            ? `Next expected payday in ${daysToPayday} days`
-            : daysToPayday === 1
-              ? 'Next expected payday is tomorrow'
-              : daysToPayday === 0
-                ? 'Next expected payday is today'
-                : `Next expected payday was ${formatShort(payday)}`}
-          <span className="muted"> · {formatShort(payday)}</span>
-        </span>
-      </div>
+      {payday && (
+        <div className="hero-footer">
+          <Icon icon={Banknote} size={22} className="hero-footer-icon" />
+          <span>
+            {daysToPayday > 1
+              ? `Next expected payday in ${daysToPayday} days`
+              : daysToPayday === 1
+                ? 'Next expected payday is tomorrow'
+                : daysToPayday === 0
+                  ? 'Next expected payday is today'
+                  : `Next expected payday was ${formatShort(payday)}`}
+            <span className="muted"> · {formatShort(payday)}</span>
+          </span>
+        </div>
+      )}
     </section>
   );
 }
@@ -476,18 +550,20 @@ function dayAriaLabel(row: DayRow | undefined, date: DateStr, isLow: boolean): s
   if (!row) return bits.join('. ');
   if (row.inCents) bits.push(`money in ${formatMoney(row.inCents)}`);
   if (row.outCents) bits.push(`money out ${formatMoney(row.outCents)}`);
+  if (row.reservedCents) bits.push(row.reservedCents > 0 ? `set aside ${formatMoney(row.reservedCents)}` : `from reserves ${formatMoney(-row.reservedCents)}`);
   const overdue = row.entries.filter((e) => e.occurrence.displayStatus === 'overdue').length;
   if (overdue) bits.push(`${overdue} overdue`);
   const done = row.entries.filter((e) => e.occurrence.status === 'completed').length;
   if (done) bits.push(`${done} done`);
-  if (row.tallyCents !== null) bits.push(`projected cash flow ${formatMoney(row.tallyCents)}${row.tallyCents < 0 ? ', below zero' : ''}`);
+  if (row.tallyCents !== null) bits.push(`running total ${formatMoney(row.tallyCents)}${row.tallyCents < 0 ? ', below zero' : ''}`);
   if (isLow) bits.push('lowest point');
   return bits.join(', ');
 }
 
 /** Chip style for one direction of money on a day: filled when every item is done, outlined while any is expected. */
-function chipState(entries: ForecastEntry[], dir: 'in' | 'out'): 'done' | 'expected' {
-  const items = entries.filter((e) => e.counts && (dir === 'in' ? e.signedCents > 0 : e.signedCents < 0));
+function chipState(entries: ForecastEntry[], dir: 'in' | 'out' | 'reserve'): 'done' | 'expected' {
+  const isReserve = (e: ForecastEntry) => e.occurrence.kind === 'reserve';
+  const items = entries.filter((e) => e.counts && (dir === 'reserve' ? isReserve(e) : !isReserve(e) && (dir === 'in' ? e.signedCents > 0 : e.signedCents < 0)));
   return items.length > 0 && items.every((e) => e.occurrence.status === 'completed') ? 'done' : 'expected';
 }
 
@@ -552,6 +628,7 @@ function Calendar({
                     </span>
                     <span className="cal-chips" aria-hidden="true">
                       {row && row.outCents > 0 && <span className={`chip chip-out chip-${chipState(row.entries, 'out')}`}>−{formatCompact(row.outCents)}</span>}
+                      {row && row.reservedCents !== 0 && <span className={`chip chip-reserve chip-${chipState(row.entries, 'reserve')}`}>{row.reservedCents > 0 ? '−' : '+'}{formatCompact(Math.abs(row.reservedCents))}</span>}
                       {row && row.inCents > 0 && <span className={`chip chip-in chip-${chipState(row.entries, 'in')}`}>+{formatCompact(row.inCents)}</span>}
                     </span>
                   </button>
@@ -568,12 +645,13 @@ function Calendar({
 function CalendarKey() {
   const items: [ReactNode, string][] = [
     [<span className="chip chip-in chip-expected legend-chip">+$1.8k</span>, 'Money in (green)'],
-    [<span className="chip chip-out chip-expected legend-chip">−$350</span>, 'Money out: expenses, including savings (indigo)'],
+    [<span className="chip chip-out chip-expected legend-chip">−$350</span>, 'Money out: bills, subscriptions, liabilities and spending (indigo)'],
+    [<span className="chip chip-reserve chip-expected legend-chip">−$100</span>, 'Set aside in Strategic Reserves (teal)'],
     [<span className="chip chip-out chip-done legend-chip">−$350</span>, 'Filled chip: everything that day is done (received or paid)'],
     [<span className="chip chip-out chip-expected legend-chip">−$350</span>, 'Outlined chip: still expected'],
     [<Icon icon={AlertCircle} size={18} className="flag-overdue" />, 'Overdue: the date passed and it hasn’t been recorded'],
-    [<Icon icon={TrendingDown} size={18} className="flag-neg" />, 'Projected cash flow is below $0 that day'],
-    [<span className="flag-low">Low</span>, 'Lowest projected cash flow in this period'],
+    [<Icon icon={TrendingDown} size={18} className="flag-neg" />, 'Running total is below $0 that day'],
+    [<span className="flag-low">Low</span>, 'Lowest running total in this period'],
     [<span className="today-dot">11</span>, 'Today'],
   ];
   return (
@@ -592,95 +670,57 @@ function CalendarKey() {
 
 // ---------------------------------------------------------------------------
 
-/** Weeks | Days pill switch: one compact list at a time. Rows open sheets with the details. */
-function Breakdown({
-  forecast,
-  rows,
-  view,
-  start,
-  lowDate,
-  onDay,
-  onWeek,
-}: {
-  forecast: Forecast;
-  rows: DayRow[];
-  view: View;
-  start: DateStr;
-  lowDate: DateStr | null;
-  onDay: (d: DateStr) => void;
-  onWeek: (start: DateStr, end: DateStr) => void;
-}) {
-  const showWeeks = view === 'month';
-  const [tab, setTab] = useState<'weeks' | 'days'>(showWeeks ? 'weeks' : 'days');
-  const [showAll, setShowAll] = useState(false);
-  const active = showWeeks ? tab : 'days';
+/** Week by week. Each week opens in place to show its days, with the running total at the end of each day. */
+function WeekList({ forecast, start, end, lowDate, onDay }: { forecast: Forecast; start: DateStr; end: DateStr; lowDate: DateStr | null; onDay: (d: DateStr) => void }) {
+  const weeks = useMemo(() => weekSummaries(forecast, start, end), [forecast, start, end]);
+  const [open, setOpen] = useState<DateStr | null>(null);
   return (
-    <section aria-labelledby="breakdown-heading" className="stack-sm">
-      <SectionLabel
-        id="breakdown-heading"
-        action={
-          active === 'days' ? (
-            <label className="toggle">
-              <input type="checkbox" role="switch" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
-              <span className="toggle-track" aria-hidden="true" />
-              Show every day
-            </label>
-          ) : undefined
-        }
-      >
-        {showWeeks ? 'Breakdown' : 'Day by day'}
-      </SectionLabel>
+    <section aria-labelledby="weeks-heading" className="stack-sm">
+      <SectionLabel id="weeks-heading">Week by week</SectionLabel>
       <div className="card list-card">
-        {showWeeks && (
-          <div className="pill-tabs" role="tablist" aria-label="Breakdown">
-            <button type="button" role="tab" aria-selected={tab === 'weeks'} className={tab === 'weeks' ? 'active' : ''} onClick={() => setTab('weeks')}>
-              Week by week
-            </button>
-            <button type="button" role="tab" aria-selected={tab === 'days'} className={tab === 'days' ? 'active' : ''} onClick={() => setTab('days')}>
-              Day by day
-            </button>
-          </div>
-        )}
-        {active === 'weeks' ? (
-          <WeekList forecast={forecast} monthDate={start} onWeek={onWeek} />
-        ) : (
-          <Timeline rows={showAll ? rows : rows.filter((r) => r.entries.length > 0 || r.date === lowDate)} lowDate={lowDate} onSelect={onDay} anchor={forecast.anchor} anyBeforeAnchor={rows.some((r) => r.tallyCents === null)} />
-        )}
+        <ul className="week-list">
+          {weeks.map((w) => {
+            const expanded = open === w.start;
+            const negative = w.endTallyCents !== null && w.endTallyCents < 0;
+            return (
+              <li key={w.start} className={expanded ? 'open' : ''}>
+                <button type="button" className="week-row" aria-expanded={expanded} aria-controls={`week-${w.start}`} onClick={() => setOpen(expanded ? null : w.start)}>
+                  <span className="week-label">{formatRange(w.start, w.end)}</span>
+                  <span className="week-nums">
+                    <span>
+                      <span className="sr-only">Income </span>
+                      <span className="amount amount-in">{formatMoneyIn(w.incomeCents)}</span>
+                    </span>
+                    <span>
+                      <span className="sr-only">Spending </span>
+                      <span className="amount amount-out">{formatMoneyOut(w.outflowCents)}</span>
+                    </span>
+                    {w.reservesCents !== 0 && (
+                      <span>
+                        <span className="sr-only">{w.reservesCents > 0 ? 'Set aside ' : 'From reserves '}</span>
+                        <span className="amount amount-reserve">{formatSignedMoney(-w.reservesCents)}</span>
+                      </span>
+                    )}
+                    <span className={w.netCents < 0 ? 'week-net negative' : 'week-net'}>Net {formatSignedMoney(w.netCents)}</span>
+                    <span className={negative ? 'week-tally negative' : 'week-tally'}>
+                      {negative && <Icon icon={TrendingDown} size={14} />}
+                      Running total {tallyText(w.endTallyCents)}
+                    </span>
+                  </span>
+                  <Icon icon={expanded ? ChevronUp : ChevronDown} size={18} className="chevron" />
+                </button>
+                {expanded && (
+                  <div id={`week-${w.start}`} className="week-days">
+                    <Timeline rows={w.days} lowDate={lowDate} onSelect={onDay} anchor={forecast.anchor} anyBeforeAnchor={w.days.some((r) => r.tallyCents === null)} />
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        <p className="hint card-note">Weeks run Sunday to Saturday. Tap a week to see its days, and a day for its transactions.</p>
       </div>
     </section>
-  );
-}
-
-function WeekList({ forecast, monthDate, onWeek }: { forecast: Forecast; monthDate: DateStr; onWeek: (start: DateStr, end: DateStr) => void }) {
-  const weeks = useMemo(() => monthWeekSummaries(forecast, monthDate), [forecast, monthDate]);
-  return (
-    <>
-      <ul className="week-list">
-        {weeks.map((w) => (
-          <li key={w.start}>
-            <button type="button" className="week-row" aria-haspopup="dialog" onClick={() => onWeek(w.start, w.end)}>
-              <span className="week-label">{formatRange(w.start, w.end)}</span>
-              <span className="week-nums">
-                <span>
-                  <span className="sr-only">Income </span>
-                  <span className="amount amount-in">+{formatMoney(w.incomeCents)}</span>
-                </span>
-                <span>
-                  <span className="sr-only">Expenses </span>
-                  <span className="amount amount-out">−{formatMoney(w.outflowCents)}</span>
-                </span>
-                <span className={w.netCents < 0 ? 'week-net negative' : 'week-net'}>
-                  <span className="sr-only">Net </span>
-                  Net {formatSignedMoney(w.netCents)}
-                </span>
-              </span>
-              <Icon icon={ChevronRight} size={18} className="chevron" />
-            </button>
-          </li>
-        ))}
-      </ul>
-      <p className="hint card-note">Weeks run Sunday to Saturday. Tap a week for its days.</p>
-    </>
   );
 }
 
@@ -710,7 +750,7 @@ function Timeline({
                 <button type="button" className="timeline-row" aria-haspopup="dialog" onClick={() => onSelect(r.date)} aria-label={`Show details for ${formatLong(r.date)}`}>
                   <span className="tl-date">
                     {shortDay(r.date)}
-                    {r.date === lowDate && <span className="badge badge-low">Lowest point</span>}
+                    {r.date === lowDate && <span className="badge badge-low">Lowest</span>}
                   </span>
                   <span className="tl-cell">
                     <span className="tl-label">In</span>
@@ -719,13 +759,19 @@ function Timeline({
                   <span className="tl-cell">
                     <span className="tl-label">Out</span>
                     <span className="amount amount-out">{r.outCents ? `−${formatMoney(r.outCents)}` : '—'}</span>
+                    {r.reservedCents !== 0 && (
+                      <span className="amount amount-reserve">
+                        {formatSignedMoney(-r.reservedCents)}
+                        <span className="sr-only">{r.reservedCents > 0 ? ' set aside' : ' from reserves'}</span>
+                      </span>
+                    )}
                   </span>
                   <span className="tl-cell">
                     <span className="tl-label">Net</span>
                     <span>{formatSignedMoney(r.netCents)}</span>
                   </span>
                   <span className="tl-cell tl-tally">
-                    <span className="tl-label">Cash flow</span>
+                    <span className="tl-label">Running total</span>
                     <span>
                       {negative && <Icon icon={TrendingDown} size={14} />}
                       {tallyText(r.tallyCents)}
@@ -738,7 +784,7 @@ function Timeline({
           })}
         </ol>
       )}
-      {anchor && anyBeforeAnchor && <p className="hint card-note">“—” means the day is on or before {formatMedium(anchor)}, when the projected cash flow begins.</p>}
+      {anchor && anyBeforeAnchor && <p className="hint card-note">“—” means the day is on or before {formatMedium(anchor)}, when the running total begins.</p>}
     </>
   );
 }
@@ -762,12 +808,12 @@ function EntryButton({ e, onOpen }: { e: ForecastEntry; onOpen: (id: string) => 
         <span className="entry-title">{o.description}</span>
         <span className="entry-tags">
           <KindTag kind={o.kind} />
-          <StatusBadge status={o.displayStatus} kind={o.kind} />
+          <StatusBadge status={o.displayStatus} kind={o.kind} release={o.release} />
         </span>
         {sub && <span className="entry-sub">{sub}</span>}
       </span>
       <span className="entry-side">
-        <FlowAmount kind={o.kind} cents={e.amountCents} strike={!e.counts} />
+        <FlowAmount kind={o.kind} cents={e.amountCents} strike={!e.counts} release={o.release} />
         <Icon icon={ChevronRight} size={18} className="chevron" />
       </span>
     </button>
@@ -785,8 +831,14 @@ function DayTotals({ row }: { row: DayRow }) {
         <dt>Money out</dt>
         <dd className="amount-out">{row.outCents ? `−${formatMoney(row.outCents)}` : '—'}</dd>
       </div>
+      {row.reservedCents !== 0 && (
+        <div>
+          <dt>{row.reservedCents > 0 ? 'Set aside' : 'From reserves'}</dt>
+          <dd className="amount-reserve">{formatSignedMoney(-row.reservedCents)}</dd>
+        </div>
+      )}
       <div>
-        <dt>Projected cash flow</dt>
+        <dt>Running total</dt>
         <dd className={row.tallyCents !== null && row.tallyCents < 0 ? 'negative' : ''}>
           {row.tallyCents !== null && row.tallyCents < 0 && <Icon icon={TrendingDown} size={14} />}
           {tallyText(row.tallyCents)}
@@ -813,51 +865,7 @@ function DaySheet({ forecast, date, onClose, onOpen }: { forecast: Forecast; dat
           ))}
         </ul>
       )}
-    </Modal>
-  );
-}
-
-function WeekSheet({ forecast, start, end, onClose, onOpen }: { forecast: Forecast; start: DateStr; end: DateStr; onClose: () => void; onOpen: (id: string) => void }) {
-  const days = dailyTimeline(forecast, start, end);
-  const k = periodKpis(forecast, start, end);
-  const active = days.filter((d) => d.entries.length > 0);
-  return (
-    <Modal title={`Week of ${formatRange(start, end)}`} onClose={onClose}>
-      <dl className="sheet-stats">
-        <div>
-          <dt>Projected income</dt>
-          <dd className="amount-in">+{formatMoney(k.incomeCents)}</dd>
-        </div>
-        <div>
-          <dt>Projected expenses</dt>
-          <dd className="amount-out">−{formatMoney(k.outflowCents)}</dd>
-        </div>
-        <div>
-          <dt>Left to spend</dt>
-          <dd className={k.netCents < 0 ? 'negative' : ''}>{formatSignedMoney(k.netCents)}</dd>
-        </div>
-      </dl>
-      {active.length === 0 ? (
-        <p className="muted">Nothing scheduled this week.</p>
-      ) : (
-        active.map((d) => (
-          <section key={d.date} className="week-day" aria-label={formatLong(d.date)}>
-            <p className="week-day-head">
-              <strong>{shortDay(d.date)}</strong>
-              <span>
-                Net {formatSignedMoney(d.netCents)} · Cash flow {tallyText(d.tallyCents)}
-              </span>
-            </p>
-            <ul className="entry-list">
-              {d.entries.map((e) => (
-                <li key={e.occurrence.id}>
-                  <EntryButton e={e} onOpen={onOpen} />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))
-      )}
+      <DayTransfers date={date} />
     </Modal>
   );
 }

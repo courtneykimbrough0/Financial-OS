@@ -19,7 +19,6 @@ const USER: AccountUser = { id: 'u1', email: 'alex@example.com' };
 
 class FakeAuth implements AuthService {
   user: AccountUser | null = null;
-  sent: string[] = [];
   deleted = false;
   constructor(readonly server: FakeServer) {}
   async currentUser() {
@@ -28,12 +27,14 @@ class FakeAuth implements AuthService {
   onSignedOut() {
     return () => {};
   }
-  async sendCode(email: string) {
-    this.sent.push(email);
-  }
-  async verifyCode(email: string, code: string) {
-    if (code !== '123456') throw new Error('That code didn’t work. It may have expired. Check the code or send a new one.');
-    this.user = { ...USER, email };
+  /** Set to make the next sign-in fail: 'cancelled' (window closed) or an error message. */
+  nextSignIn: 'cancelled' | string | null = null;
+  async signInWithGoogle() {
+    const outcome = this.nextSignIn;
+    this.nextSignIn = null;
+    if (outcome === 'cancelled') throw Object.assign(new Error('cancelled'), { cancelled: true });
+    if (outcome) throw new Error(outcome);
+    this.user = USER;
     return this.user;
   }
   async signOut() {
@@ -82,25 +83,20 @@ describe('accounts', () => {
     window.location.hash = '';
   });
 
-  it('signs in with an emailed code and saves setup to the account', async () => {
+  it('signs in with Google and saves setup to the account', async () => {
     const user = userEvent.setup();
     const server = new FakeServer();
     const auth = new FakeAuth(server);
     renderApp(auth);
 
-    await user.click(await screen.findByRole('button', { name: /Email me a code/ }));
-    expect(screen.getByText(/Enter an email address/)).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Email'), ' Alex@Example.com ');
-    await user.click(screen.getByRole('button', { name: /Email me a code/ }));
-    expect(auth.sent).toEqual(['alex@example.com']);
-    expect(await screen.findByRole('heading', { name: 'Check your email' })).toBeInTheDocument();
-
-    await user.type(screen.getByLabelText('Sign-in code'), '000000');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('That code didn’t work');
-    await user.clear(screen.getByLabelText('Sign-in code'));
-    await user.type(screen.getByLabelText('Sign-in code'), '123456');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    // Closing the Google window quietly returns to the button.
+    auth.nextSignIn = 'cancelled';
+    await user.click(await screen.findByRole('button', { name: /Continue with Google/ }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    auth.nextSignIn = 'Your browser blocked the Google sign-in window. Allow pop-ups for Financial OS, then try again.';
+    await user.click(screen.getByRole('button', { name: /Continue with Google/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('blocked the Google sign-in window');
+    await user.click(screen.getByRole('button', { name: /Continue with Google/ }));
 
     expect(await screen.findByText(/it’s saved to your account/)).toBeInTheDocument();
     expect(screen.getByText(/Signed in as alex@example.com/)).toBeInTheDocument();
@@ -108,11 +104,20 @@ describe('accounts', () => {
     await user.click(screen.getByRole('button', { name: 'Get started' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('button', { name: 'Continue without income' }));
-    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    // Bills, subscriptions, liabilities, and reserves each have their own step.
+    for (const step of ['What bills do you pay?', 'What subscriptions renew?', 'What do you pay toward debts?', 'What do you set aside?']) {
+      expect(screen.getByRole('heading', { name: step })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Continue' }));
+    }
     await user.click(screen.getByRole('button', { name: 'See my forecast' }));
     await waitFor(() => expect(server.row?.data.onboardingComplete).toBe(true));
     expect(server.row?.revision).toBe(1);
-    expect(screen.getByText(/saved to your Financial OS account/)).toBeInTheDocument();
+    // Account details live on the Settings page.
+    await user.click(screen.getByRole('link', { name: 'Settings' }));
+    expect(await screen.findByText(/saved to your Financial OS account/)).toBeInTheDocument();
+    expect(screen.getByText(/Signed in as/)).toHaveTextContent('alex@example.com');
+    // The review rhythm stays device-only until the live Firestore rules accept it (REVIEW_RHYTHM_IN_ACCOUNTS).
+    expect(screen.queryByRole('heading', { name: 'Review rhythm' })).toBeNull();
   });
 
   it('offers to move a forecast saved on this device into a new, empty account', async () => {
@@ -165,7 +170,7 @@ describe('accounts', () => {
 
     server.offline = true;
     act(() => {
-      store.run((d, c) => addOneTime(d, { kind: 'bill', description: 'Repair', amountCents: 5000, date: '2026-10-20' }, c, 'rep'));
+      store.run((d, c) => addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: 5000, date: '2026-10-20' }, c, 'rep'));
     });
     expect(await screen.findByRole('alert')).toHaveTextContent('kept on this device');
     expect(screen.getByText('items:1')).toBeInTheDocument();
@@ -187,7 +192,7 @@ describe('accounts', () => {
     const adapter = new CloudAdapter(server, USER.id, localStorage);
     await adapter.load();
     server.offline = true;
-    const mine = addOneTime(forecast(), { kind: 'bill', description: 'Mine', amountCents: 100, date: '2026-10-20' }, clock, 'm');
+    const mine = addOneTime(forecast(), { kind: 'varied', description: 'Mine', amountCents: 100, date: '2026-10-20' }, clock, 'm');
     if (!mine.ok) throw new Error(mine.error);
     await adapter.save(mine.data, 0);
     server.offline = false;
@@ -216,7 +221,7 @@ describe('accounts', () => {
     server.row = { data: forecast(), revision: 1 };
     const auth = new FakeAuth(server);
     auth.user = USER;
-    window.location.hash = '#/dashboard';
+    window.location.hash = '#/settings';
     renderApp(auth);
     await user.click(await screen.findByRole('button', { name: /Delete account/ }));
     const dialog = screen.getByRole('dialog', { name: 'Delete your account?' });

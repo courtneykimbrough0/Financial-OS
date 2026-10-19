@@ -33,8 +33,9 @@
   --color-out-fill: #3d4cc0;
   --color-liability-fill: #6a4fc0;
   --color-subscription-fill: #2f6aa8;
-  --color-savings-fill: #1c7272;
-  --color-spending-fill: #9c3f66;
+  --color-reserve-fill: #1c7272;
+  --color-reserve: #6fd6d6;
+  --color-varied-fill: #9c3f66;
   --color-warn: #f5a623;
   --color-warn-soft: #3a2f17;
   --color-neg: #ff7b7b;
@@ -247,7 +248,7 @@ main.with-nav {
   left: 0;
   right: 0;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   background: var(--color-bg);
   border-top: 1px solid var(--color-border);
   padding-bottom: env(safe-area-inset-bottom);
@@ -259,7 +260,7 @@ main.with-nav {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 10px 4px 12px;
+  padding: 10px 2px 12px;
   min-height: 64px;
   font-size: var(--text-caption);
   font-weight: 500;
@@ -784,11 +785,11 @@ fieldset.inline-fields .field label {
 .avatar-subscription {
   background: var(--color-subscription-fill);
 }
-.avatar-savings {
-  background: var(--color-savings-fill);
+.avatar-reserve {
+  background: var(--color-reserve-fill);
 }
-.avatar-spending {
-  background: var(--color-spending-fill);
+.avatar-varied {
+  background: var(--color-varied-fill);
 }
 .avatar-liability {
   background: var(--color-liability-fill);
@@ -823,6 +824,11 @@ fieldset.inline-fields .field label {
   color: var(--color-text-secondary);
   background: var(--color-surface-raised);
 }
+.badge-main {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+  margin: 4px 0;
+}
 .badge-low {
   color: var(--color-neg);
   background: var(--color-neg-soft);
@@ -843,6 +849,9 @@ fieldset.inline-fields .field label {
 }
 .amount-out {
   color: var(--color-out);
+}
+.amount-reserve {
+  color: var(--color-reserve);
 }
 .amount.strike {
   color: var(--color-text-secondary);
@@ -1131,6 +1140,14 @@ fieldset.inline-fields .field label {
   border-color: var(--color-out);
   color: var(--color-out);
 }
+.chip-reserve.chip-done {
+  background: var(--color-reserve-fill);
+  color: #fff;
+}
+.chip-reserve.chip-expected {
+  border-color: var(--color-reserve);
+  color: var(--color-reserve);
+}
 @media (min-width: 520px) {
   .cal-day {
     min-height: 104px;
@@ -1242,19 +1259,6 @@ fieldset.inline-fields .field label {
     justify-content: space-between;
     align-items: center;
   }
-}
-.week-detail {
-  padding: 0 0 var(--space-3) 24px;
-}
-.week-day + .week-day {
-  margin-top: var(--space-3);
-}
-.week-day-head {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 4px 12px;
-  font-size: var(--text-small);
 }
 
 .timeline > li + li {
@@ -1567,17 +1571,6 @@ li.negative .tl-tally {
 .sample-banner p {
   flex: 1 1 240px;
 }
-.data-notice {
-  margin-top: var(--space-8);
-  padding: var(--space-4) var(--space-1) 0;
-  border-top: 1px solid var(--color-border);
-  font-size: 0.8125rem;
-  color: var(--color-text-secondary);
-}
-.data-notice .button {
-  margin-top: var(--space-1);
-  padding-left: 0;
-}
 
 @media (prefers-reduced-motion: no-preference) {
   .button,
@@ -1658,36 +1651,8 @@ li.negative .tl-tally {
   font-size: var(--text-body);
 }
 
-/* Totals strip under the calendar (period KPIs). */
-.totals-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 0;
-  padding: var(--space-4) var(--space-3) var(--space-2);
-  border-top: 1px solid var(--color-border);
-  text-align: center;
-}
-.totals-strip dt {
-  font-size: var(--text-caption);
-  color: var(--color-text-secondary);
-}
-.totals-strip dd {
-  margin: 2px 0 0;
-  font-size: 1.0625rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.totals-strip dd.negative,
 .sheet-stats dd.negative {
   color: var(--color-neg);
-}
-@media (min-width: 520px) {
-  .totals-strip dt {
-    font-size: var(--text-small);
-  }
-  .totals-strip dd {
-    font-size: 1.375rem;
-  }
 }
 .calendar-actions {
   display: flex;
@@ -1695,7 +1660,7 @@ li.negative .tl-tally {
   justify-content: space-between;
   gap: var(--space-2);
   flex-wrap: wrap;
-  padding: 0 var(--space-4) var(--space-2);
+  padding: var(--space-2) var(--space-4) var(--space-2);
 }
 .calendar-actions .hint {
   font-size: var(--text-caption);
@@ -2174,13 +2139,13 @@ li.negative .tl-tally {
   margin: 0;
   padding: 0;
 }
-.gap-list li {
+.gap-list > li {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 12px 0;
 }
-.gap-list li + li {
+.gap-list > li + li {
   border-top: 1px solid var(--color-border);
 }
 .gap-dates {
@@ -2250,10 +2215,6 @@ li.negative .tl-tally {
   gap: 0 var(--space-4);
   margin-top: var(--space-1);
 }
-.data-notice .data-actions .button {
-  padding-left: 0;
-  gap: 4px;
-}
 
 /* ---------- Accounts ---------- */
 
@@ -2271,12 +2232,479 @@ li.negative .tl-tally {
 .center-actions {
   justify-content: center;
 }
-.account-line {
-  margin-top: var(--space-4);
-}
 .button.inline-link {
   display: inline-flex;
   padding: 0 4px;
   font-size: inherit;
   vertical-align: middle;
+}
+
+/* ---------- Settings ---------- */
+
+.settings-link {
+  position: absolute;
+  right: 8px;
+  top: max(8px, env(safe-area-inset-top));
+  color: var(--color-text-secondary);
+}
+.settings-link[aria-current='page'] {
+  color: var(--color-text);
+}
+@media (min-width: 760px) {
+  .settings-link {
+    position: static;
+  }
+}
+.settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.settings-card h2 {
+  font-size: var(--text-heading);
+}
+.settings-card p {
+  color: var(--color-text-secondary);
+}
+.settings-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+}
+.settings-actions .button {
+  padding-left: 0;
+  gap: 6px;
+}
+
+/* ---------- Dashboard: cash flow hero and week rows ---------- */
+
+.hero-stat {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+.week-tally {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 650;
+}
+.week-tally.negative {
+  color: var(--color-neg);
+}
+.week-days {
+  padding-bottom: var(--space-3);
+}
+.week-list > li.open > .week-row {
+  padding-bottom: var(--space-2);
+}
+
+/* ---------- Review sheet ---------- */
+
+.review-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.review-row .entry {
+  flex: 1;
+  min-width: 0;
+}
+.review-check {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: var(--tap);
+  height: var(--tap);
+  cursor: pointer;
+}
+.review-check input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+.review-check input:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+.review-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) 0 var(--space-1);
+  background: var(--color-sheet);
+}
+.review-actions > .button {
+  flex: 1 1 140px;
+}
+.review-actions > .hint {
+  flex-basis: 100%;
+  margin: 0;
+}
+.review-undo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.review-start {
+  align-self: flex-start;
+}
+
+/* ---------- Timing gap explanations ---------- */
+
+button.callout.gap-line {
+  width: 100%;
+  border: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.callout.gap-line > span {
+  flex: 1;
+}
+button.callout.gap-line:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.gap-list > li:has(> .gap-detail) {
+  padding: 0;
+}
+.gap-detail > summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: var(--tap);
+  padding: 12px 28px 12px 0;
+  list-style: none;
+  cursor: pointer;
+  position: relative;
+}
+.gap-detail > summary::-webkit-details-marker {
+  display: none;
+}
+.gap-detail > summary::after {
+  content: '';
+  position: absolute;
+  right: 6px;
+  top: 20px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--color-text-secondary);
+  border-bottom: 2px solid var(--color-text-secondary);
+  transform: rotate(45deg);
+}
+.gap-detail[open] > summary::after {
+  transform: rotate(-135deg);
+  top: 24px;
+}
+.gap-detail > summary:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.gap-explain {
+  padding: 0 0 var(--space-4);
+}
+.gap-step {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-caption);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+}
+.gap-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.gap-entries li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: 6px 0;
+}
+.gap-entry-date {
+  flex-shrink: 0;
+  width: 4.5em;
+  color: var(--color-text-secondary);
+  font-size: var(--text-small);
+}
+.gap-entry-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.gap-total {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0;
+  padding-top: 6px;
+  border-top: 1px dashed var(--color-border);
+  font-size: var(--text-small);
+}
+.gap-total strong {
+  white-space: nowrap;
+}
+
+/* ---------- What if ---------- */
+
+.gap-entries li:has(.gap-whatif) {
+  flex-wrap: wrap;
+}
+.gap-whatif {
+  margin-left: auto;
+  min-height: var(--tap);
+  padding-right: 0;
+}
+.whatif-headline {
+  margin: 0;
+  font-weight: 650;
+}
+.whatif-change {
+  margin: 0;
+}
+.whatif-compare {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.whatif-result .callout {
+  margin: 0;
+}
+
+/* ---------- Estimate suggestions ---------- */
+
+.estimate-callout {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.estimate-callout > span {
+  flex: 1;
+  min-width: 12em;
+}
+.estimate-limited {
+  margin-left: 8px;
+}
+.estimate-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.estimate-when {
+  margin: 0;
+  font-weight: 600;
+}
+.estimate-notes {
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--color-text-secondary);
+  font-size: var(--text-small);
+}
+.estimate-evidence .gap-entries li {
+  justify-content: space-between;
+}
+.estimate-excluded {
+  color: var(--color-text-secondary);
+}
+
+/* ---------- Scenarios ---------- */
+
+.scenario-entry {
+  align-self: flex-start;
+}
+.scenario-types,
+.scenario-changes,
+.scenario-assumptions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.scenario-type {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 14px;
+  text-align: left;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  color: inherit;
+  cursor: pointer;
+}
+.scenario-type:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.scenario-type:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.scenario-change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 0 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+.scenario-change.invalid {
+  border-color: var(--color-neg);
+}
+.scenario-change-label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.scenario-change-actions {
+  display: flex;
+}
+.scenario-change-error {
+  flex-basis: 100%;
+  margin: 0;
+  padding-right: 12px;
+}
+.scenario-assumptions li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.scenario-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+}
+.scenario-table th,
+.scenario-table td {
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: right;
+  vertical-align: top;
+}
+.scenario-table th[scope='row'],
+.scenario-table thead th:first-child {
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+.scenario-table thead th {
+  font-weight: 650;
+}
+.scenario-shortfall {
+  font-weight: 600;
+}
+.scenario-cases-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+/* ---------- Review rhythm ---------- */
+
+.rhythm-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.rhythm-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  background: var(--color-surface-raised);
+  cursor: pointer;
+}
+.rhythm-option.selected {
+  box-shadow: inset 0 0 0 1.5px var(--color-text);
+}
+.rhythm-option input {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
+}
+.rhythm-option input:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+.rhythm-option > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rhythm-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--tap);
+  padding: 10px 16px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rhythm-entry:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.review-gap-lines {
+  margin: 0;
+  padding-left: 1.1em;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* Development builds on a local Supabase stack only (src/state/supabase/dev.tsx). */
+.dev-storage-note {
+  margin: 0;
+  padding: 6px 16px;
+  font-size: 0.8125rem;
+  text-align: center;
+  background: var(--color-warn-soft);
+}
+
+/* Changes set aside when another account signed in on this device (development Supabase build). */
+.recovery-panel {
+  margin: 12px 16px;
+  border: 1px solid var(--color-warn);
+}
+
+/* Accounts: the account on an item's row, and transfers between accounts. */
+.account-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+.avatar-transfer {
+  background: var(--color-text-secondary);
 }

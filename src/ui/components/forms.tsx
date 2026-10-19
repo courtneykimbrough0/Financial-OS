@@ -4,9 +4,11 @@ import { formatMedium, parts, type DateStr } from '../../domain/dates';
 import { centsToInput, formatMoney, parseMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { describeRule, nextOccurrenceOnOrAfter } from '../../domain/recurrence';
-import { LIABILITY_TYPE_LABEL, LIABILITY_TYPES, type LiabilityType, type RecurrenceRule, type RecurringSource, type TransactionKind } from '../../domain/types';
+import { LIABILITY_TYPE_LABEL, LIABILITY_TYPES, mainPaycheckId, type LiabilityType, type RecurrenceRule, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { Field, FormError, Icon, MoneyInput, useToast } from './common';
+import { AccountSelect } from './money-accounts';
+import { useAccountSlot } from '../../state/slots';
 
 export const KIND_COPY: Record<TransactionKind, { noun: string; nameLabel: string; placeholder: string; amountLabel: string; dateLabel: string }> = {
   income: {
@@ -37,12 +39,19 @@ export const KIND_COPY: Record<TransactionKind, { noun: string; nameLabel: strin
     amountLabel: 'Payment amount',
     dateLabel: 'Next payment due date',
   },
-  savings: {
-    noun: 'savings',
-    nameLabel: 'What are you saving for?',
+  reserve: {
+    noun: 'reserve',
+    nameLabel: 'What is this reserve for?',
     placeholder: 'e.g. Emergency fund',
     amountLabel: 'Amount you plan to set aside',
     dateLabel: 'Next date you’ll set it aside',
+  },
+  varied: {
+    noun: 'spending',
+    nameLabel: 'What is this spending?',
+    placeholder: 'e.g. Car repair',
+    amountLabel: 'Amount you expect to spend',
+    dateLabel: 'Date',
   },
 };
 
@@ -248,7 +257,7 @@ export function SourceForm({
   onDone,
   submitLabel,
 }: {
-  kind: TransactionKind;
+  kind: RecurringKind;
   source?: RecurringSource;
   onDone: () => void;
   submitLabel?: string;
@@ -264,6 +273,7 @@ export function SourceForm({
   const [description, setDescription] = useState(source?.description ?? '');
   const [tags, setTags] = useState<string[]>(source?.tags ?? []);
   const [liabilityType, setLiabilityType] = useState<LiabilityType | undefined>(source?.liabilityType);
+  const [accountId, setAccountId] = useState<string | null>(source?.accountId ?? null);
   const [amount, setAmount] = useState(current ? centsToInput(current.amountCents) : '');
   const [startDate, setStartDate] = useState<DateStr>(defaultStart);
   const [rule, setRule] = useState<RuleState>(() => ruleToState(current?.rule ?? { type: kind === 'income' ? 'biweekly' : 'monthly' }, defaultStart || null));
@@ -283,15 +293,19 @@ export function SourceForm({
     const r = stateToRule(rule);
     if (typeof r === 'string') return setError(r);
 
+    // The account choice is optional and changes nothing in the forecast; it's applied with the rest in one step.
+    const withAccount = (step: ops.Result, id: string, clock: ops.Clock): ops.Result => (step.ok ? ops.assignAccount(step.data, id, accountId, clock) : step);
+
     if (!source) {
-      const result = run((d, clock) => ops.addSource(d, { kind, description, tags, liabilityType, amountCents: cents!, startDate, rule: r }, clock));
+      const id = ops.newId('src');
+      const result = run((d, clock) => withAccount(ops.addSource(d, { kind, description, tags, liabilityType, amountCents: cents!, startDate, rule: r }, clock, id), id, clock));
       if (!result.ok) return setError(result.error);
       toast(`Added ${description.trim()}.`);
       return onDone();
     }
 
     if (fresh) {
-      const result = run((d, clock) => ops.redefineSource(d, source.id, { description, tags, liabilityType, amountCents: cents!, startDate, rule: r }, clock));
+      const result = run((d, clock) => withAccount(ops.redefineSource(d, source.id, { description, tags, liabilityType, amountCents: cents!, startDate, rule: r }, clock), source.id, clock));
       if (!result.ok) return setError(result.error);
       toast(`Saved ${description.trim()}.`);
       return onDone();
@@ -301,7 +315,7 @@ export function SourceForm({
       source.active &&
       (cents !== current!.amountCents || startDate !== defaultStart || JSON.stringify(r) !== JSON.stringify(current!.rule));
     const result = run((d, clock) => {
-      const step = ops.updateSourceDetails(d, source.id, { description, tags, liabilityType }, clock);
+      const step = withAccount(ops.updateSourceDetails(d, source.id, { description, tags, liabilityType }, clock), source.id, clock);
       if (!step.ok || !scheduleChanged) return step;
       return ops.changeSourceSchedule(step.data, source.id, { startDate, amountCents: cents!, rule: r }, clock);
     });
@@ -346,6 +360,7 @@ export function SourceForm({
       <RecurrenceFields value={rule} onChange={setRule} />
         </>
       )}
+      <AccountSelect kind={kind} value={accountId} onChange={setAccountId} />
       <TagInput value={tags} onChange={setTags} />
       <FormError message={error} />
       <div className="form-actions">
@@ -360,13 +375,20 @@ export function SourceForm({
   );
 }
 
+const ONE_TIME_PLACEHOLDER: Record<ops.OneTimeInput['kind'], string> = { income: 'e.g. Tax refund', reserve: 'e.g. Bonus set aside', varied: 'e.g. Car repair' };
+
 export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; onDone: () => void }) {
   const { run, today } = useStore();
   const toast = useToast();
+  const id = useId();
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState<DateStr>(today);
   const [tags, setTags] = useState<string[]>([]);
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [release, setRelease] = useState(false);
+  // The Supabase development build can't store releases yet (it refuses the save), so it doesn't offer them.
+  const canRelease = kind === 'reserve' && !useAccountSlot();
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -379,7 +401,11 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
     if (!date) errs.date = 'Choose a date.';
     setFieldErrors(errs);
     if (Object.keys(errs).length) return;
-    const result = run((d, clock) => ops.addOneTime(d, { kind, description, tags, amountCents: cents!, date }, clock));
+    const itemId = ops.newId('one');
+    const result = run((d, clock) => {
+      const step = ops.addOneTime(d, { kind, description, tags, amountCents: cents!, date, release }, clock, itemId);
+      return step.ok ? ops.assignAccount(step.data, itemId, accountId, clock) : step;
+    });
     if (!result.ok) return setError(result.error);
     toast(`Added ${description.trim()} on ${formatMedium(date)}.`);
     onDone();
@@ -388,10 +414,24 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
   return (
     <form onSubmit={submit} noValidate className="stack">
       <p className="hint">This happens once and will not repeat.</p>
+      {canRelease && (
+        <fieldset className="choice-field">
+          <legend className="sr-only">Set aside or use</legend>
+          <div className="choice-pills">
+            {[
+              [false, 'Set aside'],
+              [true, 'Use reserves'],
+            ].map(([value, label]) => (
+              <label key={String(value)} className={`choice-pill${release === value ? ' selected' : ''}`}>
+                <input type="radio" name={`${id}-release`} checked={release === value} onChange={() => setRelease(value as boolean)} />
+                {label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
       <Field label="Description" error={fieldErrors.description}>
-        {(p) => (
-          <input {...p} type="text" maxLength={80} placeholder={kind === 'income' ? 'e.g. Tax refund' : kind === 'savings' ? 'e.g. Extra deposit' : 'e.g. Car repair'} value={description} onChange={(e) => setDescription(e.target.value)} data-autofocus />
-        )}
+        {(p) => <input {...p} type="text" maxLength={80} placeholder={release ? 'e.g. Toward the car repair' : ONE_TIME_PLACEHOLDER[kind]} value={description} onChange={(e) => setDescription(e.target.value)} data-autofocus />}
       </Field>
       <Field label="Expected amount" error={fieldErrors.amount}>
         {(p) => <MoneyInput {...p} value={amount} onChange={setAmount} />}
@@ -399,6 +439,7 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
       <Field label="Expected date" error={fieldErrors.date}>
         {(p) => <input {...p} type="date" value={date} onChange={(e) => setDate(e.target.value)} />}
       </Field>
+      <AccountSelect kind={kind} value={accountId} onChange={setAccountId} />
       <TagInput value={tags} onChange={setTags} />
       <FormError message={error} />
       <div className="form-actions">
@@ -406,7 +447,7 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
           Cancel
         </button>
         <button type="submit" className="button primary">
-          Add one-time {KIND_COPY[kind].noun}
+          {kind === 'varied' ? 'Add spending' : release ? 'Add release' : `Add one-time ${KIND_COPY[kind].noun}`}
         </button>
       </div>
     </form>
@@ -441,5 +482,44 @@ export function ReactivateForm({ source, onDone }: { source: RecurringSource; on
         </button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Which income starts pay periods. Shown once there are two or more active
+ * recurring incomes; with one, that income is the main paycheck.
+ */
+export function MainPaycheckPicker() {
+  const { data, run } = useStore();
+  const toast = useToast();
+  const id = useId();
+  const incomes = data.sources.filter((s) => s.kind === 'income' && s.active);
+  const main = mainPaycheckId(data);
+  if (incomes.length < 2) return null;
+  return (
+    <fieldset className="choice-field main-paycheck" aria-describedby={`${id}-hint`}>
+      <legend>Main paycheck</legend>
+      <p className="hint" id={`${id}-hint`}>
+        Pay periods run from one main payday to the next. Other income still counts as money coming in during the pay period.
+      </p>
+      <div className="choice-pills">
+        {incomes.map((s) => (
+          <label key={s.id} className={`choice-pill${main === s.id ? ' selected' : ''}`}>
+            <input
+              type="radio"
+              name={`${id}-main`}
+              value={s.id}
+              checked={main === s.id}
+              onChange={() => {
+                const r = run((d, c) => ops.setMainPaycheck(d, s.id, c));
+                if (r.ok) toast(`Pay periods now follow ${s.description}.`);
+                else toast(r.error, 'error');
+              }}
+            />
+            {s.description}
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }

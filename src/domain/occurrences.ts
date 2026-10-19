@@ -1,4 +1,5 @@
-import { addDays, minDate, type DateStr } from './dates';
+import { addDays, diffDays, minDate, type DateStr } from './dates';
+import type { Cents } from './money';
 import { occurrenceDates } from './recurrence';
 import {
   recurringOccurrenceId,
@@ -60,13 +61,31 @@ export function deriveStatus(record: OccurrenceRecord, today: DateStr): Occurren
 }
 
 /**
+ * True for a stored change to an outstanding recurring occurrence that its
+ * source no longer generates, because the schedule changed or the item was
+ * turned off from a date on or before the occurrence's original date. The new
+ * schedule replaces that occurrence, so the change no longer applies: it is
+ * kept on record but neither listed nor counted. It applies again if a later
+ * schedule generates the original date again. Recorded (completed) and
+ * canceled occurrences are history and are never superseded.
+ */
+function isSuperseded(record: OccurrenceRecord, sources: Map<string, RecurringSource>): boolean {
+  if (record.sourceId === null || record.status !== 'scheduled') return false;
+  const source = sources.get(record.sourceId);
+  if (!source) return false;
+  return !expandSource(source, record.expectedDate, record.expectedDate).some((gen) => gen.id === record.id);
+}
+
+/**
  * Every occurrence relevant to [from, to]: generated recurring occurrences in
  * the window, with any stored record replacing the generated occurrence of the
  * same id, plus every stored record (one-time transactions and acted-on
- * recurring occurrences) regardless of date. Each occurrence appears once.
+ * recurring occurrences) regardless of date, except superseded ones (see
+ * `isSuperseded`). Each occurrence appears once.
  */
 export function resolveOccurrences(data: AppData, from: DateStr, to: DateStr, today: DateStr): Occurrence[] {
   const recordIds = new Set(data.records.map((r) => r.id));
+  const sources = new Map(data.sources.map((s) => [s.id, s]));
   const out: Occurrence[] = [];
   for (const source of data.sources) {
     for (const gen of expandSource(source, from, to)) {
@@ -75,15 +94,19 @@ export function resolveOccurrences(data: AppData, from: DateStr, to: DateStr, to
     }
   }
   for (const record of data.records) {
+    if (isSuperseded(record, sources)) continue;
     out.push({ ...record, displayStatus: deriveStatus(record, today), virtual: false });
   }
   return out;
 }
 
-/** A single occurrence by id, generated or stored. */
+/** A single occurrence by id, generated or stored. Null for a superseded record. */
 export function findOccurrence(data: AppData, id: string, today: DateStr): Occurrence | null {
   const record = data.records.find((r) => r.id === id);
-  if (record) return { ...record, displayStatus: deriveStatus(record, today), virtual: false };
+  if (record) {
+    if (isSuperseded(record, new Map(data.sources.map((s) => [s.id, s])))) return null;
+    return { ...record, displayStatus: deriveStatus(record, today), virtual: false };
+  }
   const at = id.lastIndexOf('@');
   if (at < 0) return null;
   const source = data.sources.find((s) => s.id === id.slice(0, at));
@@ -91,4 +114,18 @@ export function findOccurrence(data: AppData, id: string, today: DateStr): Occur
   if (!source) return null;
   const gen = expandSource(source, date, date).find((o) => o.id === id);
   return gen ? { ...gen, displayStatus: deriveStatus(gen, today), virtual: true } : null;
+}
+
+/** How a recorded outcome differed from the original prediction. */
+export interface Variance {
+  /** Actual minus expected amount: positive when more than expected. */
+  amountCents: Cents;
+  /** Days from the expected date to the actual date: positive when later. */
+  days: number;
+}
+
+/** Variance of a recorded occurrence against its original prediction; null until it is recorded. */
+export function variance(record: OccurrenceRecord): Variance | null {
+  if (record.status !== 'completed' || record.actualDate === null || record.actualAmountCents === null) return null;
+  return { amountCents: record.actualAmountCents - record.expectedAmountCents, days: diffDays(record.expectedDate, record.actualDate) };
 }

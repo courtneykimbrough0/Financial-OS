@@ -2,7 +2,9 @@
 
 Financial OS uses a dark-first, card-based visual language. It is calm and legible, with large numbers and one consistent set of controls. Every token lives at the top of `src/styles.css`, and the shared React pieces live in `src/ui/components/common.tsx`.
 
-The product's terms are fixed (Projected income, Projected expenses, Projected cash flow, Money in, Money out, Overdue, and so on). This system governs only how things look.
+This file describes the visual system **as built**. A redesign direction (fewer cards, color roles, navigation, desktop layouts) is proposed in [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 7 and will replace parts of this file as roadmap Phase D is built; until then, this file stays authoritative for the current app.
+
+The product's terms are fixed (Cash flow, Running total, Projected income, Projected expenses, Money in, Money out, Overdue, and so on). This system governs only how things look.
 
 ## Principles
 
@@ -75,7 +77,7 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
   - Danger is a red pill.
   - Link buttons are underlined text.
 - **Bottom sheet:** a grab handle, a sticky title row with a close button, and stacked full-width pill actions. It becomes a centered dialog on wide screens. The page behind it is inert.
-- **Left to spend bar:** a pill-shaped card pinned under the header during setup, labeled "Left to spend" with the period it covers (in setup, "First pay period · Oct 15 – 28"). The value is green, or red with a trend-down icon when negative, and changes are announced to screen readers.
+- **Cash flow bar:** a pill-shaped card pinned under the header during setup, labeled "Cash flow" with the period it covers (in setup, "First pay period · Oct 15 – 28"). The value is green, or red with a trend-down icon when negative, and changes are announced to screen readers.
 - **Breakdown list:** label/value rows with sub-rows indented in secondary text and the key total on a heavier divider (used for the monthly breakdown and totals by tag).
 - **Tags:** small outlined pills with a tag icon. In forms they become removable chips, entered through a text field with an Add button. The only suggestions are tags the user has already created.
 - **Kind avatars:** income (banknote, green), bill (receipt, indigo), subscription (repeat, blue), liability (card, violet), savings (piggy bank, teal).
@@ -86,6 +88,7 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
 - **Totals strip / sheet stats:** three centered label-over-value columns, with values aligned on one baseline.
 - **Callouts:** soft-tinted rounded blocks (info, warn, danger, ok) that always lead with an icon or a bold phrase.
 - **Switch:** a pill track that turns green when on, built on a native checkbox with `role="switch"`.
+- **Selection checkbox:** a native checkbox in a 44px tap target, to the left of an entry row, for picking several items (the review list). The row itself still opens the item. Batch actions sit in a sticky bar at the bottom of the sheet and appear only when something is selected.
 - **Toasts:** light pills with an icon at the top of the screen, so they never cover sheet or step buttons. They are announced through a live region.
 
 ## Layout pattern: summary on the page, details in sheets
@@ -93,13 +96,13 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
 The dashboard shows only summaries. Detail opens in a bottom sheet:
 
 - **Overdue banner:** a one-line amber pill ("1 transaction needs an update ›") that opens the overdue list.
-- **Hero card:** the lowest projected cash flow, a one-line timing-gap or all-clear callout, and the next expected payday. The (i) button explains how projected cash flow works.
-- **Calendar card:** the grid, then a **totals strip** with the three period totals, then a "Calendar key" link that opens the key.
-- **Breakdown card:** a **pill-tab** switch (Week by week | Day by day) in the month view, and day-by-day only in the other views. Each row is one tappable line.
+- **Hero card:** cash flow for the period (large, signed; red with a trend-down icon when negative) with money in and out beneath it, then the lowest running total, a one-line timing-gap or all-clear callout, and the next expected payday. The (i) button explains cash flow and the running total.
+- **Calendar card:** the grid, then a "Calendar key" link that opens the key.
+- **Breakdown card:** income, expenses with one indented row per category that has something in the period, and cash flow.
+- **Week by week:** one row per week with money in, money out, net, and the running total at the week's end. A row opens in place (chevron down/up, `aria-expanded`) to list that week's days. The week view lists its days directly.
 - **Sheets:**
-  - A day shows money in, money out and projected cash flow, then that day's transactions.
-  - A week shows its totals, then its days.
-  - A transaction opened from a day or week sheet returns to that sheet when closed.
+  - A day shows money in, money out and running total, then that day's transactions.
+  - A transaction opened from a day sheet returns to that sheet when closed.
 
 The guided setup follows the same pattern:
 

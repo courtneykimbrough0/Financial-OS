@@ -5,11 +5,16 @@ import { formatMoney } from '../../domain/money';
 import { resolveOccurrences } from '../../domain/occurrences';
 import * as ops from '../../domain/operations';
 import { describeRule } from '../../domain/recurrence';
-import { liabilityPrefix, type AppData, type Occurrence, type RecurringSource, type TransactionKind } from '../../domain/types';
+import { liabilityPrefix, mainPaycheckId, ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OneTimeKind, type Occurrence, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { EmptyState, FlowAmount, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
-import { KIND_COPY, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm } from '../components/forms';
+import { KIND_COPY, MainPaycheckPicker, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm } from '../components/forms';
+import { EstimateCallout, EstimateSheet, useEstimateSuggestion } from '../components/EstimateSheet';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
+import { AccountLabel } from '../components/money-accounts';
+
+const isRecurringKind = (k: TransactionKind): k is RecurringKind => (RECURRING_KINDS as readonly string[]).includes(k);
+const isOneTimeKind = (k: TransactionKind): k is OneTimeKind => (ONE_TIME_KINDS as readonly string[]).includes(k);
 
 const SCREEN_COPY: Record<
   TransactionKind,
@@ -29,7 +34,7 @@ const SCREEN_COPY: Record<
     recurringHeading: 'Recurring bills',
     addRecurring: 'Add bill',
     empty: 'Add regular bills like rent, utilities, phone, or insurance.',
-    oneTime: { heading: 'One-time expenses', empty: 'Add a bill that happens once, like a medical bill. It counts once.' },
+    oneTime: null,
   },
   subscription: {
     title: 'Subscriptions',
@@ -47,13 +52,21 @@ const SCREEN_COPY: Record<
     empty: 'Add payments like a car loan, student loan, or credit card payment.',
     oneTime: null,
   },
-  savings: {
-    title: 'Savings',
-    intro: 'Money you plan to set aside on a schedule. It counts as an expense.',
-    recurringHeading: 'Recurring savings',
-    addRecurring: 'Add savings',
-    empty: 'Add regular amounts you set aside, like an emergency fund.',
-    oneTime: { heading: 'One-time savings', empty: 'Add a single deposit you plan to make. It counts once.' },
+  reserve: {
+    title: 'Strategic Reserves',
+    intro: 'Money you set aside on purpose and keep. It lowers what’s available to spend, and it stays yours.',
+    recurringHeading: 'Recurring reserves',
+    addRecurring: 'Add reserve',
+    empty: 'Add amounts you set aside regularly, like an emergency fund.',
+    oneTime: { heading: 'One-time reserves', empty: 'Set aside a single amount, or use some of your reserves. It counts once.' },
+  },
+  varied: {
+    title: 'Varied spending',
+    intro: 'Spending that happens once, like a car repair or a gift.',
+    recurringHeading: '',
+    addRecurring: '',
+    empty: '',
+    oneTime: { heading: 'Varied spending', empty: 'Add spending that happens once, like a car repair. It counts once.' },
   },
 };
 
@@ -84,6 +97,7 @@ function OccurrenceRow({ o, onOpen }: { o: Occurrence; onOpen: (id: string) => v
       <span className="entry-main">
         <span className="entry-title">{formatMedium(date)}</span>
         {o.sourceId === null && <span className="entry-sub">{o.description}</span>}
+        {o.sourceId === null && <AccountLabel accountId={o.accountId} />}
         {o.status === 'completed' && (o.actualAmountCents !== o.expectedAmountCents || o.actualDate !== o.expectedDate) && (
           <span className="entry-sub">
             Expected {formatMoney(o.expectedAmountCents)} on {formatMedium(o.expectedDate)}
@@ -91,8 +105,8 @@ function OccurrenceRow({ o, onOpen }: { o: Occurrence; onOpen: (id: string) => v
         )}
       </span>
       <span className="entry-side">
-        <FlowAmount kind={o.kind} cents={amount} strike={o.status === 'canceled'} />
-        <StatusBadge status={o.displayStatus} kind={o.kind} />
+        <FlowAmount kind={o.kind} cents={amount} strike={o.status === 'canceled'} release={o.release} />
+        <StatusBadge status={o.displayStatus} kind={o.kind} release={o.release} />
       </span>
       <Icon icon={ChevronRight} size={18} className="chevron" />
     </button>
@@ -105,6 +119,8 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
   const [expanded, setExpanded] = useState(false);
   const [confirmOff, setConfirmOff] = useState(false);
   const [reactivating, setReactivating] = useState(false);
+  const [reviewingEstimate, setReviewingEstimate] = useState(false);
+  const suggestion = useEstimateSuggestion(source);
   const current = source.versions[source.versions.length - 1]!;
   const occurrences = useMemo(() => (expanded ? sourceOccurrences(data, source, today) : []), [expanded, data, source, today]);
   const overdueCount = useMemo(
@@ -125,7 +141,9 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
             {liabilityPrefix(source)}
             {describeRule(current.rule, current.startDate)}
           </p>
+          {source.id === mainPaycheckId(data) && <span className="badge badge-main">Main paycheck</span>}
           <TagList tags={source.tags} />
+          <AccountLabel accountId={source.accountId} />
         </div>
         <div className="source-amount">
           <FlowAmount kind={source.kind} cents={current.amountCents} />
@@ -158,6 +176,7 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
           Scheduled change: {formatMoney(upcomingChange.amountCents)}, {describeRule(upcomingChange.rule, upcomingChange.startDate).toLowerCase()}, starting {formatMedium(upcomingChange.startDate)}.
         </p>
       )}
+      {suggestion && <EstimateCallout suggestion={suggestion} onOpen={() => setReviewingEstimate(true)} />}
       {overdueCount > 0 && (
         <p className="callout callout-warn small">
           <Icon icon={AlertCircle} size={16} /> 
@@ -221,6 +240,7 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
           </div>
         </Modal>
       )}
+      {reviewingEstimate && <EstimateSheet sourceId={source.id} onClose={() => setReviewingEstimate(false)} />}
       {reactivating && (
         <Modal title={`Turn on ${source.description}`} onClose={() => setReactivating(false)}>
           <ReactivateForm source={source} onDone={() => setReactivating(false)} />
@@ -234,6 +254,7 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
 export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKind; embedded?: boolean }) {
   const { data, today } = useStore();
   const copy = SCREEN_COPY[kind];
+  const recurring = isRecurringKind(kind);
   const [adding, setAdding] = useState<'recurring' | 'one-time' | null>(null);
   const [editing, setEditing] = useState<RecurringSource | null>(null);
   const [sheetId, setSheetId] = useState<string | null>(null);
@@ -257,29 +278,32 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
         </header>
       )}
 
-      <section className="stack" aria-labelledby="recurring-heading">
-        <SectionLabel
-          id="recurring-heading"
-          action={
-            <button type="button" className="button primary small" onClick={() => setAdding('recurring')}>
-              <Icon icon={Plus} size={16} /> {copy.addRecurring}
-            </button>
-          }
-        >
-          {copy.recurringHeading}
-        </SectionLabel>
-        {sources.length === 0 ? (
-          <EmptyState title={`No ${copy.recurringHeading.toLowerCase()} yet`}>
-            <p>{copy.empty}</p>
-          </EmptyState>
-        ) : (
-          <ul className="card-list">
-            {sources.map((s) => (
-              <SourceCard key={s.id} source={s} onEdit={() => setEditing(s)} onOpen={setSheetId} />
-            ))}
-          </ul>
-        )}
-      </section>
+      {recurring && (
+        <section className="stack" aria-labelledby="recurring-heading">
+          <SectionLabel
+            id="recurring-heading"
+            action={
+              <button type="button" className="button primary small" onClick={() => setAdding('recurring')}>
+                <Icon icon={Plus} size={16} /> {copy.addRecurring}
+              </button>
+            }
+          >
+            {copy.recurringHeading}
+          </SectionLabel>
+          {kind === 'income' && <MainPaycheckPicker />}
+          {sources.length === 0 ? (
+            <EmptyState title={`No ${copy.recurringHeading.toLowerCase()} yet`}>
+              <p>{copy.empty}</p>
+            </EmptyState>
+          ) : (
+            <ul className="card-list">
+              {sources.map((s) => (
+                <SourceCard key={s.id} source={s} onEdit={() => setEditing(s)} onOpen={setSheetId} />
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {copy.oneTime && (
         <section className="stack" aria-labelledby="onetime-heading">
@@ -287,7 +311,7 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
             id="onetime-heading"
             action={
               <button type="button" className="button secondary small" onClick={() => setAdding('one-time')}>
-                <Icon icon={Plus} size={16} /> Add one-time
+                <Icon icon={Plus} size={16} /> {recurring ? 'Add one-time' : 'Add spending'}
               </button>
             }
           >
@@ -328,19 +352,19 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
         </section>
       )}
 
-      {adding === 'recurring' && (
+      {adding === 'recurring' && isRecurringKind(kind) && (
         <Modal title={copy.addRecurring} onClose={() => setAdding(null)}>
           <SourceForm kind={kind} onDone={() => setAdding(null)} />
         </Modal>
       )}
-      {adding === 'one-time' && kind !== 'subscription' && kind !== 'liability' && (
-        <Modal title={`Add one-time ${KIND_COPY[kind].noun}`} onClose={() => setAdding(null)}>
+      {adding === 'one-time' && isOneTimeKind(kind) && (
+        <Modal title={recurring ? `Add one-time ${KIND_COPY[kind].noun}` : 'Add varied spending'} onClose={() => setAdding(null)}>
           <OneTimeForm kind={kind} onDone={() => setAdding(null)} />
         </Modal>
       )}
       {editing && (
         <Modal title={`Edit ${editing.description}`} onClose={() => setEditing(null)}>
-          <SourceForm kind={kind} source={editing} onDone={() => setEditing(null)} />
+          <SourceForm kind={editing.kind} source={editing} onDone={() => setEditing(null)} />
         </Modal>
       )}
       {sheetId && <OccurrenceSheet occurrenceId={sheetId} onClose={() => setSheetId(null)} />}
@@ -351,10 +375,10 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
 const EXPENSE_TABS: { kind: TransactionKind; label: string }[] = [
   { kind: 'bill', label: 'Bills' },
   { kind: 'subscription', label: 'Subscriptions' },
-  { kind: 'savings', label: 'Savings' },
+  { kind: 'varied', label: 'Varied' },
 ];
 
-/** Expenses screen: bills, subscriptions, and savings, one pill tab each. Liabilities have their own screen. */
+/** Expenses screen: bills, subscriptions and varied spending, one pill tab each. Liabilities and reserves have their own screens. */
 export function ExpensesScreen({ initial = 'bill' }: { initial?: TransactionKind }) {
   const [tab, setTab] = useState<TransactionKind>(initial);
   return (

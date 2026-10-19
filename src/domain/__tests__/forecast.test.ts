@@ -65,13 +65,41 @@ describe('forecast anchor and running tally', () => {
     ]);
   });
 
-  it('uses the earliest upcoming date when there are several income schedules', () => {
+  it('starts the running total at the earliest income, whichever is the main paycheck', () => {
     let d = baseline();
     d = source(d, TODAY, 'income', 'Side job', 300, '2026-10-13', { type: 'monthly' }, 'income-side');
+    // The first income added is the main paycheck unless another is chosen, but
+    // the side job is paid first, so the running total starts the day before it.
     const f = buildForecast(d, TODAY);
+    expect(f.mainSourceId).toBe(PAY);
     expect(f.anchor).toBe('2026-10-12');
+    expect(f.forecastStart).toBe('2026-10-13');
     expect(tallyOn(f, '2026-10-13')).toBe(usd(300));
     expect(tallyOn(f, '2026-10-15')).toBe(usd(2100));
+    // Pay periods still follow the main paycheck.
+    expect(paycheckCycles(f)[0]!.start).toBe('2026-10-15');
+
+    // Choosing the side job as the main paycheck changes pay periods, not the start.
+    const switched = buildForecast(unwrap(ops.setMainPaycheck(d, 'income-side', clockAt(TODAY))), TODAY);
+    expect(switched.mainSourceId).toBe('income-side');
+    expect(switched.anchor).toBe('2026-10-12');
+    expect(tallyOn(switched, '2026-10-13')).toBe(usd(300));
+    expect(tallyOn(switched, '2026-10-15')).toBe(usd(2100));
+    expect(paycheckCycles(switched)[0]!.start).toBe('2026-10-13');
+  });
+
+  it('allows only active income as the main paycheck, and only one at a time', () => {
+    let d = baseline();
+    d = source(d, TODAY, 'income', 'Side job', 300, '2026-10-13', { type: 'monthly' }, 'income-side');
+    const c = clockAt(TODAY);
+    d = unwrap(ops.setMainPaycheck(d, 'income-side', c));
+    d = unwrap(ops.setMainPaycheck(d, PAY, c));
+    expect(d.sources.filter((s) => s.mainPaycheck).map((s) => s.id)).toEqual([PAY]);
+    expect(ops.setMainPaycheck(d, RENT, c)).toMatchObject({ ok: false });
+    // Turning the main paycheck off falls back to the next active income.
+    d = unwrap(ops.deactivateSource(d, PAY, c));
+    expect(buildForecast(d, TODAY).mainSourceId).toBe('income-side');
+    expect(ops.setMainPaycheck(d, PAY, c)).toMatchObject({ ok: false });
   });
 
   it('keeps the same anchor and tally in every view', () => {
@@ -97,13 +125,13 @@ describe('forecast anchor and running tally', () => {
     expect(rows[0]!.date).toBe('2026-10-26');
     expect(rows[0]!.tallyCents).toBe(usd(1390));
     expect(rows.at(-1)!.tallyCents).toBe(usd(1990));
-    expect(periodKpis(f, '2026-10-26', '2026-11-05')).toEqual({ incomeCents: usd(1800), outflowCents: usd(1200), netCents: usd(600) });
+    expect(periodKpis(f, '2026-10-26', '2026-11-05')).toEqual({ incomeCents: usd(1800), outflowCents: usd(1200), reservesCents: 0, operatingCents: usd(600), netCents: usd(600) });
   });
 
   it('nets several transactions on the same day and orders them deterministically', () => {
     let d = baseline();
-    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Groceries', amountCents: usd(150), date: '2026-10-29' }, clockAt(TODAY), 'one-groc'));
-    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Gas', amountCents: usd(40), date: '2026-10-29' }, clockAt(TODAY), 'one-gas'));
+    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Groceries', amountCents: usd(150), date: '2026-10-29' }, clockAt(TODAY), 'one-groc'));
+    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Gas', amountCents: usd(40), date: '2026-10-29' }, clockAt(TODAY), 'one-gas'));
     const f = buildForecast(d, TODAY);
     const row = dailyTimeline(f, '2026-10-29', '2026-10-29')[0]!;
     expect(row.inCents).toBe(usd(1800));
@@ -115,7 +143,7 @@ describe('forecast anchor and running tally', () => {
 
   it('finds the lowest point and negative stretches', () => {
     let d = baseline();
-    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Car repair', amountCents: usd(2000), date: '2026-10-22' }, clockAt(TODAY)));
+    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Car repair', amountCents: usd(2000), date: '2026-10-22' }, clockAt(TODAY)));
     const f = buildForecast(d, TODAY);
     const rows = dailyTimeline(f, '2026-10-01', '2026-11-30');
     expect(lowestPoint(rows)).toEqual({ date: '2026-10-25', tallyCents: usd(-610) });
@@ -262,7 +290,7 @@ describe('overdue, rescheduled, and canceled occurrences', () => {
 
   it('overdue items dated before the forecast start are carried forward, not dropped', () => {
     let d = baseline();
-    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Dentist', amountCents: usd(100), date: '2026-10-05' }, clockAt('2026-10-01'), 'one-dentist'));
+    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Dentist', amountCents: usd(100), date: '2026-10-05' }, clockAt('2026-10-01'), 'one-dentist'));
     const f = buildForecast(d, TODAY);
     const dentist = f.entries.find((e) => e.occurrence.id === 'one-dentist')!;
     expect(dentist.occurrence.displayStatus).toBe('overdue');
@@ -274,7 +302,7 @@ describe('overdue, rescheduled, and canceled occurrences', () => {
 
   it('upcoming items before the next payday are shown but not part of the tally', () => {
     let d = baseline();
-    d = unwrap(ops.addOneTime(d, { kind: 'bill', description: 'Electric', amountCents: usd(90), date: '2026-10-12' }, clockAt(TODAY)));
+    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Electric', amountCents: usd(90), date: '2026-10-12' }, clockAt(TODAY)));
     const f = buildForecast(d, TODAY);
     const row = dailyTimeline(f, '2026-10-12', '2026-10-12')[0]!;
     expect(row.outCents).toBe(usd(90));
@@ -399,7 +427,7 @@ describe('one-time transactions', () => {
   });
 
   it('can be deleted; recurring occurrences cannot', () => {
-    let d = unwrap(ops.addOneTime(baseline(), { kind: 'bill', description: 'Gift', amountCents: usd(50), date: '2026-10-30' }, clockAt(TODAY), 'one-gift'));
+    let d = unwrap(ops.addOneTime(baseline(), { kind: 'varied', description: 'Gift', amountCents: usd(50), date: '2026-10-30' }, clockAt(TODAY), 'one-gift'));
     d = unwrap(ops.deleteOneTime(d, 'one-gift'));
     expect(buildForecast(d, TODAY).entries.some((e) => e.occurrence.id === 'one-gift')).toBe(false);
     const withRecord = unwrap(ops.cancelOccurrence(d, id(PHONE, '2026-10-25'), '', clockAt(TODAY)));
@@ -410,9 +438,9 @@ describe('one-time transactions', () => {
 describe('period KPIs and summaries', () => {
   it('KPIs follow the selected period and count liability payments once', () => {
     const f = buildForecast(baseline(), TODAY);
-    expect(periodKpis(f, '2026-10-18', '2026-10-24')).toEqual({ incomeCents: 0, outflowCents: usd(350), netCents: usd(-350) });
-    expect(periodKpis(f, '2026-10-01', '2026-10-31')).toEqual({ incomeCents: usd(3600), outflowCents: usd(410), netCents: usd(3190) });
-    expect(periodKpis(f, '2026-10-15', '2026-11-14')).toEqual({ incomeCents: usd(5400), outflowCents: usd(1610), netCents: usd(3790) });
+    expect(periodKpis(f, '2026-10-18', '2026-10-24')).toEqual({ incomeCents: 0, outflowCents: usd(350), reservesCents: 0, operatingCents: usd(-350), netCents: usd(-350) });
+    expect(periodKpis(f, '2026-10-01', '2026-10-31')).toEqual({ incomeCents: usd(3600), outflowCents: usd(410), reservesCents: 0, operatingCents: usd(3190), netCents: usd(3190) });
+    expect(periodKpis(f, '2026-10-15', '2026-11-14')).toEqual({ incomeCents: usd(5400), outflowCents: usd(1610), reservesCents: 0, operatingCents: usd(3790), netCents: usd(3790) });
     expect(entriesInRange(f, '2026-10-20', '2026-10-20')).toHaveLength(1);
   });
 
@@ -455,18 +483,32 @@ describe('paycheck-to-paycheck cycles', () => {
     const second = paycheckCycles(f)[1]!;
     const rows = dailyTimeline(f, second.start, second.end);
     expect(rows[0]!.tallyCents).toBe(usd(3190));
-    expect(periodKpis(f, second.start, second.end)).toEqual({ incomeCents: usd(1800), outflowCents: usd(1200), netCents: usd(600) });
+    expect(periodKpis(f, second.start, second.end)).toEqual({ incomeCents: usd(1800), outflowCents: usd(1200), reservesCents: 0, operatingCents: usd(600), netCents: usd(600) });
   });
 
-  it('merges boundaries from several income schedules', () => {
+  it('starts pay periods only on the main paycheck; other income lands inside them', () => {
     let d = baseline();
     d = source(d, TODAY, 'income', 'Benefits', 400, '2026-11-03', { type: 'monthly' }, 'income-benefits');
-    const cycles = paycheckCycles(buildForecast(d, TODAY), 4);
+    const f = buildForecast(d, TODAY);
+    const cycles = paycheckCycles(f, 4);
     expect(cycles.map((c) => [c.start, c.end, c.paydayEntries.map((e) => e.occurrence.description).join('+')])).toEqual([
       ['2026-10-15', '2026-10-28', 'Paycheck'],
-      ['2026-10-29', '2026-11-02', 'Paycheck'],
-      ['2026-11-03', '2026-11-11', 'Benefits'],
+      ['2026-10-29', '2026-11-11', 'Paycheck'],
       ['2026-11-12', '2026-11-25', 'Paycheck'],
+      ['2026-11-26', '2026-12-09', 'Paycheck'],
+    ]);
+    const second = entriesInRange(f, cycles[1]!.start, cycles[1]!.end).filter((e) => e.occurrence.kind === 'income');
+    expect(second.map((e) => `${e.date} ${e.occurrence.description}`)).toEqual(['2026-10-29 Paycheck', '2026-11-03 Benefits']);
+  });
+
+  it('gives a household paid on back-to-back days one pay period, not a one-day one', () => {
+    // Paid Wednesday and Thursday every week.
+    let d = source(ops.emptyData(), TODAY, 'income', 'My pay', 900, '2026-10-14', { type: 'weekly' }, 'mine');
+    d = source(d, TODAY, 'income', 'Partner pay', 800, '2026-10-15', { type: 'weekly' }, 'partner');
+    const cycles = paycheckCycles(buildForecast(d, TODAY), 2);
+    expect(cycles.map((c) => [c.start, c.end])).toEqual([
+      ['2026-10-14', '2026-10-20'],
+      ['2026-10-21', '2026-10-27'],
     ]);
   });
 

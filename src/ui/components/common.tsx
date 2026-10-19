@@ -1,8 +1,8 @@
 import { createPortal } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { AlertCircle, Ban, Banknote, Check, CircleDashed, CreditCard, PiggyBank, Receipt, Repeat, Tag, X, type LucideIcon } from 'lucide-react';
+import { AlertCircle, Ban, Banknote, Check, CircleDashed, CreditCard, PiggyBank, Receipt, Repeat, ShoppingBag, Tag, X, type LucideIcon } from 'lucide-react';
 import { formatMoney } from '../../domain/money';
-import { doneVerb, KIND_LABEL, type OccurrenceStatus, type TransactionKind } from '../../domain/types';
+import { doneVerb, KIND_LABEL, signFor, type OccurrenceStatus, type TransactionKind } from '../../domain/types';
 
 // ---------------------------------------------------------------------------
 // Icons: one line-icon set (Lucide) at one stroke weight, always decorative
@@ -18,7 +18,8 @@ export const KIND_ICON: Record<TransactionKind, LucideIcon> = {
   bill: Receipt,
   subscription: Repeat,
   liability: CreditCard,
-  savings: PiggyBank,
+  reserve: PiggyBank,
+  varied: ShoppingBag,
 };
 
 /** Round leading avatar for a transaction, colored and shaped by kind. */
@@ -168,9 +169,9 @@ const STATUS_ICON: Record<OccurrenceStatus, LucideIcon> = {
   canceled: Ban,
 };
 
-export function StatusBadge({ status, kind }: { status: OccurrenceStatus; kind?: TransactionKind }) {
+export function StatusBadge({ status, kind, release }: { status: OccurrenceStatus; kind?: TransactionKind; release?: true }) {
   let label = STATUS_LABEL[status];
-  if (status === 'completed' && kind) label = doneVerb(kind).replace(/^./, (c) => c.toUpperCase());
+  if (status === 'completed' && kind) label = doneVerb({ kind, release }).replace(/^./, (c) => c.toUpperCase());
   return (
     <span className={`badge badge-${status}`}>
       <Icon icon={STATUS_ICON[status]} size={13} /> {label}
@@ -200,11 +201,12 @@ export function TagList({ tags }: { tags: string[] }) {
 }
 
 /** Amount with an explicit +/− sign by direction. */
-export function FlowAmount({ kind, cents, strike }: { kind: TransactionKind; cents: number; strike?: boolean }) {
-  const sign = kind === 'income' ? '+' : '−';
+/** An item's amount, signed by its effect on available cash. Reserves have their own color: the money stays the person's. */
+export function FlowAmount({ kind, cents, strike, release }: { kind: TransactionKind; cents: number; strike?: boolean; release?: true }) {
+  const sign = signFor({ kind, release }) === 1 ? '+' : '−';
   const text = `${sign}${formatMoney(cents)}`;
   return (
-    <span className={`amount amount-${kind === 'income' ? 'in' : 'out'}${strike ? ' strike' : ''}`}>
+    <span className={`amount amount-${kind === 'reserve' ? 'reserve' : kind === 'income' ? 'in' : 'out'}${strike ? ' strike' : ''}`}>
       {strike ? <s>{text}</s> : text}
     </span>
   );

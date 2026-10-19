@@ -1,0 +1,52 @@
+rules_version = '2';
+
+// Financial OS: each signed-in user owns exactly one document,
+// financialData/{uid}, holding their whole forecast and a revision number.
+// Everything else is denied.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // The optional review rhythm: three fields, each from a fixed set.
+    function isValidReview(r) {
+      return r is map
+        && r.keys().hasAll(['cadence', 'handledOn', 'outcome'])
+        && r.keys().hasOnly(['cadence', 'handledOn', 'outcome'])
+        && r.cadence in ['off', 'weekly', 'payday', 'monthly']
+        && (r.handledOn == null || (r.handledOn is string && r.handledOn.size() == 10))
+        && (r.outcome == null || r.outcome in ['completed', 'skipped']);
+    }
+
+    // The document the app writes: these fields only, with the right types.
+    function isValidForecast(userId) {
+      let d = request.resource.data;
+      return d.keys().hasAll(['userId', 'schemaVersion', 'revision', 'onboardingComplete', 'sources', 'records', 'updatedAt'])
+        && d.keys().hasOnly(['userId', 'schemaVersion', 'revision', 'onboardingComplete', 'sources', 'records', 'updatedAt', 'review'])
+        && (!('review' in d) || isValidReview(d.review))
+        && d.userId == userId
+        && d.schemaVersion is int
+        && d.revision is int
+        && d.onboardingComplete is bool
+        && d.sources is list && d.sources.size() <= 2000
+        && d.records is list && d.records.size() <= 20000
+        && d.updatedAt == request.time;
+    }
+
+    match /financialData/{userId} {
+      allow get: if isOwner(userId);
+      // The first save is revision 1.
+      allow create: if isOwner(userId)
+        && isValidForecast(userId)
+        && request.resource.data.revision == 1;
+      // Every later save raises the revision by exactly one, so a device
+      // holding stale data can't overwrite newer data.
+      allow update: if isOwner(userId)
+        && isValidForecast(userId)
+        && request.resource.data.revision == resource.data.revision + 1;
+      allow delete: if isOwner(userId);
+    }
+  }
+}

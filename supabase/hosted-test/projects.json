@@ -1,0 +1,4 @@
+{
+  "$comment": "Hosted Supabase projects approved for Financial OS testing: disposable test infrastructure only, never production. Add a project by its 20-letter ref in a reviewed commit (see docs/SUPABASE-HOSTED.md). The browser build and the test runners refuse any project not listed here.",
+  "projects": []
+}

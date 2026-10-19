@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react';
-import { CreditCard, HandCoins, LayoutGrid, Receipt, type LucideIcon } from 'lucide-react';
-import { useAccount } from '../state/account';
+import { useEffect } from 'react';
+import { CreditCard, HandCoins, LayoutGrid, PiggyBank, Receipt, RefreshCw, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
 import { useDataMode } from '../state/mode';
+import { useAccountSlot } from '../state/slots';
 import { useStore } from '../state/store';
-import { AccountActions, DeviceDataOffer, RecoveredChangesNotice } from './components/account';
-import { DownloadBackupButton, RestoreBackupButton, SaveStatusBar } from './components/backup';
-import { Icon, Modal } from './components/common';
+import { DeviceDataOffer, RecoveredChangesNotice } from './components/account';
+import { SaveStatusBar } from './components/backup';
+import { Icon } from './components/common';
 import { navigate, useRoute, type Route } from './router';
+import { useWaitingUpdate } from './update';
 import { Dashboard } from './screens/Dashboard';
 import { Onboarding } from './screens/Onboarding';
+import { Settings } from './screens/Settings';
 import { ExpensesScreen, SourcesScreen } from './screens/SourcesScreen';
 
 const NAV: { route: Route; label: string; icon: LucideIcon }[] = [
@@ -16,14 +18,13 @@ const NAV: { route: Route; label: string; icon: LucideIcon }[] = [
   { route: 'income', label: 'Income', icon: HandCoins },
   { route: 'expenses', label: 'Expenses', icon: Receipt },
   { route: 'liabilities', label: 'Liabilities', icon: CreditCard },
+  { route: 'reserves', label: 'Reserves', icon: PiggyBank },
 ];
-
-/** Savings is a tab inside Expenses; its route highlights the Expenses tab. */
-const navRoute = (r: Route): Route => (r === 'savings' ? 'expenses' : r);
 
 export function App() {
   const { data } = useStore();
   const hashRoute = useRoute();
+  const slot = useAccountSlot();
   const route: Route = hashRoute ?? (data.onboardingComplete ? 'dashboard' : 'onboarding');
 
   useEffect(() => {
@@ -35,7 +36,8 @@ export function App() {
     income: 'Income',
     expenses: 'Expenses',
     liabilities: 'Liabilities',
-    savings: 'Savings',
+    reserves: 'Strategic Reserves',
+    settings: 'Settings',
     onboarding: 'Get started',
   };
   useEffect(() => {
@@ -57,30 +59,37 @@ export function App() {
         {showNav && (
           <nav className="top-nav" aria-label="Main">
             {NAV.map((n) => (
-              <a key={n.route} href={`#/${n.route}`} aria-current={navRoute(route) === n.route ? 'page' : undefined}>
+              <a key={n.route} href={`#/${n.route}`} aria-current={route === n.route ? 'page' : undefined}>
                 {n.label}
               </a>
             ))}
           </nav>
         )}
+        {showNav && (
+          <a className="icon-button settings-link" href="#/settings" aria-current={route === 'settings' ? 'page' : undefined} aria-label="Settings">
+            <Icon icon={SettingsIcon} size={22} />
+          </a>
+        )}
       </header>
       <main id="main" className={showNav ? 'with-nav' : ''}>
         <SaveStatusBar />
+        {slot && <slot.Guard />}
+        <UpdateBanner />
         {data.isSample && <SampleBanner />}
         {route === 'onboarding' && <Onboarding />}
         {route === 'dashboard' && <Dashboard />}
         {route === 'income' && <SourcesScreen key="income" kind="income" />}
         {route === 'expenses' && <ExpensesScreen key="expenses" />}
-        {route === 'savings' && <ExpensesScreen key="savings" initial="savings" />}
+        {route === 'reserves' && <SourcesScreen key="reserve" kind="reserve" />}
         {route === 'liabilities' && <SourcesScreen key="liability" kind="liability" />}
-        {showNav && <DataNotice />}
+        {route === 'settings' && <Settings />}
         <RecoveredChangesNotice />
         <DeviceDataOffer />
       </main>
       {showNav && (
         <nav className="bottom-nav" aria-label="Main">
           {NAV.map((n) => (
-            <a key={n.route} href={`#/${n.route}`} aria-current={navRoute(route) === n.route ? 'page' : undefined}>
+            <a key={n.route} href={`#/${n.route}`} aria-current={route === n.route ? 'page' : undefined}>
               <Icon icon={n.icon} size={24} className="nav-icon" />
               {n.label}
             </a>
@@ -113,53 +122,19 @@ function SampleBanner() {
   );
 }
 
-/** States plainly where data lives, and offers sample data in its own separate space. */
-function DataNotice() {
-  const { data } = useStore();
-  const account = useAccount();
-  const { enterSample } = useDataMode();
-  const [confirming, setConfirming] = useState(false);
+/** Shown when a new version is ready. Updating reloads the page, so it waits for a tap. */
+function UpdateBanner() {
+  const apply = useWaitingUpdate();
+  const { saveStatus } = useStore();
+  if (!apply) return null;
   return (
-    <footer className="data-notice">
-      {account ? (
-        <p>Your data is saved to your Financial OS account, with a copy on this device so it opens offline. Changes made offline are saved to your account when you reconnect.</p>
-      ) : (
-        <p>Your data is saved in this browser on this device only. It isn’t synced to other devices, and clearing your browser’s site data removes it. Download a backup to keep a copy or move it to another device.</p>
-      )}
-      {!data.isSample && (
-        <div className="data-actions">
-          <DownloadBackupButton />
-          <RestoreBackupButton />
-          <button type="button" className="button small link" onClick={() => setConfirming(true)}>
-            Explore with sample data
-          </button>
-        </div>
-      )}
-      <AccountActions />
-      {confirming && (
-        <Modal title="Explore with sample data?" onClose={() => setConfirming(false)}>
-          <div className="stack">
-            <p>
-              You’ll see a made-up example with a late paycheck, a bill that cost more than expected, an overdue bill, and a stretch where projected cash flow dips below $0.
-            </p>
-            <p>Sample data is kept separate from yours. Your own entries stay exactly as they are, and you can return to them anytime with “Leave” on the sample-data banner.</p>
-            <div className="form-actions">
-              <button type="button" className="button secondary" onClick={() => setConfirming(false)} data-autofocus>
-                Not now
-              </button>
-              <button
-                type="button"
-                className="button primary"
-                onClick={() => {
-                  void enterSample().then(() => navigate('dashboard'));
-                }}
-              >
-                Show sample data
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-    </footer>
+    <div className="sample-banner update-banner" role="status">
+      <p>
+        <strong>A new version of Financial OS is ready.</strong> Update when you’re done entering things.
+      </p>
+      <button type="button" className="button small secondary" onClick={apply} disabled={saveStatus === 'saving'}>
+        <Icon icon={RefreshCw} size={16} /> Update
+      </button>
+    </div>
   );
 }

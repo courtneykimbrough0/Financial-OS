@@ -1,13 +1,16 @@
 import type { AppData } from '../../domain/types';
-import type { CloudBackend } from '../cloud';
+import { CloudAccessError, type CloudBackend } from '../cloud';
 
 /** Behaves like the save_financial_data function; `offline` makes every call fail. */
 export class FakeServer implements CloudBackend {
   row: { data: AppData; revision: number } | null = null;
   offline = false;
+  /** Simulates the server refusing requests (e.g. security rules not deployed). */
+  refuse = false;
   saves = 0;
   private check() {
     if (this.offline) throw new Error('Failed to fetch');
+    if (this.refuse) throw new CloudAccessError('permission-denied');
   }
   async fetch() {
     this.check();

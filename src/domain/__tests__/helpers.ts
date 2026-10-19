@@ -1,7 +1,7 @@
 import { expect } from 'vitest';
 import type { DateStr } from '../dates';
 import * as ops from '../operations';
-import type { AppData, RecurrenceRule, TransactionKind } from '../types';
+import type { AppData, RecurrenceRule, RecurringKind } from '../types';
 
 export const clockAt = (today: DateStr): ops.Clock => ({ today, now: `${today}T12:00:00.000Z` });
 
@@ -21,7 +21,7 @@ let seq = 0;
 export function source(
   data: AppData,
   today: DateStr,
-  kind: TransactionKind,
+  kind: RecurringKind,
   description: string,
   dollars: number,
   startDate: DateStr,
