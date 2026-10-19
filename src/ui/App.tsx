@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { CreditCard, HandCoins, LayoutGrid, PiggyBank, Receipt, RefreshCw, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
+import { CreditCard, HandCoins, House, LayoutGrid, PiggyBank, Receipt, RefreshCw, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
 import { useDataMode } from '../state/mode';
 import { useAccountSlot } from '../state/slots';
 import { useStore } from '../state/store';
@@ -9,12 +9,14 @@ import { Icon } from './components/common';
 import { navigate, useRoute, type Route } from './router';
 import { useWaitingUpdate } from './update';
 import { Dashboard } from './screens/Dashboard';
+import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
 import { Settings } from './screens/Settings';
 import { ExpensesScreen, SourcesScreen } from './screens/SourcesScreen';
 
 const NAV: { route: Route; label: string; icon: LucideIcon }[] = [
-  { route: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
+  { route: 'home', label: 'Home', icon: House },
+  { route: 'dashboard', label: 'Forecast', icon: LayoutGrid },
   { route: 'income', label: 'Income', icon: HandCoins },
   { route: 'expenses', label: 'Expenses', icon: Receipt },
   { route: 'liabilities', label: 'Liabilities', icon: CreditCard },
@@ -25,14 +27,15 @@ export function App() {
   const { data } = useStore();
   const hashRoute = useRoute();
   const slot = useAccountSlot();
-  const route: Route = hashRoute ?? (data.onboardingComplete ? 'dashboard' : 'onboarding');
+  const route: Route = hashRoute ?? (data.onboardingComplete ? 'home' : 'onboarding');
 
   useEffect(() => {
     if (hashRoute === null) navigate(route);
   }, [hashRoute, route]);
 
   const titles: Record<Route, string> = {
-    dashboard: 'Dashboard',
+    home: 'Home',
+    dashboard: 'Forecast',
     income: 'Income',
     expenses: 'Expenses',
     liabilities: 'Liabilities',
@@ -77,6 +80,7 @@ export function App() {
         <UpdateBanner />
         {data.isSample && <SampleBanner />}
         {route === 'onboarding' && <Onboarding />}
+        {route === 'home' && <Home />}
         {route === 'dashboard' && <Dashboard />}
         {route === 'income' && <SourcesScreen key="income" kind="income" />}
         {route === 'expenses' && <ExpensesScreen key="expenses" />}

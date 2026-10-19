@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { useAccount } from '../../state/account';
 import { useAccountSlot } from '../../state/slots';
-import { REVIEW_RHYTHM_IN_ACCOUNTS } from '../../state/features';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
 import { AccountActions } from '../components/account';
 import { DownloadBackupButton, RestoreBackupButton, StartOverButton } from '../components/backup';
 import { Modal } from '../components/common';
-import { ReviewRhythmSettings } from '../components/rhythm';
 import { AccountsSettings } from '../components/money-accounts';
 import { navigate } from '../router';
 
@@ -28,8 +26,6 @@ export function Settings() {
       {slot ? <slot.Card /> : <AccountActions />}
 
       <AccountsSettings />
-
-      {(!account || data.isSample || REVIEW_RHYTHM_IN_ACCOUNTS) && <ReviewRhythmSettings />}
 
       <section className="card settings-card" aria-labelledby="settings-data">
         <h2 id="settings-data">Your data</h2>
@@ -81,7 +77,7 @@ export function Settings() {
                 type="button"
                 className="button primary"
                 onClick={() => {
-                  void enterSample().then(() => navigate('dashboard'));
+                  void enterSample().then(() => navigate('home'));
                 }}
               >
                 Show sample data

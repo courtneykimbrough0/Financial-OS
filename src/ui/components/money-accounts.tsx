@@ -8,8 +8,8 @@
  */
 import { useId, useState, type FormEvent } from 'react';
 import { ArrowRight, ChevronRight, Plus, Wallet } from 'lucide-react';
-import { accountBalance, accountTransfers, transferShortfall, transfersDue, transfersInRange } from '../../domain/balances';
-import { endOfWeek, formatMedium, type DateStr } from '../../domain/dates';
+import { accountBalance, accountTransfers, transferShortfall, transfersInRange } from '../../domain/balances';
+import { formatMedium, type DateStr } from '../../domain/dates';
 import { centsToInput, formatMoney, parseMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { ACCOUNT_TYPE_LABEL, ACCOUNT_TYPES, accountTypeFor, type Account, type AccountType, type AppData, type TransactionKind, type Transfer } from '../../domain/types';
@@ -478,61 +478,6 @@ export function AccountLabel({ accountId }: { accountId?: string }) {
       <span className="sr-only">Account: </span>
       {account.name}
     </span>
-  );
-}
-
-/**
- * On the dashboard: planned transfers whose date has come and that aren't
- * recorded yet, and the rest of this week's. A passed date never marks one
- * done; the person records it once the money has moved.
- */
-export function TransfersDue() {
-  const { data, today } = useStore();
-  const available = useAccountsAvailable();
-  const [open, setOpen] = useState<Transfer | 'list' | null>(null);
-  if (!available) return null;
-  const due = transfersDue(data, today, endOfWeek(today));
-  const count = due.attention.length + due.upcoming.length;
-  if (count === 0 && open === null) return null;
-  const label = due.attention.length > 0 ? `${due.attention.length === 1 ? '1 transfer' : `${due.attention.length} transfers`} to record` : `${due.upcoming.length === 1 ? '1 transfer' : `${due.upcoming.length} transfers`} planned this week`;
-  return (
-    <>
-      {count > 0 && (
-        <button type="button" className="rhythm-entry transfers-entry" onClick={() => setOpen('list')} aria-haspopup="dialog">
-          <span>{label}</span>
-          <Icon icon={ChevronRight} size={18} />
-        </button>
-      )}
-      {open === 'list' && (
-        <Modal title="Transfers" onClose={() => setOpen(null)}>
-          <div className="stack">
-            {[
-              ['Not recorded yet', due.attention],
-              ['Later this week', due.upcoming],
-            ].map(([heading, list]) =>
-              (list as Transfer[]).length ? (
-                <section key={heading as string} className="stack-sm" aria-label={heading as string}>
-                  <h3 className="subhead">{heading as string}</h3>
-                  <ul className="entry-list card">
-                    {(list as Transfer[]).map((t) => (
-                      <li key={t.id}>
-                        <TransferRow transfer={t} onOpen={() => setOpen(t)} />
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null,
-            )}
-            {count === 0 && <p className="muted">Nothing left to record.</p>}
-          </div>
-        </Modal>
-      )}
-      {open && open !== 'list' && (
-        <Modal title="Planned transfer" onClose={() => setOpen('list')}>
-          <TransferForm transfer={open} onDone={() => setOpen('list')} />
-        </Modal>
-      )}
-    </>
   );
 }
 

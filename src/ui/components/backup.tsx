@@ -121,7 +121,7 @@ export function RestoreBackupButton({ label = 'Restore from backup' }: { label?:
     const restored = pending!;
     setPending(null);
     toast('Backup restored.');
-    navigate(restored.data.onboardingComplete ? 'dashboard' : 'onboarding');
+    navigate(restored.data.onboardingComplete ? 'home' : 'onboarding');
   });
 
   const onFile = async (file: File | undefined) => {
@@ -217,7 +217,7 @@ export function StartOverButton() {
         <Modal title="Start over?" onClose={close}>
           <div className="stack">
             <p>
-              This erases {count === 0 ? 'your setup' : `all ${itemsText(count)} you’ve entered, with everything recorded for them,`} and takes you back to setup. Your review rhythm stays.
+              This erases {count === 0 ? 'your setup' : `all ${itemsText(count)} you’ve entered, with everything recorded for them,`} and takes you back to setup.
             </p>
             <KeepACopy />
             {replace.failure && (

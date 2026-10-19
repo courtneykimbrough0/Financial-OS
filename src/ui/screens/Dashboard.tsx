@@ -1,20 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-  AlertCircle,
-  Banknote,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  Info,
-  TrendingDown,
-} from 'lucide-react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { AlertCircle, Banknote, Check, ChevronDown, ChevronRight, ChevronUp, Info, TrendingDown } from 'lucide-react';
 import {
   addDays,
   diffDays,
   addMonthsClamped,
-  dayOfWeek,
   eachDay,
   endOfMonth,
   endOfWeek,
@@ -35,8 +24,6 @@ import {
   dailyTimeline,
   lowestPoint,
   negativeStretches,
-  overdueEntries,
-  reviewEntries,
   explainTimingGaps,
   GAP_LOOKAHEAD_DAYS,
   paycheckCycles,
@@ -50,19 +37,14 @@ import {
 import { formatCompact, formatMoney, formatMoneyIn, formatMoneyOut, formatSignedMoney } from '../../domain/money';
 import { periodPlan, type PeriodPlan } from '../../domain/plan';
 import { useStore } from '../../state/store';
-import { EmptyState, FlowAmount, Icon, KindAvatar, KindTag, Modal, SectionLabel, StatusBadge } from '../components/common';
+import { EmptyState, Icon, Modal, SectionLabel } from '../components/common';
+import { EntryButton, PeriodNav, shortDay } from '../components/entries';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
-import { ReviewSheet } from '../components/ReviewSheet';
-import { PeriodReviewSheet } from '../components/PeriodReviewSheet';
 import { ScenarioSheet } from '../components/ScenarioSheet';
-import { CADENCE_LABEL } from '../components/rhythm';
-import { reviewStatus } from '../../domain/cadence';
-import { useAccount } from '../../state/account';
-import { REVIEW_RHYTHM_IN_ACCOUNTS } from '../../state/features';
 import { GapsSheet } from '../components/gaps';
 import { WhatIfSheet } from '../components/WhatIfSheet';
 import { PeriodBreakdown, TagBreakdown } from '../components/plan';
-import { DayTransfers, TransfersDue } from '../components/money-accounts';
+import { DayTransfers } from '../components/money-accounts';
 import { navigate } from '../router';
 
 type View = 'month' | 'week' | 'cycle' | 'custom';
@@ -74,10 +56,6 @@ const VIEWS: { id: View; label: string }[] = [
   { id: 'custom', label: 'Custom' },
 ];
 
-function shortDay(date: DateStr): string {
-  return `${WEEKDAYS_SHORT[dayOfWeek(date)]}, ${formatShort(date)}`;
-}
-
 function tallyText(cents: number | null): string {
   return cents === null ? '—' : formatMoney(cents);
 }
@@ -85,14 +63,12 @@ function tallyText(cents: number | null): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Which bottom sheet is open. Details live in sheets so the dashboard itself
- * stays short: tap a day or the overdue banner to see more. An
- * occurrence opened from another sheet returns to it when closed.
+ * Which bottom sheet is open. Details live in sheets so the forecast itself
+ * stays short: tap a day to see more. An occurrence opened from a day
+ * returns to it when closed.
  */
 type Sheet =
   | { kind: 'day'; date: DateStr }
-  | { kind: 'review'; title: string; closeIfEmpty?: boolean }
-  | { kind: 'period-review' }
   | { kind: 'occurrence'; id: string; back: Sheet | null }
   | { kind: 'about-tally' }
   | { kind: 'calendar-key' }
@@ -127,16 +103,6 @@ export function Dashboard() {
   const cycle = cycles[Math.min(cycleIndex, Math.max(cycles.length - 1, 0))];
   const range: [DateStr, DateStr] | null = view === 'cycle' ? (cycle ? [cycle.start, cycle.end] : null) : fixedRange;
 
-  const overdue = overdueEntries(forecast);
-  const overdueTitle = overdue.length === 1 ? '1 transaction needs an update' : `${overdue.length} transactions need an update`;
-  const review = reviewEntries(forecast);
-  const account = useAccount();
-  // Reviews only where the rhythm can be chosen and saved (see REVIEW_RHYTHM_IN_ACCOUNTS).
-  const rhythm = !account || data.isSample || REVIEW_RHYTHM_IN_ACCOUNTS ? reviewStatus(data, today, forecast) : null;
-  const toReview = review.attention.length + review.upcoming.length;
-  useEffect(() => {
-    if (sheet?.kind === 'review' && sheet.closeIfEmpty && toReview === 0) setSheet(null);
-  }, [sheet, toReview]);
   const openOccurrence = (id: string, back: Sheet | null = null) => setSheet({ kind: 'occurrence', id, back });
   const openDay = (date: DateStr) => {
     setSelected(date);
@@ -153,30 +119,6 @@ export function Dashboard() {
       </header>
 
       {forecast.issue && <IssueCard forecast={forecast} />}
-      {overdue.length > 0 ? (
-        <button type="button" className="overdue-banner" onClick={() => setSheet({ kind: 'review', title: overdueTitle })}>
-          <Icon icon={AlertCircle} size={20} />
-          <span>{overdueTitle}</span>
-          <Icon icon={ChevronRight} size={18} />
-        </button>
-      ) : (
-        toReview > 0 &&
-        !rhythm?.due && (
-          <button type="button" className="button small secondary review-start" onClick={() => setSheet({ kind: 'review', title: 'Review this week' })}>
-            Review this week · {toReview}
-          </button>
-        )
-      )}
-
-      <TransfersDue />
-
-      {rhythm?.due && (
-        <button type="button" className="rhythm-entry" onClick={() => setSheet({ kind: 'period-review' })} aria-haspopup="dialog">
-          <span>Your {CADENCE_LABEL[rhythm.cadence].toLowerCase()} review is ready</span>
-          <Icon icon={ChevronRight} size={18} />
-        </button>
-      )}
-
       <button type="button" className="button small secondary scenario-entry" onClick={() => setSheet({ kind: 'scenario' })} aria-haspopup="dialog">
         Explore a scenario
       </button>
@@ -278,20 +220,10 @@ export function Dashboard() {
       </section>
 
       {sheet?.kind === 'occurrence' && (
-        // Back to the review list after handling an item, unless that left nothing to review.
-        <OccurrenceSheet occurrenceId={sheet.id} onClose={() => setSheet(sheet.back?.kind === 'review' ? { ...sheet.back, closeIfEmpty: true } : sheet.back)} />
+        <OccurrenceSheet occurrenceId={sheet.id} onClose={() => setSheet(sheet.back)} />
       )}
       {sheet?.kind === 'day' && (
         <DaySheet forecast={forecast} date={sheet.date} onClose={() => setSheet(null)} onOpen={(id) => openOccurrence(id, sheet)} />
-      )}
-      {sheet?.kind === 'period-review' && <PeriodReviewSheet onOpen={(id) => openOccurrence(id, sheet)} onClose={() => setSheet(null)} />}
-      {sheet?.kind === 'review' && !(sheet.closeIfEmpty && toReview === 0) && (
-        <ReviewSheet
-          forecast={forecast}
-          title={sheet.title}
-          onOpen={(id) => openOccurrence(id, sheet)}
-          onClose={() => setSheet(null)}
-        />
       )}
       {sheet?.kind === 'about-tally' && forecast.anchor && forecast.forecastStart && (
         <Modal title="How cash flow and the running total work" onClose={() => setSheet(null)}>
@@ -336,39 +268,6 @@ function IssueCard({ forecast }: { forecast: Forecast }) {
           Go to Income
         </button>
       </div>
-    </div>
-  );
-}
-
-function PeriodNav({
-  label,
-  prevLabel,
-  nextLabel,
-  onPrev,
-  onNext,
-  onToday,
-}: {
-  label: string;
-  prevLabel: string;
-  nextLabel: string;
-  onPrev?: () => void;
-  onNext?: () => void;
-  onToday?: () => void;
-}) {
-  return (
-    <div className="period-nav">
-      <button type="button" className="icon-button" onClick={onPrev} disabled={!onPrev} aria-label={prevLabel}>
-        <Icon icon={ChevronLeft} size={22} />
-      </button>
-      <h2 aria-live="polite">{label}</h2>
-      {onToday && (
-        <button type="button" className="button small secondary" onClick={onToday}>
-          Today
-        </button>
-      )}
-      <button type="button" className="icon-button" onClick={onNext} disabled={!onNext} aria-label={nextLabel}>
-        <Icon icon={ChevronRight} size={22} />
-      </button>
     </div>
   );
 }
@@ -791,34 +690,6 @@ function Timeline({
 
 // ---------------------------------------------------------------------------
 // Sheets
-
-function EntryButton({ e, onOpen }: { e: ForecastEntry; onOpen: (id: string) => void }) {
-  const o = e.occurrence;
-  let sub: string | null = null;
-  if (e.carriedForward) sub = `Overdue since ${formatMedium(o.scheduledDate)}`;
-  else if (o.status === 'completed' && (o.actualDate !== o.expectedDate || o.actualAmountCents !== o.expectedAmountCents)) {
-    sub = `Expected ${formatMoney(o.expectedAmountCents)} on ${formatShort(o.expectedDate)}`;
-  } else if (o.status === 'scheduled' && (o.scheduledDate !== o.expectedDate || o.scheduledAmountCents !== o.expectedAmountCents)) {
-    sub = `Changed from ${formatMoney(o.expectedAmountCents)} on ${formatShort(o.expectedDate)}`;
-  }
-  return (
-    <button type="button" className="entry" onClick={() => onOpen(o.id)}>
-      <KindAvatar kind={o.kind} />
-      <span className="entry-main">
-        <span className="entry-title">{o.description}</span>
-        <span className="entry-tags">
-          <KindTag kind={o.kind} />
-          <StatusBadge status={o.displayStatus} kind={o.kind} release={o.release} />
-        </span>
-        {sub && <span className="entry-sub">{sub}</span>}
-      </span>
-      <span className="entry-side">
-        <FlowAmount kind={o.kind} cents={e.amountCents} strike={!e.counts} release={o.release} />
-        <Icon icon={ChevronRight} size={18} className="chevron" />
-      </span>
-    </button>
-  );
-}
 
 function DayTotals({ row }: { row: DayRow }) {
   return (

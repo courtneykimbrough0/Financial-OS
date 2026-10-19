@@ -1587,28 +1587,6 @@ li.negative .tl-tally {
   margin-top: var(--space-4);
 }
 
-/* One-line overdue banner that opens a sheet. */
-.overdue-banner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  width: 100%;
-  min-height: 52px;
-  padding: 12px 16px;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: var(--color-warn-soft);
-  box-shadow: inset 0 0 0 1.5px var(--color-warn);
-  color: var(--color-warn);
-  font: inherit;
-  font-weight: 650;
-  text-align: left;
-  cursor: pointer;
-}
-.overdue-banner span {
-  flex: 1;
-}
-
 .hero-top {
   display: flex;
   align-items: center;
@@ -2304,18 +2282,18 @@ li.negative .tl-tally {
   padding-bottom: var(--space-2);
 }
 
-/* ---------- Review sheet ---------- */
+/* ---------- Home: selecting due items ---------- */
 
-.review-row {
+.pick-row {
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
-.review-row .entry {
+.pick-row .entry {
   flex: 1;
   min-width: 0;
 }
-.review-check {
+.pick-check {
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -2323,41 +2301,53 @@ li.negative .tl-tally {
   height: var(--tap);
   cursor: pointer;
 }
-.review-check input {
+.pick-check input {
   width: 22px;
   height: 22px;
   margin: 0;
   accent-color: var(--color-accent);
   cursor: pointer;
 }
-.review-check input:focus-visible {
+.pick-check input:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 3px;
 }
-.review-actions {
-  position: sticky;
-  bottom: 0;
+.pick-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  padding: var(--space-3) 0 var(--space-1);
-  background: var(--color-sheet);
+  padding: var(--space-2) 0 0;
 }
-.review-actions > .button {
+.pick-actions > .button {
   flex: 1 1 140px;
 }
-.review-actions > .hint {
+.pick-actions > .hint {
   flex-basis: 100%;
   margin: 0;
 }
-.review-undo {
+
+.progress-change {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-2);
+  font-weight: 600;
 }
-.review-start {
-  align-self: flex-start;
+.progress-change.up {
+  color: var(--color-in);
+}
+.progress-change.down {
+  color: var(--color-neg);
+}
+.progress-projected {
+  font-size: var(--text-small);
+}
+.progress-projected:not(:first-child) {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+.avatar-gap {
+  background: var(--color-warn-soft);
+  color: var(--color-warn);
 }
 
 /* ---------- Timing gap explanations ---------- */
@@ -2612,70 +2602,6 @@ button.callout.gap-line:focus-visible {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-2);
-}
-
-/* ---------- Review rhythm ---------- */
-
-.rhythm-options {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  border: none;
-}
-.rhythm-option {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  min-height: var(--tap);
-  padding: 10px 12px;
-  border-radius: var(--radius-control);
-  background: var(--color-surface-raised);
-  cursor: pointer;
-}
-.rhythm-option.selected {
-  box-shadow: inset 0 0 0 1.5px var(--color-text);
-}
-.rhythm-option input {
-  width: 20px;
-  height: 20px;
-  margin: 2px 0 0;
-  accent-color: var(--color-accent);
-  flex-shrink: 0;
-}
-.rhythm-option input:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 3px;
-}
-.rhythm-option > span {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.rhythm-entry {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  width: 100%;
-  min-height: var(--tap);
-  padding: 10px 16px;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--color-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.rhythm-entry:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
-}
-.review-gap-lines {
-  margin: 0;
-  padding-left: 1.1em;
 }
 
 .nowrap {

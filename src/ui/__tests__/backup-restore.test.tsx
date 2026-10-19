@@ -15,8 +15,7 @@ import { Settings } from '../screens/Settings';
 
 /*
  * Today is Fri 2026-10-16. Current data: a paycheck, rent, and a phone bill
- * with three $65 payments and a dismissed estimate suggestion, plus a weekly
- * review rhythm: 3 items.
+ * with three $65 payments and a dismissed estimate suggestion: 3 items.
  */
 const TODAY = '2026-10-16';
 const clock = clockAt(TODAY);
@@ -28,15 +27,14 @@ function current(): AppData {
   d = source(d, '2026-07-01', 'bill', 'Phone', 60, '2026-07-25', { type: 'monthly' }, 'phone');
   for (const date of ['2026-07-25', '2026-08-25', '2026-09-25']) d = unwrap(ops.recordActual(d, `phone@${date}`, { amountCents: usd(65), date }, clock));
   d = unwrap(dismissEstimate(d, analyzeEstimate(d, 'phone', TODAY).suggestion!, clock));
-  return unwrap(ops.setReviewCadence(d, 'weekly'));
+  return d;
 }
 
-/** Another household's backup: a paycheck and a one-time repair, monthly reviews. */
+/** Another household's backup: a paycheck and a one-time repair. */
 function otherBackup(): string {
   let d = unwrap(ops.completeOnboarding(ops.emptyData()));
   d = source(d, TODAY, 'income', 'Salary', 2400, '2026-10-30', { type: 'monthly' }, 'sal');
   d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(300), date: '2026-11-04' }, clock, 'rep'));
-  d = unwrap(ops.setReviewCadence(d, 'monthly'));
   return createBackup(d, new Date(2026, 9, 16, 9)).text;
 }
 
@@ -103,14 +101,13 @@ describe('restoring a backup', () => {
     expect(saved()).toBe(stored);
   });
 
-  it('replaces everything with the backup, including its review rhythm', async () => {
+  it('replaces everything with the backup', async () => {
     const user = await mount();
     await upload(user, otherBackup());
     await user.click(screen.getByRole('button', { name: 'Replace with backup' }));
     expect(await screen.findByText('Backup restored.')).toBeInTheDocument();
     expect(store.data.sources.map((s) => s.description)).toEqual(['Salary']);
     expect(store.data.records.map((r) => [r.description, r.scheduledAmountCents])).toEqual([['Repair', 30000]]);
-    expect(store.data.review).toEqual({ cadence: 'monthly', handledOn: null, outcome: null });
     await waitFor(() => expect(JSON.parse(saved()!).sources.map((s: { description: string }) => s.description)).toEqual(['Salary']));
   });
 
@@ -140,7 +137,7 @@ describe('starting over', () => {
     const before = store.data;
     await user.click(screen.getByRole('button', { name: 'Start over' }));
     const dialog = screen.getByRole('dialog', { name: 'Start over?' });
-    expect(dialog).toHaveTextContent('This erases all 3 items you’ve entered, with everything recorded for them, and takes you back to setup. Your review rhythm stays.');
+    expect(dialog).toHaveTextContent('This erases all 3 items you’ve entered, with everything recorded for them, and takes you back to setup.');
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
     await user.keyboard('{Enter}');
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -156,7 +153,7 @@ describe('starting over', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Erase and start over' }));
     expect(await screen.findByText('Your data was erased. Set up again whenever you’re ready.')).toBeInTheDocument();
     expect(window.location.hash).toBe('#/onboarding');
-    expect(store.data).toMatchObject({ onboardingComplete: false, sources: [], records: [], review: { cadence: 'weekly', handledOn: null, outcome: null } });
+    expect(store.data).toMatchObject({ onboardingComplete: false, sources: [], records: [] });
 
     // Restore the backup downloaded just before: nothing to keep now, so no copy is offered.
     await upload(user, await downloads[0]!.text());
@@ -166,7 +163,6 @@ describe('starting over', () => {
     await user.click(within(restore).getByRole('button', { name: 'Replace with backup' }));
     expect(store.data.sources).toEqual(original.sources);
     expect(store.data.records).toEqual(original.records);
-    expect(store.data.review).toEqual(original.review);
     expect(store.data.sources.find((s) => s.id === 'phone')!.estimateDismissal).toEqual({ currentCents: 6000, proposedCents: 6500, through: '2026-09-25' });
     expect(buildForecast(store.data, TODAY)).toEqual(buildForecast(original, TODAY));
   });
