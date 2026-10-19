@@ -167,7 +167,7 @@ In order:
 3. Sample data
 4. Start over (danger zone, at the end)
 
-The review rhythm section goes away if decision Q3 is approved.
+The review rhythm section is gone (removed in H2, October 2026).
 
 ### 3.6 Corrections
 
@@ -179,7 +179,7 @@ Corrections are ordinary edits, with no undo history (AGENTS.md section A2).
 | Wrong amount or date recorded | **Edit payment** (`correctActual`) |
 | Skipped by mistake | **Add back** (today's "Restore") |
 
-- The batch Undo callout goes (decision Q4).
+- The batch Undo callout is gone (removed in H2, October 2026).
 - Destructive actions (delete, start over, restore a backup) keep their confirmations and the offer of a backup first.
 
 ---

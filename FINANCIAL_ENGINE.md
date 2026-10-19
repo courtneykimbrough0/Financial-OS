@@ -46,18 +46,20 @@ Every counted entry lands in exactly one part, by kind (`totals`):
 
 **Accounts and transfers aren't forecast inputs.** Items may carry an `accountId` (PRODUCT_EXPERIENCE.md section 11) and the plan may hold transfers, but nothing above reads either: creating, assigning or deleting accounts and adding, recording or deleting transfers changes no entry, running total or cash-flow figure (`accounts`, `reserves-transfers` tests).
 
-## Home (`home.ts`, roadmap H1)
+## Home (`home.ts`, roadmap H1 and H2)
 
-`homeView(data, today)` organizes what the Home screen will show, from the same forecast. It adds no money math: every figure comes from `buildForecast` and `totals` (through `kpisOfEntries`), `transfersInRange` / `transferShortfall`, `explainTimingGaps` and `variance`. Weeks run Sunday to Saturday.
+`homeView(data, today, { weekOf })` organizes what the Home screen shows, from the same forecast. `today` decides what is overdue, what needs attention and what progress compares; `weekOf` (any date in a week, default `today`) only chooses the week listed under Coming up and Happened, so browsing weeks never changes a figure. It adds no money math: every figure comes from `buildForecast` and `totals` (through `kpisOfEntries`), `transfersInRange` / `transferShortfall`, `explainTimingGaps` and `variance`. Weeks run Sunday to Saturday.
 
 - **Progress.** This month and last month, each as `recorded` (completed entries only) and `projected` (recorded plus still expected), and two comparisons that state their basis:
   - `monthToDate`: recorded cash flow from the 1st through today against the same days of last month (the 31st compares with the last day of a shorter month). Like for like.
   - `projectedVsLastMonth`: this month as projected against last month as recorded. Different bases, labeled as such.
   - The direction is the sign of the difference (`up`, `down`, `unchanged`); there is no threshold.
 - **Attention.** Outstanding items dated today or earlier (overdue first, oldest first, then today's), planned transfers dated today or earlier (never treated as recorded), and timing gaps that start within 7 days (today included) and haven't ended.
-- **Coming up.** Outstanding items after today through early next week (the Tuesday after this week), planned transfers in that window, and timing gaps starting after the attention window but within it. Chronological.
-- **Happened.** Entries recorded this week (on their actual dates, with `variance` against the original expectation) and transfers recorded this week. Chronological.
-- **Later gaps.** Timing gaps starting after both windows (within the 90-day look-ahead), so the forecast can still show them.
+- **Coming up.** Outstanding items after today in the viewed week, planned transfers there, and timing gaps starting after the attention window within it. For the current week the window also takes early next week (through the Tuesday after); another week lists only its own days. A past week has nothing coming up. Chronological.
+- **Happened.** Entries recorded in the viewed week (on their actual dates, with `variance` against the original expectation) and transfers recorded then. Chronological.
+- **Later gaps.** Timing gaps not in Needs attention or the viewed window (within the 90-day look-ahead), so the forecast can still show them. `horizonEnd` is the forecast's reach, for explaining a gap that doesn't end before it.
+- Each comparison side carries `count` (the entries behind the figure); a side with `count` 0 has nothing to compare, and Home then shows only the trustworthy figure.
+- **Batches.** `recordAsExpected` and `rescheduleSelected` take only items dated today or earlier; a later one is refused with nothing changed. An early payment is recorded one item at a time (`recordActual`). There is no batch undo.
 - Each item appears in one section only and carries its stable id (an occurrence id, transfer id, or `gap@<start>`) for the existing sheets; occurrences carry their account (`accountOf`). Empty sections are empty arrays.
 
 ## Account balances (`balances.ts`)
@@ -70,16 +72,9 @@ A balance is where money is at a point in time, not cash flow over a period. It 
 - **Strategic Reserve items never change a balance**: an allocation says money is set aside, and only a transfer moves it. Counting both would count it twice.
 - Every transfer changes two balances by the same amount, so the total across accounts is unchanged by it. Balances may go negative; recorded history is kept as it is.
 - **Shortfalls** (`transferShortfall`): for an expected transfer, how far its source is projected to fall below $0 on its date (or today, once passed), counting the transfer; null when the source has no opening balance. Nothing moves money to cover it.
-- `transfersDue`: expected transfers dated today or earlier (not recorded yet) and later this week. A passed date never records a transfer.
+- A passed date never records a transfer: Home lists an expected transfer dated today or earlier under Needs attention until it is recorded.
 
 **What the inputs can't express.** No amount of cash on hand is stored, so the running total measures change from the payday anchor. Upcoming items before the next payday count in cash flow for their period but not in the running total, so a shortfall before payday can't be shown. Once such an item is overdue and still unrecorded, it's carried to payday.
-
-## Review rhythm (`cadence.ts`)
-
-- **Periods.** Weekly: Sunday to Saturday. Monthly: the calendar month. Payday: from the latest main-paycheck date on or before today (the counted entry date, so a late paycheck counts on the day it arrived) to the day before the next one; other income never starts a review.
-- **Switching.** Choosing a different rhythm (or Off) clears the latest handling, so the new rhythm's current period is due right away; choosing the same rhythm again changes nothing.
-- **Due.** A rhythm is off until chosen. The current period is due until a review is completed or skipped on or after its start (`handledOn`); only the latest handling is kept, so periods missed while away never pile up. `nextDue` is the current period's start while it is due, otherwise the next period's start.
-- **Summary** (`reviewSummary`): for a period, the forecast's counted entries split into expected income, expected money out, and recorded; every overdue item; `periodKpis` for cash flow; and the explained timing gaps overlapping the period. Build the forecast through the period's end.
 
 ## Adaptive estimates (`estimates.ts`)
 
@@ -141,8 +136,8 @@ Files are in `src/domain/__tests__/`. "EV" is `engine-validation.test.ts`; "SC" 
 | Actuals (late, early, different amount) | `forecast` › expected vs actual outcomes; spec › C, D, E |
 | Paying a bill: once only, correction, undo | `forecast` › rejects duplicate completion…, corrects a recorded actual…, undoing a recorded outcome…; SC › marking a bill paid; `history` › paying a bill, correcting a payment, undoing a payment or cancellation |
 | Variance (actual vs. original prediction) | `history` › paying a bill |
-| Batch review: only selected items change, batch undo is exact | `review` (all); `ui/review-sheet` |
-| Review rhythm (periods, due, complete/skip, summary, persistence) | `cadence` (all); `state/review-persistence`; rules test › optional review rhythm |
+| Batches: only selected due items change, later items refused | `batch` (all); `ui/home` |
+| Home: sections, week navigation (month and year), progress bases, attention rules | `home`; `ui/home` |
 | Adaptive estimates (steady, rising, falling, variable, seasonal; unusual payments; too little history; rate and schedule changes; approve, dismiss, repeat; income not estimated; exact cents) | `estimates` (all); `state/estimate-persistence` |
 | Scenarios (one-time, several together, recurring, variable income, anchors, before payday, no stored changes, reconciliation, invalid input) | `scenarios` (all) |
 | Rescheduling and canceling | `forecast` › overdue, rescheduled, and canceled occurrences; spec › H, I; SC › a moved occurrence |

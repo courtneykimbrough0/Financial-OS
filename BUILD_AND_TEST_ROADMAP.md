@@ -52,7 +52,7 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | Audit recommendations (not yet approved) | docs/REDUCTION-AUDIT.md §3 and decisions §7 |
 | Deferred features | PRODUCT_EXPERIENCE.md §10; Step 8's deferred imports; Step 9 |
 
-### Proposed next phase: Home (progress, actions, what's coming) — plan only, not authorized
+### Home (progress, actions, what's coming) — H1 and H2 complete (October 2026); H3 next, not authorized
 
 Goal: within about 30 seconds of opening the app, a person can tell (1) whether their cash flow is improving, declining or steady, (2) what needs attention now, and (3) what's coming. It carries out phases R2, C1, C2 and C4 below in a tighter order, and adds no financial data, inputs or engine.
 
@@ -80,19 +80,16 @@ Previous and next week stay one tap away. The month calendar, breakdown, tag tot
 
 **Sequence (each its own authorized task, with tests):**
 - **H1. Home selector (complete, October 2026).** `homeView` in `src/domain/home.ts` (FINANCIAL_ENGINE.md, Home): progress (this month and last month, recorded and projected, a like-for-like month-to-date comparison and a labeled projected-versus-recorded one), attention, coming up, happened and later gaps, including transfers, reserves and accounts. Domain tests only (`home`, 22). No interface change.
-- **H2. Opening screen.** The progress line and the four sections, built from H1, replacing the dashboard as the first screen; previous/next week. Removes the four entry points. Component and e2e tests. Complexity: medium. (Includes R2.)
+- **H2. Opening screen (complete, October 2026).** `Home` (`src/ui/screens/Home.tsx`, route `#/home`, first in the navigation and the screen after setup, restore and sample data): progress, Needs attention, a week navigator over Coming up and Happened, built from `homeView(data, today, { weekOf })`. `weekOf` is separate from `today`, so moving weeks never changes overdue items, progress or Needs attention. Removed: review completion and skip, the review rhythm (all options, its Settings control and `REVIEW_RHYTHM_IN_ACCOUNTS`), the weekly and period review sheets, the overdue banner, the review entry, the transfers entry, batch Undo (`undoBatch`) and `transfersDue`. Batch recording and moving take only items due today or earlier. The old dashboard keeps its place as **Forecast** (route `#/dashboard`) with its Month, Week, Paycheck and Custom views, calendar, breakdown, scenarios and the rest, untouched until H3. The stored `review` field is dropped on load and never written; the Supabase `review_*` columns stay, unused, and the Firestore rules still accept the optional field. Tests: 32 domain (`home`), 7 `batch`, 25 component (`ui/home`), browser smoke steps.
 - **H3. Forecast tab and navigation.** Month calendar, gaps, breakdown, tag totals, custom range and scenarios under Forecast; tabs This week, Forecast, Plan (Activity later, C3); redirects from old routes. Complexity: medium.
 - **H4. Conditional visibility and wording** on the screens touched (C4, B1 for those screens). Complexity: low.
 - Later, separately: R1 (main paycheck), C3 (Activity), C5 (Plan and setup), C6 (one "See what happens if…"), D (visual redesign).
 
 **Decisions (product owner, October 2026):** the week view opens the app (Q1); progress is month over month, shown as the factual difference with no threshold; review completion states, the payday rhythm and batch Undo are removed (Q3, Q4), keeping ordinary corrections and legitimate early payments; a timing gap needs attention when it starts within 7 days, and later gaps stay visible in the forecast; the main paycheck is removed separately (Q2), not as part of Home.
 
-**Still open before H2 renders Home:**
-1. **Which progress comparison leads.** `homeView` gives both: month to date, recorded against recorded (like for like, but early in a month it covers few days), and this month projected against last month recorded (a full month, but the bases differ and must be labeled). Recommended: lead with month to date, and show the projected month as a second, labeled line.
-2. **Overdue income in Needs attention.** H1 includes it (a late paycheck needs recording just as a bill does). Confirm, or limit the section to obligations and keep overdue income under Coming up.
-3. **"Early next week."** H1 uses Sunday to Tuesday after this week. Confirm the length.
+**Decided for H2 (as built):** progress leads with recorded month to date against the same days of last month, with the projected month as a second, labeled line (Projected against last month's recorded result); expected income that is not recorded appears in Needs attention as "Expected — not recorded", never as late; "coming up" is the viewed week, and for the current week it runs through Tuesday of next week.
 
-**H2 integration points:** the opening screen renders `homeView(data, today)` sections in order (progress, attention, coming up, happened), skipping empty ones; items open the existing `OccurrenceSheet` (occurrence id), `TransferForm` (transfer id) and `GapsSheet` (gap start); batch record and move use `recordAsExpected` and `rescheduleSelected` on attention items due today or earlier; previous and next week need a small addition in H2 (a week to show, separate from `today`, since `today` also decides what is overdue). `laterGaps` feeds the Forecast tab (H3).
+**Left for H3:** the Forecast tab and navigation (the dashboard still carries its own Month, Week, Paycheck and Custom views, its calendar, breakdown, scenarios and What if…); a decision on whether to drop the Supabase `review_*` columns in a later migration (after every client is past H2); the main paycheck (separate); and a retirement date for `overdueEntries` if nothing else uses it.
 
 ### Phases
 
@@ -156,7 +153,7 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
   - updated component and e2e tests.
 - **Excluded:** dropping the column; any calculation change.
 
-**R2. Remove review completion states, the payday rhythm and batch Undo; limit batch recording to due items** (Q3, Q4). Complexity: **low**.
+**R2. Remove review completion states, the payday rhythm and batch Undo; limit batch recording to due items** (Q3, Q4). **Complete in H2 (October 2026).** Complexity: **low**.
 - **Scope:**
   - Remove `completeReview` / `skipReview` and their UI, the payday option, and the `REVIEW_RHYTHM_IN_ACCOUNTS` branching.
   - Keep the monthly look-ahead only if Q3a says so.

@@ -192,7 +192,7 @@ Simple and mobile-first. Prefer:
 - safe corrections through ordinary editing, and recovery from data loss (backups, restore), without elaborate undo (section A2);
 - short contextual explanations, with optional deeper detail;
 - sensible defaults;
-- a configurable review cadence instead of repeated nagging;
+- one opening screen that shows progress, what needs attention and what is coming, instead of repeated nagging or review rituals;
 - clear distinctions between confirmed information, estimates, and suggestions.
 
 Don't assume every subscription is unnecessary, every recurring expense is discretionary, or that everyone should follow the same financial strategy. Help people see what they can do **now** about a future problem.
