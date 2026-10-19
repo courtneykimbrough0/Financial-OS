@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { reviewStatus, reviewSummary } from '../../../domain/cadence';
 import { addDays } from '../../../domain/dates';
 import { estimateSuggestions } from '../../../domain/estimates';
 import { buildForecast, dailyTimeline, explainTimingGaps, lowestPoint, paycheckCycles } from '../../../domain/forecast';
@@ -7,6 +6,7 @@ import { variance } from '../../../domain/occurrences';
 import type { AppData } from '../../../domain/types';
 import { createBackup, readBackup } from '../../backup';
 import { canonicalize, checkForMigration, toRows } from '../rows';
+import { homeView } from '../../../domain/home';
 import { allPlans, TODAY } from './fixtures';
 import { count, load, loadRows, newUser, save, workspaceOf } from './pg';
 
@@ -14,15 +14,13 @@ import { count, load, loadRows, newUser, save, workspaceOf } from './pg';
 function outcomes(d: AppData, today: string) {
   const f = buildForecast(d, today);
   const start = f.forecastStart;
-  const status = reviewStatus(d, today);
   return {
     forecast: f,
     gaps: explainTimingGaps(f),
     cycles: paycheckCycles(f),
     lowest: start ? lowestPoint(dailyTimeline(f, start, addDays(start, 89))) : null,
     suggestions: estimateSuggestions(d, today),
-    review: status,
-    reviewSummary: status.period ? reviewSummary(buildForecast(d, today, { through: status.period.end }), status.period) : null,
+    home: homeView(d, today),
     variances: d.records.map((r) => [r.id, variance(r)]),
   };
 }

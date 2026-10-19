@@ -32,8 +32,8 @@ describe('progress', () => {
     const p = homeView(withOctober(1100), TODAY).progress;
     expect(p.monthToDate).toEqual({
       basis: 'month-to-date-recorded',
-      current: { start: '2026-10-01', end: '2026-10-13', netCents: usd(500) },
-      previous: { start: '2026-09-01', end: '2026-09-13', netCents: usd(400) },
+      current: { start: '2026-10-01', end: '2026-10-13', netCents: usd(500), count: 2 },
+      previous: { start: '2026-09-01', end: '2026-09-13', netCents: usd(400), count: 2 },
       differenceCents: usd(100),
       direction: 'up',
     });
@@ -142,7 +142,7 @@ describe('timing gaps', () => {
 describe('coming up', () => {
   it('lists expected income from several sources, obligations and reserves after today through early next week, in date order', () => {
     const v = homeView(week(), TODAY);
-    expect(v.week).toEqual({ start: '2026-10-11', end: '2026-10-17', comingUpThrough: '2026-10-20' });
+    expect(v.week).toEqual({ start: '2026-10-11', end: '2026-10-17', current: true, comingUpThrough: '2026-10-20' });
     expect(v.comingUp.map((i) => [i.date, i.id])).toEqual([
       ['2026-10-16', 'pay@2026-10-16'],
       ['2026-10-18', 'fund@2026-10-18'],
@@ -233,6 +233,88 @@ describe('accounts on items', () => {
     expect(accountOfId(v.happened, 'side@2026-10-12')).toBe('acct-in');
     expect(accountOfId(v.comingUp, 'side@2026-10-19')).toBe('acct-side');
     expect(accountOfId(v.comingUp, 'pay@2026-10-16')).toBeNull();
+  });
+});
+
+describe('the viewed week', () => {
+  const base = homeView(week(), TODAY);
+  const view = (weekOf: string) => homeView(week(), TODAY, { weekOf });
+
+  it('defaults to the current week', () => {
+    expect(homeView(week(), TODAY, { weekOf: TODAY })).toEqual(base);
+    expect(homeView(week(), TODAY, { weekOf: '2026-10-11' })).toEqual(base);
+  });
+
+  it('moving the week never changes progress, what is overdue or what needs attention', () => {
+    for (const weekOf of ['2026-10-04', '2026-10-20', '2026-11-03', '2027-02-10']) {
+      const v = view(weekOf);
+      expect(v.today).toBe(TODAY);
+      expect(v.progress).toEqual(base.progress);
+      expect(v.attention).toEqual(base.attention);
+    }
+  });
+
+  it('the next week lists its own expected items, after today, and takes no early days of the week after', () => {
+    const v = view('2026-10-20');
+    expect(v.week).toEqual({ start: '2026-10-18', end: '2026-10-24', current: false, comingUpThrough: '2026-10-24' });
+    expect(v.comingUp.map((i) => [i.date, i.id])).toEqual([
+      ['2026-10-18', 'fund@2026-10-18'],
+      ['2026-10-19', 'side@2026-10-19'],
+    ]);
+    expect(v.happened).toEqual([]);
+  });
+
+  it('a week further ahead starts at its first day, not at tomorrow', () => {
+    const v = view('2026-10-27');
+    expect(v.comingUp.map((i) => i.id)).toEqual(['side@2026-10-26', 'pay@2026-10-30']);
+    expect(v.comingUp.every((i) => i.date >= '2026-10-25' && i.date <= '2026-10-31')).toBe(true);
+  });
+
+  it('the previous week lists what was recorded then, and nothing coming up', () => {
+    const v = view('2026-10-07');
+    expect(v.week).toMatchObject({ start: '2026-10-04', end: '2026-10-10', current: false });
+    expect(v.happened.map((i) => i.id)).toEqual(['side@2026-10-05']);
+    expect(v.comingUp).toEqual([]);
+  });
+
+  it('an item recorded this week is not in last week, and a past week keeps its own record', () => {
+    expect(base.happened.map((i) => i.id)).toEqual(['side@2026-10-12']);
+    expect(view('2026-10-07').happened.map((i) => i.id)).not.toContain('side@2026-10-12');
+  });
+
+  it('crosses a month boundary', () => {
+    const v = homeView(week(), '2026-10-29', { weekOf: '2026-11-03' });
+    expect(v.week).toMatchObject({ start: '2026-11-01', end: '2026-11-07', current: false });
+    expect(v.progress.thisMonth.start).toBe('2026-10-01');
+  });
+
+  it('crosses a year boundary', () => {
+    let d = source(ops.emptyData(), SETUP, 'income', 'Paycheck', 1000, '2026-12-05', { type: 'monthly' }, 'pay');
+    d = source(d, SETUP, 'bill', 'Rent', 700, '2026-12-30', { type: 'monthly' }, 'rent');
+    const today = '2026-12-30';
+    const current = homeView(d, today);
+    expect(current.week).toMatchObject({ start: '2026-12-27', end: '2027-01-02', current: true });
+    expect(ids(current.attention)).toContain('rent@2026-12-30');
+    const next = homeView(d, today, { weekOf: '2027-01-04' });
+    expect(next.week).toMatchObject({ start: '2027-01-03', end: '2027-01-09', current: false });
+    expect(next.comingUp.map((i) => i.id)).toEqual(['pay@2027-01-05']);
+    expect(next.attention).toEqual(current.attention);
+  });
+
+  it('gaps follow the viewed week; later ones stay available', () => {
+    const d = gapOn('2026-10-28');
+    const next = homeView(d, TODAY, { weekOf: '2026-10-27' });
+    expect(next.comingUp.filter((i) => i.type === 'gap').map((i) => i.id)).toEqual(['gap@2026-10-28']);
+    expect(next.laterGaps).toEqual([]);
+    const current = homeView(d, TODAY);
+    expect(current.laterGaps.map((g) => g.id)).toEqual(['gap@2026-10-28']);
+  });
+
+  it('reads the same forecast: a viewed week’s totals reconcile with periodKpis', () => {
+    const f = buildForecast(week(), TODAY, { through: '2026-10-31' });
+    const v = view('2026-10-20');
+    const expected = v.comingUp.filter((i) => i.type === 'occurrence').reduce((n, i) => n + (i.type === 'occurrence' ? i.entry.signedCents : 0), 0);
+    expect(expected).toBe(periodKpis(f, '2026-10-18', '2026-10-24').netCents);
   });
 });
 

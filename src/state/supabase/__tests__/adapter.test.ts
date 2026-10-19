@@ -88,7 +88,7 @@ describe('saving', () => {
     expect(undone.records.some((r) => r.id === 'elec@2026-08-03')).toBe(false);
   });
 
-  it('8. a batch marked done and undone', async () => {
+  it('8. a batch marked done, then one item undone', async () => {
     const plan = smallPlan();
     const ids = ['pay@2026-10-23', 'rent@2026-11-01', 'pay@2026-11-06'];
     const { back } = await roundTrip(plan, (d) => unwrap(ops.recordAsExpected(d, ids, { today: '2026-11-06', now: '2026-11-06T12:00:00.000Z' })));
@@ -97,18 +97,16 @@ describe('saving', () => {
       ['rent@2026-11-01', 150000],
       ['pay@2026-11-06', 100000],
     ]);
-    const { back: undone } = await roundTrip(back, (d) => unwrap(ops.undoBatch(d, { ...plan, revision: d.revision }, d, ids)));
-    expect(undone.records).toEqual([]);
+    const { back: undone } = await roundTrip(back, (d) => unwrap(ops.restoreOccurrence(d, ids[2]!, { today: '2026-11-06', now: '2026-11-06T12:00:00.000Z' })));
+    expect(undone.records.map((r) => r.id)).toEqual([ids[0], ids[1]]);
   });
 
-  it('9–10. an estimate dismissal and the review rhythm are kept', async () => {
+  it('9. an estimate dismissal is kept', async () => {
     const plan = richPlan();
     const { back } = await roundTrip({ ...plan, sources: plan.sources.map((s) => (s.id === 'phone' ? { ...s, estimateDismissal: undefined } : s)).map(stripUndefined) }, (d) => {
-      const dismissed = unwrap(dismissEstimate(d, analyzeEstimate(d, 'phone', TODAY).suggestion!, clock));
-      return unwrap(ops.setReviewCadence(dismissed, 'weekly'));
+      return unwrap(dismissEstimate(d, analyzeEstimate(d, 'phone', TODAY).suggestion!, clock));
     });
     expect(back.sources.find((s) => s.id === 'phone')!.estimateDismissal).toEqual({ currentCents: 6000, proposedCents: 6500, through: '2026-09-25' });
-    expect(back.review).toEqual({ cadence: 'weekly', handledOn: null, outcome: null });
   });
 
   it('11. a restore is sent as a replace and replaces the plan', async () => {
@@ -125,7 +123,7 @@ describe('saving', () => {
     const loaded = await adapter.load();
     expect(await adapter.save(unwrap(ops.startOver(loaded)), loaded.revision, 'reset')).toEqual({ ok: true, revision: 38 });
     expect(saveCalls(fake)[0]!.args!.p_mode).toBe('reset');
-    expect(await adapter.load()).toEqual({ schemaVersion: 2, revision: 38, onboardingComplete: false, sources: [], records: [], review: loaded.review });
+    expect(await adapter.load()).toEqual({ schemaVersion: 2, revision: 38, onboardingComplete: false, sources: [], records: [] });
     // A reset that isn't empty is refused, and says why.
     const r = await adapter.save({ ...loaded, revision: 38 }, 38, 'reset');
     expect(r).toEqual({ ok: false, reason: 'error', message: 'This change couldn’t be saved: Starting over needs an empty plan in setup.' });

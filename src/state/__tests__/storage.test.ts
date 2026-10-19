@@ -80,6 +80,17 @@ describe('reading saved data', () => {
     expect(() => migrate({ schemaVersion: 2, sources: [src], records: [] })).toThrow('Saved data is damaged.');
   });
 
+  it('loads a copy saved with a review rhythm, drops the retired field, and never writes it back', async () => {
+    const saved = { ...emptyData(), onboardingComplete: true, review: { cadence: 'weekly', handledOn: '2026-10-09', outcome: 'completed' } };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    const adapter = new LocalStorageAdapter();
+    const loaded = await adapter.load();
+    expect(loaded).toEqual({ ...emptyData(), onboardingComplete: true });
+    expect('review' in loaded).toBe(false);
+    expect(await adapter.save(loaded, loaded.revision)).toMatchObject({ ok: true });
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!)).not.toHaveProperty('review');
+  });
+
   it('keeps a release only on a one-time reserve', () => {
     const one = { id: 'one', sourceId: null, kind: 'reserve', release: true, description: 'Use', tags: [], expectedDate: '2026-10-20', expectedAmountCents: 5000, scheduledDate: '2026-10-20', scheduledAmountCents: 5000, status: 'scheduled', actualDate: null, actualAmountCents: null, completedAt: null, canceledAt: null, cancelNote: null, createdAt: 'x', updatedAt: 'x' };
     const loaded = migrate({ schemaVersion: 2, sources: [], records: [one, { ...one, id: 'two', kind: 'varied' }, { ...one, id: 'three', release: 'yes' }] });

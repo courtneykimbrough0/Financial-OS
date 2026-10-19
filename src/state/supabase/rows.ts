@@ -6,14 +6,13 @@
  *
  * Every financially meaningful field round-trips exactly: identities,
  * original predictions, current expectations, actuals, schedules, pauses,
- * estimate dismissals, the review rhythm (including "none chosen") and
- * onboarding. Three things come back in canonical form (see `canonicalize`):
+ * estimate dismissals and onboarding. Three things come back in canonical form (see `canonicalize`):
  * timestamps as ISO-8601 UTC with milliseconds, schedule versions in start
  * order, and pauses in date order. Sample data is never stored.
  */
 import { isValidDateStr, type DateStr } from '../../domain/dates';
 import { validateRule } from '../../domain/recurrence';
-import { ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OccurrenceRecord, type RecurrenceRule, type RecurringKind, type RecurringSource, type ReviewCadence, type ScheduleVersion, type StoredStatus, type TransactionKind } from '../../domain/types';
+import { ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OccurrenceRecord, type RecurrenceRule, type RecurringKind, type RecurringSource, type ScheduleVersion, type StoredStatus, type TransactionKind } from '../../domain/types';
 
 export interface SourceRow {
   id: string;
@@ -73,9 +72,6 @@ export interface RecordRow {
 /** The body of a save_plan request. */
 export interface PlanRows {
   onboarding_complete: boolean;
-  review_cadence: ReviewCadence | null;
-  review_handled_on: DateStr | null;
-  review_outcome: 'completed' | 'skipped' | null;
   sources: SourceRow[];
   versions: VersionRow[];
   pauses: PauseRow[];
@@ -164,9 +160,6 @@ export function toRows(data: AppData): PlanRows {
   }));
   return {
     onboarding_complete: data.onboardingComplete,
-    review_cadence: data.review?.cadence ?? null,
-    review_handled_on: data.review?.handledOn ?? null,
-    review_outcome: data.review?.outcome ?? null,
     sources,
     versions,
     pauses,
@@ -234,7 +227,6 @@ export function fromRows(plan: LoadedPlan): AppData {
     onboardingComplete: plan.onboarding_complete,
     sources,
     records,
-    ...(plan.review_cadence ? { review: { cadence: plan.review_cadence, handledOn: plan.review_handled_on, outcome: plan.review_outcome } } : {}),
   };
 }
 

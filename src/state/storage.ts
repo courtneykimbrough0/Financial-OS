@@ -6,7 +6,7 @@
  */
 import { isValidDateStr } from '../domain/dates';
 import { emptyData, MAX_ACCOUNT_NAME, MAX_ACCOUNTS, MAX_BALANCE_CENTS } from '../domain/operations';
-import { ACCOUNT_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, REVIEW_CADENCES, accountTypeFor, type Account, type AccountType, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type ReviewCadence, type ReviewSettings, type TransactionKind, type Transfer } from '../domain/types';
+import { ACCOUNT_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type TransactionKind, type Transfer } from '../domain/types';
 
 export type SaveResult =
   | { ok: true; revision: number }
@@ -80,16 +80,6 @@ function isRecord(r: unknown): r is OccurrenceRecord {
     Number.isSafeInteger(v.scheduledAmountCents) &&
     ['scheduled', 'completed', 'canceled'].includes(v.status)
   );
-}
-
-/** A saved review rhythm, if it is well formed; anything else is dropped rather than failing the whole load. */
-function readReview(r: unknown): ReviewSettings | undefined {
-  if (!r || typeof r !== 'object') return undefined;
-  const v = r as Partial<ReviewSettings>;
-  if (!REVIEW_CADENCES.includes(v.cadence as ReviewCadence)) return undefined;
-  const handledOn = isValidDateStr(v.handledOn) ? v.handledOn : null;
-  const outcome = v.outcome === 'completed' || v.outcome === 'skipped' ? v.outcome : null;
-  return { cadence: v.cadence!, handledOn, outcome: handledOn ? outcome : null };
 }
 
 /** A saved estimate dismissal, if it is well formed; anything else is dropped (the suggestion may simply return). */
@@ -205,7 +195,6 @@ export function migrate(raw: unknown): AppData {
       ...(r.sourceId === null || r.status === 'completed' ? keptAccount(accounts, r.kind, accountId) : {}),
       ...(r.sourceId === null && r.kind === 'reserve' && release === true ? { release: true as const } : {}),
     })),
-    ...(readReview(doc.review) ? { review: readReview(doc.review) } : {}),
     ...(accounts.length > 0 ? { accounts } : {}),
     ...(transfers.length > 0 ? { transfers } : {}),
   };

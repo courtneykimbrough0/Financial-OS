@@ -64,20 +64,17 @@ export function richPlan(): AppData {
   d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Car repair', amountCents: usd(800), date: '2026-11-10' }, clock, 'one-repair'));
   d = unwrap(ops.addOneTime(d, { kind: 'reserve', description: 'Holiday fund', amountCents: usd(100), date: '2026-12-01' }, clock, 'one-holiday'));
   d = unwrap(ops.cancelOccurrence(d, 'one-holiday', '', clock));
-  // Review rhythm: on payday, the current one done.
-  d = unwrap(ops.setReviewCadence(d, 'payday'));
-  d = unwrap(ops.completeReview(d, clock));
   return { ...d, revision: 37 };
 }
 
-/** A plan with income and one bill, nothing recorded, no review rhythm. */
+/** A plan with income and one bill, nothing recorded. */
 export function smallPlan(): AppData {
   let d = unwrap(ops.completeOnboarding(ops.emptyData()));
   d = source(d, TODAY, 'income', 'Paycheck', 1000, '2026-10-23', { type: 'biweekly' }, 'pay');
   return source(d, TODAY, 'bill', 'Rent', 1500, '2026-11-01', { type: 'monthly' }, 'rent');
 }
 
-/** A document an early version saved: old kind names, missing optional fields, timestamps without milliseconds, a review set to off. */
+/** A document an early version saved: old kind names, missing optional fields, timestamps without milliseconds. */
 export function legacyPlan(): AppData {
   return migrate({
     schemaVersion: 1,

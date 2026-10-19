@@ -12,7 +12,7 @@
  */
 import { emptyData } from '../domain/operations';
 import type { AppData } from '../domain/types';
-import { ACCOUNTS_IN_SIGNED_IN_SAVES, REVIEW_RHYTHM_IN_ACCOUNTS } from './features';
+import { ACCOUNTS_IN_SIGNED_IN_SAVES } from './features';
 import { migrate, type SaveResult, type StorageAdapter } from './storage';
 
 /**
@@ -57,14 +57,9 @@ export class CloudAdapter implements StorageAdapter {
     private readonly backend: CloudBackend,
     private readonly userId: string,
     private readonly storage: Storage = window.localStorage,
-    /** Whether saves include the review rhythm; see REVIEW_RHYTHM_IN_ACCOUNTS. */
-    private readonly includeReview: boolean = REVIEW_RHYTHM_IN_ACCOUNTS,
     /** Whether saves include accounts and item assignments; see ACCOUNTS_IN_SIGNED_IN_SAVES. */
     private readonly includeAccounts: boolean = ACCOUNTS_IN_SIGNED_IN_SAVES,
   ) {}
-
-  /** The review rhythm the account had when last loaded; kept on saves while `includeReview` is off. */
-  private accountReview: AppData['review'];
 
   private readCopy(): DeviceCopy | null {
     try {
@@ -103,7 +98,6 @@ export class CloudAdapter implements StorageAdapter {
       // Offline: open with the device copy. Its pending change is sent once the connection returns.
       if (copy) {
         this.pendingAfterLoad = copy.pending;
-        this.accountReview = copy.data.review;
         return copy.data;
       }
       throw err;
@@ -114,7 +108,6 @@ export class CloudAdapter implements StorageAdapter {
       if (copy.data.revision === remoteRevision) {
         // Nothing changed elsewhere since this device's change: send it now.
         this.pendingAfterLoad = true;
-        this.accountReview = remote ? migrate(remote.data).review : undefined;
         return copy.data;
       }
       this.setAside(copy.data);
@@ -122,7 +115,6 @@ export class CloudAdapter implements StorageAdapter {
 
     const data: AppData = remote ? { ...migrate(remote.data), revision: remoteRevision } : emptyData();
     this.pendingAfterLoad = false;
-    this.accountReview = data.review;
     if (remote) this.writeCopy({ data, pending: false });
     else this.storage.removeItem(cloudCacheKey(this.userId));
     return data;
@@ -133,12 +125,8 @@ export class CloudAdapter implements StorageAdapter {
   }
 
   async save(data: AppData, baseRevision: number): Promise<SaveResult> {
-    const { isSample: _sample, review, ...rest } = data;
-    // See REVIEW_RHYTHM_IN_ACCOUNTS. While it is off, a rhythm from this device stays out of account saves
-    // (the live rules may refuse the field), but one the account already had is saved back unchanged
-    // (the rules accepted it, and leaving it out would erase it).
-    const kept = this.includeReview ? review : this.accountReview;
-    const doc = withoutAccounts(kept ? { ...rest, review: kept } : rest, this.includeAccounts);
+    const { isSample: _sample, ...rest } = data;
+    const doc = withoutAccounts(rest, this.includeAccounts);
     this.writeCopy({ data: { ...doc, revision: baseRevision }, pending: true });
     let revision: number | null;
     try {
@@ -200,7 +188,7 @@ export function hasPendingDeviceChanges(userId: string, storage: Storage = windo
  * accounts), unless `include`; see ACCOUNTS_IN_SIGNED_IN_SAVES. Reserve
  * releases are ordinary record fields and are kept.
  */
-function withoutAccounts<T extends Omit<AppData, 'isSample' | 'review'>>(doc: T, include: boolean): T {
+function withoutAccounts<T extends Omit<AppData, 'isSample'>>(doc: T, include: boolean): T {
   if (include) return doc;
   const { accounts: _accounts, transfers: _transfers, ...rest } = doc;
   return {

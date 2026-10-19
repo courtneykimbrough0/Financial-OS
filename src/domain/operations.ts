@@ -14,10 +14,9 @@
  */
 import { isValidDateStr, type DateStr } from './dates';
 import type { Cents } from './money';
-import { DEFAULT_REVIEW, reviewStatus } from './cadence';
 import { findOccurrence } from './occurrences';
 import { validateRule } from './recurrence';
-import { ACCOUNT_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, REVIEW_CADENCES, accountTypeFor, type Account, type AccountType, type AppData, type ReviewCadence, type LiabilityType, type OccurrenceRecord, type OneTimeKind, type RecurrenceRule, type RecurringKind, type RecurringSource, type Transfer, type TransactionKind } from './types';
+import { ACCOUNT_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type LiabilityType, type OccurrenceRecord, type OneTimeKind, type RecurrenceRule, type RecurringKind, type RecurringSource, type Transfer, type TransactionKind } from './types';
 
 export type Result = { ok: true; data: AppData } | { ok: false; error: string };
 
@@ -438,7 +437,7 @@ export function restoreOccurrence(data: AppData, id: string, clock: Clock): Resu
 }
 
 // ---------------------------------------------------------------------------
-// Batches: several selected occurrences changed, and undone, as one step
+// Batches: several selected occurrences that are due, changed as one step
 // ---------------------------------------------------------------------------
 
 /** Applies `fn` to each selected occurrence in turn; all succeed or nothing changes. */
@@ -457,52 +456,33 @@ function forEachSelected(data: AppData, ids: string[], today: DateStr, fn: (d: A
   return ok(next);
 }
 
+/** Batches take only items that are due: dated today or earlier. An early payment is recorded one at a time. */
+const NOT_DUE = 'This isn’t due yet. Open it to record it early.';
+
 /**
  * Marks each selected outstanding occurrence done exactly as expected: its
- * scheduled amount, on its scheduled date (or today, if that is still ahead).
- * Only the selected occurrences change. To record a different amount or date,
- * use `recordActual` on that one.
+ * scheduled amount, on its scheduled date. Only items due today or earlier
+ * are accepted; one dated later is refused and nothing changes (record an
+ * early payment with `recordActual`). Only the selected occurrences change.
+ * To record a different amount or date, use `recordActual` on that one.
  */
 export function recordAsExpected(data: AppData, ids: string[], clock: Clock): Result {
   return forEachSelected(data, ids, clock.today, (d, id) => {
     const o = findOccurrence(d, id, clock.today);
     if (!o) return fail('That transaction could not be found.');
+    if (o.status === 'scheduled' && o.scheduledDate > clock.today) return fail(NOT_DUE);
     return recordActual(d, id, { amountCents: o.scheduledAmountCents, date: defaultActualDate(o.scheduledDate, clock.today) }, clock);
   });
 }
 
-/** Moves each selected outstanding occurrence to `date`, keeping its amount. */
+/** Moves each selected outstanding occurrence that is due (today or earlier) to `date`, keeping its amount. */
 export function rescheduleSelected(data: AppData, ids: string[], date: DateStr, clock: Clock): Result {
   return forEachSelected(data, ids, clock.today, (d, id) => {
     const o = findOccurrence(d, id, clock.today);
     if (!o) return fail('That transaction could not be found.');
+    if (o.status === 'scheduled' && o.scheduledDate > clock.today) return fail(NOT_DUE);
     return rescheduleOccurrence(d, id, { date, amountCents: o.scheduledAmountCents }, clock);
   });
-}
-
-/** Compares two records field by field, regardless of key order. */
-function sameRecord(a: OccurrenceRecord | undefined, b: OccurrenceRecord | undefined): boolean {
-  if (!a || !b) return a === b;
-  const keys = Object.keys(a).sort();
-  return JSON.stringify(a, keys) === JSON.stringify(b, Object.keys(b).sort());
-}
-
-/**
- * Undoes a batch: puts the records of the given occurrences back exactly as
- * they were in `before` (removing any that didn't exist then). Every other
- * record and every source stays as it is now. Refused, with nothing changed,
- * if any of those records differs from how the batch left it (`after`), so a
- * later correction is never silently overwritten.
- */
-export function undoBatch(data: AppData, before: AppData, after: AppData, ids: string[]): Result {
-  const selected = new Set(ids);
-  const find = (d: AppData, id: string) => d.records.find((r) => r.id === id);
-  if ([...selected].some((id) => !sameRecord(find(data, id), find(after, id)))) {
-    return fail('Some of these items have changed since, so they can’t be undone together. Open each one to change it.');
-  }
-  const previous = before.records.filter((r) => selected.has(r.id));
-  const kept = data.records.filter((r) => !selected.has(r.id));
-  return ok({ ...data, records: [...kept, ...previous] });
 }
 
 // ---------------------------------------------------------------------------
@@ -723,46 +703,15 @@ export function deleteTransfer(data: AppData, id: string): Result {
   return ok(rest.length ? { ...withoutList, transfers: rest } : withoutList);
 }
 
-// ---------------------------------------------------------------------------
-// Review rhythm
-// ---------------------------------------------------------------------------
-
-/**
- * Chooses how often to review. A different rhythm (or turning reviews off)
- * starts fresh: its own current period is due right away. Choosing the
- * rhythm already in use changes nothing.
- */
-export function setReviewCadence(data: AppData, cadence: ReviewCadence): Result {
-  if (!REVIEW_CADENCES.includes(cadence)) return fail('Choose how often to review.');
-  const current = data.review ?? DEFAULT_REVIEW;
-  if (current.cadence === cadence) return ok(data);
-  return ok({ ...data, review: { cadence, handledOn: null, outcome: null } });
-}
-
-function handleReview(data: AppData, outcome: 'completed' | 'skipped', clock: Clock): Result {
-  if (!reviewStatus(data, clock.today).due) return fail('There’s no review due right now.');
-  return ok({ ...data, review: { ...(data.review ?? DEFAULT_REVIEW), handledOn: clock.today, outcome } });
-}
-
-/** Marks the current review done until the next period. Changes nothing else. */
-export function completeReview(data: AppData, clock: Clock): Result {
-  return handleReview(data, 'completed', clock);
-}
-
-/** Skips the current review; the next period's review is due as usual. Changes nothing else. */
-export function skipReview(data: AppData, clock: Clock): Result {
-  return handleReview(data, 'skipped', clock);
-}
-
 /**
  * Starting over: every recurring item, one-time item and recorded outcome is
- * removed and setup starts again. The review rhythm (a preference, not
- * financial data) and the revision (so the save is accepted) are kept. The
+ * removed and setup starts again. The revision (so the save is accepted) is
+ * kept. The
  * interface offers a backup first; this never runs without the person's
  * explicit confirmation.
  */
 export function startOver(data: AppData): Result {
-  return ok({ ...emptyData(), revision: data.revision, ...(data.review ? { review: data.review } : {}) });
+  return ok({ ...emptyData(), revision: data.revision });
 }
 
 export function completeOnboarding(data: AppData): Result {

@@ -182,15 +182,14 @@ describe('the six classifications', () => {
 });
 
 describe('deleting, replacing and starting over', () => {
-  it('a batch undone in one save removes all its records', () => {
+  it('a batch of due items is saved in one save, and one of them can be undone', () => {
     const { user, data } = stored();
     const ids = ['elec@2026-09-03', 'elec@2026-10-03', 'pay@2026-10-23', 'elec@2026-11-03', 'rent@2026-11-01', 'pay@2026-11-06'];
-    const before = data;
     const after = unwrap(ops.recordAsExpected(data, ids, clockAt('2026-11-06')));
     const saved = saveOk(user, after);
     expect(saved.records).toHaveLength(6);
-    const undone = saveOk(user, unwrap(ops.undoBatch(saved, before, saved, ids)));
-    expect(undone.records).toEqual([]);
+    const undone = saveOk(user, unwrap(ops.restoreOccurrence(saved, 'pay@2026-11-06', clockAt('2026-11-06'))));
+    expect(undone.records.map((r) => r.id)).not.toContain('pay@2026-11-06');
   });
 
   it('an item without history can be removed', () => {
@@ -245,11 +244,11 @@ describe('deleting, replacing and starting over', () => {
     expect(load(user)).toEqual(data);
   });
 
-  it('start over empties the plan back to setup, keeping the review rhythm; a backup restores it', () => {
+  it('start over empties the plan back to setup; a backup restores it', () => {
     const { user, data } = stored(richPlan());
     const original = data;
     const reset = saveOk(user, unwrap(ops.startOver(original)), 'reset');
-    expect(reset).toEqual({ schemaVersion: 2, revision: 2, onboardingComplete: false, sources: [], records: [], review: original.review });
+    expect(reset).toEqual({ schemaVersion: 2, revision: 2, onboardingComplete: false, sources: [], records: [] });
     // Start over can't be used to replace a plan with something else.
     const sneaky = save(user, { ...original, revision: reset.revision }, { mode: 'reset' });
     expect([sneaky.code, sneaky.message]).toEqual(['PT422', 'Starting over needs an empty plan in setup.']);

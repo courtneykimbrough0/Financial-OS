@@ -169,15 +169,6 @@ describe('firebaseBackend against the rules', () => {
     expect(await backend.fetch()).toBeNull();
   });
 
-  it('saves the review rhythm once chosen, and leaves it out until then', async () => {
-    const backend = firebaseBackend(alice, 'alice');
-    await backend.save(withBill('A'), 0);
-    expect((await backend.fetch())?.data).not.toHaveProperty('review');
-    const review = { cadence: 'payday' as const, handledOn: '2026-10-15', outcome: 'skipped' as const };
-    expect(await backend.save({ ...withBill('A'), review }, 1)).toBe(2);
-    expect((await backend.fetch())?.data).toMatchObject({ review });
-  });
-
   it('reports a refused request as an access error, not as offline', async () => {
     await firebaseBackend(alice, 'alice').save(withBill('A'), 0);
     const intruder = firebaseBackend(bob, 'alice');

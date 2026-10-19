@@ -125,19 +125,6 @@ export function transfersInRange(data: AppData, start: DateStr, end: DateStr): T
     .sort((a, b) => (a.date !== b.date ? (a.date < b.date ? -1 : 1) : a.status !== b.status ? (a.status === 'recorded' ? -1 : 1) : b.amountCents - a.amountCents || (a.id < b.id ? -1 : 1)));
 }
 
-export interface TransfersDue {
-  /** Expected transfers dated today or earlier: not recorded yet. */
-  attention: Transfer[];
-  /** Expected transfers after today through `end`. */
-  upcoming: Transfer[];
-}
-
-/** Expected transfers to act on, oldest first. A passed date never marks one done. */
-export function transfersDue(data: AppData, today: DateStr, end: DateStr): TransfersDue {
-  const expected = transfersInRange(data, '0000-01-01', end).filter((t) => t.status === 'expected');
-  return { attention: expected.filter((t) => t.date <= today), upcoming: expected.filter((t) => t.date > today) };
-}
-
 /** Every transfer touching the account, newest first. */
 export function accountTransfers(data: AppData, accountId: string): Transfer[] {
   return transfersInRange(data, '0000-01-01', '9999-12-31')
