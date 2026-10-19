@@ -52,7 +52,7 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | Audit recommendations (not yet approved) | docs/REDUCTION-AUDIT.md §3 and decisions §7 |
 | Deferred features | PRODUCT_EXPERIENCE.md §10; Step 8's deferred imports; Step 9 |
 
-### Current state (verified October 19, 2026; `main` at `fe8b13d`)
+### Current state (verified October 19, 2026; `main` at `75e3e7c`, plus the H3 pull request)
 
 `main` is the default and integration branch (AGENTS.md section H). CI (`.github/workflows/ci.yml`, five jobs) passed on both merge commits below.
 
@@ -60,14 +60,14 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | --- | --- | --- |
 | PR #4, account distribution and cash-flow architecture | **Complete**, merged as `3fac4ac` | AC1–AC4, AC5 in part, CI, seven integration fixes |
 | PR #5, Home (H1 selector, H2 opening screen) | **Complete**, merged as `fe8b13d` | H1, H2; R2 and C1 done through them |
-| H3, Forecast and navigation | **Planned**, not authorized | Plan and decisions below |
-| H4, conditional visibility and wording | **Planned** | After H3 |
+| H3, Forecast and Plan navigation | **Complete** in its pull request (awaiting review and merge) | H3 entry below |
+| H4, conditional visibility and wording | **Planned**, next | After H3 |
 | A1, where the running total starts | **Complete** | Status |
-| A2, defects D3 and D5 | **Planned** (still open in the code; D4 no longer applies) | Phase A2 |
+| A2, defects D3 and D5 | **Complete** (with H3's pull request; D4 no longer applies) | Phase A2 |
 | R1, remove the main paycheck and Paycheck view | **Planned** (decided, Q2) | Phase R1 |
 | R2, remove review states, rhythm and batch Undo | **Complete** (in H2) | Phase R2 |
 | C1, the week view | **Complete** (as Home, H2) | Phase C1 |
-| C2, navigation | **In part** (Home and Forecast are separate); the rest is H3 | Phases C2, H3 |
+| C2, navigation | **Complete except Activity** (Home, Forecast, Plan; Activity is C3) | Phases C2, H3 |
 | C3 Activity, C4 visibility, C5 Plan screens, C6 one "See what happens if…", B1 wording, D redesign | **Planned** | Phases |
 | E, income expansion | **Planned**, needs separate approval and decision D8 | Phase E |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
@@ -76,7 +76,7 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | Step 9 virtual allocations; Phase F (hosted Supabase, Firebase cutover, offline-sync removal, Vercel) | **Deferred** (paused by the product experience decision) | Phase F, Step 10 |
 | Steps 3 and 5 (review list, review rhythm) | **Superseded** by Home (H2) | Status |
 
-### Home (progress, actions, what's coming) — H1 and H2 merged to `main` (October 2026); H3 planned below, not authorized
+### Home (progress, actions, what's coming) — H1 and H2 merged to `main`; H3 complete in review (October 2026)
 
 Goal: within about 30 seconds of opening the app, a person can tell (1) whether their cash flow is improving, declining or steady, (2) what needs attention now, and (3) what's coming. It carries out phases R2, C1, C2 and C4 below in a tighter order, and adds no financial data, inputs or engine.
 
@@ -107,7 +107,7 @@ Previous and next week stay one tap away. The month calendar, breakdown, tag tot
 **Sequence (each its own authorized task, with tests):**
 - **H1. Home selector (complete, October 2026).** `homeView` in `src/domain/home.ts` (FINANCIAL_ENGINE.md, Home): progress (this month and last month, recorded and projected, a like-for-like month-to-date comparison and a labeled projected-versus-recorded one), attention, coming up, happened and later gaps, including transfers, reserves and accounts. Domain tests only (`home`, 22). No interface change.
 - **H2. Opening screen (complete and merged, October 2026; PR #4 `3fac4ac`, PR #5 `fe8b13d`).** `Home` (`src/ui/screens/Home.tsx`, route `#/home`, first in the navigation and the screen after setup, restore and sample data): progress, Needs attention, a week navigator over Coming up and Happened, built from `homeView(data, today, { weekOf })`. `weekOf` is separate from `today`, so moving weeks never changes overdue items, progress or Needs attention. Removed: review completion and skip, the review rhythm (all options, its Settings control and `REVIEW_RHYTHM_IN_ACCOUNTS`), the weekly and period review sheets, the overdue banner, the review entry, the transfers entry, batch Undo (`undoBatch`) and `transfersDue`. Batch recording and moving take only items due today or earlier. The old dashboard keeps its place as **Forecast** (route `#/dashboard`) with its Month, Week, Paycheck and Custom views, calendar, breakdown, scenarios and the rest, untouched until H3. The stored `review` field is dropped on load and never written; the Supabase `review_*` columns stay, unused, and the Firestore rules still accept the optional field. Tests: 32 domain (`home`), 7 `batch`, 25 component (`ui/home`), browser smoke steps.
-- **H3. Forecast tab and navigation (plan above).** Month calendar, gaps, breakdown, tag totals, custom range and scenarios under Forecast; tabs This week, Forecast, Plan (Activity later, C3); redirects from old routes. Complexity: medium.
+- **H3. Forecast and Plan navigation (complete, October 2026; in review).** Navigation is Home, Forecast and Plan, with Settings behind the gear. `#/forecast` is canonical (`Forecast.tsx`, formerly `Dashboard.tsx`); `#/dashboard` redirects, replacing the address without a history entry. Plan (`Plan.tsx`, `#/plan/income`, `expenses`, `liabilities`, `reserves`) hosts the existing item screens unchanged; the old kind routes redirect. Forecast's Week tab is removed; Month, Paycheck and Custom each list their weeks and days, and a custom range can cover a single week. Accounts and transfers stay in Settings, item sheets and Home. No calculation changed. Decisions 1–3 below were approved as recommended. Not done from the plan: step 5's deep links from Home into a particular Forecast month or gap (Home's "Full forecast and calendar" opens the current month). Tests: `navigation` (19), updated `home`, `money-accounts` and `scenario-sheet`, the browser smoke test (redirects, Plan sections, phone-width fit) and the Supabase browser suite's navigation helper.
 - **H4. Conditional visibility and wording** on the screens touched (C4, B1 for those screens). Complexity: low.
 - Later, separately: R1 (main paycheck), C3 (Activity), C5 (Plan and setup), C6 (one "See what happens if…"), D (visual redesign).
 
@@ -115,7 +115,7 @@ Previous and next week stay one tap away. The month calendar, breakdown, tag tot
 
 **Decided for H2 (as built):** progress leads with recorded month to date against the same days of last month, with the projected month as a second, labeled line (Projected against last month's recorded result); expected income that is not recorded appears in Needs attention as "Expected — not recorded", never as late; "coming up" is the viewed week, and for the current week it runs through Tuesday of next week.
 
-**H3 plan (Forecast and navigation; proposed, not authorized).** Goal: Home answers "what matters now"; Forecast holds the detail behind it; neither asks for more work. No new calculation, screen logic or metric.
+**H3 plan (Forecast and navigation; approved and built, see the H3 entry above).** Goal: Home answers "what matters now"; Forecast holds the detail behind it; neither asks for more work. No new calculation, screen logic or metric.
 
 *What exists to reuse.* The Forecast screen is today's dashboard (`Dashboard.tsx`, route `#/dashboard`): Month / Week / Paycheck / Custom views, the cash-flow hero with its timing-gap line, the calendar and key, breakdown, tag totals, the week list or day timeline, the day sheet, the gap and What if… sheets, and "Explore a scenario". Plan screens are `SourcesScreen.tsx` (Income, Liabilities, Reserves) and `ExpensesScreen`; accounts and transfers live in Settings and in item sheets. Shared parts already exist: `PeriodNav`, `EntryButton` (`components/entries.tsx`), `GapsSheet`, `OccurrenceSheet`.
 
@@ -131,7 +131,7 @@ Previous and next week stay one tap away. The month calendar, breakdown, tag tot
 
 *Conditional visibility.* Sections with nothing to show are hidden (breakdown, tag totals, gap line, empty week list); no zero-value placeholders.
 
-*Genuine decisions for the product owner.*
+*Decisions for the product owner (all three approved as recommended, October 2026).*
 1. Drop the Forecast Week tab? (Recommended: yes, Home and the week list cover it.)
 2. A Plan tab grouping Income / Expenses / Liabilities / Reserves, or keep them as separate top-level items? (Recommended: Plan, to keep the bar to three.)
 3. Rename the route `dashboard` to `forecast` with a redirect, or keep both names? (Recommended: rename with a redirect.)
@@ -173,7 +173,7 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
   - an e2e step for the reproduction.
 - **Excluded:** layout; removing the main paycheck (R1); "cash available now".
 
-**A2. Small verified defects** (D3, D5). **Planned**: both still present (`OccurrenceSheet.tsx` shows the raw kind in "Delete this one-time …"; `enterSample` failures are unhandled). D4 no longer applies (the rhythm entry was removed in H2). Complexity: **low**.
+**A2. Small verified defects** (D3, D5). **Complete (October 2026).** D3: a one-time item's delete label names it in words ("varied spending", "one-time income", "Strategic Reserve amount", "use of reserves"), never the kind id. D5: when the device won't store sample data, `enterSample` returns a result instead of throwing, leaves nothing half set up, and Settings and the welcome screen say what went wrong. Tests: `occurrence-sheet` (D3), `mode` and `sample-data` (D5), each failing against the old code. D4 no longer applies (the rhythm entry was removed in H2). Complexity: **low**.
 - **Scope:**
   - the one-time item's delete label uses its own words;
   - a failed switch to sample data shows a message.
@@ -236,7 +236,7 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
   - e2e: record and move from the week view.
 - **Excluded:** visual redesign; new data.
 
-**C2. Navigation and the remaining dashboard** (Q1; PRODUCT_EXPERIENCE.md §3.1, §3.3). **In part:** Home and Forecast are separate (H2); the rest is H3. Complexity: **medium**.
+**C2. Navigation and the remaining dashboard** (Q1; PRODUCT_EXPERIENCE.md §3.1, §3.3). **Complete except the Activity tab** (H2 and H3): Home, Forecast and Plan, with redirects from old addresses; Activity is C3. Complexity: **medium**.
 - **Scope:**
   - The tabs This week, Forecast, Activity and Plan; Plan for now is today's Income / Expenses / Liabilities screens behind one tab.
   - Forecast holds the month calendar, gaps, "See what happens if…" and the range chip.
@@ -685,13 +685,13 @@ Replaces the earlier plan to validate Firebase persistence and offline behavior.
 - **Phase A1: complete (October 2026).** The running total starts the day before the earliest outstanding or received-today income from any active recurring source, so entry order and the main paycheck no longer decide it (defect D1). Overdue income counts the same for every source; one-time income, inactive sources and hypothetical scenario income don't start it. Setup's first-period cash flow, lowest running total and before-payday note start from the same point (defect D2, `firstPeriod`). Pay periods still follow the main paycheck. Tests: `forecast-start` (15), the updated `forecast` anchor test, a setup test in `setup-timing-gaps`, and a browser step in the e2e smoke test.
 - **Accounts AC1: complete (October 2026).** Income, Distribution and Payment accounts (`types.ts`, `addAccount` / `renameAccount` / `assignAccount`), an Accounts section in Settings, an optional account on recurring item forms, validation on load, device storage and backups. Firebase saves leave accounts out (`ACCOUNTS_IN_SIGNED_IN_SAVES`) and the Supabase adapter refuses them, so nothing is silently dropped. The forecast never reads accounts. Tests: `accounts` (domain), `accounts-persistence`, `money-accounts` (UI), and an e2e step.
 - **Account distribution and cash-flow architecture: AC2, AC3, AC4 complete; AC5 partly (October 2026).** Six classifications (Strategic Reserves and Varied Spending); reserves lower available cash flow without counting as spending; operating and available cash flow; transfers (expected and recorded); optional opening balances with recorded and projected balances; account deletion; the account on item rows; transfers on the dashboard. Supabase kind constraints updated (migration `20261018000002`); Supabase still refuses accounts, transfers and releases (AC-S). Tests: `reserves-transfers` (25), updated `plan`, `accounts-persistence`, `storage`, `money-accounts` (AC2, balances, transfers, dashboard), a DB classification test, and an e2e transfer step. Next: AC-S with Phase F, or the planned-transfer decision (conflict 6).
+- **A2 and H3: complete (October 2026), in one pull request against `main`.** D3 and D5 fixed with failing-first regression tests; Home, Forecast and Plan navigation with redirects from earlier addresses; Forecast's Week tab removed. No calculation changed. Details in Phase A2 and the H3 entry.
 - **Home H1 and H2: complete, merged (October 2026).** PR #5, merge commit `fe8b13d`, on top of PR #4 (`3fac4ac`). Details in the H1 and H2 entries above. CI passed on both merge commits, and on integrated `main` the unit and component tests (665), browser smoke test, PostgreSQL (58) and Firestore rules (14) suites also passed locally.
 - **Repository governance (October 2026).** `main` is the default and integration branch; work arrives through pull requests (AGENTS.md section H). The earlier working branch `ccr-12ec4965-6tzwgr` is merged and retired.
 - **PR #4 integration verification (October 2026).** GitHub Actions CI added (`.github/workflows/ci.yml`): typecheck, lint, unit tests, build, browser smoke test, database tests, Firestore rules, and the Supabase integration and browser suites on a local stack, all green. An integration review found and fixed: the classifications migration failing on existing savings rows; recorded payments moving when an item changed accounts; projected balances leaving out items due before the opening day; "Use reserves" offered in the Supabase build, which refuses it; release amounts shown with the wrong sign on several sheets; an empty default destination in the transfer form; unbounded opening balances in storage. Each has a regression test.
 
 ## Open items
 
-- **Smaller verified defects D3 and D5:** docs/REDUCTION-AUDIT.md §4; Phase A2. (D1 and D2, the forecast start, are fixed; D4 went with the review rhythm in H2.)
 - **Cash before payday is unknown.** The running total starts at $0 the day before the next payday, so a shortfall caused by spending before that payday can't be shown. A product decision (for example, an optional "cash available now" amount); see FINANCIAL_ENGINE.md.
 - **For the UI review** (calculations are consistent; how they are presented needs a look):
   - An early payment followed by a schedule change: both the payment and the new schedule's first payment count.

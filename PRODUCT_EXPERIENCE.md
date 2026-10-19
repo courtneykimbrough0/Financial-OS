@@ -108,7 +108,7 @@ The structure follows the information model. The full proposal, with the reasons
 - **Settings** sits behind the gear.
 - **"+ Add"** in the top bar opens a short sheet with two choices: Add income, and Add a bill or payment. Record a payment is in the week view, where the due items are.
 - **Wide screens** move the tabs to a left rail (section 7.6).
-- **Today:** the tabs are Home (the opening screen, carrying the week view; section 3.2), Forecast (the earlier dashboard, still with its Month / Week / Paycheck / Custom views), Income, Expenses (Bills, Subscriptions, Varied), Liabilities and Reserves (**Implemented**, roadmap H2). The Forecast, Activity and Plan structure above is roadmap H3 and later (**Proposed**).
+- **Today:** the tabs are Home (the opening screen, carrying the week view; section 3.2), Forecast (Month, Paycheck and Custom views; no separate week view) and Plan (Income, Expenses with Bills, Subscriptions and Varied, Liabilities, Reserves), with Settings behind the gear (**Implemented**, roadmap H2 and H3). Activity (section 4), "+ Add" and the merged "See what happens if…" are not built yet (**Proposed**).
 
 ### 3.2 The week view
 
