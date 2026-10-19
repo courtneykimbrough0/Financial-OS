@@ -79,18 +79,20 @@ Previous and next week stay one tap away. The month calendar, breakdown, tag tot
 **Dependencies:** R2 before H2 (it removes the review states the opening screen would otherwise duplicate). Decisions Q1, Q3, Q4 and the progress comparison (below) before H2. Nothing depends on Supabase, Firebase or new storage.
 
 **Sequence (each its own authorized task, with tests):**
-- **H1. Week grouping helper.** Pure function: attention, coming up, happened and early next week, including transfers and shortfalls; overdue items from earlier weeks; week boundaries. Domain tests only. Complexity: low.
+- **H1. Home selector (complete, October 2026).** `homeView` in `src/domain/home.ts` (FINANCIAL_ENGINE.md, Home): progress (this month and last month, recorded and projected, a like-for-like month-to-date comparison and a labeled projected-versus-recorded one), attention, coming up, happened and later gaps, including transfers, reserves and accounts. Domain tests only (`home`, 22). No interface change.
 - **H2. Opening screen.** The progress line and the four sections, built from H1, replacing the dashboard as the first screen; previous/next week. Removes the four entry points. Component and e2e tests. Complexity: medium. (Includes R2.)
 - **H3. Forecast tab and navigation.** Month calendar, gaps, breakdown, tag totals, custom range and scenarios under Forecast; tabs This week, Forecast, Plan (Activity later, C3); redirects from old routes. Complexity: medium.
 - **H4. Conditional visibility and wording** on the screens touched (C4, B1 for those screens). Complexity: low.
 - Later, separately: R1 (main paycheck), C3 (Activity), C5 (Plan and setup), C6 (one "See what happens if…"), D (visual redesign).
 
-**Decisions needing product-owner approval:**
-1. **Q1:** the week view opens the app, with no separate dashboard.
-2. **Progress comparison:** this month's available cash flow (recorded plus expected) against last month's recorded cash flow, shown as improving, steady (within a small band, for example $25 or 5%) or declining. The alternative is the change in the lowest running total over the next 4 weeks. Either reuses existing figures; the choice is about meaning.
-3. **Q3 / Q4:** remove review completion states, the payday rhythm and batch Undo; limit batch recording to items due today or earlier.
-4. **Timing-gap threshold for Needs attention:** a gap starting within 7 days (proposed) versus any gap in the 90-day look-ahead (which stays visible in the progress line either way).
-5. **Q2** (main paycheck and Paycheck view) can wait; H1–H3 don't depend on it.
+**Decisions (product owner, October 2026):** the week view opens the app (Q1); progress is month over month, shown as the factual difference with no threshold; review completion states, the payday rhythm and batch Undo are removed (Q3, Q4), keeping ordinary corrections and legitimate early payments; a timing gap needs attention when it starts within 7 days, and later gaps stay visible in the forecast; the main paycheck is removed separately (Q2), not as part of Home.
+
+**Still open before H2 renders Home:**
+1. **Which progress comparison leads.** `homeView` gives both: month to date, recorded against recorded (like for like, but early in a month it covers few days), and this month projected against last month recorded (a full month, but the bases differ and must be labeled). Recommended: lead with month to date, and show the projected month as a second, labeled line.
+2. **Overdue income in Needs attention.** H1 includes it (a late paycheck needs recording just as a bill does). Confirm, or limit the section to obligations and keep overdue income under Coming up.
+3. **"Early next week."** H1 uses Sunday to Tuesday after this week. Confirm the length.
+
+**H2 integration points:** the opening screen renders `homeView(data, today)` sections in order (progress, attention, coming up, happened), skipping empty ones; items open the existing `OccurrenceSheet` (occurrence id), `TransferForm` (transfer id) and `GapsSheet` (gap start); batch record and move use `recordAsExpected` and `rescheduleSelected` on attention items due today or earlier; previous and next week need a small addition in H2 (a week to show, separate from `today`, since `today` also decides what is overdue). `laterGaps` feeds the Forecast tab (H3).
 
 ### Phases
 

@@ -260,6 +260,11 @@ function kpisOf(t: MoneyTotals): PeriodKpis {
   return { incomeCents: t.inCents, outflowCents: t.outCents, reservesCents: t.reservedCents, operatingCents: t.inCents - t.outCents, netCents: t.netCents };
 }
 
+/** `PeriodKpis` for any set of entries (for example only the recorded ones in a range). Canceled entries are excluded. */
+export function kpisOfEntries(entries: ForecastEntry[]): PeriodKpis {
+  return kpisOf(totals(entries));
+}
+
 /** Income, outflows, net reserves, operating and available cash flow for [start, end]. */
 export function periodKpis(forecast: Forecast, start: DateStr, end: DateStr): PeriodKpis {
   return kpisOf(totals(entriesInRange(forecast, start, end)));
