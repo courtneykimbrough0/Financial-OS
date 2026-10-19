@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ClipboardList, House, ChartLine, RefreshCw, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
+import { ClipboardList, History, House, ChartLine, RefreshCw, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
 import { useDataMode } from '../state/mode';
 import { useAccountSlot } from '../state/slots';
 import { useStore } from '../state/store';
@@ -11,6 +11,7 @@ import { useWaitingUpdate } from './update';
 import { Forecast } from './screens/Forecast';
 import { Home } from './screens/Home';
 import { Onboarding } from './screens/Onboarding';
+import { Activity } from './screens/Activity';
 import { Settings } from './screens/Settings';
 import { Plan } from './screens/Plan';
 
@@ -18,6 +19,7 @@ import { Plan } from './screens/Plan';
 const NAV: { route: Route; label: string; icon: LucideIcon; current: (r: Route) => boolean }[] = [
   { route: 'home', label: 'Home', icon: House, current: (r) => r === 'home' },
   { route: 'forecast', label: 'Forecast', icon: ChartLine, current: (r) => r === 'forecast' },
+  { route: 'activity', label: 'Activity', icon: History, current: (r) => r === 'activity' },
   { route: 'plan/income', label: 'Plan', icon: ClipboardList, current: (r) => r.startsWith('plan/') },
 ];
 
@@ -34,6 +36,7 @@ export function App() {
   const titles: Record<Route, string> = {
     home: 'Home',
     forecast: 'Forecast',
+    activity: 'Activity',
     'plan/income': 'Income · Plan',
     'plan/expenses': 'Expenses · Plan',
     'plan/liabilities': 'Liabilities · Plan',
@@ -80,6 +83,7 @@ export function App() {
         {route === 'onboarding' && <Onboarding />}
         {route === 'home' && <Home />}
         {route === 'forecast' && <Forecast />}
+        {route === 'activity' && <Activity />}
         {route.startsWith('plan/') && <Plan section={route.slice('plan/'.length) as PlanSection} />}
         {route === 'settings' && <Settings />}
         <RecoveredChangesNotice />

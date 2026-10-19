@@ -79,7 +79,7 @@ describe('Home layout', () => {
       </DataModeProvider>,
     );
     await screen.findByRole('heading', { level: 1, name: /^Home/ });
-    expect(within(screen.getAllByRole('navigation', { name: 'Main' })[0]!).getAllByRole('link').map((a) => a.textContent)).toEqual(['Home', 'Forecast', 'Plan']);
+    expect(within(screen.getAllByRole('navigation', { name: 'Main' })[0]!).getAllByRole('link').map((a) => a.textContent)).toEqual(['Home', 'Forecast', 'Activity', 'Plan']);
     expect(screen.getByRole('button', { name: 'Full forecast and calendar' })).toBeInTheDocument();
   });
 

@@ -43,20 +43,23 @@ const OUTFLOW_ROWS: [Exclude<TransactionKind, 'income' | 'reserve'>, string][] =
  * period. Reserves are their own line: money set aside, never spending.
  * Classifications with nothing in the period are left out.
  */
-export function PeriodBreakdown({ plan, title, showRange = true }: { plan: PeriodPlan; title: string; showRange?: boolean }) {
+export function PeriodBreakdown({ plan, title, showRange = true, recorded = false }: { plan: PeriodPlan; title: string; showRange?: boolean; recorded?: boolean }) {
   const rows = OUTFLOW_ROWS.filter(([kind]) => plan.byKind[kind] > 0);
+  const incomeLabel = recorded ? 'Received' : 'Income';
+  const spendingLabel = recorded ? 'Paid' : 'Spending';
+  const reserveLabel = (positive: boolean) => recorded ? (positive ? 'Saved in reserves' : 'Used from reserves') : positive ? 'Set aside in reserves' : 'Used from reserves';
   return (
     <section className="stack-sm" aria-labelledby="breakdown-period">
       <SectionLabel id="breakdown-period">{title}</SectionLabel>
       <div className="card">
         {showRange && <p className="hint">{formatRange(plan.start, plan.end)}</p>}
         <dl className="breakdown">
-          <Row label="Income" value={formatSignedMoney(plan.incomeCents)} tone="in" />
-          <Row label="Spending" value={plan.outflowCents ? `−${formatMoney(plan.outflowCents)}` : formatMoney(0)} tone="out" />
+          <Row label={incomeLabel} value={formatSignedMoney(plan.incomeCents)} tone="in" />
+          <Row label={spendingLabel} value={plan.outflowCents ? `−${formatMoney(plan.outflowCents)}` : formatMoney(0)} tone="out" />
           {rows.map(([kind, label]) => (
             <Row key={kind} label={label} value={formatMoney(plan.byKind[kind])} level={1} />
           ))}
-          {plan.reservesCents !== 0 && <Row label={plan.reservesCents > 0 ? 'Set aside in reserves' : 'Used from reserves'} value={formatSignedMoney(-plan.reservesCents)} tone="reserve" />}
+          {plan.reservesCents !== 0 && <Row label={reserveLabel(plan.reservesCents > 0)} value={formatSignedMoney(-plan.reservesCents)} tone="reserve" />}
           <Row label="Cash flow" value={formatSignedMoney(plan.cashFlowCents)} tone={plan.cashFlowCents < 0 ? 'neg' : undefined} strong />
         </dl>
       </div>

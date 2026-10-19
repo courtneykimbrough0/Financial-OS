@@ -108,7 +108,7 @@ The structure follows the information model. The full proposal, with the reasons
 - **Settings** sits behind the gear.
 - **"+ Add"** in the top bar opens a short sheet with two choices: Add income, and Add a bill or payment. Record a payment is in the week view, where the due items are.
 - **Wide screens** move the tabs to a left rail (section 7.6).
-- **Today:** the tabs are Home (the opening screen, carrying the week view; section 3.2), Forecast (Month, Paycheck and Custom views; no separate week view) and Plan (Income, Expenses with Bills, Subscriptions and Varied, Liabilities, Reserves), with Settings behind the gear (**Implemented**, roadmap H2 and H3). Activity (section 4), "+ Add" and the merged "See what happens if…" are not built yet (**Proposed**).
+- **Today:** the tabs are Home (the opening screen, carrying the week view; section 3.2), Forecast (Month, Paycheck and Custom views; no separate week view), Activity (recorded entries with expected-vs-actual and month summary; section 4) and Plan (Income, Expenses with Bills, Subscriptions and Varied, Liabilities, Reserves), with Settings behind the gear (**Implemented**, roadmap H2, H3 and C3). "+ Add" and the merged "See what happens if…" are not built yet (**Proposed**).
 
 ### 3.2 The week view
 
@@ -188,9 +188,9 @@ Corrections are ordinary edits, with no undo history (AGENTS.md section A2).
 
 ---
 
-## 4. Recorded activity: the Activity view (Proposed; Missing today)
+## 4. Recorded activity: the Activity view (Implemented, C3)
 
-**Today.** Nothing shows what actually happened across items. Recorded entries appear only in day sheets, each item's "See dates", estimate sheets and the optional period review (**Verified**, REDUCTION-AUDIT §1).
+**Today.** The Activity tab shows all recorded (completed) entries for the selected month, sorted newest first, with a summary (Received, Paid, Cash flow), a by-kind breakdown using recorded labels (Received/Paid/Saved), a by-tag breakdown, kind filter chips, and expected-vs-actual variance for each item. Month navigation uses the same `PeriodNav` as Forecast. The domain layer (`activityView` in `src/domain/activity.ts`) produces a `PeriodPlan`-compatible summary so `PeriodBreakdown` and `TagBreakdown` render it directly.
 
 ### 4.1 First release: existing data only
 
