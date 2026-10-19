@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { ChevronRight, Minus, TrendingDown, TrendingUp, TriangleAlert } from 'lucide-react';
 import { addDays, formatMedium, formatMonthYear, formatRange, formatShort, type DateStr } from '../../domain/dates';
+import { navigateToForecast } from '../router';
 import { formatMoney, formatSignedMoney } from '../../domain/money';
 import { homeView, type CashFlowComparison, type HomeGap, type HomeItem, type HomeOccurrence, type HomeProgress, type HomeView } from '../../domain/home';
 import * as ops from '../../domain/operations';
@@ -67,9 +68,9 @@ export function Home() {
       </section>
 
       <p className="center">
-        <a className="button link" href="#/forecast">
+        <button type="button" className="button link" onClick={() => navigateToForecast(week.start)}>
           Full forecast and calendar
-        </a>
+        </button>
       </p>
 
       {sheet?.kind === 'occurrence' && <OccurrenceSheet occurrenceId={sheet.id} onClose={() => setSheet(null)} />}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { DateStr } from '../domain/dates';
 
 /** The Plan screen's sections, one per group of financial items. */
 export const PLAN_SECTIONS = ['income', 'expenses', 'liabilities', 'reserves'] as const;
@@ -21,11 +22,33 @@ const REDIRECTS: Record<string, Route> = {
 export function parse(hash: string): Route | null {
   const path = hash.replace(/^#\/?/, '');
   if ((ROUTES as string[]).includes(path)) return path as Route;
+  if (/^forecast\/\d{4}-\d{2}-\d{2}$/.test(path)) return 'forecast';
   return REDIRECTS[path] ?? null;
 }
 
 export function navigate(route: Route) {
   window.location.hash = `/${route}`;
+}
+
+let _forecastDate: DateStr | null = null;
+
+/** Navigate to Forecast with an initial focus date (e.g. from Home's week view). */
+export function navigateToForecast(date: DateStr) {
+  _forecastDate = date;
+  window.location.hash = `/forecast`;
+}
+
+/** Read and clear the date passed by `navigateToForecast`. Called once by Forecast on mount. */
+export function consumeForecastDate(): DateStr | null {
+  const d = _forecastDate;
+  _forecastDate = null;
+  return d;
+}
+
+/** Extract a date from a `#/forecast/YYYY-MM-DD` hash, for direct links. */
+export function parseForecastDate(): DateStr | null {
+  const m = window.location.hash.match(/^#\/forecast\/(\d{4}-\d{2}-\d{2})$/);
+  return m ? (m[1] as DateStr) : null;
 }
 
 /** Rewrites an earlier address to its route's own, without adding a history entry. */

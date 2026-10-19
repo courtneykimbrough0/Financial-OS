@@ -1606,6 +1606,9 @@ li.negative .tl-tally {
 .forecast.stack-lg > * + * {
   margin-top: var(--space-4);
 }
+.home.stack-lg > * + * {
+  margin-top: var(--space-5);
+}
 
 .hero-top {
   display: flex;

@@ -80,7 +80,7 @@ describe('Home layout', () => {
     );
     await screen.findByRole('heading', { level: 1, name: /^Home/ });
     expect(within(screen.getAllByRole('navigation', { name: 'Main' })[0]!).getAllByRole('link').map((a) => a.textContent)).toEqual(['Home', 'Forecast', 'Plan']);
-    expect(screen.getByRole('link', { name: 'Full forecast and calendar' })).toHaveAttribute('href', '#/forecast');
+    expect(screen.getByRole('button', { name: 'Full forecast and calendar' })).toBeInTheDocument();
   });
 
   it('shows no review, rhythm, undo or overdue-banner controls anywhere', async () => {
@@ -158,7 +158,7 @@ describe('Progress', () => {
     const user = await renderHome(plan());
     const progress = await screen.findByRole('region', { name: /Cash flow so far in October/ });
     const projected = /October ends at\s*([+−]?\$[\d,]+\.\d\d)/.exec(progress.textContent ?? '')![1]!;
-    await user.click(screen.getByRole('link', { name: 'Full forecast and calendar' }));
+    await user.click(screen.getByRole('button', { name: 'Full forecast and calendar' }));
     const hero = await screen.findByRole('region', { name: 'Cash flow' });
     expect(within(hero).getByText(projected, { selector: '.hero-value' })).toBeInTheDocument();
   });
