@@ -166,11 +166,6 @@ export interface RecurringSource {
   tags: string[];
   /** Required for liability payments, absent for every other kind. */
   liabilityType?: LiabilityType;
-  /**
-   * Income only: pay periods run from one payday of this source to the next.
-   * At most one source has it; see `mainPaycheckId` for the fallback.
-   */
-  mainPaycheck?: boolean;
   /** Sorted ascending by startDate; never empty. */
   versions: ScheduleVersion[];
   active: boolean;
@@ -292,11 +287,7 @@ export function recurringOccurrenceId(sourceId: string, expectedDate: DateStr): 
   return `${sourceId}@${expectedDate}`;
 }
 
-/**
- * The income that defines pay periods: the active income marked as the main
- * paycheck, or else the first active recurring income. Null without income.
- */
-export function mainPaycheckId(data: AppData): string | null {
-  const incomes = data.sources.filter((s) => s.kind === 'income' && s.active);
-  return (incomes.find((s) => s.mainPaycheck) ?? incomes[0])?.id ?? null;
+/** True when at least one active recurring income exists. */
+export function hasActiveIncome(data: AppData): boolean {
+  return data.sources.some((s) => s.kind === 'income' && s.active);
 }

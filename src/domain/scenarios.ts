@@ -16,10 +16,10 @@ import { expandSource, findOccurrence } from './occurrences';
 import * as ops from './operations';
 import { compareForecasts, gapChanges } from './preview';
 import { describeRule, startKeepsDates } from './recurrence';
-import { mainPaycheckId, signFor, type AppData, type RecurrenceRule, type TransactionKind } from './types';
+import { signFor, type AppData, type RecurrenceRule, type TransactionKind } from './types';
 
-/** A recurring schedule for a hypothetical item, or "on each main payday from the next one". */
-export type ScenarioSchedule = { startDate: DateStr; rule: RecurrenceRule } | 'each-paycheck';
+/** A recurring schedule for a hypothetical item. */
+export type ScenarioSchedule = { startDate: DateStr; rule: RecurrenceRule };
 
 export type ScenarioChange =
   /** Income that might arrive once. Always hypothetical. */
@@ -123,21 +123,6 @@ interface Applied {
   assumption: Omit<ScenarioAssumption, 'dates' | 'inRunningTotal'> & { dates: (end: DateStr) => DateStr[] };
 }
 
-/** The main paycheck's schedule from its next payday that keeps its dates. */
-function paycheckSchedule(data: AppData, today: DateStr): { startDate: DateStr; rule: RecurrenceRule } | string {
-  const id = mainPaycheckId(data);
-  const main = data.sources.find((s) => s.id === id);
-  if (!main) return 'There’s no main paycheck to follow. Choose dates instead.';
-  const version = [...main.versions].filter((v) => v.startDate <= today).pop() ?? main.versions[0]!;
-  for (const gen of expandSource(main, today, addDays(today, 400))) {
-    if (startKeepsDates(version.rule, version.startDate, gen.expectedDate)) return { startDate: gen.expectedDate, rule: version.rule };
-  }
-  return 'The main paycheck has no upcoming payday to follow.';
-}
-
-function resolveSchedule(data: AppData, schedule: ScenarioSchedule, today: DateStr) {
-  return schedule === 'each-paycheck' ? paycheckSchedule(data, today) : schedule;
-}
 
 const sourceDates = (data: AppData, sourceId: string, from: DateStr) => (end: DateStr) => {
   const s = data.sources.find((x) => x.id === sourceId);
@@ -219,8 +204,7 @@ function applyChange(data: AppData, change: ScenarioChange, index: number, clock
     case 'recurring-reserve':
     case 'hypothetical-income': {
       const income = change.kind === 'hypothetical-income';
-      const schedule = resolveSchedule(data, change.schedule, clock.today);
-      if (typeof schedule === 'string') return schedule;
+      const schedule = change.schedule;
       const next = unwrap(ops.addSource(data, { kind: income ? 'income' : 'reserve', description: change.description, amountCents: change.amountCents, startDate: schedule.startDate, rule: schedule.rule }, clock, id));
       if (typeof next === 'string') return next;
       return {
