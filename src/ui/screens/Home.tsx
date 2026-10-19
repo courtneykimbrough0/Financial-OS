@@ -67,7 +67,7 @@ export function Home() {
       </section>
 
       <p className="center">
-        <a className="button link" href="#/dashboard">
+        <a className="button link" href="#/forecast">
           Full forecast and calendar
         </a>
       </p>

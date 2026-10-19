@@ -83,7 +83,7 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
 - **Kind avatars:** income (banknote, green), bill (receipt, indigo), subscription (repeat, blue), liability (card, violet), Strategic Reserves (piggy bank, teal).
 - **Timing-gap banner:** a red-outlined card with a warning triangle ("2 timing gaps ahead · Next 90 days"), shown only when the tally goes below $0. It opens a sheet listing each gap's dates, length, and lowest amount. Its wording describes the gap and gives no advice.
 - **Choice pills:** a required single choice (e.g. liability type: Card, Loan, Line of credit) shown as equal-width pills backed by native radio buttons. The selected pill is light, and all pills get a red outline if nothing is chosen on save.
-- **Navigation:** six tabs: Home, Forecast, Income, Expenses (Bills, Subscriptions, Varied), Liabilities and Reserves; Settings behind the gear. (Roadmap H3 proposes reducing these to Home, Forecast and Plan.)
+- **Navigation:** three tabs: Home, Forecast and Plan; Settings behind the gear. Plan has a row of section pills (Income, Expenses, Liabilities, Reserves) that fits a phone width without scrolling; Expenses keeps its Bills, Subscriptions and Varied tabs.
 - **Pill tabs:** two options inside a raised pill track, used within cards. The active option is light.
 - **Totals strip / sheet stats:** three centered label-over-value columns, with values aligned on one baseline.
 - **Callouts:** soft-tinted rounded blocks (info, warn, danger, ok) that always lead with an icon or a bold phrase.

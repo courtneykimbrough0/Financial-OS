@@ -7,7 +7,7 @@ import type { AppData } from '../../domain/types';
 import { MemoryAdapter } from '../../state/storage';
 import { StoreProvider, useStore } from '../../state/store';
 import { ToastProvider } from '../components/common';
-import { Dashboard } from '../screens/Dashboard';
+import { Forecast } from '../screens/Forecast';
 
 /*
  * The plan from scenarios.test.ts. Today is Fri 2026-10-16. Paid $1,000
@@ -35,7 +35,7 @@ async function mount(data = plan()) {
     <StoreProvider adapter={adapter} today={TODAY}>
       <ToastProvider>
         <Spy />
-        <Dashboard />
+        <Forecast />
       </ToastProvider>
     </StoreProvider>,
   );

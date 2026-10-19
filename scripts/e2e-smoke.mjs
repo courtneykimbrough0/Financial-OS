@@ -170,7 +170,7 @@ try {
   await shot('04a-home');
   await page.getByRole('link', { name: 'Full forecast and calendar' }).click();
 
-  step('dashboard: cash flow leads, with a breakdown by category');
+  step('forecast: cash flow leads, with a breakdown by category');
   await page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
   const heroText = await page.locator('.hero').innerText();
   assert.match(heroText, /^Cash flow\s+\+\$3,190\.00\s+\+\$3,600\.00 in · −\$410\.00 out/);
@@ -180,18 +180,22 @@ try {
   assert.doesNotMatch(monthBreakdown, /Subscriptions|reserves/);
   await shot('04-dashboard-month');
 
-  step('dashboard: week view follows the period, with a running total each day');
-  await page.getByRole('tab', { name: 'Week', exact: true }).click();
-  await page.getByRole('button', { name: 'Next week' }).click();
+  step('forecast: no separate Week tab (Home has the week); a custom range covers one week, with a running total each day');
+  const views = page.getByRole('tablist', { name: 'Forecast view' });
+  assert.deepEqual(await views.getByRole('tab').allInnerTexts(), ['Month', 'Paycheck', 'Custom']);
+  await views.getByRole('tab', { name: 'Custom', exact: true }).click();
+  await page.getByLabel('Start date').fill('2026-10-18');
+  await page.getByLabel('End date').fill('2026-10-24');
   assert.match(await page.locator('.hero').innerText(), /^Cash flow\s+−\$350\.00/);
   const weekBreakdown = await page.locator('section[aria-labelledby="breakdown-period"]').innerText();
   assert.match(weekBreakdown, /Liability payments\s+\$350\.00/);
   assert.doesNotMatch(weekBreakdown, /Bills/);
-  const weekDays = await page.locator('.timeline').innerText();
+  await page.getByRole('button', { name: /^Oct 18 – 24/ }).click();
+  const weekDays = await page.locator('.week-days .timeline').innerText();
   assert.match(weekDays, /Sun, Oct 18[\s\S]*Running total\s+\$1,800\.00[\s\S]*Tue, Oct 20[\s\S]*Running total\s+\$1,450\.00[\s\S]*Sat, Oct 24/);
-  await shot('04b-dashboard-week');
+  await shot('04b-forecast-week');
 
-  step('dashboard: paycheck view keeps the running total, week by week');
+  step('forecast: paycheck view keeps the running total, week by week');
   await page.getByRole('tab', { name: 'Paycheck', exact: true }).click();
   await page.getByRole('button', { name: 'Next pay period' }).click();
   await page.getByRole('heading', { name: 'Oct 29 – Nov 11' }).waitFor();
@@ -201,7 +205,7 @@ try {
   assert.match(await page.locator('.week-days .timeline > li').first().innerText(), /Thu, Oct 29[\s\S]*Running total\s+\$3,190\.00/);
   await shot('05-dashboard-paycheck');
 
-  step('dashboard: custom range validation');
+  step('forecast: custom range validation');
   await page.getByRole('tab', { name: 'Custom', exact: true }).click();
   await page.getByLabel('Start date').fill('2026-11-10');
   await page.getByLabel('End date').fill('2026-11-01');
@@ -243,7 +247,7 @@ try {
   await page.getByRole('heading', { name: 'Oct 11 – 17', level: 2 }).waitFor();
   // Phone layout: nothing spills sideways.
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
-  await page.goto(`${BASE}#/dashboard`);
+  await page.goto(`${BASE}#/forecast`);
   await page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
 
   step('tapping a week opens its days, reflecting the actual date and amount');
@@ -270,24 +274,39 @@ try {
   await page.keyboard.press('Escape');
 
   step('income screen shows recorded history and keeps the schedule');
-  await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Income' }).click();
+  await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Plan' }).click();
   await page.getByRole('button', { name: 'See dates' }).click();
   const dates = await page.locator('.source-occurrences').innerText();
   assert.match(dates, /Oct 16, 2026[\s\S]*Expected \$1,800\.00 on Oct 15, 2026[\s\S]*Received/);
   assert.match(dates, /Oct 29, 2026[\s\S]*\+\$1,800\.00[\s\S]*Expected/);
   await shot('09-income');
 
-  step('navigation: Home, Forecast, Income, Expenses, Liabilities, Reserves');
+  step('navigation: Home, Forecast and Plan; Plan holds Income, Expenses, Liabilities and Reserves; old addresses still open');
   const nav = page.getByRole('navigation', { name: 'Main' }).last();
-  assert.deepEqual(await nav.getByRole('link').allInnerTexts(), ['Home', 'Forecast', 'Income', 'Expenses', 'Liabilities', 'Reserves']);
-  await nav.getByRole('link', { name: 'Liabilities' }).click();
+  assert.deepEqual(await nav.getByRole('link').allInnerTexts(), ['Home', 'Forecast', 'Plan']);
+  const planNav = page.getByRole('navigation', { name: 'Plan' });
+  assert.deepEqual(await planNav.getByRole('link').allInnerTexts(), ['Income', 'Expenses', 'Liabilities', 'Reserves']);
+  await planNav.getByRole('link', { name: 'Liabilities' }).click();
   await page.getByRole('heading', { name: 'Liabilities', level: 1 }).waitFor();
   assert.match(await page.locator('.source-card').innerText(), /Car loan[\s\S]*Loan · Monthly on the 20th/);
-  await nav.getByRole('link', { name: 'Expenses' }).click();
+  await planNav.getByRole('link', { name: 'Expenses' }).click();
   await page.getByRole('tab', { name: 'Bills', selected: true }).waitFor();
   assert.deepEqual(await page.getByRole('tablist', { name: 'Expense type' }).getByRole('tab').allInnerTexts(), ['Bills', 'Subscriptions', 'Varied']);
   assert.match(await page.locator('.card-list').innerText(), /Rent[\s\S]*Housing/);
-  await page.goto(`${BASE}#/income`);
+  await planNav.getByRole('link', { name: 'Reserves' }).click();
+  await page.getByRole('heading', { name: 'Strategic Reserves', level: 1 }).waitFor();
+  await page.goto(`${BASE}#/dashboard`);
+  await page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
+  assert.equal(new URL(page.url()).hash, '#/forecast');
+  await page.goto(`${BASE}#/liabilities`);
+  await page.getByRole('heading', { name: 'Liabilities', level: 1 }).waitFor();
+  assert.equal(new URL(page.url()).hash, '#/plan/liabilities');
+  // Phone layout: the four Plan sections fit without scrolling, and nothing spills sideways.
+  assert.equal(await page.evaluate(() => { const n = document.querySelector('.plan-nav'); return n.scrollWidth <= n.clientWidth; }), true);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+  await page.locator('.toast').first().waitFor({ state: 'detached' }).catch(() => {});
+  await shot('09b-plan-liabilities');
+  await page.goto(`${BASE}#/plan/income`);
 
   step('data persists across reloads');
   await page.reload();
@@ -296,7 +315,7 @@ try {
 
   step('desktop layout');
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`${BASE}#/dashboard`);
+  await page.goto(`${BASE}#/forecast`);
   await page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
   await shot('10-desktop');
 
@@ -321,7 +340,7 @@ try {
   await restoreSheet.getByRole('button', { name: 'Replace with backup' }).click();
   await page.getByText('Backup restored.').waitFor();
   await page.getByRole('heading', { name: /^Home/ }).waitFor();
-  await page.goto(`${BASE}#/income`);
+  await page.goto(`${BASE}#/plan/income`);
   assert.match(await page.locator('.source-card').innerText(), /Paycheck[\s\S]*Next: Oct 29, 2026/);
   await page.goto(`${BASE}#/settings`);
 
@@ -393,7 +412,7 @@ try {
   assert.equal(await page.getByRole('dialog').count(), 0);
   assert.equal(await page.getByText('Timing gap ahead').count(), 0);
   // Late paycheck: actual recorded, next one still scheduled.
-  await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Income' }).click();
+  await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Plan' }).click();
   await page.getByRole('button', { name: 'See dates' }).click();
   const sampleDates = await page.locator('.source-occurrences').innerText();
   assert.match(sampleDates, /Oct 14, 2026[\s\S]*Expected \$1,800\.00 on Oct 13, 2026[\s\S]*Received/);
@@ -401,7 +420,7 @@ try {
   await page.getByRole('button', { name: 'Leave sample data' }).click();
   await page.getByRole('heading', { name: /^Home/ }).waitFor();
   assert.equal(await page.getByText('You’re exploring sample data.').count(), 0);
-  await page.goto(`${BASE}#/income`);
+  await page.goto(`${BASE}#/plan/income`);
   assert.match(await page.locator('.source-card').innerText(), /Paycheck[\s\S]*Next: Oct 29, 2026/);
 
   step('estimate suggestion: see the evidence, preview the forecast, approve after confirming');
@@ -440,7 +459,7 @@ try {
   assert.match(await restoreHousehold.innerText(), /This backup has 4 items/);
   await restoreHousehold.getByRole('button', { name: 'Replace with backup' }).click();
   await page.getByText('Backup restored.').waitFor();
-  await page.goto(`${BASE}#/expenses`);
+  await page.goto(`${BASE}#/plan/expenses`);
   const elecCard = page.locator('.source-card', { has: page.getByRole('heading', { name: 'Electricity' }) });
   assert.match(await elecCard.locator('.estimate-callout').innerText(), /Suggested estimate: \$215\.00 instead of \$180\.00 from Nov 3\./);
   assert.equal(await page.locator('.source-card', { has: page.getByRole('heading', { name: 'Rent' }) }).locator('.estimate-callout').count(), 0);
@@ -502,7 +521,7 @@ try {
   await page.locator('input[aria-label="Backup file"]').setInputFiles(planPath);
   await page.getByRole('dialog', { name: 'Restore this backup?' }).getByRole('button', { name: 'Replace with backup' }).click();
   await page.getByText('Backup restored.').waitFor();
-  await page.goto(`${BASE}#/dashboard`);
+  await page.goto(`${BASE}#/forecast`);
   const planBefore = await page.evaluate(() => localStorage.getItem('financial-os:data'));
   // Open from the keyboard.
   await page.getByRole('button', { name: 'Explore a scenario' }).focus();
@@ -613,7 +632,7 @@ try {
     await sheet.getByRole('button', { name: 'Add account' }).click();
     await page.getByText('Account added.').waitFor();
     const dataBefore = JSON.parse(await page.evaluate(() => localStorage.getItem('financial-os:data')));
-    await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Income' }).click();
+    await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Plan' }).click();
     await page.getByRole('button', { name: 'Edit' }).first().click();
     const edit = page.getByRole('dialog', { name: /^Edit / });
     await edit.getByLabel('Account (optional)').selectOption({ label: 'Paycheck account' });
@@ -699,7 +718,7 @@ try {
     await p2.getByRole('heading', { name: /^Home/ }).waitFor();
     await p2.getByRole('link', { name: 'Full forecast and calendar' }).click();
     await p2.getByRole('heading', { name: 'Your cash flow' }).waitFor();
-    assert.match(await p2.locator('.dashboard .hero').innerText(), /Lowest running total\s*−\$600\.00 · Oct 22[\s\S]*Timing gap ahead/);
+    assert.match(await p2.locator('.forecast .hero').innerText(), /Lowest running total\s*−\$600\.00 · Oct 22[\s\S]*Timing gap ahead/);
     await fresh.close();
   }
 

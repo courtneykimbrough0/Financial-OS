@@ -47,11 +47,11 @@ import { PeriodBreakdown, TagBreakdown } from '../components/plan';
 import { DayTransfers } from '../components/money-accounts';
 import { navigate } from '../router';
 
-type View = 'month' | 'week' | 'cycle' | 'custom';
+/** Forecast views. The week has its own place on Home; here each period lists its weeks, and a week opens its days. */
+type View = 'month' | 'cycle' | 'custom';
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'month', label: 'Month' },
-  { id: 'week', label: 'Week' },
   { id: 'cycle', label: 'Paycheck' },
   { id: 'custom', label: 'Custom' },
 ];
@@ -74,7 +74,7 @@ type Sheet =
   | { kind: 'calendar-key' }
   | { kind: 'scenario' };
 
-export function Dashboard() {
+export function Forecast() {
   const { data, today } = useStore();
   const [view, setView] = useState<View>('month');
   const [focus, setFocus] = useState<DateStr>(today);
@@ -93,7 +93,6 @@ export function Dashboard() {
 
   const fixedRange = useMemo((): [DateStr, DateStr] | null => {
     if (view === 'month') return [startOfMonth(focus), endOfMonth(focus)];
-    if (view === 'week') return [startOfWeek(focus), endOfWeek(focus)];
     if (view === 'custom') return customError ? null : [customStart, customEnd];
     return null;
   }, [view, focus, customStart, customEnd, customError]);
@@ -110,7 +109,7 @@ export function Dashboard() {
   };
 
   return (
-    <div className="dashboard stack-lg">
+    <div className="forecast stack-lg">
       <header className="screen-header">
         <h1>
           <span className="sr-only">Your cash flow, </span>
@@ -123,7 +122,7 @@ export function Dashboard() {
         Explore a scenario
       </button>
 
-      <div className="segmented" role="tablist" aria-label="Dashboard view">
+      <div className="segmented" role="tablist" aria-label="Forecast view">
         {VIEWS.map((v) => (
           <button
             key={v.id}
@@ -131,7 +130,7 @@ export function Dashboard() {
             role="tab"
             id={`tab-${v.id}`}
             aria-selected={view === v.id}
-            aria-controls="dashboard-panel"
+            aria-controls="forecast-panel"
             className={view === v.id ? 'active' : ''}
             onClick={() => {
               setView(v.id);
@@ -143,7 +142,7 @@ export function Dashboard() {
         ))}
       </div>
 
-      <section id="dashboard-panel" role="tabpanel" aria-labelledby={`tab-${view}`} className="stack-lg">
+      <section id="forecast-panel" role="tabpanel" aria-labelledby={`tab-${view}`} className="stack-lg">
         {view === 'month' && (
           <PeriodNav
             label={formatMonthYear(focus)}
@@ -152,16 +151,6 @@ export function Dashboard() {
             onPrev={() => setFocus(addMonthsClamped(startOfMonth(focus), -1))}
             onNext={() => setFocus(addMonthsClamped(startOfMonth(focus), 1))}
             onToday={focus.slice(0, 7) !== today.slice(0, 7) ? () => setFocus(today) : undefined}
-          />
-        )}
-        {view === 'week' && (
-          <PeriodNav
-            label={formatRange(startOfWeek(focus), endOfWeek(focus))}
-            prevLabel="Previous week"
-            nextLabel="Next week"
-            onPrev={() => setFocus(addDays(startOfWeek(focus), -7))}
-            onNext={() => setFocus(addDays(startOfWeek(focus), 7))}
-            onToday={startOfWeek(focus) !== startOfWeek(today) ? () => setFocus(today) : undefined}
           />
         )}
         {view === 'cycle' &&
@@ -210,7 +199,6 @@ export function Dashboard() {
             key={view}
             forecast={forecast}
             range={range}
-            view={view}
             today={today}
             selected={selected && selected >= range[0] && selected <= range[1] ? selected : null}
             onDay={openDay}
@@ -264,7 +252,7 @@ function IssueCard({ forecast }: { forecast: Forecast }) {
         Totals for each period are still shown below.
       </p>
       <div>
-        <button type="button" className="button primary" onClick={() => navigate('income')}>
+        <button type="button" className="button primary" onClick={() => navigate('plan/income')}>
           Go to Income
         </button>
       </div>
@@ -277,7 +265,6 @@ function IssueCard({ forecast }: { forecast: Forecast }) {
 function PeriodBody({
   forecast,
   range,
-  view,
   today,
   selected,
   onDay,
@@ -285,7 +272,6 @@ function PeriodBody({
 }: {
   forecast: Forecast;
   range: [DateStr, DateStr];
-  view: View;
   today: DateStr;
   selected: DateStr | null;
   onDay: (d: DateStr) => void;
@@ -314,16 +300,7 @@ function PeriodBody({
       <PeriodBreakdown plan={plan} title="Breakdown" showRange={false} />
       <TagBreakdown plan={plan} />
 
-      {view === 'week' ? (
-        <section aria-labelledby="days-heading" className="stack-sm">
-          <SectionLabel id="days-heading">Day by day</SectionLabel>
-          <div className="card list-card">
-            <Timeline rows={rows} lowDate={low?.date ?? null} onSelect={onDay} anchor={forecast.anchor} anyBeforeAnchor={rows.some((r) => r.tallyCents === null)} />
-          </div>
-        </section>
-      ) : (
-        <WeekList forecast={forecast} start={start} end={end} lowDate={low?.date ?? null} onDay={onDay} />
-      )}
+      <WeekList forecast={forecast} start={start} end={end} lowDate={low?.date ?? null} onDay={onDay} />
     </>
   );
 }

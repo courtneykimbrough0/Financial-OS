@@ -953,7 +953,11 @@ fieldset.inline-fields .field label {
   justify-content: center;
   gap: 6px;
 }
-.segmented button {
+.segmented button,
+.segmented a {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
   min-height: var(--tap);
   padding: 8px 14px;
   white-space: nowrap;
@@ -965,10 +969,26 @@ fieldset.inline-fields .field label {
   color: var(--color-text);
   cursor: pointer;
 }
-.segmented button.active {
+.segmented button.active,
+.segmented a.active {
   background: var(--color-text);
   color: var(--color-text-inverse);
   font-weight: 650;
+}
+
+.plan-nav {
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.plan-nav a {
+  padding: 8px 12px;
+  font-size: var(--text-small);
+}
+@media (max-width: 420px) {
+  .plan-nav {
+    justify-content: flex-start;
+  }
 }
 
 .period-nav {
@@ -1581,9 +1601,9 @@ li.negative .tl-tally {
   }
 }
 
-/* ---------- Condensed dashboard ---------- */
+/* ---------- Condensed forecast ---------- */
 
-.dashboard.stack-lg > * + * {
+.forecast.stack-lg > * + * {
   margin-top: var(--space-4);
 }
 

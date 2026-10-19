@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { buildForecast, tallyOn } from '../../domain/forecast';
-import { addSource, emptyData } from '../../domain/operations';
+import { addOneTime, addSource, emptyData } from '../../domain/operations';
 import type { AppData } from '../../domain/types';
 import { MemoryAdapter } from '../../state/storage';
 import { StoreProvider, useStore } from '../../state/store';
@@ -118,5 +118,33 @@ describe('OccurrenceSheet', () => {
     expect(saved.records[0]).toMatchObject({ status: 'canceled', cancelNote: 'Unpaid leave', actualAmountCents: null });
     const f = buildForecast(saved, '2026-10-11');
     expect(f.forecastStart).toBe('2026-10-29');
+  });
+});
+
+describe('deleting a one-time item names it in words (defect D3)', () => {
+  const at = { today: '2026-10-11', now: '2026-10-11T12:00:00Z' };
+  function oneTime(kind: 'income' | 'varied' | 'reserve', release?: true): AppData {
+    const r = addOneTime(emptyData(), { kind, description: 'Item', amountCents: 5000, date: '2026-10-20', ...(release ? { release } : {}) }, at, 'one');
+    if (!r.ok) throw new Error(r.error);
+    return r.data;
+  }
+
+  it.each([
+    ['varied', undefined, 'Delete this varied spending'],
+    ['income', undefined, 'Delete this one-time income'],
+    ['reserve', undefined, 'Delete this Strategic Reserve amount'],
+    ['reserve', true, 'Delete this use of reserves'],
+  ] as const)('%s%s: "%s", never the internal kind id', async (kind, release, label) => {
+    const user = userEvent.setup();
+    render(
+      <StoreProvider adapter={new MemoryAdapter(oneTime(kind, release))} today="2026-10-11">
+        <ToastProvider>
+          <OccurrenceSheet occurrenceId="one" onClose={() => {}} />
+        </ToastProvider>
+      </StoreProvider>,
+    );
+    await user.click(await screen.findByRole('button', { name: label }));
+    expect(screen.getByRole('heading', { name: `${label}?` })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/one-time (varied|reserve)\b/);
   });
 });

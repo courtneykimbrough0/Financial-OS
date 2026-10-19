@@ -10,7 +10,7 @@ import { liabilityPrefix, type OccurrenceRecord, type RecurringKind, type Recurr
 import { useAccount } from '../../state/account';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
-import { FlowAmount, Icon, KindAvatar, Modal, SectionLabel, TagList, useToast } from '../components/common';
+import { FlowAmount, FormError, Icon, KindAvatar, Modal, SectionLabel, TagList, useToast } from '../components/common';
 import { KIND_COPY, MainPaycheckPicker, OneTimeForm, SourceForm } from '../components/forms';
 import { TimingGapsBanner } from '../components/gaps';
 import { CashFlowBanner, PeriodBreakdown, TagBreakdown } from '../components/plan';
@@ -396,6 +396,7 @@ export function Onboarding() {
   const [step, setStep] = useState(0);
   const [needIncome, setNeedIncome] = useState(false);
   const [sheet, setSheet] = useState<SetupSheet | null>(null);
+  const [sampleError, setSampleError] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const hasIncome = data.sources.some((s) => s.kind === 'income' && s.active);
   const plan = useMemo(() => {
@@ -469,11 +470,12 @@ export function Onboarding() {
             type="button"
             className="button link full"
             onClick={() => {
-              void enterSample().then(() => navigate('home'));
+              void enterSample().then((r) => (r.ok ? navigate('home') : setSampleError(r.message)));
             }}
           >
             Explore with sample data
           </button>
+          <FormError message={sampleError} />
           <div className="center">
             <RestoreBackupButton label="Have a backup? Restore it" />
           </div>

@@ -7,10 +7,19 @@ import { StoreProvider } from './store';
 export type DataMode = 'real' | 'sample';
 const MODE_KEY = 'financial-os:mode';
 
+/** Shown when this device won't store the sample data (storage full, or blocked as in some private windows). */
+export const SAMPLE_UNAVAILABLE = 'Sample data couldn’t be set up on this device. Check that this browser can store site data and has space, then try again.';
+
+export type SampleResult = { ok: true } | { ok: false; message: string };
+
 interface ModeApi {
   mode: DataMode;
-  /** Switches to a fresh copy of the sample data. Real data is left untouched. */
-  enterSample: () => Promise<void>;
+  /**
+   * Switches to a fresh copy of the sample data. Real data is left untouched.
+   * Never throws: when the device can't store the sample, it stays on the
+   * person's own data and says why.
+   */
+  enterSample: () => Promise<SampleResult>;
   /** Discards the sample data and returns to the user's own data. */
   exitSample: () => void;
 }
@@ -44,13 +53,24 @@ export function DataModeProvider({ children, storage = window.localStorage, adap
     [storage, mode, realAdapter],
   );
 
-  const enterSample = useCallback(async () => {
-    const sample = new LocalStorageAdapter(storage, SAMPLE_STORAGE_KEY);
-    await sample.clear();
-    const result = await sample.save(buildSampleData(todayLocal()), 0);
-    if (!result.ok) throw new Error(result.message);
-    storage.setItem(MODE_KEY, 'sample');
+  const enterSample = useCallback(async (): Promise<SampleResult> => {
+    try {
+      const sample = new LocalStorageAdapter(storage, SAMPLE_STORAGE_KEY);
+      await sample.clear();
+      const result = await sample.save(buildSampleData(todayLocal()), 0);
+      if (!result.ok) return { ok: false, message: SAMPLE_UNAVAILABLE };
+      storage.setItem(MODE_KEY, 'sample');
+    } catch {
+      // Leave nothing half set up: the person stays on their own data.
+      try {
+        storage.removeItem(SAMPLE_STORAGE_KEY);
+      } catch {
+        // Storage refuses even removal; there is nothing more to undo.
+      }
+      return { ok: false, message: SAMPLE_UNAVAILABLE };
+    }
     setMode('sample');
+    return { ok: true };
   }, [storage]);
 
   const exitSample = useCallback(() => {
