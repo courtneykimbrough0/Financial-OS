@@ -45,7 +45,7 @@ import { GapsSheet } from '../components/gaps';
 import { WhatIfSheet } from '../components/WhatIfSheet';
 import { PeriodBreakdown, TagBreakdown } from '../components/plan';
 import { DayTransfers } from '../components/money-accounts';
-import { navigate } from '../router';
+import { consumeForecastDate, navigate, parseForecastDate } from '../router';
 
 /** Forecast views. The week has its own place on Home; here each period lists its weeks, and a week opens its days. */
 type View = 'month' | 'cycle' | 'custom';
@@ -77,7 +77,7 @@ type Sheet =
 export function Forecast() {
   const { data, today } = useStore();
   const [view, setView] = useState<View>('month');
-  const [focus, setFocus] = useState<DateStr>(today);
+  const [focus, setFocus] = useState<DateStr>(() => consumeForecastDate() ?? parseForecastDate() ?? today);
   const [cycleIndex, setCycleIndex] = useState(0);
   const [customStart, setCustomStart] = useState<DateStr>(today);
   const [customEnd, setCustomEnd] = useState<DateStr>(addDays(today, 30));
@@ -396,7 +396,7 @@ function CashFlowHero({
         {low && !worst && (
           <p className="callout callout-ok gap-line">
             <Icon icon={Check} size={16} />
-            <span>Running total stays at or above $0 this period</span>
+            <span>Running total stays above $0 this period</span>
           </p>
         )}
       </div>
@@ -594,7 +594,7 @@ function WeekList({ forecast, start, end, lowDate, onDay }: { forecast: Forecast
             );
           })}
         </ul>
-        <p className="hint card-note">Weeks run Sunday to Saturday. Tap a week to see its days, and a day for its transactions.</p>
+        <p className="hint card-note">Tap a week to see its days, or a day for details.</p>
       </div>
     </section>
   );

@@ -202,7 +202,7 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
       </div>
       {expanded && (
         <div className="source-occurrences">
-          <p className="hint">Last 60 days and next 90 days. Select one to record what happened or change just that date.</p>
+          <p className="hint">Last 60 days and next 90 days. Tap one to record or change it.</p>
           {occurrences.length === 0 ? (
             <p className="muted">No dates in this window.</p>
           ) : (
@@ -270,7 +270,7 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
   return (
     <div className="stack-lg">
       {embedded ? (
-        <p className="muted center">{copy.intro}</p>
+        sources.length === 0 && oneTimes.length === 0 ? <p className="muted center">{copy.intro}</p> : null
       ) : (
         <header className="screen-header">
           <h1>{copy.title}</h1>

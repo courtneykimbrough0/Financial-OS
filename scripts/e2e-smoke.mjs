@@ -168,7 +168,7 @@ try {
   assert.match(await page.locator('.home').innerText(), /Oct 11 – 17[\s\S]*Coming up[\s\S]*Thu, Oct 15[\s\S]*Paycheck/i);
   assert.equal(await page.getByRole('button', { name: /Undo/ }).count(), 0);
   await shot('04a-home');
-  await page.getByRole('link', { name: 'Full forecast and calendar' }).click();
+  await page.getByRole('button', { name: 'Full forecast and calendar' }).click();
 
   step('forecast: cash flow leads, with a breakdown by category');
   await page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
@@ -372,7 +372,7 @@ try {
   await page.getByText('You’re exploring sample data.').waitFor();
   // Unpaid bill: stays visible as overdue.
   assert.match(await page.getByRole('region', { name: 'Needs attention' }).innerText(), /Phone/);
-  await page.getByRole('link', { name: 'Full forecast and calendar' }).click();
+  await page.getByRole('button', { name: 'Full forecast and calendar' }).click();
   // Negative tally before a later payday (look ahead with a custom range).
   await page.getByRole('tab', { name: 'Custom', exact: true }).click();
   await page.getByLabel('End date').fill('2026-11-30');
@@ -716,7 +716,7 @@ try {
     await p2.getByRole('button', { name: 'See my forecast' }).click();
     // Setup ends on Home; the forecast has the running total.
     await p2.getByRole('heading', { name: /^Home/ }).waitFor();
-    await p2.getByRole('link', { name: 'Full forecast and calendar' }).click();
+    await p2.getByRole('button', { name: 'Full forecast and calendar' }).click();
     await p2.getByRole('heading', { name: 'Your cash flow' }).waitFor();
     assert.match(await p2.locator('.forecast .hero').innerText(), /Lowest running total\s*−\$600\.00 · Oct 22[\s\S]*Timing gap ahead/);
     await fresh.close();

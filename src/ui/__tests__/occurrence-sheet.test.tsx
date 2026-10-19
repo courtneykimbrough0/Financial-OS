@@ -53,7 +53,7 @@ describe('OccurrenceSheet', () => {
     let closed = false;
     await renderSheet(adapter, '2026-10-16', () => (closed = true));
 
-    expect(screen.getByText(/hasn’t been marked received/)).toBeInTheDocument();
+    expect(screen.getByText(/not yet received/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Mark received' }));
     const amount = screen.getByLabelText('Amount received');
     const date = screen.getByLabelText('Date received');

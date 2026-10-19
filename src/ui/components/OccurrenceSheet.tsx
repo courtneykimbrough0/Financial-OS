@@ -135,7 +135,7 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
       {o.displayStatus === 'overdue' && (
         <p className="callout callout-warn">
           <Icon icon={AlertCircle} size={16} /> 
-          This was expected on {formatMedium(o.scheduledDate)} and hasn’t been marked {doneVerb(o)}. It stays in your forecast until you record what happened, change its date, or cancel it.
+          Expected {formatMedium(o.scheduledDate)} — not yet {doneVerb(o)}. Record, reschedule, or cancel it to update your forecast.
         </p>
       )}
       <Comparison o={o} />
