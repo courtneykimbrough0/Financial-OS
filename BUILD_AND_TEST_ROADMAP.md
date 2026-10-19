@@ -52,15 +52,15 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | Audit recommendations (not yet approved) | docs/REDUCTION-AUDIT.md §3 and decisions §7 |
 | Deferred features | PRODUCT_EXPERIENCE.md §10; Step 8's deferred imports; Step 9 |
 
-### Current state (verified October 19, 2026; `main` at `75e3e7c`, plus the H3 pull request)
+### Current state (verified October 19, 2026; `main` at `abc57d6`)
 
-`main` is the default and integration branch (AGENTS.md section H). CI (`.github/workflows/ci.yml`, five jobs) passed on both merge commits below.
+`main` is the default and integration branch (AGENTS.md section H). CI (`.github/workflows/ci.yml`, five jobs) passed on all merge commits below.
 
 | Work | Status | Where |
 | --- | --- | --- |
 | PR #4, account distribution and cash-flow architecture | **Complete**, merged as `3fac4ac` | AC1–AC4, AC5 in part, CI, seven integration fixes |
 | PR #5, Home (H1 selector, H2 opening screen) | **Complete**, merged as `fe8b13d` | H1, H2; R2 and C1 done through them |
-| H3, Forecast and Plan navigation | **Complete** in its pull request (awaiting review and merge) | H3 entry below |
+| PR #11, C3 Activity view and navigation (H3, H4, A2, R1, C3) | **Complete**, merged as `abc57d6` | H3, H4, A1, A2, R1, C2, C3 |
 | H4, interface simplification | **Complete** | Conditional visibility, language, contextual nav, density |
 | A1, where the running total starts | **Complete** | Status |
 | A2, defects D3 and D5 | **Complete** (with H3's pull request; D4 no longer applies) | Phase A2 |
