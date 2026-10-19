@@ -1144,9 +1144,7 @@ describe('two tabs: requests, recovery and pending restores', () => {
     const hold = await holdNextSave(a.page);
     await payPhone(a.page);
     await hold.arrived;
-    await a.page.goto(`${DEV}#/settings`);
-    await a.page.getByRole('radio', { name: /^Off/ }).focus();
-    await a.page.keyboard.press('ArrowDown');
+    await changeRent(a.page, '1600');
     // Tab A's clock passes its token's expiry, so its next request refreshes first: with the browser's (now B's) session.
     await a.page.clock.setFixedTime(new Date(Date.now() + TWO_HOURS));
     const tab2 = await newTab(a.page, at);
