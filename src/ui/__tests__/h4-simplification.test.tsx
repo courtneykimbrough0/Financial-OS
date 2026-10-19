@@ -96,7 +96,7 @@ describe('Home to Forecast context', () => {
 
 describe('conditional visibility', () => {
   it('embedded intro is hidden when items exist on an expense tab', async () => {
-    const user = await open('#/plan/expenses');
+    await open('#/plan/expenses');
     await screen.findByText('Rent');
     expect(screen.queryByText('Regular bills like rent, utilities, phone, and insurance.')).not.toBeInTheDocument();
   });
