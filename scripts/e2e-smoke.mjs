@@ -271,9 +271,9 @@ try {
   assert.match(dates, /Oct 29, 2026[\s\S]*\+\$1,800\.00[\s\S]*Expected/);
   await shot('09-income');
 
-  step('navigation: Home, Forecast and Plan; Plan holds Income, Expenses, Liabilities and Reserves; old addresses still open');
+  step('navigation: Home, Forecast, Activity and Plan; Plan holds Income, Expenses, Liabilities and Reserves; old addresses still open');
   const nav = page.getByRole('navigation', { name: 'Main' }).last();
-  assert.deepEqual(await nav.getByRole('link').allInnerTexts(), ['Home', 'Forecast', 'Plan']);
+  assert.deepEqual(await nav.getByRole('link').allInnerTexts(), ['Home', 'Forecast', 'Activity', 'Plan']);
   const planNav = page.getByRole('navigation', { name: 'Plan' });
   assert.deepEqual(await planNav.getByRole('link').allInnerTexts(), ['Income', 'Expenses', 'Liabilities', 'Reserves']);
   await planNav.getByRole('link', { name: 'Liabilities' }).click();
