@@ -16,6 +16,13 @@ type Mode = 'view' | 'record' | 'correct' | 'reschedule' | 'cancel' | 'delete';
 
 const doneVerb = (o: Occurrence) => kindDoneVerb(o);
 
+/** What a one-time item is, in words: "one-time income", "varied spending", "Strategic Reserve amount", "use of reserves". */
+function oneTimeName(o: Occurrence): string {
+  if (o.kind === 'varied') return 'varied spending';
+  if (o.kind === 'reserve') return o.release ? 'use of reserves' : 'Strategic Reserve amount';
+  return `one-time ${KIND_LABEL[o.kind].toLowerCase()}`;
+}
+
 /** "1 day late", "2 days early", "on time" */
 function timing(expected: DateStr, actual: DateStr): string {
   const d = diffDays(expected, actual);
@@ -165,7 +172,7 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
           )}
           {o.sourceId === null && (
             <button type="button" className="button danger-link" onClick={() => open('delete')}>
-              Delete this one-time {o.kind}
+              Delete this {oneTimeName(o)}
             </button>
           )}
           {o.sourceId !== null && outstanding && (
@@ -238,7 +245,7 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
 
       {mode === 'delete' && (
         <div className="stack">
-          <h3>Delete this one-time {o.kind}?</h3>
+          <h3>Delete this {oneTimeName(o)}?</h3>
           <p>Use this if it was added by mistake. To keep a record that it didn’t happen, cancel it instead.</p>
           <FormError message={error} />
           <div className="form-actions">

@@ -5,7 +5,7 @@ import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
 import { AccountActions } from '../components/account';
 import { DownloadBackupButton, RestoreBackupButton, StartOverButton } from '../components/backup';
-import { Modal } from '../components/common';
+import { FormError, Modal } from '../components/common';
 import { AccountsSettings } from '../components/money-accounts';
 import { navigate } from '../router';
 
@@ -16,6 +16,7 @@ export function Settings() {
   const slot = useAccountSlot();
   const { enterSample } = useDataMode();
   const [confirming, setConfirming] = useState(false);
+  const [sampleError, setSampleError] = useState<string | null>(null);
 
   return (
     <div className="stack-lg">
@@ -65,7 +66,7 @@ export function Settings() {
       )}
 
       {confirming && (
-        <Modal title="Explore with sample data?" onClose={() => setConfirming(false)}>
+        <Modal title="Explore with sample data?" onClose={() => { setConfirming(false); setSampleError(null); }}>
           <div className="stack">
             <p>You’ll see a made-up example with a late paycheck, a bill that cost more than expected, an overdue bill, and a stretch where the running total dips below $0.</p>
             <p>Sample data is kept separate from yours. Your own entries stay exactly as they are, and you can return to them anytime with “Leave” on the sample-data banner.</p>
@@ -77,12 +78,14 @@ export function Settings() {
                 type="button"
                 className="button primary"
                 onClick={() => {
-                  void enterSample().then(() => navigate('home'));
+                  setSampleError(null);
+                  void enterSample().then((r) => (r.ok ? navigate('home') : setSampleError(r.message)));
                 }}
               >
                 Show sample data
               </button>
             </div>
+            <FormError message={sampleError} />
           </div>
         </Modal>
       )}
