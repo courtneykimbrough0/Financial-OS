@@ -65,7 +65,7 @@ A calm, competent friend who is good with money. Plain words, short sentences, s
 7. **Errors say what happened and what to do.** "Couldn't save your change. Check your connection and try again." Apologize only when the app is at fault, and at most once.
 8. **Use familiar money words:**
    - paycheck, payday, bill, payment, due, paid, received, card, loan;
-   - the fixed product terms (AGENTS.md section F): Cash flow, Running total, Main paycheck, Expected / Overdue / Done, Money in / Money out, Lowest running total, Timing gap.
+   - the fixed product terms (AGENTS.md section F): Cash flow, Running total, Expected / Overdue / Done, Money in / Money out, Lowest running total, Timing gap.
 9. **Never use "debt" in the interface.** Say liability, loan, card, line of credit or payment, whichever fits.
 10. **No budgeting language or features:** no "budget", "envelope", "spending limit" or "allowance". Financial OS looks forward at cash flow.
 11. **No implementation terms on screen:** "anchor", "occurrence", "record" (as a noun), "forecast start", "set aside", "revision", "data changed since…", "superseded", "virtual".
@@ -282,7 +282,7 @@ Visibility follows the data, through rules computed from forecast output. CSS ne
 | Gig | Baseline expected payouts, or nothing | Sessions: earnings, cash received, platform payouts |
 | One-time / irregular | Amount and date (exists today) | Mark as expected or possible |
 
-**Implemented today:** recurring income (fixed amounts on a schedule), one-time income, recorded actuals with amounts and dates that can differ from the expected ones, and the main paycheck (proposed for removal, REDUCTION-AUDIT Q2). Everything else in this table is Missing.
+**Implemented today:** recurring income (fixed amounts on a schedule), one-time income, and recorded actuals with amounts and dates that can differ from the expected ones. The main paycheck concept was removed in Phase R1. Everything else in this table is Missing.
 
 ### 6.3 Expected, possible, received (Proposed domain addition)
 
@@ -551,7 +551,7 @@ Add ─────────────────────────�
 
 **Setup.** Three steps instead of seven.
 
-1. **When do you get paid?** Add one or more incomes, with no main paycheck choice. Welcome, sample data and restore sit on this first screen as links.
+1. **When do you get paid?** Add one or more incomes. Welcome, sample data and restore sit on this first screen as links.
 2. **What do you pay regularly?** One list for bills, subscriptions and liability payments (with a kind picker). Strategic Reserves are offered as "Set money aside on a schedule (optional)".
 3. **Your first look:**
    - cash flow for the next four weeks;
@@ -563,11 +563,9 @@ Add ─────────────────────────�
 
 ## 8. Forecast start (Confirmed; Implemented in Phase A1)
 
-**Decision.** The running total starts on the **earliest eligible upcoming income event**, not on whichever income was entered first or marked main. The anchor stays at $0 on the day before.
+**Decision.** The running total starts on the **earliest eligible upcoming income event**, not on whichever income was entered first. The anchor stays at $0 on the day before. All income sources are treated equally (Phase R1 removed the main paycheck concept).
 
-The **main paycheck** no longer decides where the running total starts. It is proposed for removal altogether (decision Q2), with a replacement for each use (REDUCTION-AUDIT §5.4).
-
-**Fixed (Phase A1).** `buildForecast` used to start the running total at the main paycheck's next payday, so earlier income from other sources fell outside it and a real timing gap could stay hidden. It now takes the earliest outstanding or received-today occurrence of any active recurring income (overdue included, for every source alike). Root cause and analysis: [docs/PRODUCT-AUDIT.md](docs/PRODUCT-AUDIT.md) §6; tests: `src/domain/__tests__/forecast-start.test.ts`.
+**Fixed (Phase A1).** `buildForecast` used to start the running total at a single paycheck's next payday, so earlier income from other sources fell outside it and a real timing gap could stay hidden. It now takes the earliest outstanding or received-today occurrence of any active recurring income (overdue included, for every source alike). Root cause and analysis: [docs/PRODUCT-AUDIT.md](docs/PRODUCT-AUDIT.md) §6; tests: `src/domain/__tests__/forecast-start.test.ts`.
 
 ---
 
@@ -578,8 +576,8 @@ The structural decisions (Q1–Q7) are in [docs/REDUCTION-AUDIT.md](docs/REDUCTI
 | # | Decision | Recommended default |
 | --- | --- | --- |
 | D1 | Can one-time expected income start the running total? | **No.** Recurring income only, for now. One-time income still counts once it's inside the running total. Revisit when "possible" income exists. |
-| D2 | Can overdue income start the running total? | **Decided in Phase A1: yes, from any source alike** (a late payment hasn't arrived yet). This keeps the rule free of any income hierarchy, and is the rule the main paycheck already followed. Overdue items before the start are still carried to it. |
-| D3 | ~~Which income is the main paycheck~~ | Superseded by REDUCTION-AUDIT Q2 (remove it). Entry order never decides anything financial. |
+| D2 | Can overdue income start the running total? | **Decided in Phase A1: yes, from any source alike** (a late payment hasn't arrived yet). This keeps the rule free of any income hierarchy. Overdue items before the start are still carried to it. |
+| D3 | ~~Which income is the main paycheck~~ | **Completed in Phase R1:** the concept is removed. All income sources are treated equally; entry order never decides anything financial. |
 | D4 | ~~Home's default period~~ | Superseded by Q1: the week view opens the app; Forecast defaults to this month. |
 | D5 | Tab names | **This week, Forecast, Activity, Plan** (follows Q1). |
 | D6 | Money-out color | **Neutral with a "−" sign**; indigo becomes the accent only. |

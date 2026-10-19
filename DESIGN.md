@@ -77,7 +77,7 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
   - Danger is a red pill.
   - Link buttons are underlined text.
 - **Bottom sheet:** a grab handle, a sticky title row with a close button, and stacked full-width pill actions. It becomes a centered dialog on wide screens. The page behind it is inert.
-- **Cash flow bar:** a pill-shaped card pinned under the header during setup, labeled "Cash flow" with the period it covers (in setup, "First pay period · Oct 15 – 28"). The value is green, or red with a trend-down icon when negative, and changes are announced to screen readers.
+- **Cash flow bar:** a pill-shaped card pinned under the header during setup, labeled "Cash flow" with the period it covers (in setup, "First period · Oct 15 – 28"). The value is green, or red with a trend-down icon when negative, and changes are announced to screen readers.
 - **Breakdown list:** label/value rows with sub-rows indented in secondary text and the key total on a heavier divider (used for the monthly breakdown and totals by tag).
 - **Tags:** small outlined pills with a tag icon. In forms they become removable chips, entered through a text field with an Add button. The only suggestions are tags the user has already created.
 - **Kind avatars:** income (banknote, green), bill (receipt, indigo), subscription (repeat, blue), liability (card, violet), Strategic Reserves (piggy bank, teal).

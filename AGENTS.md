@@ -170,7 +170,7 @@ Rules:
 - A low or negative **running total** is a forecast condition to explain (a timing gap), not a data error.
 - **Accounts** (where money is received, held and spent; PRODUCT_EXPERIENCE.md section 11): exactly three types, Income, Distribution and Payment; names are the person's own; assignments are optional and must suit the item (`accountTypeFor`). Accounts never change a cash-flow figure.
 - **Transfers** move money between two different accounts of the person's (`addTransfer`, `balances.ts`). They are never income or spending, the forecast never reads them, and each one changes two balances by the same amount. Expected and recorded transfers stay distinct: a passed date never records one, and nothing moves money automatically to cover a shortfall. Reserve allocations change no balance (only a transfer moves the money), so a reserve and its transfer are never counted twice. Balances exist only from an opening balance the person gave; without one the app never states a balance, and a projected balance is always labeled an estimate. Scheduled or rule-based transfers, routing and bank automation aren't built.
-- **Where the running total starts** (decided and implemented October 2026, Phase A1): the day before the earliest eligible upcoming income, whichever source it comes from. Entry order never decides it, and the main paycheck organizes pay periods without excluding earlier income. Uncertain or speculative income never sets the start.
+- **Where the running total starts** (decided and implemented October 2026, Phase A1): the day before the earliest eligible upcoming income, whichever source it comes from. Entry order never decides it. Uncertain or speculative income never sets the start.
 - Batch confirmation applies only to the selected records. An event is never marked actual merely because it was expected.
 - Undo, corrections, batch operations, imports, and resets never silently alter unrelated records.
 - **Uncertain future income is never counted as confirmed cash flow** just because past income suggests it may arrive. Income counts in the forecast only when the person has entered it as expected (a recurring or one-time item) or recorded it.
@@ -207,7 +207,7 @@ Product terms are fixed; use them consistently in UI, docs, and tests:
 
 - **Cash flow** — available cash flow for a period: income minus external outflows minus net Strategic Reserve allocations.
 - **Running total** — the day-by-day cumulative total from the forecast anchor. Never call it a "balance".
-- **Main paycheck** — the income whose paydays start pay periods. *Decided for removal* (product owner, October 2026; roadmap R1, not yet done); until then, it must not exclude other income from the running total (section D).
+- ~~Main paycheck~~ — removed (Phase R1, October 2026). All income sources are treated equally; entry order never decides where the running total starts.
 - **Expected / Overdue / Done**, **Money in / Money out**, **Lowest running total**, **Timing gap**.
 
 The six financial classifications are Income, Bills, Subscriptions, Liabilities (liability payments: card, loan, or line of credit), Strategic Reserves and Varied Spending. Bills, subscriptions and liabilities are recurring; varied spending is one-time. Use "Strategic Reserves", never "savings", and "liability", never the alternative term. No classification is labeled "other", "misc", or anything similarly vague. Tags are optional and created only by the person; none are built in.
@@ -227,7 +227,7 @@ Use deterministic test data and fixed dates (pass "today" explicitly; pin the br
 - Several events on the same day.
 - Zero and negative running totals.
 - Income arriving early, late, or in a different amount.
-- Timing gaps between paydays; main-paycheck pay periods.
+- Timing gaps between paydays.
 - Recurring schedule changes and effective dates.
 - Cancellation, rescheduling, actuals, stored overrides, and duplicate prevention.
 - Original-prediction preservation and variance.

@@ -64,7 +64,7 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | H4, interface simplification | **Complete** | Conditional visibility, language, contextual nav, density |
 | A1, where the running total starts | **Complete** | Status |
 | A2, defects D3 and D5 | **Complete** (with H3's pull request; D4 no longer applies) | Phase A2 |
-| R1, remove the main paycheck and Paycheck view | **Planned** (decided, Q2) | Phase R1 |
+| R1, remove the primary-paycheck concept and Paycheck view | **Complete** | Phase R1 |
 | R2, remove review states, rhythm and batch Undo | **Complete** (in H2) | Phase R2 |
 | C1, the week view | **Complete** (as Home, H2) | Phase C1 |
 | C2, navigation | **Complete except Activity** (Home, Forecast, Plan; Activity is C3) | Phases C2, H3 |
@@ -96,7 +96,7 @@ Goal: within about 30 seconds of opening the app, a person can tell (1) whether 
 
 Previous and next week stay one tap away. The month calendar, breakdown, tag totals, custom range and scenarios move to a **Forecast** tab (C2); nothing is removed from the app.
 
-**Remove (each needs its decision):** review completion states, the payday rhythm and batch Undo (Q3, Q4; phase R2); the separate overdue banner, "Review this week" button, rhythm entry and transfers entry (folded into Needs attention); the dashboard's Week tab and per-period week list (replaced by the opening screen); the Paycheck view and main paycheck (Q2; phase R1, can follow later); the calendar key's explanatory list (a tooltip instead).
+**Remove (each needs its decision):** review completion states, the payday rhythm and batch Undo (Q3, Q4; phase R2); the separate overdue banner, "Review this week" button, rhythm entry and transfers entry (folded into Needs attention); the dashboard's Week tab and per-period week list (replaced by the opening screen); the calendar key's explanatory list (a tooltip instead). The Paycheck view and primary-paycheck concept were removed in R1.
 
 **Consolidate:** the four action entry points into Needs attention; "Review this week" and the period review into the opening screen; What if… and scenarios into one "See what happens if…" (Q5; phase C6, later).
 
@@ -109,9 +109,9 @@ Previous and next week stay one tap away. The month calendar, breakdown, tag tot
 - **H2. Opening screen (complete and merged, October 2026; PR #4 `3fac4ac`, PR #5 `fe8b13d`).** `Home` (`src/ui/screens/Home.tsx`, route `#/home`, first in the navigation and the screen after setup, restore and sample data): progress, Needs attention, a week navigator over Coming up and Happened, built from `homeView(data, today, { weekOf })`. `weekOf` is separate from `today`, so moving weeks never changes overdue items, progress or Needs attention. Removed: review completion and skip, the review rhythm (all options, its Settings control and `REVIEW_RHYTHM_IN_ACCOUNTS`), the weekly and period review sheets, the overdue banner, the review entry, the transfers entry, batch Undo (`undoBatch`) and `transfersDue`. Batch recording and moving take only items due today or earlier. The old dashboard keeps its place as **Forecast** (route `#/dashboard`) with its Month, Week, Paycheck and Custom views, calendar, breakdown, scenarios and the rest, untouched until H3. The stored `review` field is dropped on load and never written; the Supabase `review_*` columns stay, unused, and the Firestore rules still accept the optional field. Tests: 32 domain (`home`), 7 `batch`, 25 component (`ui/home`), browser smoke steps.
 - **H3. Forecast and Plan navigation (complete, October 2026; in review).** Navigation is Home, Forecast and Plan, with Settings behind the gear. `#/forecast` is canonical (`Forecast.tsx`, formerly `Dashboard.tsx`); `#/dashboard` redirects, replacing the address without a history entry. Plan (`Plan.tsx`, `#/plan/income`, `expenses`, `liabilities`, `reserves`) hosts the existing item screens unchanged; the old kind routes redirect. Forecast's Week tab is removed; Month, Paycheck and Custom each list their weeks and days, and a custom range can cover a single week. Accounts and transfers stay in Settings, item sheets and Home. No calculation changed. Decisions 1–3 below were approved as recommended. Not done from the plan: step 5's deep links from Home into a particular Forecast month or gap (Home's "Full forecast and calendar" opens the current month). Tests: `navigation` (19), updated `home`, `money-accounts` and `scenario-sheet`, the browser smoke test (redirects, Plan sections, phone-width fit) and the Supabase browser suite's navigation helper.
 - **H4. Interface simplification (complete, October 2026).** Conditional visibility: embedded section intros hidden when items exist; overdue callout shortened. Language: concise week-list hint, tighter running-total OK callout, shorter source-occurrence hint. Contextual navigation: Home's "Full forecast and calendar" carries the viewed week's start date into Forecast via `navigateToForecast`/`consumeForecastDate`; `#/forecast/YYYY-MM-DD` deep links parse to the forecast route; direct `#/forecast` and all redirects still work. Density: Home and Forecast stack spacing tightened via CSS overrides. No domain or calculation changes. Tests: `h4-simplification` (12), updated `home` (25), `occurrence-sheet` (8), `navigation` (19), browser smoke (all steps pass).
-- Later, separately: R1 (main paycheck), C3 (Activity), C5 (Plan and setup), C6 (one "See what happens if…"), D (visual redesign).
+- Later, separately: C3 (Activity), C5 (Plan and setup), C6 (one "See what happens if…"), D (visual redesign). R1 (primary-paycheck removal) is complete.
 
-**Decisions (product owner, October 2026):** the week view opens the app (Q1); progress is month over month, shown as the factual difference with no threshold; review completion states, the payday rhythm and batch Undo are removed (Q3, Q4), keeping ordinary corrections and legitimate early payments; a timing gap needs attention when it starts within 7 days, and later gaps stay visible in the forecast; the main paycheck is removed separately (Q2), not as part of Home.
+**Decisions (product owner, October 2026):** the week view opens the app (Q1); progress is month over month, shown as the factual difference with no threshold; review completion states, the payday rhythm and batch Undo are removed (Q3, Q4), keeping ordinary corrections and legitimate early payments; a timing gap needs attention when it starts within 7 days, and later gaps stay visible in the forecast; the primary-paycheck concept is removed (Q2, done in R1).
 
 **Decided for H2 (as built):** progress leads with recorded month to date against the same days of last month, with the projected month as a second, labeled line (Projected against last month's recorded result); expected income that is not recorded appears in Needs attention as "Expected — not recorded", never as late; "coming up" is the viewed week, and for the current week it runs through Tuesday of next week.
 
@@ -136,7 +136,7 @@ Previous and next week stay one tap away. The month calendar, breakdown, tag tot
 2. A Plan tab grouping Income / Expenses / Liabilities / Reserves, or keep them as separate top-level items? (Recommended: Plan, to keep the bar to three.)
 3. Rename the route `dashboard` to `forecast` with a redirect, or keep both names? (Recommended: rename with a redirect.)
 
-**Also open, outside H3:** whether to drop the unused Supabase `review_*` columns in a later migration (after every client is past H2); the main paycheck (separate, R1); and a retirement date for `overdueEntries` if nothing else uses it.
+**Also open, outside H3:** whether to drop the unused Supabase `review_*` columns in a later migration (after every client is past H2); and a retirement date for `overdueEntries` if nothing else uses it. The primary-paycheck removal (R1) is complete.
 
 ### Phases
 
@@ -149,14 +149,14 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 **Rules for every phase:**
 - Each phase is its own authorized task, small enough to verify on its own, with tests in the same change.
 - Only A1 changes a calculation.
-- R1 and R2 had to wait for decisions Q2–Q4. The product owner approved them (October 2026): R2 is complete (in H2) and R1 is planned.
+- R1 and R2 had to wait for decisions Q2–Q4. The product owner approved them (October 2026): R2 is complete (in H2) and R1 is complete.
 
 #### A. Financial correctness
 
 **A1. The running total starts at the earliest eligible upcoming income** (defects D1 and D2). **Complete (October 2026).** Complexity: **medium**.
 - **Scope:**
   - The algorithm in docs/PRODUCT-AUDIT.md §6.3, with defaults D1 and D2 (PRODUCT_EXPERIENCE.md §9).
-  - `Forecast` gains `nextMainPayday`, while the main paycheck still exists.
+  - `Forecast` gained `nextMainPayday` (later removed in R1).
   - Wording that says "next payday" where it means the running total's start is corrected.
 - **Dependencies:** none.
 - **Files:**
@@ -169,9 +169,9 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
   - Single-income plans are unchanged.
 - **Tests:**
   - docs/PRODUCT-AUDIT.md §6.6, written failing first;
-  - `forecast.test.ts › anchors on the main paycheck…` updated deliberately;
+  - `forecast.test.ts › anchors at $0…` updated deliberately;
   - an e2e step for the reproduction.
-- **Excluded:** layout; removing the main paycheck (R1); "cash available now".
+- **Excluded:** layout; "cash available now". The primary-paycheck concept was removed in R1.
 
 **A2. Small verified defects** (D3, D5). **Complete (October 2026).** D3: a one-time item's delete label names it in words ("varied spending", "one-time income", "Strategic Reserve amount", "use of reserves"), never the kind id. D5: when the device won't store sample data, `enterSample` returns a result instead of throwing, leaves nothing half set up, and Settings and the welcome screen say what went wrong. Tests: `occurrence-sheet` (D3), `mode` and `sample-data` (D5), each failing against the old code. D4 no longer applies (the rhythm entry was removed in H2). Complexity: **low**.
 - **Scope:**
@@ -182,22 +182,26 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 
 #### R. Removals (each needs its decision approved)
 
-**R1. Remove the main paycheck and the Paycheck view** (Q2). Complexity: **medium**.
+**R1. Remove the primary-paycheck concept and the Paycheck view** (Q2). **Complete (October 2026).** Complexity: **medium**.
 - **Scope:** every use replaced per REDUCTION-AUDIT §5.4:
-  - the setup cash-flow bar shows the next 4 weeks;
-  - scenario reserves follow a chosen income;
-  - the picker and badge are removed.
-- **Data:** stored `mainPaycheck` / `main_paycheck` stay readable and are ignored. No schema change until the Supabase cutover.
+  - the setup cash-flow bar shows the first period (earliest income to the second upcoming income date);
+  - scenario reserves use an explicit schedule;
+  - the picker, badge, `MainPaycheckPicker`, `setMainPaycheck`, `paycheckCycles` and the Paycheck view tab are removed;
+  - `mainPaycheckId()` replaced by `hasActiveIncome()`;
+  - `firstPeriod()` rewritten to scan forecast entries for the earliest income source's first two dates;
+  - `'each-paycheck'` schedule type removed from scenarios.
+- **Data:** stored `mainPaycheck` / `main_paycheck` stay readable and are ignored. No schema change until the Supabase cutover. `main_paycheck` column always written as `false`.
 - **Dependencies:** A1.
-- **Files:**
-  - `types.ts`, `forecast.ts` (`paycheckCycles` callers), `scenarios.ts`, `operations.ts` (`cadence.ts` was removed in H2);
-  - `forms.tsx`, `SourcesScreen.tsx`, `Dashboard.tsx`, `Onboarding.tsx`, `ScenarioSheet.tsx`.
-- **Acceptance:** no screen mentions a main paycheck; forecasts are identical to A1's.
+- **Files changed:**
+  - `types.ts`, `forecast.ts`, `scenarios.ts`, `operations.ts`;
+  - `forms.tsx`, `SourcesScreen.tsx`, `Forecast.tsx`, `Onboarding.tsx`, `ScenarioSheet.tsx`;
+  - `storage.ts`, `rows.ts`.
+- **Acceptance:** no screen mentions a primary paycheck; forecasts are identical to A1's.
 - **Tests:**
-  - old data with `mainPaycheck` loads;
+  - old data with `mainPaycheck` loads (silently stripped);
   - backups round-trip;
-  - scenario reserves on a chosen income's paydays;
-  - updated component and e2e tests.
+  - scenario reserves on an explicit schedule;
+  - updated component, domain and e2e tests.
 - **Excluded:** dropping the column; any calculation change.
 
 **R2. Remove review completion states, the payday rhythm and batch Undo; limit batch recording to due items** (Q3, Q4). **Complete in H2 (October 2026).** Complexity: **low**.
@@ -395,7 +399,7 @@ Since the product experience decision above, this order is paused after the host
 - Deterministic results for fixed inputs; identical results across host time zones.
 - Recurrence: weekly, every 2 weeks, twice monthly, monthly (month-end clamping, leap years), custom intervals, year boundaries.
 - Same-day events (ordering and totals), running totals through zero and below zero.
-- Main-paycheck anchor and pay periods (including back-to-back paydays and five paydays in one week).
+- Forecast start anchor from earliest income (including back-to-back paydays and several paydays in one week).
 - Timing gaps (start, end, length, lowest amount) and the 90-day lookahead.
 - Duplicate prevention between generated occurrences and stored records; adjacent date windows never duplicate or skip.
 
@@ -529,7 +533,7 @@ Revised (October 2026): the priority is a fast first forecast and safe recovery,
 **Deferred** (not planned until the product owner asks): spreadsheet import, statement or PDF parsing, automatic categorization, recurring-rule discovery from imported history, and import batches. No bank connections or Plaid, ever (AGENTS.md section E).
 
 **Tests**
-- Minimum setup to a forecast with exact running totals; skipped optional steps; corrections; main paycheck choice; timing gaps.
+- Minimum setup to a forecast with exact running totals; skipped optional steps; corrections; timing gaps.
 - Backup round trips that reproduce the forecast, including review rhythm and estimate dismissals; damaged files; cancel; replacement with a copy offered; start over and recovery.
 
 **Exit criteria**
