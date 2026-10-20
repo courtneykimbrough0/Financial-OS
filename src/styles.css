@@ -1,8 +1,10 @@
 /*
  * Financial OS design system. See DESIGN.md for the rules behind these tokens.
- * Dark-first: deep charcoal canvas, soft-gray rounded cards, pill controls,
- * one line-icon set, and semantic chips (green = money in, indigo = money out;
- * filled = done, outlined = expected).
+ * Dark-first: deep charcoal canvas, grouped surfaces with hairline dividers,
+ * pill controls, one line-icon set. Each color has one meaning: green = money
+ * in, neutral with a "−" = money out, red = below $0 or destructive, amber =
+ * overdue, indigo = interactive accent and focus only. Chips: filled = done,
+ * outlined = expected.
  */
 
 :root {
@@ -26,11 +28,13 @@
   --color-selected: #2f3a70;
   --color-focus: #8a97ff;
 
-  /* Color: semantic */
+  /* Color: semantic (one meaning each; status is never shown by color alone) */
   --color-in: #52cf88;
   --color-in-fill: #1c6b3e;
-  --color-out: #a3adff;
-  --color-out-fill: #3d4cc0;
+  /* Money out is neutral: the "−" carries the direction, and indigo stays the accent. */
+  --color-out: var(--color-text);
+  --color-out-line: #8e8e93;
+  --color-out-fill: #4a4f5c;
   --color-liability-fill: #6a4fc0;
   --color-subscription-fill: #2f6aa8;
   --color-reserve-fill: #1c7272;
@@ -43,17 +47,19 @@
   --color-ok-soft: #1d3327;
   --color-info-soft: #262d4d;
 
-  /* Type */
+  /* Type scale (PRODUCT_EXPERIENCE.md §7.1): display 36/700, title 22/650,
+     section 15/600, body 16/400, secondary 14/400, caption 12/500. */
   --font-sans: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --text-display: 2.5rem;
+  --text-display: 2.25rem;
   --text-title: 1.375rem;
   --text-heading: 1.125rem;
+  --text-section: 0.9375rem;
   --text-body: 1rem;
   --text-small: 0.875rem;
   --text-caption: 0.75rem;
 
-  /* Shape & space */
-  --radius-card: 24px;
+  /* Shape & space: 4-based scale; 16px phone gutters, 24px between groups, 12px inside rows. */
+  --radius-card: 18px;
   --radius-control: 14px;
   --radius-chip: 8px;
   --radius-pill: 999px;
@@ -320,16 +326,13 @@ main.with-nav {
   padding: 0 var(--space-1);
 }
 .section-label {
-  font-size: var(--text-small);
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #e5e5ea;
+  font-size: var(--text-section);
+  font-weight: 600;
+  color: var(--color-text);
 }
 .subhead {
-  font-size: var(--text-caption);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-size: var(--text-small);
+  font-weight: 600;
   color: var(--color-text-secondary);
   padding: 0 var(--space-1);
 }
@@ -759,6 +762,29 @@ fieldset.inline-fields .field label {
   color: var(--color-text);
 }
 
+/* Empty line: one line of text and, at most, one action. No empty card with a heading. */
+.empty-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  padding: 0 var(--space-1);
+  color: var(--color-text-secondary);
+}
+
+/* List group: related rows on one surface, separated by hairlines. */
+.list-group {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-1) var(--space-4);
+  background: var(--color-surface);
+  border-radius: var(--radius-card);
+}
+.list-group > li + li {
+  border-top: 1px solid var(--color-border);
+}
+
 /* ---------- Avatars, badges, amounts ---------- */
 
 .avatar {
@@ -815,7 +841,11 @@ fieldset.inline-fields .field label {
   border-color: var(--color-warn);
   background: var(--color-warn-soft);
 }
-.badge-completed,
+.badge-completed {
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+}
+.badge-completed.badge-in,
 .badge-active {
   color: var(--color-in);
   background: var(--color-ok-soft);
@@ -1128,7 +1158,7 @@ fieldset.inline-fields .field label {
   gap: 3px;
 }
 
-/* Chips: green = money in, indigo = money out. Filled = done; outlined = still expected. */
+/* Chips: green = money in, neutral = money out. Filled = done; outlined = still expected. */
 .chip {
   display: inline-flex;
   align-items: center;
@@ -1157,7 +1187,7 @@ fieldset.inline-fields .field label {
   color: #fff;
 }
 .chip-out.chip-expected {
-  border-color: var(--color-out);
+  border-color: var(--color-out-line);
   color: var(--color-out);
 }
 .chip-reserve.chip-done {

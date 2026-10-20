@@ -31,7 +31,7 @@ export function KindAvatar({ kind, size = 'md' }: { kind: TransactionKind; size?
   );
 }
 
-/** Small uppercase label that introduces a group of cards. */
+/** Sentence-case section heading (15/600) with an optional action on the right. */
 export function SectionLabel({ id, children, action }: { id?: string; children: ReactNode; action?: ReactNode }) {
   return (
     <div className="section-label-row">
@@ -172,8 +172,10 @@ const STATUS_ICON: Record<OccurrenceStatus, LucideIcon> = {
 export function StatusBadge({ status, kind, release }: { status: OccurrenceStatus; kind?: TransactionKind; release?: true }) {
   let label = STATUS_LABEL[status];
   if (status === 'completed' && kind) label = doneVerb({ kind, release }).replace(/^./, (c) => c.toUpperCase());
+  // Green means money in: only money that came in is marked done in green; everything else done is neutral.
+  const moneyIn = status === 'completed' && kind !== undefined && signFor({ kind, release }) === 1;
   return (
-    <span className={`badge badge-${status}`}>
+    <span className={`badge badge-${status}${moneyIn ? ' badge-in' : ''}`}>
       <Icon icon={STATUS_ICON[status]} size={13} /> {label}
     </span>
   );
@@ -212,11 +214,21 @@ export function FlowAmount({ kind, cents, strike, release }: { kind: Transaction
   );
 }
 
-export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
+/** Related rows on one surface, separated by hairlines. Each child is one row. */
+export function ListGroup({ label, children }: { label?: string; children: ReactNode }) {
   return (
-    <div className="empty-state">
-      <p className="empty-title">{title}</p>
+    <ul className="list-group" aria-label={label}>
       {children}
+    </ul>
+  );
+}
+
+/** What an empty section shows: one line, and at most one action. */
+export function EmptyLine({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="empty-line">
+      <p>{children}</p>
+      {action}
     </div>
   );
 }

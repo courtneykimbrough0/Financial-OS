@@ -7,7 +7,7 @@ import * as ops from '../../domain/operations';
 import { describeRule } from '../../domain/recurrence';
 import { liabilityPrefix, ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OneTimeKind, type Occurrence, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
-import { FlowAmount, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
+import { EmptyLine, FlowAmount, ListGroup, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
 import { KIND_COPY, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm } from '../components/forms';
 import { EstimateCallout, EstimateSheet, useEstimateSuggestion } from '../components/EstimateSheet';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
@@ -343,7 +343,7 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
             {copy.recurringHeading}
           </SectionLabel>
           {sources.length === 0 ? (
-            showIntro ? null : <p className="muted">{copy.empty}</p>
+            showIntro ? null : <EmptyLine>{copy.empty}</EmptyLine>
           ) : (
             <ul className="card-list">
               {sources.map((s) => (
@@ -360,31 +360,31 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
             {copy.oneTime.heading}
           </SectionLabel>
           {oneTimes.length === 0 ? (
-            showIntro ? null : <p className="muted">{copy.oneTime.empty}</p>
+            showIntro ? null : <EmptyLine>{copy.oneTime.empty}</EmptyLine>
           ) : (
             <>
               {upcomingOneTimes.length > 0 && (
                 <>
                   <h3 className="subhead">Expected</h3>
-                  <ul className="entry-list card">
+                  <ListGroup>
                     {upcomingOneTimes.map((o) => (
                       <li key={o.id}>
                         <OccurrenceRow o={o} onOpen={openOccurrence} />
                       </li>
                     ))}
-                  </ul>
+                  </ListGroup>
                 </>
               )}
               {pastOneTimes.length > 0 && (
                 <>
                   <h3 className="subhead">Recorded or canceled</h3>
-                  <ul className="entry-list card">
+                  <ListGroup>
                     {pastOneTimes.map((o) => (
                       <li key={o.id}>
                         <OccurrenceRow o={o} onOpen={openOccurrence} />
                       </li>
                     ))}
-                  </ul>
+                  </ListGroup>
                 </>
               )}
             </>
