@@ -3,7 +3,9 @@
  * data, forecast with the same `buildForecast`, and compared with the plan as
  * it is. Every change goes through the ordinary operations (so their
  * validation applies) and the copy is discarded; nothing is saved. A scenario
- * is informational: there is no way to apply one to the plan yet.
+ * of exactly one change to an expected payment can be made real after the
+ * person confirms it (`applicableChange`, then `applyPreviewedChange`); any
+ * other scenario is informational.
  *
  * Hypothetical income is kept apart from confirmed income: it is listed as
  * hypothetical in the assumptions and reported separately in cash flow. Only
@@ -14,7 +16,7 @@ import { buildForecast, periodKpis, tallyOn, type Forecast, type ForecastEntry, 
 import { formatMoney, type Cents } from './money';
 import { expandSource, findOccurrence } from './occurrences';
 import * as ops from './operations';
-import { compareForecasts, gapChanges } from './preview';
+import { compareForecasts, gapChanges, SKIP_NOTE, type ProposedChange } from './preview';
 import { describeRule, startKeepsDates } from './recurrence';
 import { signFor, type AppData, type RecurrenceRule, type TransactionKind } from './types';
 
@@ -32,6 +34,8 @@ export type ScenarioChange =
   | { kind: 'occurrence-amount'; occurrenceId: string; amountCents: Cents }
   /** A different expected date for one outstanding occurrence. */
   | { kind: 'occurrence-date'; occurrenceId: string; date: DateStr }
+  /** One outstanding occurrence left out of the forecast. Only the forecast changes: it isn't canceled, waived or paid. */
+  | { kind: 'occurrence-skip'; occurrenceId: string }
   /** A recurring item's amount from one of its payment dates on (for example a higher liability payment). */
   | { kind: 'recurring-amount'; sourceId: string; amountCents: Cents; from: DateStr }
   /** A hypothetical recurring allocation to Strategic Reserves. */
@@ -161,6 +165,17 @@ function applyChange(data: AppData, change: ScenarioChange, index: number, clock
         assumption: { change, label: `Extra payment on ${source.description}: −${formatMoney(change.amountCents)} once on ${formatMedium(change.date)}`, direction: 'out', amountCents: change.amountCents, recurrence: 'one-time', income: null, dates: () => [change.date] },
       };
     }
+    case 'occurrence-skip': {
+      const o = findOccurrence(data, change.occurrenceId, clock.today);
+      if (!o) return 'That item could not be found.';
+      if (o.status !== 'scheduled') return `${o.description} on ${formatMedium(o.scheduledDate)} has already been recorded or skipped.`;
+      const next = unwrap(ops.cancelOccurrence(data, o.id, SKIP_NOTE, clock));
+      if (typeof next === 'string') return next;
+      return {
+        data: next,
+        assumption: { change, label: `${o.description} on ${formatMedium(o.scheduledDate)} left out (${formatMoney(o.scheduledAmountCents)})`, direction: signFor(o) === 1 ? 'in' : 'out', amountCents: o.scheduledAmountCents, recurrence: 'one-time', income: o.kind === 'income' ? 'confirmed' : null, dates: () => [o.scheduledDate] },
+      };
+    }
     case 'occurrence-amount':
     case 'occurrence-date': {
       const o = findOccurrence(data, change.occurrenceId, clock.today);
@@ -252,7 +267,7 @@ function outlook(f: Forecast, side: { lowest: LowPoint | null; gaps: GapExplanat
  */
 export function evaluateScenario(data: AppData, changes: ScenarioChange[], clock: ops.Clock, options: { through?: DateStr; incomeCase?: IncomeCaseName } = {}): ScenarioOutcome {
   if (changes.length === 0) return fail('Add at least one change.');
-  const touched = changes.flatMap((c) => (c.kind === 'occurrence-amount' || c.kind === 'occurrence-date' ? [c.occurrenceId] : []));
+  const touched = changes.flatMap((c) => (c.kind === 'occurrence-amount' || c.kind === 'occurrence-date' || c.kind === 'occurrence-skip' ? [c.occurrenceId] : []));
   if (new Set(touched).size !== touched.length) return fail('Change each item only once in a scenario.');
   const recurring = changes.flatMap((c) => (c.kind === 'recurring-amount' ? [c.sourceId] : []));
   if (new Set(recurring).size !== recurring.length) return fail("Change each recurring item's amount once per scenario.");
@@ -420,6 +435,20 @@ export function scenarioOptions(data: AppData, today: DateStr, end: DateStr = ad
       return dates.length ? [{ sourceId: s.id, description: s.description, amountCents: version.amountCents, dates }] : [];
     });
   return { occurrences, liabilities };
+}
+
+/**
+ * The one change a scenario can make real: when it holds exactly one change
+ * to an expected payment (move it, change its amount, or leave it out). Null
+ * for anything else, including hypothetical items and several changes.
+ */
+export function applicableChange(changes: ScenarioChange[]): ProposedChange | null {
+  if (changes.length !== 1) return null;
+  const c = changes[0]!;
+  if (c.kind === 'occurrence-date') return { kind: 'move', occurrenceId: c.occurrenceId, date: c.date };
+  if (c.kind === 'occurrence-amount') return { kind: 'amount', occurrenceId: c.occurrenceId, amountCents: c.amountCents };
+  if (c.kind === 'occurrence-skip') return { kind: 'skip', occurrenceId: c.occurrenceId };
+  return null;
 }
 
 /**

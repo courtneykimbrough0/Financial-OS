@@ -2476,20 +2476,18 @@ button.callout.gap-line:focus-visible {
 .gap-entries li:has(.gap-whatif) {
   flex-wrap: wrap;
 }
-.gap-whatif {
-  margin-left: auto;
+/* On its own line under the item, so a long label never squeezes the name. */
+.gap-entries .button.gap-whatif {
+  flex-basis: calc(100% - 4.5em - var(--space-3));
+  margin-left: calc(4.5em + var(--space-3));
+  justify-content: flex-start;
   min-height: var(--tap);
-  padding-right: 0;
+  padding-left: 0;
+  text-align: left;
 }
 .whatif-headline {
   margin: 0;
   font-weight: 650;
-}
-.whatif-change {
-  margin: 0;
-}
-.whatif-compare {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .whatif-result .callout {
   margin: 0;
