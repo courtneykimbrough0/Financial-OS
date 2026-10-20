@@ -375,7 +375,7 @@ describe('the development copy on local Supabase', () => {
     await card(page, 'Paycheck').getByRole('button', { name: 'See dates' }).click();
     await card(page, 'Paycheck').getByRole('button', { name: /^Oct 16, 2026/ }).click();
     occ = page.getByRole('dialog', { name: 'Paycheck' });
-    await occ.getByRole('button', { name: 'Undo: not received yet' }).click();
+    await occ.getByRole('button', { name: 'Undo received' }).click();
     await saves.idle();
     const undone = recordOf((await stored(page))!, 'Paycheck', '2026-10-15');
     expect(undone?.status ?? 'none').not.toBe('completed');
@@ -408,7 +408,7 @@ describe('the development copy on local Supabase', () => {
     await card(page, 'Rent').getByRole('button', { name: 'See dates' }).click();
     await card(page, 'Rent').getByRole('button', { name: /^Nov 1, 2026/ }).click();
     occ = page.getByRole('dialog', { name: 'Rent' });
-    await occ.getByRole('button', { name: 'Change just this one' }).click();
+    await occ.getByRole('button', { name: 'Change date or amount' }).click();
     await occ.getByLabel('Expected date').fill('2026-11-03');
     await occ.getByRole('button', { name: 'Save' }).click();
     d = await savedAndReloaded(page, saves);
@@ -1328,7 +1328,7 @@ describe('two tabs: requests, recovery and pending restores', () => {
     await loseNextReply(a.page);
     const dialog = await restore(a.page, household.path);
     await dialog.getByRole('alert').waitFor();
-    expect(await dialog.getByRole('alert').innerText()).toBe("The restore hasn't been confirmed. Couldn't reach the server, so this change isn't confirmed yet. Check your connection and try again.");
+    expect(await dialog.getByRole('alert').innerText()).toBe("Couldn't restore your backup. Couldn't reach the server, so this change isn't confirmed yet. Check your connection and try again.");
     expect(plan_(await planOf(a.account))).toEqual(plan_(canonicalize(household.data)));
     await dialog.getByRole('button', { name: 'Try again' }).click();
     await a.page.getByText('Backup restored.').waitFor();
@@ -1551,7 +1551,7 @@ describe('two devices signed in to one account, and saves that go wrong', () => 
     expect(checkForMigration(bad).filter((i) => i.level === 'error').length).toBeGreaterThan(0);
     const dialog = await restore(a.page, backupFile('refused.json', bad));
     await dialog.getByRole('alert').waitFor();
-    expect(await dialog.getByRole('alert').innerText()).toMatch(/^The restore hasn't been confirmed\. This change couldn't be saved/);
+    expect(await dialog.getByRole('alert').innerText()).toMatch(/^Couldn't restore your backup\. This change couldn't be saved/);
     expect(await a.page.getByText('Backup restored.').count()).toBe(0);
     expect(await stored(a.page)).toEqual(before);
     await dialog.getByRole('button', { name: 'Cancel' }).click();
