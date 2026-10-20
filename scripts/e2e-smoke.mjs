@@ -567,7 +567,7 @@ try {
   assert.equal(await page.getByRole('dialog').count(), 0);
   assert.equal(await page.evaluate(() => localStorage.getItem('financial-os:data')), planBefore);
   await page.getByRole('button', { name: 'Explore a scenario' }).click();
-  assert.match(await scenario.innerText(), /No changes yet\./);
+  assert.match(await scenario.innerText(), /Add a change to compare\./);
   await page.keyboard.press('Escape');
 
   step('start over: back up first, erase, quick setup to the review, then recover from the backup');
