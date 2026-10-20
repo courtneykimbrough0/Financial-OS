@@ -163,6 +163,8 @@ The row loses its three equal buttons and its "On" badge. Only "Off" is marked, 
 
 **Next date shows the item's true status.** When an occurrence is overdue, the row says "Overdue since Oct 5", not "Next: Nov 5". Today the same bill appears on three different dates (audit finding H5).
 
+**As built (Implemented, C5).** Rows and the item sheet are as described, inside the four Plan tabs (decision S7: Income, Expenses with Bills, Subscriptions and Varied, Liabilities, Reserves) rather than six sections. The sheet also shows any scheduled change. Delete appears only when the item has no recorded history. The estimate suggestion stays on the row.
+
 ### 3.5 Settings
 
 In order:
@@ -560,6 +562,8 @@ Add ─────────────────────────�
    - any timing gap;
    - payments due before the first income, if any;
    - "Looks right" (primary) and "Change something".
+
+   **As built (Implemented, C5):** the three steps are in place. The first look keeps the first pay period (from the earliest income to the day before its next payment) rather than four weeks, with any timing gap and payments due before the first income. The payment kind picker offers Bill, Subscription and Loan or card payment.
 
 ---
 
