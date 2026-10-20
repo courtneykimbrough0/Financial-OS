@@ -495,7 +495,7 @@ try {
   assert.deepEqual(savedAfter.sources.find((s) => s.id === 'elec').versions.map((v) => [v.startDate, v.amountCents]), [['2026-04-03', 18000], ['2026-11-03', 21500]]);
   assert.deepEqual(savedAfter.records.filter((r) => r.sourceId === 'elec').map((r) => [r.expectedAmountCents, r.actualAmountCents]), household.records.filter((r) => r.sourceId === 'elec').map((r) => [r.expectedAmountCents, r.actualAmountCents]));
 
-  step('scenario: combine changes, see a hidden shortfall, edit, remove, and leave the plan untouched');
+  step('scenario: combine changes, see a hidden timing gap, edit, remove, and leave the plan untouched');
   // The plan from scenarios.test.ts: paid $1,000 every other Friday from Oct 23, rent $1,500 from Nov 1,
   // car loan $300 on the 28th. The clock still reads Fri Oct 16.
   const planPath = `${SHOTS}scenario-plan.json`;
@@ -535,7 +535,7 @@ try {
     await f.getByLabel('Date').fill('2026-11-10');
   });
   const scenarioResult = scenario.getByRole('region', { name: 'Scenario comparison' });
-  assert.match(await scenarioResult.getByRole('status').innerText(), /Your projected ending total improves by \$1,100\.00, but this scenario creates a \$700\.00 shortfall on Nov 10, back to \$0 or more on Nov 20\./);
+  assert.match(await scenarioResult.getByRole('status').innerText(), /Your ending running total improves by \$1,100\.00, but this scenario creates a \$700\.00 timing gap on Nov 10, back to \$0 or more on Nov 20\./);
   assert.match(await scenarioResult.getByRole('table').innerText(), /Cash flow\s+\+\$1,600\.00\s+\+\$2,700\.00[\s\S]*Lowest running total\s+−\$800\.00 on Nov 1\s+−\$1,500\.00 on Dec 1[\s\S]*Ending running total\s+\$1,600\.00\s+\$2,700\.00/);
   assert.match(await scenarioResult.innerText(), /Includes \$2,000\.00 of hypothetical income\. Without it, cash flow would be \+\$700\.00\./);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
@@ -546,7 +546,7 @@ try {
   await scenario.getByRole('button', { name: 'Edit Dentist: −$900.00 on Nov 10, 2026' }).click();
   await scenario.getByRole('form', { name: 'Unexpected expense' }).getByLabel('Amount').fill('100');
   await scenario.getByRole('button', { name: 'Save change' }).click();
-  assert.match(await scenarioResult.getByRole('status').innerText(), /improves by \$1,900\.00, but this scenario deepens a shortfall to \$700\.00 on Dec 1/);
+  assert.match(await scenarioResult.getByRole('status').innerText(), /improves by \$1,900\.00, but this scenario deepens a timing gap to \$700\.00 on Dec 1/);
   await scenario.getByRole('button', { name: 'Remove Dentist: −$100.00 on Nov 10, 2026' }).click();
   assert.equal(await scenarioResult.getByRole('status').count(), 0);
   // Variable income: three hypothetical cases side by side, on top of the $2,000 refund still in the scenario.
