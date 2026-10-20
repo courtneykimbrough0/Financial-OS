@@ -21,9 +21,9 @@ async function reachReview(data: AppData) {
       </ToastProvider>
     </DataModeProvider>,
   );
-  await user.click(await screen.findByRole('button', { name: 'Get started' }));
-  // Income, bills, subscriptions, liabilities, reserves, then review.
-  for (let i = 0; i < 5; i++) await user.click(screen.getByRole('button', { name: 'Continue' }));
+  await screen.findByRole('heading', { name: 'When do you get paid?' });
+  // Income, then regular payments, then the review.
+  for (let i = 0; i < 2; i++) await user.click(screen.getByRole('button', { name: 'Continue' }));
   await screen.findByRole('heading', { name: 'Check everything over' });
   return user;
 }
