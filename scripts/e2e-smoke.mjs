@@ -121,7 +121,7 @@ try {
   await page.getByRole('heading', { name: 'What subscriptions renew?' }).waitFor();
   assert.equal(await page.getByText('Phone').count(), 0);
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('heading', { name: 'What do you pay toward debts?' }).waitFor();
+  await page.getByRole('heading', { name: 'Do you make loan or card payments?' }).waitFor();
   await page.getByRole('button', { name: 'Add a payment' }).click();
   sheet = page.getByRole('dialog', { name: 'Add a payment' });
   await sheet.getByLabel('What is this payment for?').fill('Car loan');
@@ -138,7 +138,7 @@ try {
   assert.match(await page.locator('.left-to-spend').innerText(), /\$1,390\.00/);
   await page.getByText('Loan · Monthly on the 20th').waitFor();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('heading', { name: 'What do you set aside?' }).waitFor();
+  await page.getByRole('heading', { name: 'What do you save?' }).waitFor();
   await page.getByRole('button', { name: 'Continue' }).click();
 
   step('onboarding: review with first pay period breakdown');

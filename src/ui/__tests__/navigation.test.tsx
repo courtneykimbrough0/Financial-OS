@@ -86,7 +86,7 @@ describe('routes', () => {
   ])('an old %s link opens %s', async (old, canonical, heading) => {
     await open(old);
     await screen.findByRole('heading', { level: 1, name: heading });
-    expect(window.location.hash).toBe(canonical);
+    await waitFor(() => expect(window.location.hash).toBe(canonical));
   });
 
   it.each([
