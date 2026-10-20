@@ -56,7 +56,7 @@ export function checkTarget(env, approved) {
   const { role, ref: keyRef } = keyRole(key);
   const keyProblem =
     role === 'missing'
-      ? 'Set SUPABASE_TEST_ANON_KEY to the project’s anon or publishable key.'
+      ? "Set SUPABASE_TEST_ANON_KEY to the project's anon or publishable key."
       : role !== 'anon'
         ? `SUPABASE_TEST_ANON_KEY must be the public anon or publishable key, not a ${role} key.`
         : null;
@@ -65,22 +65,22 @@ export function checkTarget(env, approved) {
     const url = env.SUPABASE_TEST_URL ?? 'http://127.0.0.1:54321';
     const mailUrl = env.SUPABASE_TEST_MAIL_URL ?? 'http://127.0.0.1:54324';
     if (!LOOPBACK.includes(hostOf(url))) return { ok: false, error: `SUPABASE_TEST_URL must be a local Supabase stack (127.0.0.1 or localhost); got "${hostOf(url) || url}". To test a hosted project, set SUPABASE_TEST_TARGET=hosted.` };
-    if (!LOOPBACK.includes(hostOf(mailUrl))) return { ok: false, error: 'SUPABASE_TEST_MAIL_URL must be the local stack’s email-testing server.' };
+    if (!LOOPBACK.includes(hostOf(mailUrl))) return { ok: false, error: "SUPABASE_TEST_MAIL_URL must be the local stack's email-testing server." };
     if (keyProblem) return { ok: false, error: keyProblem };
     return { ok: true, target: { kind: 'local', url, key, mailUrl, ref: null, outboxSecret: env.SUPABASE_TEST_OUTBOX_SECRET || null } };
   }
 
   if (target !== 'hosted') return { ok: false, error: `SUPABASE_TEST_TARGET must be "local" or "hosted"; got "${target}".` };
   const ref = env.SUPABASE_TEST_PROJECT_REF ?? '';
-  if (!REF.test(ref)) return { ok: false, error: 'Set SUPABASE_TEST_PROJECT_REF to the hosted test project’s 20-letter ref.' };
-  if (!approved.includes(ref)) return { ok: false, error: `Project ${ref} isn’t in supabase/hosted-test/projects.json. Only approved test projects can be used.` };
+  if (!REF.test(ref)) return { ok: false, error: "Set SUPABASE_TEST_PROJECT_REF to the hosted test project's 20-letter ref." };
+  if (!approved.includes(ref)) return { ok: false, error: `Project ${ref} isn't in supabase/hosted-test/projects.json. Only approved test projects can be used.` };
   const url = `https://${ref}.supabase.co`;
   if (env.SUPABASE_TEST_URL !== undefined && env.SUPABASE_TEST_URL.replace(/\/$/, '') !== url) return { ok: false, error: `SUPABASE_TEST_URL must be exactly ${url} for project ${ref}.` };
   if (keyProblem) return { ok: false, error: keyProblem };
   if (keyRef && keyRef !== ref) return { ok: false, error: `SUPABASE_TEST_ANON_KEY belongs to project ${keyRef}, not ${ref}.` };
   if (env.SUPABASE_TEST_ALLOW_DESTRUCTIVE !== ref) return { ok: false, error: `These tests create and delete accounts. Set SUPABASE_TEST_ALLOW_DESTRUCTIVE=${ref} to confirm ${ref} is a disposable test project.` };
   const mailUrl = env.SUPABASE_TEST_MAIL_URL || null;
-  if (mailUrl && !hostOf(mailUrl)) return { ok: false, error: 'SUPABASE_TEST_MAIL_URL isn’t a valid address.' };
+  if (mailUrl && !hostOf(mailUrl)) return { ok: false, error: "SUPABASE_TEST_MAIL_URL isn't a valid address." };
   const outboxSecret = env.SUPABASE_TEST_OUTBOX_SECRET || null;
   if (!mailUrl && !outboxSecret) {
     return { ok: false, error: 'Email confirmation stays on, so a hosted run needs to read confirmation emails: set SUPABASE_TEST_OUTBOX_SECRET (supabase/hosted-test/test-outbox.sql) or SUPABASE_TEST_MAIL_URL.' };
@@ -107,7 +107,7 @@ export async function supabaseTarget(env = process.env) {
     const res = await fetch(`${t.url}/auth/v1/health`, { headers: { apikey: t.key } });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   } catch (err) {
-    fail(t.kind === 'local' ? `No Supabase stack answered at ${t.url} (${err.message}). Start one with \`supabase start\`.` : `Project ${t.ref} didn’t answer at ${t.url} (${err.message}).`);
+    fail(t.kind === 'local' ? `No Supabase stack answered at ${t.url} (${err.message}). Start one with \`supabase start\`.` : `Project ${t.ref} didn't answer at ${t.url} (${err.message}).`);
   }
   if (t.kind === 'hosted') {
     let marker = null;
@@ -117,7 +117,7 @@ export async function supabaseTarget(env = process.env) {
     } catch {
       marker = null;
     }
-    if (marker !== `${MARKER_PREFIX}${t.ref}`) fail(`Project ${t.ref} isn’t marked as the Financial OS test project (supabase/hosted-test/marker.sql), so nothing was run.`);
+    if (marker !== `${MARKER_PREFIX}${t.ref}`) fail(`Project ${t.ref} isn't marked as the Financial OS test project (supabase/hosted-test/marker.sql), so nothing was run.`);
   }
   if (t.outboxSecret) {
     let answered = false;
@@ -127,13 +127,13 @@ export async function supabaseTarget(env = process.env) {
     } catch {
       answered = false;
     }
-    if (!answered) fail('The test outbox didn’t accept SUPABASE_TEST_OUTBOX_SECRET (supabase/hosted-test/test-outbox.sql), so nothing was run.');
+    if (!answered) fail("The test outbox didn't accept SUPABASE_TEST_OUTBOX_SECRET (supabase/hosted-test/test-outbox.sql), so nothing was run.");
   } else if (t.mailUrl) {
     try {
       const res = await fetch(`${t.mailUrl}/api/v1/info`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
     } catch (err) {
-      fail(`The email-testing server didn’t answer at ${t.mailUrl} (${err.message}).`);
+      fail(`The email-testing server didn't answer at ${t.mailUrl} (${err.message}).`);
     }
   }
   return t;
