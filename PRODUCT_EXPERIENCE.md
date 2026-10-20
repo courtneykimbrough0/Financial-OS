@@ -232,7 +232,7 @@ An **Earnings** section appears only when earnings data exists:
 
 ---
 
-## 5. Conditional visibility (Proposed)
+## 5. Conditional visibility (Implemented, C4)
 
 Visibility follows the data, through rules computed from forecast output. CSS never hides content alone. A hidden element is absent from the DOM, not just from view, so screen readers and the layout agree.
 
@@ -258,6 +258,8 @@ Visibility follows the data, through rules computed from forecast output. CSS ne
 | Actions that would open nothing | Never shown | — | — | e.g. no "See dates" on an item with no dates in range | — |
 
 **Where it lives.** A pure helper in the UI layer, `src/ui/visibility.ts`, takes `DayRow` / `WeekSummary` values and returns flags. It does no money math, only tests on fields the engine already computed. Component tests cover each row of the table, including the "negative but empty" case.
+
+**As built (C4).** Every row above is in place except two that don't apply: the "Until next income" range option doesn't exist (Forecast has Month and Custom), and Plan has no section menu, so "Add one-time" sits beside the recurring Add until the one-time list has items. A folded run of quiet days shows no running total, since nothing in the run changes it. The running total's start line reads "Your running total starts Oct 16, your next payday." The setup card keeps its existing wording and "Go to Income" button. The lowest-running-total replacement reads "You stay above $0 through Oct 31", keeping the voice rules' "you".
 
 ---
 
@@ -587,7 +589,7 @@ The structural decisions (Q1–Q7) are in [docs/REDUCTION-AUDIT.md](docs/REDUCTI
 | D10 | Freelance payment without a date | **Possible, not counted**, until a date is set or it's received. |
 | D11 | "Cash available now" (the open item in the roadmap) | Keep deferred, but leave room in the week view's forecast line for an optional starting amount (REDUCTION-AUDIT Q6). |
 | D12 | Savings as an expense | **Replaced** (Development-State Directive, October 2026): Strategic Reserves are an internal allocation that lowers available cash flow without counting as spending (section 11.3). |
-| S1 | Hide "By Kind" when only one kind has activity | **Deferred to C4** (visibility phase). Keep it visible for now; the C4 conditional-visibility pass will apply the rule consistently. |
+| S1 | Hide "By Kind" when only one kind has activity | **Applied in C4:** "By kind" shows when two or more classifications have activity; with one, every row would repeat the summary. Same rule as the other breakdowns: a section appears when it adds something. |
 | S2 | Hide "Paid $0.00" from the Activity summary | **Keep as-is.** The three KPIs (Received, Paid, Cash flow) form a complete set; showing all three even at zero provides orientation. |
 | S7 | Collapse empty Plan tabs in early use | **Keep all four tabs visible.** Consistent layout outweighs the cost of empty tabs during setup. |
 
