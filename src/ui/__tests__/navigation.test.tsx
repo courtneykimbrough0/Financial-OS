@@ -69,7 +69,7 @@ describe('routes', () => {
   it('an old #/dashboard link opens Forecast and the address becomes #/forecast, without an extra history entry', async () => {
     await open('#/dashboard');
     await screen.findByRole('heading', { level: 1, name: /Your cash flow/ });
-    expect(window.location.hash).toBe('#/forecast');
+    await waitFor(() => expect(window.location.hash).toBe('#/forecast'));
     expect(mainNav().getByRole('link', { name: 'Forecast' })).toHaveAttribute('aria-current', 'page');
     const before = window.history.length;
     window.location.hash = '#/dashboard';

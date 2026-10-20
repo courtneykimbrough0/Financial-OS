@@ -361,7 +361,7 @@ describe('the development copy on local Supabase', () => {
     await loaded(page);
     await page.getByRole('region', { name: 'Needs attention' }).locator('.entry').first().click();
     let occ = page.getByRole('dialog', { name: 'Paycheck' });
-    await occ.getByRole('button', { name: 'Mark received', exact: true }).click();
+    await occ.getByRole('button', { name: 'Record received', exact: true }).click();
     await occ.getByLabel('Amount received').fill('1750');
     await occ.getByLabel('Date received').fill('2026-10-16');
     await occ.getByRole('button', { name: 'Save as received' }).click();
@@ -382,7 +382,7 @@ describe('the development copy on local Supabase', () => {
     await page.keyboard.press('Escape');
     await card(page, 'Paycheck').getByRole('button', { name: /^Oct 15, 2026/ }).click();
     occ = page.getByRole('dialog', { name: 'Paycheck' });
-    await occ.getByRole('button', { name: 'Mark received', exact: true }).click();
+    await occ.getByRole('button', { name: 'Record received', exact: true }).click();
     await occ.getByLabel('Amount received').fill('1750');
     await occ.getByLabel('Date received').fill('2026-10-16');
     await occ.getByRole('button', { name: 'Save as received' }).click();
@@ -1395,7 +1395,7 @@ async function payPhone(page: Any, dollars = '150') {
   await page.goto(`${DEV}#/home`);
   await page.getByRole('region', { name: 'Needs attention' }).locator('.entry').first().click();
   const occ = page.getByRole('dialog', { name: 'Phone' });
-  await occ.getByRole('button', { name: 'Mark paid', exact: true }).click();
+  await occ.getByRole('button', { name: 'Record paid', exact: true }).click();
   await occ.getByLabel('Amount paid').fill(dollars);
   await occ.getByLabel('Date paid').fill('2026-10-16');
   await occ.getByRole('button', { name: 'Save as paid' }).click();

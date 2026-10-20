@@ -215,7 +215,7 @@ try {
   await attention.locator('.entry').first().click();
   const dialog = page.getByRole('dialog', { name: 'Paycheck' });
   await dialog.waitFor();
-  await dialog.getByRole('button', { name: 'Mark received', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Record received', exact: true }).click();
   const amount = dialog.getByLabel('Amount received');
   assert.equal(await amount.inputValue(), '1800.00');
   assert.equal(await dialog.getByLabel('Date received').inputValue(), '2026-10-15');
@@ -344,8 +344,8 @@ try {
   assert.equal(await page.getByRole('region', { name: 'Coming up' }).getByRole('checkbox').count(), 0);
   await due.getByRole('button', { name: 'Select all' }).click();
   await shot('08b-home-selected');
-  await due.getByRole('button', { name: 'Mark 2 items done' }).click();
-  await page.getByText('Marked 2 items done as expected.').waitFor();
+  await due.getByRole('button', { name: 'Record 2 items as expected' }).click();
+  await page.getByText('Recorded 2 items as expected.').waitFor();
   assert.equal(await page.getByRole('region', { name: 'Needs attention' }).count(), 0);
   assert.equal(await page.getByRole('button', { name: /Undo/ }).count(), 0);
   await page.clock.setFixedTime(new Date(2026, 9, 16, 9, 0));
