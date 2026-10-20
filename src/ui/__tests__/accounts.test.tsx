@@ -100,16 +100,13 @@ describe('accounts', () => {
 
     expect(await screen.findByText(/Your data stays in your account/)).toBeInTheDocument();
     expect(screen.getByText(/Signed in as alex@example.com/)).toBeInTheDocument();
-    // Getting started makes no data change yet; skipping ahead to finish saves to the account.
-    await user.click(screen.getByRole('button', { name: 'Get started' }));
+    // Moving through setup makes no data change yet; finishing saves to the account.
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('button', { name: 'Continue without income' }));
-    // Bills, subscriptions, liabilities, and reserves each have their own step.
-    for (const step of ['What bills do you pay?', 'What subscriptions renew?', 'Do you make loan or card payments?', 'What do you save?']) {
-      expect(screen.getByRole('heading', { name: step })).toBeInTheDocument();
-      await user.click(screen.getByRole('button', { name: 'Continue' }));
-    }
-    await user.click(screen.getByRole('button', { name: 'See my forecast' }));
+    // Every regular payment is on one step.
+    expect(screen.getByRole('heading', { name: 'What do you pay regularly?' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.click(screen.getByRole('button', { name: 'Looks right' }));
     await waitFor(() => expect(server.row?.data.onboardingComplete).toBe(true));
     expect(server.row?.revision).toBe(1);
     // Account details live on the Settings page.
@@ -146,7 +143,7 @@ describe('accounts', () => {
     expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull();
     unmount();
     renderApp(auth);
-    await screen.findByRole('heading', { name: 'See your cash flow ahead of time' });
+    await screen.findByRole('heading', { name: 'When do you get paid?' });
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 

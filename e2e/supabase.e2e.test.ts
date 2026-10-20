@@ -300,11 +300,10 @@ describe('the development copy on local Supabase', () => {
     const { page, saves } = await open(DEV, new Date(2026, 9, 11, 9, 0));
 
     // 1. An empty workspace.
-    await page.getByRole('heading', { name: 'See your cash flow ahead of time' }).waitFor();
+    await page.getByRole('heading', { name: 'When do you get paid?' }).waitFor();
     expect(await stored(page)).toEqual({ schemaVersion: 2, revision: 0, onboardingComplete: false, sources: [], records: [] });
 
     // 2–6. Minimum setup: income, a bill, a one-time expense, a liability payment.
-    await page.getByRole('button', { name: 'Get started' }).click();
     await page.getByRole('button', { name: 'Add income' }).click();
     let sheet = page.getByRole('dialog', { name: 'Add income' });
     await sheet.getByLabel('What is this income?').fill('Paycheck');
@@ -314,9 +313,9 @@ describe('the development copy on local Supabase', () => {
     await sheet.getByRole('button', { name: 'Save' }).click();
     await page.getByText('Every 2 weeks · next Oct 15, 2026').waitFor();
     await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('heading', { name: 'What bills do you pay?' }).waitFor();
-    await page.getByRole('button', { name: 'Add a bill' }).click();
-    sheet = page.getByRole('dialog', { name: 'Add a bill' });
+    await page.getByRole('heading', { name: 'What do you pay regularly?' }).waitFor();
+    await page.getByRole('button', { name: 'Add a payment' }).click();
+    sheet = page.getByRole('dialog', { name: 'Add a payment' });
     await sheet.getByLabel('What is this bill?').fill('Rent');
     await sheet.getByLabel('Amount you expect to pay').fill('1,200');
     await sheet.getByLabel('Next due date').fill('2026-11-01');
@@ -328,22 +327,18 @@ describe('the development copy on local Supabase', () => {
     await sheet.getByLabel('Expected date').fill('2026-10-26');
     await sheet.getByRole('button', { name: 'Add spending' }).click();
     await page.getByText('One time · Oct 26, 2026').waitFor();
-    await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('heading', { name: 'What subscriptions renew?' }).waitFor();
-    await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('heading', { name: 'Do you make loan or card payments?' }).waitFor();
-    await page.getByRole('button', { name: 'Add a payment' }).click();
+    await page.getByRole('button', { name: 'Add another payment' }).click();
     sheet = page.getByRole('dialog', { name: 'Add a payment' });
+    await sheet.getByRole('radio', { name: 'Loan or card payment' }).check();
     await sheet.getByLabel('What is this payment for?').fill('Car loan');
     await sheet.getByLabel('Payment amount').fill('350');
     await sheet.getByLabel('Next payment due date').fill('2026-10-20');
-    await sheet.getByRole('radio', { name: 'Loan' }).check();
+    await sheet.getByRole('radio', { name: 'Loan', exact: true }).check();
     await sheet.getByRole('button', { name: 'Save' }).click();
     await page.getByText('Loan · Monthly on the 20th').waitFor();
     await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('heading', { name: 'What do you save?' }).waitFor();
-    await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('button', { name: 'See my forecast' }).click();
+    await page.getByRole('heading', { name: 'Check everything over' }).waitFor();
+    await page.getByRole('button', { name: 'Looks right' }).click();
     await page.getByRole('heading', { name: /^Home/ }).waitFor();
     let d = await savedAndReloaded(page, saves);
     expect(d.onboardingComplete).toBe(true);
@@ -496,7 +491,7 @@ describe('accounts in the development copy', () => {
     expect(subjectIs(mail, 'Confirm your email address')).toBe(true);
     await page.goto(mail.link);
     await loaded(page);
-    await page.getByRole('heading', { name: 'See your cash flow ahead of time' }).waitFor();
+    await page.getByRole('heading', { name: 'When do you get paid?' }).waitFor();
     expect(new globalThis.URL(page.url()).search).toBe('');
     expect(await page.getByText(`Signed in as ${email}.`).count()).toBe(1);
     expect(await stored(page)).toEqual({ schemaVersion: 2, revision: 0, onboardingComplete: false, sources: [], records: [] });
@@ -696,7 +691,7 @@ describe('accounts in the development copy', () => {
     await page.getByText("Your data was erased. Set up again whenever you're ready.").waitFor();
     await signOutUi(page);
     await signIn(page, account.email, account.password);
-    await page.getByRole('heading', { name: 'See your cash flow ahead of time' }).waitFor();
+    await page.getByRole('heading', { name: 'When do you get paid?' }).waitFor();
     expect(await stored(page)).toMatchObject({ onboardingComplete: false, sources: [], records: [] });
     await page.context().close();
   });

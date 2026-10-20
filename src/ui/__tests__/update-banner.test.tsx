@@ -22,7 +22,7 @@ describe('new version available', () => {
         </ToastProvider>
       </DataModeProvider>,
     );
-    await screen.findByRole('heading', { name: 'See your cash flow ahead of time' });
+    await screen.findByRole('heading', { name: 'When do you get paid?' });
     expect(screen.queryByText(/new version/)).toBeNull();
 
     act(() => announceUpdate(() => (applied += 1)));
