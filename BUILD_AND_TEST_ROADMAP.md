@@ -71,8 +71,9 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | C3, Activity view | **Complete** | Phase C3 |
 | B1, wording | **Complete** | Phase B1 |
 | C4, conditional visibility | **Complete**, merged as `ae331a1` | Phase C4 |
-| C5, Plan screens and setup | **Complete** (in review) | Phase C5 |
-| C6 one "See what happens if…", D redesign | **Planned** | Phases |
+| C5, Plan screens and setup | **Complete**, merged as `957d79a` | Phase C5 |
+| C6, one "See what happens if…" | **Complete** (in review) | Phase C6 |
+| D redesign | **Planned** | Phases |
 | E, income expansion | **Planned**, needs separate approval and decision D8 | Phase E |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
 | AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
@@ -267,7 +268,7 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 - **Tests:** `visibility` (21: the pure rules including "negative but empty", calendar cells, week rows, folding, the running total's start line, the summary line, the empty breakdown, the no-income card, S1 and S2, Plan sections, "See dates", and nothing saved); updated `onboarding` (review) and the browser smoke test (summary line and folded days).
 - **Not changed:** Home (its sections were already conditional in H2 and H4); S2 (Paid $0.00 stays in the Activity summary) and S7 (all four Plan tabs stay).
 
-**C5. Plan screens and setup** (rows plus a detail sheet, one-time items inside each kind; setup in three steps). **Complete (October 2026; in review).** Complexity: **medium**.
+**C5. Plan screens and setup** (rows plus a detail sheet, one-time items inside each kind; setup in three steps). **Complete (October 2026; PR #15, merged as `957d79a`).** Complexity: **medium**.
 - **Dependencies:** R1, C2.
 - **What was built:**
   - **Plan** (PRODUCT_EXPERIENCE.md §3.4): each recurring item is one tappable row (name, schedule, status, amount). Only "Off" is marked. The status shows where the item really stands: "Overdue since Oct 5" before "Next Nov 1" (audit finding H5), then "No upcoming dates" or "Off since …". The row opens the item's sheet with its recent and upcoming dates (formerly "See dates"), any scheduled change, Edit, Turn off or Turn on, and Delete only when nothing has been recorded (`deleteSource` already refuses otherwise). A date opened from the sheet returns to it. The estimate suggestion stays on the row. One-time items stay inside their kind (C4). The four Plan tabs stay (decision S7).
@@ -275,10 +276,11 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 - **Tests:** `onboarding` (the three steps, the first screen's links and the income prompt, the kind picker, "Change something"), `setup-timing-gaps` (the four-week first look with one income, several incomes, a payment already recorded, and no income), `plan-rows` (7: status text, Off only, the sheet's dates and actions, Delete only without history, return from a date, turning off), updated `accounts`, `update-banner`, `estimate-sheet`, `money-accounts`, `navigation` and `visibility`; the browser smoke test and the Supabase browser suite walk the new setup and reach items through their sheets.
 - **Not changed from today:** the review's per-kind sections and "Not added" line (C4) stay. "+ Add" in the top bar (§3.1) is not part of C5.
 
-**C6. One "See what happens if…"** (merge What if… and scenarios; Q5). Complexity: **medium–high**.
+**C6. One "See what happens if…"** (merge What if… and scenarios; Q5). **Complete (October 2026; in review).** Complexity: **medium–high**.
 - **Dependencies:** C2.
-- **Tests:** the existing `preview` and `scenarios` behaviors preserved (comparisons, hidden shortfalls, apply-one-change with confirmation).
-- **Excluded:** saving scenarios.
+- **What was built:** one sheet, "See what happens if…" (`ScenarioSheet.tsx`), opened from Forecast and from each outstanding item in a timing-gap explanation (Forecast and Home), where it opens on that payment. `WhatIfSheet.tsx` is removed. Its three actions on one payment (move it, change its amount, leave it out) are one change type, "Change an expected payment", next to the scenario types (additional income, unexpected expense, a higher liability payment, reserves, variable income). Every comparison comes from `evaluateScenario` / `evaluateIncomeCases` over the existing forecast engine, through the period being viewed when opened from a gap. Domain additions only: an `occurrence-skip` scenario change (the same `cancelOccurrence` on a copy that What if… used, so the plan is untouched) and `applicableChange`, which names the one case that can be applied: exactly one change to an expected payment. Apply… appears only for that case when the comparison is valid, asks for confirmation, and goes through the existing `applyPreviewedChange`, which refuses a stale or uncomparable preview and changes that one occurrence. Closing changes nothing. No new engine, classification or saved scenarios.
+- **Tests:** `see-what-happens` (17, 15 ported from the What if… sheet: opening on a payment, comparisons, Keep exploring, apply a move, apply "leave it out", stale preview refused, not comparable, invalid date, several or hypothetical changes never applied, a recorded payment refused, closing, plain words for leaving out income, a liability or a bill, a gap beyond 90 days; plus an overdue payment opened from a gap, and a confirmation that resets when the change is edited); `scenarios` (7 new: leaving out a payment, agreement with `previewChange` for move, amount and leave-out, the plan unchanged, one change per item, recorded payments refused, `applicableChange`, applying through `applyPreviewedChange`); updated `scenario-sheet` and `gaps-sheet`; the browser smoke test's timing-gap step.
+- **Excluded:** saving scenarios; applying several changes at once.
 
 #### B. Product language
 
