@@ -261,14 +261,15 @@ describe('Plan', () => {
     expect(screen.queryByText(/Nothing one-time yet/)).toBeNull();
   });
 
-  it('"See dates" appears only on an item that has dates to show', async () => {
+  it("an item's sheet lists dates only when the item has dates to show", async () => {
     let d = steady();
     d = source(d, SETUP, 'reserve', 'Next year', 50, '2027-06-01', { type: 'monthly' }, 'later');
-    await open('#/plan/reserves', d);
-    const card = (name: string) => screen.getByRole('heading', { name }).closest('li')!;
-    await screen.findByRole('heading', { name: 'Next year' });
-    expect(within(card('Emergency fund')).getByRole('button', { name: 'See dates' })).toHaveAttribute('aria-expanded', 'false');
-    expect(within(card('Next year')).queryByRole('button', { name: 'See dates' })).toBeNull();
+    const user = await open('#/plan/reserves', d);
+    await user.click(await screen.findByRole('button', { name: /^Emergency fund/ }));
+    expect(within(screen.getByRole('dialog', { name: 'Emergency fund' })).getByRole('region', { name: 'Recent and upcoming dates' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: /^Next year/ }));
+    expect(within(screen.getByRole('dialog', { name: 'Next year' })).queryByRole('region', { name: 'Recent and upcoming dates' })).toBeNull();
   });
 });
 

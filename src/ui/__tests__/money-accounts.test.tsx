@@ -101,7 +101,8 @@ describe('accounts in Settings and on item forms', () => {
     d = unwrap(ops.addAccount(d, { name: 'Everyday', type: 'payment' }, clock, 'acct-everyday'));
     const user = await renderAt('plan/expenses', d);
 
-    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    await user.click(await screen.findByRole('button', { name: /^Rent/ }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Rent' })).getByRole('button', { name: 'Edit' }));
     const sheet = screen.getByRole('dialog', { name: 'Edit Rent' });
     const select = within(sheet).getByLabelText('Account (optional)');
     expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['No account', 'Bills', 'Everyday']);
@@ -118,7 +119,8 @@ describe('accounts in Settings and on item forms', () => {
 
   it('with no suitable account, the form has no account choice at all', async () => {
     const user = await renderAt('plan/income', plan());
-    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    await user.click(await screen.findByRole('button', { name: /^Paycheck/ }));
+    await user.click(within(screen.getByRole('dialog', { name: 'Paycheck' })).getByRole('button', { name: 'Edit' }));
     expect(within(screen.getByRole('dialog', { name: 'Edit Paycheck' })).queryByLabelText('Account (optional)')).toBeNull();
   });
 });
@@ -145,7 +147,7 @@ describe('AC2: accounts on items, deleting accounts, balances and transfers', ()
 
   it("shows an item's account on its row", async () => {
     await renderAt('plan/expenses', withAccounts());
-    const card = (await screen.findByRole('heading', { name: 'Rent' })).closest('li')!;
+    const card = (await screen.findByRole('button', { name: /^Rent/ })).closest('li')!;
     expect(card).toHaveTextContent('Account: Bills');
   });
 

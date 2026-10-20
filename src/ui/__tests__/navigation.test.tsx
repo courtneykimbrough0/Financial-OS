@@ -150,7 +150,9 @@ describe('Plan', () => {
     const user = await open('#/plan/expenses');
     await screen.findByText('Rent');
     expect(screen.getByRole('button', { name: /Add (a )?bill/ })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Edit' }).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole('button', { name: /^Rent/ }));
+    expect(within(screen.getByRole('dialog', { name: 'Rent' })).getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
     await user.click(planNav().getByRole('link', { name: 'Reserves' }));
     await screen.findByText('Emergency fund');
     expect(screen.getByRole('button', { name: 'Add one-time' })).toBeInTheDocument();

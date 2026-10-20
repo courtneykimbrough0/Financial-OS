@@ -2734,3 +2734,13 @@ button.callout.gap-line:focus-visible {
   font-weight: inherit;
   vertical-align: baseline;
 }
+
+/* Plan rows (C5): one tappable row per item. */
+.source-card .source-row {
+  padding: 0;
+  min-height: 44px;
+}
+.overdue-text {
+  color: var(--color-warn);
+  font-weight: 600;
+}
