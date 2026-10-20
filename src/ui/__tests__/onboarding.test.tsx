@@ -93,9 +93,10 @@ describe('the minimum useful setup', () => {
     expect(screen.getByText('Next expected payday').closest('section')).toHaveTextContent('Next expected paydayOct 23in 7 days');
     expect(screen.getByText(/Lowest running total before Nov 5:/).closest('span')).toHaveTextContent('Lowest running total before Nov 5: −$500.00 · Nov 1');
     expect(screen.getByRole('button', { name: /1 timing gap ahead/ })).toBeInTheDocument();
-    for (const label of ['Subscriptions', 'Liability payments', 'Strategic Reserves']) {
-      expect(screen.getByRole('region', { name: label }).querySelector('.review-empty')).toHaveTextContent(/^None added\.$/);
-    }
+    // Kinds with nothing added collapse into one line, each name a way to add it.
+    for (const label of ['Subscriptions', 'Liability payments', 'Strategic Reserves']) expect(screen.queryByRole('region', { name: label })).toBeNull();
+    expect(document.querySelector('.review-missing')).toHaveTextContent(/^Not added: subscriptions, liability payments, Strategic Reserves\.$/);
+    expect(screen.getByRole('button', { name: 'Add liability payments' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'See my forecast' }));
     expect(store.data.onboardingComplete).toBe(true);

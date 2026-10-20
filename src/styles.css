@@ -2703,3 +2703,34 @@ button.callout.gap-line:focus-visible {
 .kind-chips .chip:hover {
   background: var(--color-surface-raised);
 }
+
+/* Conditional visibility (C4): rows and days with nothing to open are plain text. */
+.cal-day.inactive {
+  cursor: default;
+}
+.cal-day.inactive:hover {
+  background: transparent;
+}
+.week-row.quiet {
+  cursor: default;
+  min-height: 0;
+}
+.timeline > li.timeline-quiet,
+.timeline > li.timeline-start {
+  padding: var(--space-3) 0;
+  font-size: var(--text-small);
+}
+.section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.review-missing .button.link {
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  vertical-align: baseline;
+}

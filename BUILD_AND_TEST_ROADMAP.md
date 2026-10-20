@@ -70,7 +70,8 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | C2, navigation | **Complete** (Home, Forecast, Activity, Plan) | Phases C2, H3, C3 |
 | C3, Activity view | **Complete** | Phase C3 |
 | B1, wording | **Complete** | Phase B1 |
-| C4 visibility, C5 Plan screens, C6 one "See what happens if…", D redesign | **Planned** | Phases |
+| C4, conditional visibility | **Complete** (in review) | Phase C4 |
+| C5 Plan screens, C6 one "See what happens if…", D redesign | **Planned** | Phases |
 | E, income expansion | **Planned**, needs separate approval and decision D8 | Phase E |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
 | AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
@@ -259,12 +260,11 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 - **Excluded:** forecast figures; the Earnings section (E).
 - **What was built:** `activityView` in `src/domain/activity.ts` (pure function producing a `PeriodPlan`-compatible summary from completed forecast entries), `Activity` screen in `src/ui/screens/Activity.tsx` (month navigation, summary KPIs, `PeriodBreakdown` with recorded labels, `TagBreakdown`, kind filter chips, item list with variance sub-line, occurrence sheet on tap), route `#/activity` in the nav between Forecast and Plan. No domain or calculation changes to existing code; `PeriodBreakdown` gained a `recorded` prop to swap labels.
 
-**C4. Conditional visibility** (PRODUCT_EXPERIENCE.md §5) on the screens that remain. Complexity: **low–medium**.
+**C4. Conditional visibility** (PRODUCT_EXPERIENCE.md §5) on the screens that remain. **Complete (October 2026; in review).** Complexity: **low–medium**.
 - **Dependencies:** C2.
-- **Tests:**
-  - a pure visibility helper, including "negative but empty";
-  - component tests;
-  - no `aria-expanded` or `aria-haspopup` on inert rows.
+- **What was built:** `src/ui/visibility.ts` (pure rules over fields the engine already computed: active day, active week, folding quiet days, empty plan, classifications with activity). Forecast: a day with nothing scheduled and a running total at or above $0 is a plain calendar cell; a week with no active day shows "Nothing scheduled" with no expand control; week rows show only non-zero amounts; an open week folds runs of quiet days into one text line ("Oct 18 – 19 · nothing scheduled"), keeping today and every day below $0; no "—" running totals (the running total is left out before it starts, with "Your running total starts Oct 16, your next payday." above the first day that has one, completing PRODUCT-AUDIT §4 item 9); the lowest running total shows only when it goes below $0, otherwise "You stay above $0 through …"; with no recurring income, only the setup card. The breakdown is one line when nothing moved. Activity: "By kind" shows when two or more classifications have activity (decision S1). Plan: an empty section is one line beside its Add button; a recurring kind's one-time list appears once it has items, with "Add one-time" beside the recurring Add until then; "See dates" only when an item has dates. Setup review: kinds with nothing added collapse into "Not added: subscriptions, Strategic Reserves." with a link to add each. No calculation changed.
+- **Tests:** `visibility` (21: the pure rules including "negative but empty", calendar cells, week rows, folding, the running total's start line, the summary line, the empty breakdown, the no-income card, S1 and S2, Plan sections, "See dates", and nothing saved); updated `onboarding` (review) and the browser smoke test (summary line and folded days).
+- **Not changed:** Home (its sections were already conditional in H2 and H4); S2 (Paid $0.00 stays in the Activity summary) and S7 (all four Plan tabs stay).
 
 **C5. Plan screens and setup** (rows plus a detail sheet, one-time items inside each kind; setup in three steps). Complexity: **medium**.
 - **Dependencies:** R1, C2.

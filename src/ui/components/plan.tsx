@@ -3,6 +3,7 @@ import { formatRange } from '../../domain/dates';
 import { formatMoney, formatSignedMoney } from '../../domain/money';
 import type { PeriodPlan } from '../../domain/plan';
 import type { TransactionKind } from '../../domain/types';
+import { planIsEmpty } from '../visibility';
 import { Icon, SectionLabel } from './common';
 
 /** The single headline number for a period: available cash flow (income minus spending and money set aside). */
@@ -48,6 +49,13 @@ export function PeriodBreakdown({ plan, title, showRange = true, recorded = fals
   const incomeLabel = recorded ? 'Received' : 'Income';
   const spendingLabel = recorded ? 'Paid' : 'Spending';
   const reserveLabel = (positive: boolean) => recorded ? (positive ? 'Saved in reserves' : 'Used from reserves') : positive ? 'Set aside in reserves' : 'Used from reserves';
+  if (planIsEmpty(plan))
+    return (
+      <section className="stack-sm" aria-labelledby="breakdown-period">
+        <SectionLabel id="breakdown-period">{title}</SectionLabel>
+        <p className="muted">{recorded ? 'Nothing recorded in this period.' : 'Nothing scheduled in this period.'}</p>
+      </section>
+    );
   return (
     <section className="stack-sm" aria-labelledby="breakdown-period">
       <SectionLabel id="breakdown-period">{title}</SectionLabel>

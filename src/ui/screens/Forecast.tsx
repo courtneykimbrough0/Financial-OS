@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useMemo, useState, type ReactNode } from 'react';
 import { AlertCircle, Banknote, Check, ChevronDown, ChevronRight, ChevronUp, Info, TrendingDown } from 'lucide-react';
 import {
   addDays,
@@ -32,6 +32,7 @@ import {
   type ForecastEntry,
   type LowPoint,
   type NegativeStretch,
+  type WeekSummary,
 } from '../../domain/forecast';
 import { formatCompact, formatMoney, formatMoneyIn, formatMoneyOut, formatSignedMoney } from '../../domain/money';
 import { periodPlan, type PeriodPlan } from '../../domain/plan';
@@ -45,6 +46,7 @@ import { WhatIfSheet } from '../components/WhatIfSheet';
 import { PeriodBreakdown, TagBreakdown } from '../components/plan';
 import { DayTransfers } from '../components/money-accounts';
 import { consumeForecastDate, navigate, parseForecastDate } from '../router';
+import { agendaItems, dayIsActive, isNegative, weekIsActive } from '../visibility';
 
 /** Forecast views. The week has its own place on Home; here each period lists its weeks, and a week opens its days. */
 type View = 'month' | 'custom';
@@ -53,10 +55,6 @@ const VIEWS: { id: View; label: string }[] = [
   { id: 'month', label: 'Month' },
   { id: 'custom', label: 'Custom' },
 ];
-
-function tallyText(cents: number | null): string {
-  return cents === null ? '—' : formatMoney(cents);
-}
 
 // ---------------------------------------------------------------------------
 
@@ -113,71 +111,75 @@ export function Forecast() {
       </header>
 
       {forecast.issue && <IssueCard forecast={forecast} />}
-      <button type="button" className="button small secondary scenario-entry" onClick={() => setSheet({ kind: 'scenario' })} aria-haspopup="dialog">
-        Explore a scenario
-      </button>
-
-      <div className="segmented" role="tablist" aria-label="Forecast view">
-        {VIEWS.map((v) => (
-          <button
-            key={v.id}
-            type="button"
-            role="tab"
-            id={`tab-${v.id}`}
-            aria-selected={view === v.id}
-            aria-controls="forecast-panel"
-            className={view === v.id ? 'active' : ''}
-            onClick={() => {
-              setView(v.id);
-              setSelected(null);
-            }}
-          >
-            {v.label}
+      {forecast.issue !== 'no-recurring-income' && (
+        <>
+          <button type="button" className="button small secondary scenario-entry" onClick={() => setSheet({ kind: 'scenario' })} aria-haspopup="dialog">
+            Explore a scenario
           </button>
-        ))}
-      </div>
 
-      <section id="forecast-panel" role="tabpanel" aria-labelledby={`tab-${view}`} className="stack-lg">
-        {view === 'month' && (
-          <PeriodNav
-            label={formatMonthYear(focus)}
-            prevLabel="Previous month"
-            nextLabel="Next month"
-            onPrev={() => setFocus(addMonthsClamped(startOfMonth(focus), -1))}
-            onNext={() => setFocus(addMonthsClamped(startOfMonth(focus), 1))}
-            onToday={focus.slice(0, 7) !== today.slice(0, 7) ? () => setFocus(today) : undefined}
-          />
-        )}
-        {view === 'custom' && (
-          <div className="custom-range">
-            <div className="field">
-              <label htmlFor="custom-start">Start date</label>
-              <input id="custom-start" type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} aria-invalid={customError ? true : undefined} />
-            </div>
-            <div className="field">
-              <label htmlFor="custom-end">End date</label>
-              <input id="custom-end" type="date" value={customEnd} min={customStart} onChange={(e) => setCustomEnd(e.target.value)} aria-invalid={customError ? true : undefined} aria-describedby="custom-error" />
-            </div>
-            {customError && (
-              <p className="field-error" id="custom-error" role="alert">
-                {customError}
-              </p>
-            )}
+          <div className="segmented" role="tablist" aria-label="Forecast view">
+            {VIEWS.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                role="tab"
+                id={`tab-${v.id}`}
+                aria-selected={view === v.id}
+                aria-controls="forecast-panel"
+                className={view === v.id ? 'active' : ''}
+                onClick={() => {
+                  setView(v.id);
+                  setSelected(null);
+                }}
+              >
+                {v.label}
+              </button>
+            ))}
           </div>
-        )}
 
-        {range && (
-          <PeriodBody
-            key={view}
-            forecast={forecast}
-            range={range}
-            today={today}
-            selected={selected && selected >= range[0] && selected <= range[1] ? selected : null}
-            onDay={openDay}
-            onInfo={(kind) => setSheet({ kind })}
-          />
-        )}
-      </section>
+          <section id="forecast-panel" role="tabpanel" aria-labelledby={`tab-${view}`} className="stack-lg">
+            {view === 'month' && (
+              <PeriodNav
+                label={formatMonthYear(focus)}
+                prevLabel="Previous month"
+                nextLabel="Next month"
+                onPrev={() => setFocus(addMonthsClamped(startOfMonth(focus), -1))}
+                onNext={() => setFocus(addMonthsClamped(startOfMonth(focus), 1))}
+                onToday={focus.slice(0, 7) !== today.slice(0, 7) ? () => setFocus(today) : undefined}
+              />
+            )}
+            {view === 'custom' && (
+              <div className="custom-range">
+                <div className="field">
+                  <label htmlFor="custom-start">Start date</label>
+                  <input id="custom-start" type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} aria-invalid={customError ? true : undefined} />
+                </div>
+                <div className="field">
+                  <label htmlFor="custom-end">End date</label>
+                  <input id="custom-end" type="date" value={customEnd} min={customStart} onChange={(e) => setCustomEnd(e.target.value)} aria-invalid={customError ? true : undefined} aria-describedby="custom-error" />
+                </div>
+                {customError && (
+                  <p className="field-error" id="custom-error" role="alert">
+                    {customError}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {range && (
+              <PeriodBody
+                key={view}
+                forecast={forecast}
+                range={range}
+                today={today}
+                selected={selected && selected >= range[0] && selected <= range[1] ? selected : null}
+                onDay={openDay}
+                onInfo={(kind) => setSheet({ kind })}
+              />
+            )}
+          </section>
+        </>
+      )}
 
       {sheet?.kind === 'occurrence' && (
         <OccurrenceSheet occurrenceId={sheet.id} onClose={() => setSheet(sheet.back)} />
@@ -269,7 +271,7 @@ function PeriodBody({
       <PeriodBreakdown plan={plan} title="Breakdown" showRange={false} />
       <TagBreakdown plan={plan} />
 
-      <WeekList forecast={forecast} start={start} end={end} lowDate={low?.date ?? null} onDay={onDay} />
+      <WeekList forecast={forecast} start={start} end={end} today={today} lowDate={low?.date ?? null} onDay={onDay} />
     </>
   );
 }
@@ -338,11 +340,11 @@ function CashFlowHero({
             </>
           )}
         </p>
-        {payday && (
+        {payday && (!low || low.tallyCents < 0) && (
           <div className="hero-stat">
             <span className="muted">Lowest running total</span>
             {low ? (
-              <span className={low.tallyCents < 0 ? 'negative-text' : ''}>
+              <span className="negative-text">
                 <strong>{formatMoney(low.tallyCents)}</strong>
                 <span className="muted"> · {formatShort(low.date)}</span>
               </span>
@@ -365,7 +367,7 @@ function CashFlowHero({
         {low && !worst && (
           <p className="callout callout-ok gap-line">
             <Icon icon={Check} size={16} />
-            <span>You stay above $0 this period</span>
+            <span>You stay above $0 through {formatShort(range[1])}</span>
           </p>
         )}
       </div>
@@ -462,6 +464,19 @@ function Calendar({
               const overdue = row?.entries.some((e) => e.occurrence.displayStatus === 'overdue');
               const negative = row?.tallyCents !== null && row?.tallyCents !== undefined && row.tallyCents < 0;
               const classes = ['cal-day', date === selected && 'selected', date === today && 'today', negative && 'negative', date === lowDate && 'low'].filter(Boolean).join(' ');
+              if (!row || !dayIsActive(row))
+                return (
+                  <td key={date}>
+                    <span className={`${classes} inactive`}>
+                      <span className="cal-num">{parts(date).d}</span>
+                      {date === lowDate && (
+                        <span className="cal-flags">
+                          <span className="flag-low">Low</span>
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                );
               return (
                 <td key={date}>
                   <button type="button" className={classes} aria-haspopup="dialog" aria-label={dayAriaLabel(row, date, date === lowDate)} onClick={() => onSelect(date)}>
@@ -516,7 +531,41 @@ function CalendarKey() {
 // ---------------------------------------------------------------------------
 
 /** Week by week. Each week opens in place to show its days, with the running total at the end of each day. */
-function WeekList({ forecast, start, end, lowDate, onDay }: { forecast: Forecast; start: DateStr; end: DateStr; lowDate: DateStr | null; onDay: (d: DateStr) => void }) {
+function WeekNums({ w }: { w: WeekSummary }) {
+  const negative = w.endTallyCents !== null && w.endTallyCents < 0;
+  const moved = w.incomeCents !== 0 || w.outflowCents !== 0 || w.reservesCents !== 0;
+  return (
+    <span className="week-nums">
+      {w.incomeCents !== 0 && (
+        <span>
+          <span className="sr-only">Income </span>
+          <span className="amount amount-in">{formatMoneyIn(w.incomeCents)}</span>
+        </span>
+      )}
+      {w.outflowCents !== 0 && (
+        <span>
+          <span className="sr-only">Spending </span>
+          <span className="amount amount-out">{formatMoneyOut(w.outflowCents)}</span>
+        </span>
+      )}
+      {w.reservesCents !== 0 && (
+        <span>
+          <span className="sr-only">{w.reservesCents > 0 ? 'Saved in reserves ' : 'From reserves '}</span>
+          <span className="amount amount-reserve">{formatSignedMoney(-w.reservesCents)}</span>
+        </span>
+      )}
+      {moved && <span className={w.netCents < 0 ? 'week-net negative' : 'week-net'}>Net {formatSignedMoney(w.netCents)}</span>}
+      {w.endTallyCents !== null && (
+        <span className={negative ? 'week-tally negative' : 'week-tally'}>
+          {negative && <Icon icon={TrendingDown} size={14} />}
+          Running total {formatMoney(w.endTallyCents)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function WeekList({ forecast, start, end, today, lowDate, onDay }: { forecast: Forecast; start: DateStr; end: DateStr; today: DateStr; lowDate: DateStr | null; onDay: (d: DateStr) => void }) {
   const weeks = useMemo(() => weekSummaries(forecast, start, end), [forecast, start, end]);
   const [open, setOpen] = useState<DateStr | null>(null);
   return (
@@ -525,45 +574,35 @@ function WeekList({ forecast, start, end, lowDate, onDay }: { forecast: Forecast
       <div className="card list-card">
         <ul className="week-list">
           {weeks.map((w) => {
+            if (!weekIsActive(w))
+              return (
+                <li key={w.start}>
+                  <div className="week-row quiet">
+                    <span className="week-label">{formatRange(w.start, w.end)}</span>
+                    <span className="week-nums">
+                      <span className="muted">Nothing scheduled</span>
+                      {w.endTallyCents !== null && <span className="week-tally">Running total {formatMoney(w.endTallyCents)}</span>}
+                    </span>
+                  </div>
+                </li>
+              );
             const expanded = open === w.start;
-            const negative = w.endTallyCents !== null && w.endTallyCents < 0;
             return (
               <li key={w.start} className={expanded ? 'open' : ''}>
                 <button type="button" className="week-row" aria-expanded={expanded} aria-controls={`week-${w.start}`} onClick={() => setOpen(expanded ? null : w.start)}>
                   <span className="week-label">{formatRange(w.start, w.end)}</span>
-                  <span className="week-nums">
-                    <span>
-                      <span className="sr-only">Income </span>
-                      <span className="amount amount-in">{formatMoneyIn(w.incomeCents)}</span>
-                    </span>
-                    <span>
-                      <span className="sr-only">Spending </span>
-                      <span className="amount amount-out">{formatMoneyOut(w.outflowCents)}</span>
-                    </span>
-                    {w.reservesCents !== 0 && (
-                      <span>
-                        <span className="sr-only">{w.reservesCents > 0 ? 'Saved in reserves ' : 'From reserves '}</span>
-                        <span className="amount amount-reserve">{formatSignedMoney(-w.reservesCents)}</span>
-                      </span>
-                    )}
-                    <span className={w.netCents < 0 ? 'week-net negative' : 'week-net'}>Net {formatSignedMoney(w.netCents)}</span>
-                    <span className={negative ? 'week-tally negative' : 'week-tally'}>
-                      {negative && <Icon icon={TrendingDown} size={14} />}
-                      Running total {tallyText(w.endTallyCents)}
-                    </span>
-                  </span>
+                  <WeekNums w={w} />
                   <Icon icon={expanded ? ChevronUp : ChevronDown} size={18} className="chevron" />
                 </button>
                 {expanded && (
                   <div id={`week-${w.start}`} className="week-days">
-                    <Timeline rows={w.days} lowDate={lowDate} onSelect={onDay} anchor={forecast.anchor} anyBeforeAnchor={w.days.some((r) => r.tallyCents === null)} />
+                    <Timeline rows={w.days} today={today} lowDate={lowDate} onSelect={onDay} forecastStart={forecast.forecastStart} />
                   </div>
                 )}
               </li>
             );
           })}
         </ul>
-        {/* hint removed: audit #8 */}
       </div>
     </section>
   );
@@ -571,26 +610,36 @@ function WeekList({ forecast, start, end, lowDate, onDay }: { forecast: Forecast
 
 function Timeline({
   rows,
+  today,
   lowDate,
   onSelect,
-  anchor: _anchor,
-  anyBeforeAnchor: _anyBeforeAnchor,
+  forecastStart,
 }: {
   rows: DayRow[];
+  today: DateStr;
   lowDate: DateStr | null;
   onSelect: (d: DateStr) => void;
-  anchor: DateStr | null;
-  anyBeforeAnchor: boolean;
+  forecastStart: DateStr | null;
 }) {
+  const items = agendaItems(rows, today);
+  // The line goes above the first day with a running total, when earlier days in the week have none.
+  const startsHere = forecastStart !== null && rows.some((r) => r.tallyCents === null) && rows.some((r) => r.date === forecastStart);
   return (
     <>
-      {rows.length === 0 ? (
-        <p className="muted card-note">Nothing scheduled in this period.</p>
+      {items.length === 0 ? (
+        <p className="muted card-note">Nothing scheduled this week.</p>
       ) : (
         <ol className="timeline">
-          {rows.map((r) => {
-            const negative = r.tallyCents !== null && r.tallyCents < 0;
-            return (
+          {items.map((item) => {
+            if (item.type === 'quiet')
+              return (
+                <li key={item.start} className="timeline-quiet muted">
+                  {item.start === item.end ? shortDay(item.start) : formatRange(item.start, item.end)} · nothing scheduled
+                </li>
+              );
+            const r = item.row;
+            const negative = isNegative(r);
+            const row = (
               <li key={r.date} className={`${negative ? 'negative' : ''}${r.date === lowDate ? ' low' : ''}`}>
                 <button type="button" className="timeline-row" aria-haspopup="dialog" onClick={() => onSelect(r.date)} aria-label={`Show details for ${formatLong(r.date)}`}>
                   <span className="tl-date">
@@ -615,21 +664,29 @@ function Timeline({
                     <span className="tl-label">Net</span>
                     <span>{formatSignedMoney(r.netCents)}</span>
                   </span>
-                  <span className="tl-cell tl-tally">
-                    <span className="tl-label">Running total</span>
-                    <span>
-                      {negative && <Icon icon={TrendingDown} size={14} />}
-                      {tallyText(r.tallyCents)}
-                      {negative && <span className="sr-only"> (below zero)</span>}
+                  {r.tallyCents !== null && (
+                    <span className="tl-cell tl-tally">
+                      <span className="tl-label">Running total</span>
+                      <span>
+                        {negative && <Icon icon={TrendingDown} size={14} />}
+                        {formatMoney(r.tallyCents)}
+                        {negative && <span className="sr-only"> (below zero)</span>}
+                      </span>
                     </span>
-                  </span>
+                  )}
                 </button>
               </li>
+            );
+            if (!startsHere || r.date !== forecastStart) return row;
+            return (
+              <Fragment key={r.date}>
+                <li className="timeline-start hint">Your running total starts {formatShort(forecastStart)}, your next payday.</li>
+                {row}
+              </Fragment>
             );
           })}
         </ol>
       )}
-      {/* anchor footnote removed: audit #9 */}
     </>
   );
 }
@@ -654,13 +711,15 @@ function DayTotals({ row }: { row: DayRow }) {
           <dd className="amount-reserve">{formatSignedMoney(-row.reservedCents)}</dd>
         </div>
       )}
-      <div>
-        <dt>Running total</dt>
-        <dd className={row.tallyCents !== null && row.tallyCents < 0 ? 'negative' : ''}>
-          {row.tallyCents !== null && row.tallyCents < 0 && <Icon icon={TrendingDown} size={14} />}
-          {tallyText(row.tallyCents)}
-        </dd>
-      </div>
+      {row.tallyCents !== null && (
+        <div>
+          <dt>Running total</dt>
+          <dd className={row.tallyCents < 0 ? 'negative' : ''}>
+            {row.tallyCents < 0 && <Icon icon={TrendingDown} size={14} />}
+            {formatMoney(row.tallyCents)}
+          </dd>
+        </div>
+      )}
     </dl>
   );
 }
