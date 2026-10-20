@@ -194,7 +194,12 @@ const nav = async (page: Any, name: string) => {
   await main.getByRole('link', { name: 'Plan' }).click();
   await page.getByRole('navigation', { name: 'Plan' }).getByRole('link', { name }).click();
 };
-const card = (page: Any, name: string) => page.locator('.source-card', { has: page.getByRole('heading', { name }) });
+const card = (page: Any, name: string) => page.locator('.source-card', { has: page.getByRole('button', { name: new RegExp(`^${name}`) }) });
+/** Opens a Plan item's sheet (its dates, Edit, Turn off) by tapping its row. */
+const openItem = async (page: Any, name: string) => {
+  await card(page, name).getByRole('button', { name: new RegExp(`^${name}`) }).click();
+  return page.getByRole('dialog', { name });
+};
 const recordOf = (d: AppData, sourceDescription: string, expectedDate: string) => {
   const s = d.sources.find((x) => x.description === sourceDescription)!;
   return d.records.find((r) => r.id === `${s.id}@${expectedDate}`);
@@ -367,15 +372,15 @@ describe('the development copy on local Supabase', () => {
 
     // 10. Undo it (not received yet), then record it again.
     await nav(page, 'Income');
-    await card(page, 'Paycheck').getByRole('button', { name: 'See dates' }).click();
-    await card(page, 'Paycheck').getByRole('button', { name: /^Oct 16, 2026/ }).click();
+    await (await openItem(page, 'Paycheck')).getByRole('button', { name: /^Oct 16, 2026/ }).click();
     occ = page.getByRole('dialog', { name: 'Paycheck' });
     await occ.getByRole('button', { name: 'Undo received' }).click();
     await saves.idle();
     const undone = recordOf((await stored(page))!, 'Paycheck', '2026-10-15');
     expect(undone?.status ?? 'none').not.toBe('completed');
+    // Closing the date returns to the item's sheet.
     await page.keyboard.press('Escape');
-    await card(page, 'Paycheck').getByRole('button', { name: /^Oct 15, 2026/ }).click();
+    await page.getByRole('dialog', { name: 'Paycheck' }).getByRole('button', { name: /^Oct 15, 2026/ }).click();
     occ = page.getByRole('dialog', { name: 'Paycheck' });
     await occ.getByRole('button', { name: 'Record received', exact: true }).click();
     await occ.getByLabel('Amount received').fill('1750');
@@ -386,7 +391,7 @@ describe('the development copy on local Supabase', () => {
 
     // 8. Change a recurring amount: a raise from the Oct 29 paycheck (it has a recorded payment, so earlier ones keep theirs).
     await nav(page, 'Income');
-    await card(page, 'Paycheck').getByRole('button', { name: 'Edit' }).click();
+    await (await openItem(page, 'Paycheck')).getByRole('button', { name: 'Edit' }).click();
     sheet = page.getByRole('dialog', { name: 'Edit Paycheck' });
     await sheet.getByLabel('Amount you expect to receive').fill('1,900');
     await sheet.getByLabel('Starting with the payment on').fill('2026-10-29');
@@ -400,8 +405,7 @@ describe('the development copy on local Supabase', () => {
 
     // 9. Move the Nov 1 rent to Nov 3.
     await nav(page, 'Expenses');
-    await card(page, 'Rent').getByRole('button', { name: 'See dates' }).click();
-    await card(page, 'Rent').getByRole('button', { name: /^Nov 1, 2026/ }).click();
+    await (await openItem(page, 'Rent')).getByRole('button', { name: /^Nov 1, 2026/ }).click();
     occ = page.getByRole('dialog', { name: 'Rent' });
     await occ.getByRole('button', { name: 'Change date or amount' }).click();
     await occ.getByLabel('Expected date').fill('2026-11-03');
@@ -923,7 +927,7 @@ describe('two tabs on one device', () => {
     await a.page.getByRole('region', { name: 'Needs attention' }).waitFor();
     await loaded(a.page);
     await a.page.goto(`${DEV}#/plan/expenses`);
-    await a.page.getByRole('heading', { name: 'Phone' }).waitFor();
+    await a.page.getByRole('button', { name: /^Phone/ }).waitFor();
     expect(await appText(a.page)).not.toContain('Alpha phone');
     expect(await recoveryPanel(a.page).count()).toBe(0);
     // Tab A leaving A's ended session never signs out B, who is signed in now.
@@ -1398,7 +1402,7 @@ async function payPhone(page: Any, dollars = '150') {
 
 async function changeRent(page: Any, amount: string) {
   await nav(page, 'Expenses');
-  await card(page, 'Rent').getByRole('button', { name: 'Edit' }).click();
+  await (await openItem(page, 'Rent')).getByRole('button', { name: 'Edit' }).click();
   const sheet = page.getByRole('dialog', { name: 'Edit Rent' });
   await sheet.getByLabel('Amount you expect to pay').fill(amount);
   await sheet.getByLabel('Starting with the payment on').fill('2026-12-01');

@@ -268,11 +268,21 @@ try {
 
   step('income screen shows recorded history and keeps the schedule');
   await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Plan' }).click();
-  await page.getByRole('button', { name: 'See dates' }).click();
-  const dates = await page.locator('.source-occurrences').innerText();
+  // One row per item; its dates are in the item's sheet.
+  const incomeRow = await page.locator('.source-card').innerText();
+  assert.match(incomeRow, /Paycheck[\s\S]*Every 2 weeks · Next Oct 29/);
+  assert.doesNotMatch(incomeRow, /\bOn\b/);
+  await page.getByRole('button', { name: /^Paycheck/ }).click();
+  const paycheckSheet = page.getByRole('dialog', { name: 'Paycheck' });
+  for (const action of ['Edit', 'Turn off']) await paycheckSheet.getByRole('button', { name: action, exact: true }).waitFor();
+  // It has recorded history, so it can be turned off but not deleted.
+  assert.equal(await paycheckSheet.getByRole('button', { name: 'Delete' }).count(), 0);
+  const dates = await paycheckSheet.getByRole('region', { name: 'Recent and upcoming dates' }).innerText();
   assert.match(dates, /Oct 16, 2026[\s\S]*Expected \$1,800\.00 on Oct 15, 2026[\s\S]*Received/);
   assert.match(dates, /Oct 29, 2026[\s\S]*\+\$1,800\.00[\s\S]*Expected/);
   await shot('09-income');
+  await page.keyboard.press('Escape');
+  await paycheckSheet.waitFor({ state: 'detached' });
 
   step('navigation: Home, Forecast, Activity and Plan; Plan holds Income, Expenses, Liabilities and Reserves; old addresses still open');
   const nav = page.getByRole('navigation', { name: 'Main' }).last();
@@ -304,7 +314,7 @@ try {
   step('data persists across reloads');
   await page.reload();
   await page.getByRole('heading', { name: 'Recurring income' }).waitFor();
-  assert.match(await page.locator('.source-card').innerText(), /Next: Oct 29, 2026/);
+  assert.match(await page.locator('.source-card').innerText(), /Next Oct 29/);
 
   step('desktop layout');
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -334,7 +344,7 @@ try {
   await page.getByText('Backup restored.').waitFor();
   await page.getByRole('heading', { name: /^Home/ }).waitFor();
   await page.goto(`${BASE}#/plan/income`);
-  assert.match(await page.locator('.source-card').innerText(), /Paycheck[\s\S]*Next: Oct 29, 2026/);
+  assert.match(await page.locator('.source-card').innerText(), /Paycheck[\s\S]*Next Oct 29/);
   await page.goto(`${BASE}#/settings`);
 
   step('home: mark several due items done in one step (no Undo); items not yet due are recorded one at a time');
@@ -406,15 +416,18 @@ try {
   assert.equal(await page.locator('.callout-danger').count(), 0);
   // Late paycheck: actual recorded, next one still scheduled.
   await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Plan' }).click();
-  await page.getByRole('button', { name: 'See dates' }).click();
-  const sampleDates = await page.locator('.source-occurrences').innerText();
+  await page.getByRole('button', { name: /^Paycheck/ }).click();
+  const sampleSheet = page.getByRole('dialog', { name: 'Paycheck' });
+  const sampleDates = await sampleSheet.getByRole('region', { name: 'Recent and upcoming dates' }).innerText();
   assert.match(sampleDates, /Oct 14, 2026[\s\S]*Expected \$1,800\.00 on Oct 13, 2026[\s\S]*Received/);
   assert.match(sampleDates, /Oct 27, 2026[\s\S]*Expected/);
+  await page.keyboard.press('Escape');
+  await sampleSheet.waitFor({ state: 'detached' });
   await page.getByRole('button', { name: 'Leave sample data' }).click();
   await page.getByRole('heading', { name: /^Home/ }).waitFor();
   assert.equal(await page.getByRole('note').count(), 0);
   await page.goto(`${BASE}#/plan/income`);
-  assert.match(await page.locator('.source-card').innerText(), /Paycheck[\s\S]*Next: Oct 29, 2026/);
+  assert.match(await page.locator('.source-card').innerText(), /Paycheck[\s\S]*Next Oct 29/);
 
   step('estimate suggestion: see the evidence, preview the forecast, approve after confirming');
   // A household with seven months of electricity bills above its $180 estimate, restored from a backup.
@@ -453,9 +466,9 @@ try {
   await restoreHousehold.getByRole('button', { name: 'Replace with backup' }).click();
   await page.getByText('Backup restored.').waitFor();
   await page.goto(`${BASE}#/plan/expenses`);
-  const elecCard = page.locator('.source-card', { has: page.getByRole('heading', { name: 'Electricity' }) });
+  const elecCard = page.locator('.source-card', { has: page.getByRole('button', { name: /^Electricity/ }) });
   assert.match(await elecCard.locator('.estimate-callout').innerText(), /Suggested estimate: \$215\.00 instead of \$180\.00 from Nov 3\./);
-  assert.equal(await page.locator('.source-card', { has: page.getByRole('heading', { name: 'Rent' }) }).locator('.estimate-callout').count(), 0);
+  assert.equal(await page.locator('.source-card', { has: page.getByRole('button', { name: /^Rent/ }) }).locator('.estimate-callout').count(), 0);
   await page.getByRole('button', { name: 'Review the suggestion for Electricity' }).click();
   const estimate = page.getByRole('dialog', { name: 'Suggestion for Electricity' });
   const estimateText = await estimate.innerText();
@@ -489,11 +502,20 @@ try {
   await approval.getByRole('button', { name: 'Approve change' }).click();
   await page.getByText('Electricity is now expected at $215.00 from Nov 3, 2026.').waitFor();
   assert.equal(await elecCard.locator('.estimate-callout').count(), 0);
-  assert.match(await elecCard.innerText(), /Scheduled change: \$215\.00, monthly on the 3rd, starting Nov 3, 2026\./);
+  // The scheduled change is in the item's sheet.
+  const elecSheetText = async () => {
+    await page.getByRole('button', { name: /^Electricity/ }).click();
+    const sheet = page.getByRole('dialog', { name: 'Electricity' });
+    const text = await sheet.innerText();
+    await page.keyboard.press('Escape');
+    await sheet.waitFor({ state: 'detached' });
+    return text;
+  };
+  assert.match(await elecSheetText(), /Scheduled change: \$215\.00, monthly on the 3rd, starting Nov 3, 2026\./);
   // Saved, and still there after a reload; recorded payments untouched.
   await page.reload();
   await page.getByRole('heading', { name: 'Expenses', level: 1 }).waitFor();
-  assert.match(await elecCard.innerText(), /Scheduled change: \$215\.00/);
+  assert.match(await elecSheetText(), /Scheduled change: \$215\.00/);
   const savedAfter = JSON.parse(await page.evaluate(() => localStorage.getItem('financial-os:data')));
   assert.deepEqual(savedAfter.sources.find((s) => s.id === 'elec').versions.map((v) => [v.startDate, v.amountCents]), [['2026-04-03', 18000], ['2026-11-03', 21500]]);
   assert.deepEqual(savedAfter.records.filter((r) => r.sourceId === 'elec').map((r) => [r.expectedAmountCents, r.actualAmountCents]), household.records.filter((r) => r.sourceId === 'elec').map((r) => [r.expectedAmountCents, r.actualAmountCents]));
@@ -626,7 +648,8 @@ try {
     await page.getByText('Account added.').waitFor();
     const dataBefore = JSON.parse(await page.evaluate(() => localStorage.getItem('financial-os:data')));
     await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Plan' }).click();
-    await page.getByRole('button', { name: 'Edit' }).first().click();
+    await page.locator('.source-row').first().click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Edit', exact: true }).click();
     const edit = page.getByRole('dialog', { name: /^Edit / });
     await edit.getByLabel('Account (optional)').selectOption({ label: 'Paycheck account' });
     await edit.getByRole('button', { name: 'Save changes' }).click();
