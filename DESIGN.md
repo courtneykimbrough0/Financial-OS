@@ -2,15 +2,15 @@
 
 Financial OS uses a dark-first, card-based visual language. It is calm and legible, with large numbers and one consistent set of controls. Every token lives at the top of `src/styles.css`, and the shared React pieces live in `src/ui/components/common.tsx`.
 
-This file describes the visual system **as built**. A redesign direction (fewer cards, color roles, navigation, desktop layouts) is proposed in [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 7 and will replace parts of this file as roadmap Phase D is built; until then, this file stays authoritative for the current app.
+This file describes the visual system **as built**. The redesign direction is [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 7, built in roadmap Phase D one checkpoint at a time. **D1 (shared foundation) is built:** the type scale, one meaning per color (money out is neutral with a "−"; indigo is the accent only), sentence-case section labels, a smaller card radius, and the `ListGroup` and `EmptyLine` components. Screen-by-screen changes (fewer cards per screen, one hero, one primary action) and desktop layouts follow in later checkpoints.
 
 The product's terms are fixed (Cash flow, Running total, Projected income, Projected expenses, Money in, Money out, Overdue, and so on). This system governs only how things look.
 
 ## Principles
 
-1. **One surface language.** Content sits on rounded charcoal cards over a deeper charcoal canvas. Groups of cards are introduced by a small uppercase section label.
+1. **One surface language.** Content sits on rounded charcoal surfaces over a deeper charcoal canvas; related rows share one surface with hairline dividers (`ListGroup`). Groups are introduced by a sentence-case section label.
 2. **Big numbers, quiet labels.** Amounts are the loudest thing on screen. Labels and supporting text are secondary gray.
-3. **Meaning never rides on color alone.** Each semantic color always comes with a sign (+/−), an icon, a word, or a shape (filled vs. outlined).
+3. **One meaning per color, and never color alone.** Green is money in; money out is neutral with a "−"; red is below $0, a timing gap or destructive; amber is overdue; indigo is the interactive accent and focus only. Each color always comes with a sign (+/−), an icon, a word, or a shape (filled vs. outlined).
 4. **Pills for choices, cards for content.** Segmented controls and buttons are full pills. Cards and sheets use large radii.
 5. **One icon set.** Lucide line icons at a 1.75 stroke, sized 14–24px, decorative unless they carry a label.
 
@@ -27,15 +27,16 @@ The product's terms are fixed (Cash flow, Running total, Projected income, Proje
 | `--color-text` | `#f5f5f7` | Primary text, primary button fill, selected pill fill |
 | `--color-text-secondary` | `#a1a1a6` | Labels, captions, hints |
 | `--color-selected` | `#2f3a70` | Selected calendar day |
-| `--color-accent` / `--color-focus` | `#8a97ff` | Focus rings, sample-data banner |
+| `--color-accent` / `--color-focus` | `#8a97ff` | Interactive accent and focus rings only |
 | `--color-in` / `--color-in-fill` | `#52cf88` / `#1c6b3e` | Money in: text and outline / filled chip, income avatar |
-| `--color-out` / `--color-out-fill` | `#a3adff` / `#3d4cc0` | Money out: text and outline / filled chip, expense avatar |
+| `--color-out` | `var(--color-text)` | Money out amounts: neutral, with a "−" |
+| `--color-out-line` / `--color-out-fill` | `#8e8e93` / `#4a4f5c` | Money out: outlined chip border / filled chip and bill avatar (slate) |
 | `--color-liability-fill` | `#6a4fc0` | Liability avatar |
 | `--color-warn` / `--color-warn-soft` | `#f5a623` / `#3a2f17` | Overdue |
 | `--color-neg` / `--color-neg-soft` | `#ff7b7b` / `#3d2124` | Below $0, lowest point, destructive actions |
 | `--color-ok-soft` | `#1d3327` | Done / "stays at or above $0" |
 
-All text and icon pairings meet WCAG AA (4.5:1) against the surface they sit on, including chip text on the selected-day color.
+All text and icon pairings meet WCAG AA (4.5:1) against the surface they sit on, including chip text on the selected-day color; chip outlines and avatar icons meet 3:1.
 
 ## Type
 
@@ -43,18 +44,18 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
 
 | Role | Size / weight |
 | --- | --- |
-| Display (hero number) | 40px / 700, −0.02em |
-| Title (screen heading) | 22px / 650 |
-| Heading (card title, period) | 18–20px / 650 |
-| Body | 16px / 400–500 |
-| List value | 18px / 650 |
-| Small / section label | 14px; section labels are 650, uppercase, 0.08em tracking |
-| Caption | 12px |
+| Display (hero number) | 36px / 700, −0.02em (`--text-display`) |
+| Title (screen heading) | 22px / 650 (`--text-title`) |
+| Heading (sheet title, period) | 18px / 650 (`--text-heading`) |
+| Section label | 15px / 600, sentence case (`--text-section`) |
+| Body | 16px / 400–500 (`--text-body`) |
+| Secondary | 14px / 400 (`--text-small`); subheads 14px / 600 |
+| Caption | 12px / 500, used sparingly (`--text-caption`) |
 
 ## Shape and spacing
 
-- **Radius:** cards 24px, sheets 28px (top corners on phones), inputs and callouts 14px, chips 8px, buttons and pills fully round.
-- **Spacing scale:** 4, 8, 12, 16, 20, 24, 32px. Cards use 20px padding, and hero cards use 24px.
+- **Radius:** cards and list groups 18px, sheets 28px (top corners on phones), inputs and callouts 14px, chips 8px, buttons and pills fully round.
+- **Spacing scale:** 4, 8, 12, 16, 20, 24, 32px. 16px screen gutters on phones, 24px between groups, 12px inside rows. Cards use 20px padding, list groups 16px, and hero cards 24px.
 - **Touch targets:** at least 44px everywhere. Primary buttons are 48px tall.
 
 ## Components
@@ -66,11 +67,13 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
 - **List card:** rows of icon · label (with an optional sub-label) · value, separated by hairlines. Used for the period totals.
 - **Calendar:** a full grid of dark cells.
   - Today's date number sits in a light circle. The selected day fills with `--color-selected`.
-  - Amount chips are pinned to the bottom of each cell: **green for money in, indigo for money out; filled once done, outlined while expected.**
+  - Amount chips are pinned to the bottom of each cell: **green for money in, neutral (slate fill, gray outline) for money out; filled once done, outlined while expected.**
   - Overdue (amber alert icon), below $0 (red trend-down icon plus a tinted cell), and the lowest point ("LOW") are flagged at the top of the cell.
   - A key and a footer strip with per-kind counts and totals sit below the grid.
-- **Entry row:** a round kind avatar (income = banknote on green, expense = receipt on indigo, liability = card on violet), title, tags, amount, and chevron.
-- **Badges:** small pills with an icon and a word. Expected is an outlined gray pill, Received/Paid a green tint, Overdue an amber outline, Canceled plain gray.
+- **Entry row:** a round kind avatar (income = banknote on green, bill = receipt on slate, liability = card on violet), title, tags, amount, and chevron.
+- **Badges:** small pills with an icon and a word. Expected is an outlined gray pill, Received a green tint (money in), Paid and Set aside a neutral raised pill with a check, Overdue an amber outline, Canceled plain gray.
+- **List group (`ListGroup`):** related rows on one surface with hairline dividers, instead of a card per row or per section.
+- **Empty line (`EmptyLine`):** what an empty section shows: one line of text and at most one action, never an empty card with a heading.
 - **Buttons:**
   - Primary is a light pill with dark text.
   - Secondary is a transparent pill with a light outline.
@@ -80,7 +83,7 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
 - **Cash flow bar:** a pill-shaped card pinned under the header during setup, labeled "Cash flow" with the period it covers (in setup, "First period · Oct 15 – 28"). The value is green, or red with a trend-down icon when negative, and changes are announced to screen readers.
 - **Breakdown list:** label/value rows with sub-rows indented in secondary text and the key total on a heavier divider (used for the monthly breakdown and totals by tag).
 - **Tags:** small outlined pills with a tag icon. In forms they become removable chips, entered through a text field with an Add button. The only suggestions are tags the user has already created.
-- **Kind avatars:** income (banknote, green), bill (receipt, indigo), subscription (repeat, blue), liability (card, violet), Strategic Reserves (piggy bank, teal).
+- **Kind avatars:** income (banknote, green), bill (receipt, slate), subscription (repeat, blue), liability (card, violet), Strategic Reserves (piggy bank, teal), varied spending (bag, plum).
 - **Timing-gap banner:** a red-outlined card with a warning triangle ("2 timing gaps ahead · Next 90 days"), shown only when the tally goes below $0. It opens a sheet listing each gap's dates, length, and lowest amount. Its wording describes the gap and gives no advice.
 - **Choice pills:** a required single choice (e.g. liability type: Card, Loan, Line of credit) shown as equal-width pills backed by native radio buttons. The selected pill is light, and all pills get a red outline if nothing is chosen on save.
 - **Navigation:** three tabs: Home, Forecast and Plan; Settings behind the gear. Plan has a row of section pills (Income, Expenses, Liabilities, Reserves) that fits a phone width without scrolling; Expenses keeps its Bills, Subscriptions and Varied tabs.
@@ -107,7 +110,7 @@ Home and the Forecast screen show only summaries. Detail opens in a bottom sheet
 The guided setup follows the same pattern:
 
 - **Each step:** the step's items as a list card, with an "Add" button that opens the form in a sheet. Tapping an item opens it in a sheet to edit or remove it.
-- **Review step:** a hero card showing the next expected payday and the lowest point before the following payday, then uppercase-labeled list cards with an "Add" link for each type.
+- **Review step:** a hero card showing the next expected payday and the lowest running total over the next four weeks, then section-labeled list cards with an "Add" link for each type that has items, and one "Not added: …" line for the rest.
 
 Shortfall and overdue warnings always stay on the page and are never hidden behind a tap.
 

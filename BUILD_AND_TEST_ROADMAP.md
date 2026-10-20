@@ -72,8 +72,9 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | B1, wording | **Complete** | Phase B1 |
 | C4, conditional visibility | **Complete**, merged as `ae331a1` | Phase C4 |
 | C5, Plan screens and setup | **Complete**, merged as `957d79a` | Phase C5 |
-| C6, one "See what happens if…" | **Complete** (in review) | Phase C6 |
-| D redesign | **Planned** | Phases |
+| C6, one "See what happens if…" | **Complete**, merged as `0f4d33f` | Phase C6 |
+| D1, shared visual foundation | **Complete** (in review) | Phase D |
+| D2 onward: screens, then desktop | **Planned** | Phase D |
 | E, income expansion | **Planned**, needs separate approval and decision D8 | Phase E |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
 | AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
@@ -276,7 +277,7 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 - **Tests:** `onboarding` (the three steps, the first screen's links and the income prompt, the kind picker, "Change something"), `setup-timing-gaps` (the four-week first look with one income, several incomes, a payment already recorded, and no income), `plan-rows` (7: status text, Off only, the sheet's dates and actions, Delete only without history, return from a date, turning off), updated `accounts`, `update-banner`, `estimate-sheet`, `money-accounts`, `navigation` and `visibility`; the browser smoke test and the Supabase browser suite walk the new setup and reach items through their sheets.
 - **Not changed from today:** the review's per-kind sections and "Not added" line (C4) stay. "+ Add" in the top bar (§3.1) is not part of C5.
 
-**C6. One "See what happens if…"** (merge What if… and scenarios; Q5). **Complete (October 2026; in review).** Complexity: **medium–high**.
+**C6. One "See what happens if…"** (merge What if… and scenarios; Q5). **Complete (October 2026; PR #16, merged as `0f4d33f`).** Complexity: **medium–high**.
 - **Dependencies:** C2.
 - **What was built:** one sheet, "See what happens if…" (`ScenarioSheet.tsx`), opened from Forecast and from each outstanding item in a timing-gap explanation (Forecast and Home), where it opens on that payment. `WhatIfSheet.tsx` is removed. Its three actions on one payment (move it, change its amount, leave it out) are one change type, "Change an expected payment", next to the scenario types (additional income, unexpected expense, a higher liability payment, reserves, variable income). Every comparison comes from `evaluateScenario` / `evaluateIncomeCases` over the existing forecast engine, through the period being viewed when opened from a gap. Domain additions only: an `occurrence-skip` scenario change (the same `cancelOccurrence` on a copy that What if… used, so the plan is untouched) and `applicableChange`, which names the one case that can be applied: exactly one change to an expected payment. Apply… appears only for that case when the comparison is valid, asks for confirmation, and goes through the existing `applyPreviewedChange`, which refuses a stale or uncomparable preview and changes that one occurrence. Closing changes nothing. No new engine, classification or saved scenarios.
 - **Tests:** `see-what-happens` (17, 15 ported from the What if… sheet: opening on a payment, comparisons, Keep exploring, apply a move, apply "leave it out", stale preview refused, not comparable, invalid date, several or hypothetical changes never applied, a recorded payment refused, closing, plain words for leaving out income, a liability or a bill, a gap beyond 90 days; plus an overdue payment opened from a gap, and a confirmation that resets when the change is edited); `scenarios` (7 new: leaving out a payment, agreement with `previewChange` for move, amount and leave-out, the plan unchanged, one change per item, recorded payments refused, `applicableChange`, applying through `applyPreviewedChange`); updated `scenario-sheet` and `gaps-sheet`; the browser smoke test's timing-gap step.
@@ -295,8 +296,10 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 #### D. Visual redesign
 
 PRODUCT_EXPERIENCE.md §7: tokens and components first, then screen by screen, then desktop. Complexity: **high**, split per screen.
-- **Dependencies:** C1–C6.
+- **Dependencies:** C1–C6 (all complete).
 - **Excluded:** calculation changes; the light theme.
+- **D1. Shared visual foundation (complete, October 2026; in review).** Tokens: the §7.1 type scale (display 36/700, section 15/600, `--text-section`), a 18px card radius, and §7.2 color roles: money out is neutral text with its "−" (`--color-out` = primary text), its chips and the bill avatar a neutral slate (`--color-out-line`, `--color-out-fill`), so indigo is the interactive accent and focus only. Section labels and subheads are sentence case. `StatusBadge` marks done money in (Received) green and other done states (Paid, Set aside) neutral. New shared components `ListGroup` (one surface, hairline dividers) and `EmptyLine` (one line, at most one action) replace the unused `EmptyState`; adopted in Plan's one-time lists and empty lines and in Activity's recorded list. The calendar key says money out is gray with a "−". Every new color pair checked against WCAG AA (text 4.5:1, outlines and icons 3:1). No screen restructured, no navigation or calculation change.
+- **Next (proposed):** D2, Home and Forecast: one hero per screen, fewer cards (list groups), one primary action, hint text at most one line; then Plan and Activity; then setup and sheets; then desktop (≥ 1024 px left rail, side-panel sheets).
 
 #### E. Income expansion (possible new functionality; separate approval)
 

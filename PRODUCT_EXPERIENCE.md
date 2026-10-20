@@ -394,7 +394,9 @@ WorkEntry {
 
 ---
 
-## 7. Visual direction (Proposed)
+## 7. Visual direction (Proposed; D1 foundation implemented)
+
+**Status:** the shared foundation (type scale §7.1, color roles §7.2, sentence-case section labels, `ListGroup`, `EmptyLine`) is built in roadmap D1; screen-level changes and desktop layouts come in later Phase D checkpoints.
 
 Start from the current system ([DESIGN.md](DESIGN.md)), which already has good bones: dark-first, accessible contrast, 44 px targets, tabular figures, status never by color alone. The problem is density and competition, not taste.
 
