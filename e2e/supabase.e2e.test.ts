@@ -394,7 +394,7 @@ describe('the development copy on local Supabase', () => {
     await card(page, 'Paycheck').getByRole('button', { name: 'Edit' }).click();
     sheet = page.getByRole('dialog', { name: 'Edit Paycheck' });
     await sheet.getByLabel('Amount you expect to receive').fill('1,900');
-    await sheet.getByLabel('Changes start with the payment on').fill('2026-10-29');
+    await sheet.getByLabel('Starting with the payment on').fill('2026-10-29');
     await sheet.getByRole('button', { name: 'Save' }).click();
     await sheet.waitFor({ state: 'detached' });
     d = await savedAndReloaded(page, saves);
@@ -1406,7 +1406,7 @@ async function changeRent(page: Any, amount: string) {
   await card(page, 'Rent').getByRole('button', { name: 'Edit' }).click();
   const sheet = page.getByRole('dialog', { name: 'Edit Rent' });
   await sheet.getByLabel('Amount you expect to pay').fill(amount);
-  await sheet.getByLabel('Changes start with the payment on').fill('2026-12-01');
+  await sheet.getByLabel('Starting with the payment on').fill('2026-12-01');
   await sheet.getByRole('button', { name: 'Save' }).click();
   await sheet.waitFor({ state: 'detached' });
 }

@@ -70,7 +70,7 @@ try {
   step('onboarding: fix a mistake by tapping the item');
   await page.getByRole('button', { name: /^Paycheck/ }).click();
   sheet = page.getByRole('dialog', { name: 'Edit Paycheck' });
-  assert.equal(await sheet.getByText('Changes start with the payment on').count(), 0);
+  assert.equal(await sheet.getByText('Starting with the payment on').count(), 0);
   await sheet.getByLabel('Amount you expect to receive').fill('1800');
   await sheet.getByLabel('Next payment date').fill('2026-10-15');
   await sheet.getByRole('button', { name: 'Save' }).click();
