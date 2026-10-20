@@ -1,5 +1,5 @@
 import { AlertCircle, Banknote, CalendarClock, ChevronRight, Info, Plus } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { diffDays, formatMedium, formatShort } from '../../domain/dates';
 import { buildForecast, dailyTimeline, entriesInRange, explainTimingGaps, firstPeriod, lowestPoint } from '../../domain/forecast';
 import { formatMoney } from '../../domain/money';
@@ -279,6 +279,15 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
     ['Liability payments', ['liability']],
     ['Strategic Reserves', ['reserve']],
   ];
+  const sections = groups.map(([label, kinds]) => ({
+    label,
+    kinds,
+    items: data.sources.filter((s) => kinds.includes(s.kind)),
+    // Varied spending is added on the Bills step, so it's listed there.
+    once: label === 'Income' ? oneTimes(data.records, 'income') : label === 'Bills' ? oneTimes(data.records, 'varied') : [],
+  }));
+  const filled = sections.filter((g) => g.items.length + g.once.length > 0);
+  const missing = sections.filter((g) => g.items.length + g.once.length === 0);
 
   return (
     <div className="stack-lg">
@@ -335,10 +344,7 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
       {plan && <PeriodBreakdown plan={plan} title="First pay period" />}
       {plan && <TagBreakdown plan={plan} />}
 
-      {groups.map(([label, kinds]) => {
-        const items = data.sources.filter((s) => kinds.includes(s.kind));
-        // Varied spending is added on the Bills step, so it's listed there.
-        const once = label === 'Income' ? oneTimes(data.records, 'income') : label === 'Bills' ? oneTimes(data.records, 'varied') : [];
+      {filled.map(({ label, kinds, items, once }) => {
         return (
           <section key={label} className="stack-sm" aria-labelledby={`review-${kinds[0]}`}>
             <SectionLabel
@@ -352,21 +358,32 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
             >
               {label}
             </SectionLabel>
-            {items.length + once.length === 0 ? (
-              <p className="card review-empty muted">None added.</p>
-            ) : (
-              <ul className="entry-list card list-card">
-                {items.map((s) => (
-                  <SourceRow key={s.id} s={s} onOpen={() => onSheet({ mode: 'edit', source: s })} />
-                ))}
-                {once.map((r) => (
-                  <OneTimeRow key={r.id} r={r} onOpen={() => onSheet({ mode: 'once', record: r })} />
-                ))}
-              </ul>
-            )}
+            <ul className="entry-list card list-card">
+              {items.map((s) => (
+                <SourceRow key={s.id} s={s} onOpen={() => onSheet({ mode: 'edit', source: s })} />
+              ))}
+              {once.map((r) => (
+                <OneTimeRow key={r.id} r={r} onOpen={() => onSheet({ mode: 'once', record: r })} />
+              ))}
+            </ul>
           </section>
         );
       })}
+
+      {missing.length > 0 && (
+        <p className="review-missing muted">
+          Not added:{' '}
+          {missing.map(({ label, kinds }, i) => (
+            <Fragment key={label}>
+              {i > 0 && ', '}
+              <button type="button" className="button small link inline-link" onClick={() => goTo(STEP_OF[kinds[0]!])} aria-label={`Add ${label === 'Strategic Reserves' ? label : label.toLowerCase()}`}>
+                {label === 'Strategic Reserves' ? label : label.toLowerCase()}
+              </button>
+            </Fragment>
+          ))}
+          .
+        </p>
+      )}
 
       <p className="hint center">
         <Icon icon={CalendarClock} size={16} /> You can change any of these later.

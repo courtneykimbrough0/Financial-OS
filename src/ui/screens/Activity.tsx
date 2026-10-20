@@ -10,6 +10,7 @@ import { FlowAmount, Icon, KindAvatar, KindTag, SectionLabel, StatusBadge } from
 import { PeriodNav } from '../components/entries';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 import { PeriodBreakdown, TagBreakdown } from '../components/plan';
+import { kindsWithActivity } from '../visibility';
 
 type Sheet = { kind: 'occurrence'; id: string };
 
@@ -53,7 +54,7 @@ export function Activity() {
       ) : (
         <>
           <RecordedSummary receivedCents={view.summary.incomeCents} paidCents={view.summary.outflowCents} cashFlowCents={view.summary.cashFlowCents} />
-          <PeriodBreakdown plan={view.summary} title="By kind" showRange={false} recorded />
+          {kindsWithActivity(view.summary) > 1 && <PeriodBreakdown plan={view.summary} title="By kind" showRange={false} recorded />}
           <TagBreakdown plan={view.summary} />
 
           <section className="stack-sm" aria-labelledby="activity-list-heading">

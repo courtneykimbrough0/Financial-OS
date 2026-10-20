@@ -174,13 +174,15 @@ try {
   await page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
   const heroText = await page.locator('.hero').innerText();
   assert.match(heroText, /^Cash flow\s+\+\$3,190\.00\s+\+\$3,600\.00 in · −\$410\.00 out/);
-  assert.match(heroText, /Lowest running total\s+\$1,390\.00/);
+  // Above $0 all month: one line says so, and the lowest running total isn't repeated.
+  assert.match(heroText, /You stay above \$0 through Oct 31/);
+  assert.doesNotMatch(heroText, /Lowest running total/);
   const monthBreakdown = await page.locator('section[aria-labelledby="breakdown-period"]').innerText();
   assert.match(monthBreakdown, /Bills\s+\$60\.00[\s\S]*Liability payments\s+\$350\.00[\s\S]*Cash flow\s+\+\$3,190\.00/);
   assert.doesNotMatch(monthBreakdown, /Subscriptions|reserves/);
   await shot('04-dashboard-month');
 
-  step('forecast: no separate Week tab (Home has the week); a custom range covers one week, with a running total each day');
+  step('forecast: no separate Week tab (Home has the week); a custom range covers one week, and quiet days fold into one line');
   const views = page.getByRole('tablist', { name: 'Forecast view' });
   assert.deepEqual(await views.getByRole('tab').allInnerTexts(), ['Month', 'Custom']);
   await views.getByRole('tab', { name: 'Custom', exact: true }).click();
@@ -192,7 +194,7 @@ try {
   assert.doesNotMatch(weekBreakdown, /Bills/);
   await page.getByRole('button', { name: /^Oct 18 – 24/ }).click();
   const weekDays = await page.locator('.week-days .timeline').innerText();
-  assert.match(weekDays, /Sun, Oct 18[\s\S]*Running total\s+\$1,800\.00[\s\S]*Tue, Oct 20[\s\S]*Running total\s+\$1,450\.00[\s\S]*Sat, Oct 24/);
+  assert.match(weekDays, /^Oct 18 – 19 · nothing scheduled\s+Tue, Oct 20[\s\S]*Running total\s+\$1,450\.00\s+Oct 21 – 24 · nothing scheduled$/);
   await shot('04b-forecast-week');
 
   step('forecast: custom range validation');
@@ -203,7 +205,8 @@ try {
   await page.getByLabel('End date').fill('2026-11-20');
   // The range starts mid-forecast: the running total carries over from the anchor instead of restarting at $0.
   await page.locator('.week-row').first().click();
-  assert.match(await page.locator('.week-days .timeline > li').first().innerText(), /Tue, Nov 10[\s\S]*Running total\s+\$1,990\.00/);
+  // Nov 10 – 11 fold into one line; Nov 12's paycheck adds to the $1,990.00 carried in.
+  assert.match(await page.locator('.week-days .timeline').innerText(), /^Nov 10 – 11 · nothing scheduled\s+Thu, Nov 12[\s\S]*\+\$1,800\.00[\s\S]*Running total\s+\$3,790\.00\s+Nov 13 – 14 · nothing scheduled$/);
 
   step('a day later: the paycheck is overdue');
   await page.clock.setFixedTime(new Date(2026, 9, 16, 9, 0));
@@ -244,7 +247,8 @@ try {
   await page.getByRole('tab', { name: 'Month', exact: true }).click();
   await page.getByRole('button', { name: /^Oct 11 – 17/ }).click();
   const tl = await page.locator('.week-days .timeline').innerText();
-  assert.match(tl, /Thu, Oct 15[\s\S]*?—[\s\S]*?Fri, Oct 16[\s\S]*?\+\$1,650\.00[\s\S]*?Running total\s+\$1,650\.00/);
+  // Oct 15 now has nothing (the paycheck came on the 16th), so it folds; the running total's start is one line above it.
+  assert.match(tl, /^Oct 11 – 15 · nothing scheduled\s+Your running total starts Oct 16, your next payday\.\s+Fri, Oct 16[\s\S]*?\+\$1,650\.00[\s\S]*?Running total\s+\$1,650\.00\s+Sat, Oct 17 · nothing scheduled$/);
   assert.doesNotMatch(tl, /\$1,800\.00/);
   await page.getByRole('button', { name: /^Oct 25 – 31/ }).click();
   assert.match(await page.locator('.week-days .timeline').innerText(), /Thu, Oct 29[\s\S]*?\+\$1,800\.00[\s\S]*?Running total\s+\$3,040\.00/);

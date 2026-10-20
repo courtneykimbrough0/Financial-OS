@@ -7,7 +7,7 @@ import * as ops from '../../domain/operations';
 import { describeRule } from '../../domain/recurrence';
 import { liabilityPrefix, ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OneTimeKind, type Occurrence, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
-import { EmptyState, FlowAmount, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
+import { FlowAmount, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
 import { KIND_COPY, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm } from '../components/forms';
 import { EstimateCallout, EstimateSheet, useEstimateSuggestion } from '../components/EstimateSheet';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
@@ -122,7 +122,7 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
   const [reviewingEstimate, setReviewingEstimate] = useState(false);
   const suggestion = useEstimateSuggestion(source);
   const current = source.versions[source.versions.length - 1]!;
-  const occurrences = useMemo(() => (expanded ? sourceOccurrences(data, source, today) : []), [expanded, data, source, today]);
+  const occurrences = useMemo(() => sourceOccurrences(data, source, today), [data, source, today]);
   const overdueCount = useMemo(
     () => sourceHistory(data, source, today, today).filter((o) => o.displayStatus === 'overdue').length,
     [data, source, today],
@@ -183,9 +183,11 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
         </p>
       )}
       <div className="card-actions">
-        <button type="button" className="button small secondary" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-          {expanded ? 'Hide dates' : 'See dates'}
-        </button>
+        {occurrences.length > 0 && (
+          <button type="button" className="button small secondary" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+            {expanded ? 'Hide dates' : 'See dates'}
+          </button>
+        )}
         <button type="button" className="button small secondary" onClick={onEdit}>
           Edit
         </button>
@@ -199,20 +201,16 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
           </button>
         )}
       </div>
-      {expanded && (
+      {expanded && occurrences.length > 0 && (
         <div className="source-occurrences">
           <p className="hint">Recent and upcoming dates. Tap one to record or change it.</p>
-          {occurrences.length === 0 ? (
-            <p className="muted">No dates in this window.</p>
-          ) : (
-            <ul className="entry-list">
-              {occurrences.map((o) => (
-                <li key={o.id}>
-                  <OccurrenceRow o={o} onOpen={onOpen} />
-                </li>
-              ))}
-            </ul>
-          )}
+          <ul className="entry-list">
+            {occurrences.map((o) => (
+              <li key={o.id}>
+                <OccurrenceRow o={o} onOpen={onOpen} />
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       {confirmOff && (
@@ -265,12 +263,20 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
     .sort((a, b) => (a.scheduledDate < b.scheduledDate ? 1 : -1));
   const upcomingOneTimes = oneTimes.filter((o) => o.status === 'scheduled').reverse();
   const pastOneTimes = oneTimes.filter((o) => o.status !== 'scheduled');
+  const showIntro = embedded && sources.length === 0 && oneTimes.length === 0;
+  // A recurring kind's one-time list appears once it has items; until then its Add sits beside the recurring one.
+  const showOneTimeList = copy.oneTime !== null && (!recurring || oneTimes.length > 0);
+  const addOneTime = (
+    <button type="button" className="button secondary small" onClick={() => setAdding('one-time')}>
+      <Icon icon={Plus} size={16} /> {recurring ? 'Add one-time' : 'Add spending'}
+    </button>
+  );
 
   return (
     <div className="stack-lg">
-      {embedded ? (
-        sources.length === 0 && oneTimes.length === 0 ? <p className="muted center">{copy.intro}</p> : null
-      ) : (
+      {showIntro ? (
+        <p className="muted center">{copy.intro}</p>
+      ) : embedded ? null : (
         <header className="screen-header">
           <h1>{copy.title}</h1>
           <p className="muted">{copy.intro}</p>
@@ -282,17 +288,18 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
           <SectionLabel
             id="recurring-heading"
             action={
-              <button type="button" className="button primary small" onClick={() => setAdding('recurring')}>
-                <Icon icon={Plus} size={16} /> {copy.addRecurring}
-              </button>
+              <span className="section-actions">
+                <button type="button" className="button primary small" onClick={() => setAdding('recurring')}>
+                  <Icon icon={Plus} size={16} /> {copy.addRecurring}
+                </button>
+                {copy.oneTime && !showOneTimeList && addOneTime}
+              </span>
             }
           >
             {copy.recurringHeading}
           </SectionLabel>
           {sources.length === 0 ? (
-            <EmptyState title={`No ${copy.recurringHeading.toLowerCase()} yet`}>
-              <p>{copy.empty}</p>
-            </EmptyState>
+            showIntro ? null : <p className="muted">{copy.empty}</p>
           ) : (
             <ul className="card-list">
               {sources.map((s) => (
@@ -303,22 +310,13 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
         </section>
       )}
 
-      {copy.oneTime && (
+      {copy.oneTime && showOneTimeList && (
         <section className="stack" aria-labelledby="onetime-heading">
-          <SectionLabel
-            id="onetime-heading"
-            action={
-              <button type="button" className="button secondary small" onClick={() => setAdding('one-time')}>
-                <Icon icon={Plus} size={16} /> {recurring ? 'Add one-time' : 'Add spending'}
-              </button>
-            }
-          >
+          <SectionLabel id="onetime-heading" action={addOneTime}>
             {copy.oneTime.heading}
           </SectionLabel>
           {oneTimes.length === 0 ? (
-            <EmptyState title="Nothing one-time yet">
-              <p>{copy.oneTime.empty}</p>
-            </EmptyState>
+            showIntro ? null : <p className="muted">{copy.oneTime.empty}</p>
           ) : (
             <>
               {upcomingOneTimes.length > 0 && (
