@@ -366,8 +366,8 @@ try {
   // Negative tally before a later payday (look ahead with a custom range).
   await page.getByRole('tab', { name: 'Custom', exact: true }).click();
   await page.getByLabel('End date').fill('2026-11-30');
-  await page.getByText('Timing gap ahead').waitFor();
-  assert.match(await page.locator('.callout-danger').innerText(), /Nov 5 – 9, by up to \$600\.00/);
+  await page.locator('.callout-danger').waitFor();
+  assert.match(await page.locator('.callout-danger').innerText(), /Short \$600\.00 · Nov 5 – 9/);
   await shot('11-sample-data');
   // The warning opens an explanation from the same forecast: what leads to the low point and what ends it.
   await page.locator('.callout-danger').click();
@@ -400,7 +400,7 @@ try {
   await whatIf.getByRole('button', { name: 'Apply change', exact: true }).click();
   await page.getByText('Moved Car repair to Nov 10, 2026.').waitFor();
   assert.equal(await page.getByRole('dialog').count(), 0);
-  assert.equal(await page.getByText('Timing gap ahead').count(), 0);
+  assert.equal(await page.locator('.callout-danger').count(), 0);
   // Late paycheck: actual recorded, next one still scheduled.
   await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Plan' }).click();
   await page.getByRole('button', { name: 'See dates' }).click();
@@ -708,7 +708,7 @@ try {
     await p2.getByRole('heading', { name: /^Home/ }).waitFor();
     await p2.getByRole('button', { name: 'Full forecast and calendar' }).click();
     await p2.getByRole('heading', { name: 'Your cash flow' }).waitFor();
-    assert.match(await p2.locator('.forecast .hero').innerText(), /Lowest running total\s*−\$600\.00 · Oct 22[\s\S]*Timing gap ahead/);
+    assert.match(await p2.locator('.forecast .hero').innerText(), /Lowest running total\s*−\$600\.00 · Oct 22[\s\S]*Short \$600\.00/);
     await fresh.close();
   }
 
