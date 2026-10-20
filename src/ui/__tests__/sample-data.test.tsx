@@ -55,7 +55,7 @@ describe("sample data that can't be stored (defect D5)", () => {
     await user.click(within(sheet).getByRole('button', { name: 'Show sample data' }));
     expect(await within(sheet).findByRole('alert')).toHaveTextContent(SAMPLE_UNAVAILABLE);
     expect(window.location.hash).toBe('#/settings');
-    expect(screen.queryByText("You're exploring sample data.")).toBeNull();
+    expect(screen.queryByRole('note')).toBeNull();
     expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
   });
 
@@ -64,6 +64,6 @@ describe("sample data that can't be stored (defect D5)", () => {
     await user.click(await screen.findByRole('button', { name: 'Explore with sample data' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(SAMPLE_UNAVAILABLE);
     expect(screen.getByRole('button', { name: 'Explore with sample data' })).toBeInTheDocument();
-    expect(screen.queryByText("You're exploring sample data.")).toBeNull();
+    expect(screen.queryByRole('note')).toBeNull();
   });
 });
