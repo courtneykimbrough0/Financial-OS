@@ -33,30 +33,30 @@ function copyFor(item: SetAside) {
   const who = item.owner.email ?? 'a temporary identity';
   if (item.intent === 'replace') {
     return {
-      intro: `A restore of a backup for ${who} was waiting for the server’s answer when another account signed in on this device. It may or may not have been applied.`,
-      action: `Check and finish the restore in ${who}’s account`,
-      already: `The restore was applied to ${who}’s account.`,
-      saved: `Restored in ${who}’s account.`,
-      stale: `${who}’s plan changed since, so the restore wasn’t applied over it. Download the backup to compare.`,
+      intro: `A restore of a backup for ${who} was waiting for the server's answer when another account signed in on this device. It may or may not have been applied.`,
+      action: `Check and finish the restore in ${who}'s account`,
+      already: `The restore was applied to ${who}'s account.`,
+      saved: `Restored in ${who}'s account.`,
+      stale: `${who}'s plan changed since, so the restore wasn't applied over it. Download the backup to compare.`,
       download: 'Download the backup',
     };
   }
   if (item.intent === 'reset') {
     return {
-      intro: `Starting over (erasing the plan) for ${who} was waiting for the server’s answer when another account signed in on this device. It may or may not have been applied.`,
-      action: `Check and finish starting over in ${who}’s account`,
-      already: `${who}’s plan was erased: starting over was applied.`,
-      saved: `${who}’s plan was erased.`,
-      stale: `${who}’s plan changed since, so it wasn’t erased.`,
+      intro: `Starting over (erasing the plan) for ${who} was waiting for the server's answer when another account signed in on this device. It may or may not have been applied.`,
+      action: `Check and finish starting over in ${who}'s account`,
+      already: `${who}'s plan was erased: starting over was applied.`,
+      saved: `${who}'s plan was erased.`,
+      stale: `${who}'s plan changed since, so it wasn't erased.`,
       download: null,
     };
   }
   return {
     intro: null,
-    action: `Save them to ${who}’s account`,
-    already: `These changes are already saved in ${who}’s account.`,
-    saved: `Saved to ${who}’s account.`,
-    stale: `${who}’s plan changed since these edits, so they weren’t saved over it. Download them to compare.`,
+    action: `Save them to ${who}'s account`,
+    already: `These changes are already saved in ${who}'s account.`,
+    saved: `Saved to ${who}'s account.`,
+    stale: `${who}'s plan changed since these edits, so they weren't saved over it. Download them to compare.`,
     download: 'Download them',
   };
 }
@@ -84,8 +84,8 @@ export function RecoveryPanel({ item, verifier, onSaved, onDone }: { item: SetAs
     verifierClient.current = c;
     const { data, error: err } = await c.auth.signInWithPassword({ email, password });
     setBusy(false);
-    if (err) return setError(err.code === 'invalid_credentials' ? 'That password isn’t right.' : authMessage(err));
-    if (data.user.id !== item.owner.id) return setError('That’s a different account.');
+    if (err) return setError(err.code === 'invalid_credentials' ? "That password isn't right." : authMessage(err));
+    if (data.user.id !== item.owner.id) return setError("That's a different account.");
     setPassword('');
     setUnlocked(c);
   };
@@ -96,7 +96,7 @@ export function RecoveryPanel({ item, verifier, onSaved, onDone }: { item: SetAs
     setError(null);
     try {
       const loaded = await unlocked.rpc('load_plan');
-      if (loaded.error) return setError(`They weren’t saved: ${loaded.error.message}`);
+      if (loaded.error) return setError(`They weren't saved: ${loaded.error.message}`);
       const current = loaded.data ? fromRows(loaded.data as LoadedPlan) : null;
       if (current && samePlan(current, item.data)) {
         setOutcome({ kind: 'already', message: copy.already });
@@ -105,7 +105,7 @@ export function RecoveryPanel({ item, verifier, onSaved, onDone }: { item: SetAs
       if (!current || current.revision !== item.baseRevision) return setError(copy.stale);
       // Exactly the revision it started from: send it now, as that account, with its own intent.
       const { error: err } = await unlocked.rpc('save_plan', { p_base_revision: item.baseRevision, p_save_id: crypto.randomUUID(), p_mode: item.intent, p_plan: toRows(item.data) });
-      if (err) return setError(err.code === 'PT409' ? copy.stale : `That wasn’t saved: ${err.message}`);
+      if (err) return setError(err.code === 'PT409' ? copy.stale : `That wasn't saved: ${err.message}`);
       setOutcome({ kind: 'saved', message: copy.saved });
       onSaved();
     } finally {
@@ -133,10 +133,10 @@ export function RecoveryPanel({ item, verifier, onSaved, onDone }: { item: SetAs
             <Icon icon={AlertCircle} size={16} />{' '}
             {copy.intro ?? (
               <>
-                Changes made as <strong>{email ?? 'a temporary identity'}</strong> weren’t saved: another account signed in on this device.
+                Changes made as <strong>{email ?? 'a temporary identity'}</strong> weren't saved: another account signed in on this device.
               </>
             )}{' '}
-            They’re kept here, not in any account, until this page closes.
+            They're kept here, not in any account, until this page closes.
           </p>
           {!unlocked && email && (
             <form className="stack-sm" onSubmit={(e) => void unlock(e)} noValidate aria-label="Unlock the unsaved changes">

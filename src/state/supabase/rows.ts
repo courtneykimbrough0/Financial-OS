@@ -114,7 +114,7 @@ export function hasAccountData(data: AppData): boolean {
   );
 }
 
-export const ACCOUNTS_NOT_STORED = 'This plan has accounts, transfers or reserve releases, which can’t be saved to this storage yet. Nothing was saved.';
+export const ACCOUNTS_NOT_STORED = "This plan has accounts, transfers or reserve releases, which can't be saved to this storage yet. Nothing was saved.";
 
 /** The plan as the rows save_plan expects. Doesn't validate; see `checkForMigration`. */
 export function toRows(data: AppData): PlanRows {
@@ -333,6 +333,6 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
   const all = [...data.sources.flatMap((s) => [s.createdAt, s.updatedAt]), ...data.records.flatMap((r) => [r.createdAt, r.updatedAt, r.completedAt, r.canceledAt])];
   if (all.some((t) => t !== null && isTimestamp(t) && canonicalTimestamp(t) !== t)) normalized('Some times will be stored as ISO-8601 UTC with milliseconds.');
   if (data.isSample) error('Sample data is never stored in an account.');
-  if (hasAccountData(data)) error('Accounts, account assignments, transfers and reserve releases can’t be stored in Supabase yet.');
+  if (hasAccountData(data)) error("Accounts, account assignments, transfers and reserve releases can't be stored in Supabase yet.");
   return issues;
 }

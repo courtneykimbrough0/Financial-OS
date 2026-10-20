@@ -13,7 +13,7 @@ describe('development Supabase configuration', () => {
     expect(devConfigProblem('http://127.0.0.1:54321', undefined)).toMatch(/^Set VITE_SUPABASE_ANON_KEY/);
     expect(devConfigProblem('http://127.0.0.1:54321', 'sb_secret_abc')).toBe('VITE_SUPABASE_ANON_KEY is a secret key. Use the anon or publishable key.');
     expect(devConfigProblem('http://127.0.0.1:54321', jwt('service_role'))).toBe('VITE_SUPABASE_ANON_KEY is a service_role key. Use the anon or publishable key.');
-    expect(devConfigProblem('http://127.0.0.1:54321', 'nonsense')).toBe('VITE_SUPABASE_ANON_KEY isn’t a Supabase key.');
+    expect(devConfigProblem('http://127.0.0.1:54321', 'nonsense')).toBe("VITE_SUPABASE_ANON_KEY isn't a Supabase key.");
   });
 
   afterEach(() => vi.unstubAllEnvs());
@@ -27,7 +27,7 @@ describe('development Supabase configuration', () => {
       vi.stubEnv('VITE_SUPABASE_ANON_KEY', key);
       const app = vi.fn(() => <p>app</p>);
       const { unmount } = render(<SupabaseDevelopment>{app}</SupabaseDevelopment>);
-      expect(screen.getByRole('alert')).toHaveTextContent(/^Development storage couldn’t start\./);
+      expect(screen.getByRole('alert')).toHaveTextContent(/^Development storage couldn't start\./);
       expect(app).not.toHaveBeenCalled();
       unmount();
     }

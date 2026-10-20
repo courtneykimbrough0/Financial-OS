@@ -587,6 +587,9 @@ The structural decisions (Q1–Q7) are in [docs/REDUCTION-AUDIT.md](docs/REDUCTI
 | D10 | Freelance payment without a date | **Possible, not counted**, until a date is set or it's received. |
 | D11 | "Cash available now" (the open item in the roadmap) | Keep deferred, but leave room in the week view's forecast line for an optional starting amount (REDUCTION-AUDIT Q6). |
 | D12 | Savings as an expense | **Replaced** (Development-State Directive, October 2026): Strategic Reserves are an internal allocation that lowers available cash flow without counting as spending (section 11.3). |
+| S1 | Hide "By Kind" when only one kind has activity | **Deferred to C4** (visibility phase). Keep it visible for now; the C4 conditional-visibility pass will apply the rule consistently. |
+| S2 | Hide "Paid $0.00" from the Activity summary | **Keep as-is.** The three KPIs (Received, Paid, Cash flow) form a complete set; showing all three even at zero provides orientation. |
+| S7 | Collapse empty Plan tabs in early use | **Keep all four tabs visible.** Consistent layout outweighs the cost of empty tabs during setup. |
 
 ---
 

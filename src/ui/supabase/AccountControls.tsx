@@ -45,7 +45,7 @@ function UnsavedNotice() {
   return (
     <div className="callout callout-warn stack-sm" role="alert">
       <p>
-        <Icon icon={AlertCircle} size={16} /> Some of your changes aren’t saved yet. {saveMessage ?? ''}
+        <Icon icon={AlertCircle} size={16} /> Some of your changes aren't saved yet. {saveMessage ?? ''}
       </p>
       {saveStatus === 'error' && (
         <button type="button" className="button small secondary" onClick={retrySave}>
@@ -68,7 +68,7 @@ function SignOutDialog({ onClose }: { onClose: () => void }) {
         {unsaved ? (
           <p>Signing out now leaves those changes behind. Save them first, or download a backup to keep a copy.</p>
         ) : temporary ? (
-          <p>This is a temporary identity: once you sign out, you can’t sign back in to this plan. Add an email first, or download a backup to keep a copy.</p>
+          <p>This is a temporary identity: once you sign out, you can't sign back in to this plan. Add an email first, or download a backup to keep a copy.</p>
         ) : (
           <p>Your plan stays saved to your account. Sign in again on any device to see it.</p>
         )}
@@ -114,7 +114,7 @@ function DeleteDialog({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Delete your account?" onClose={() => !busy && onClose()}>
       <form className="stack" onSubmit={(e) => void submit(e)} noValidate aria-label="Delete your account">
-        <p>This permanently deletes your account and everything in your plan: every item, schedule and recorded payment. It can’t be undone.</p>
+        <p>This permanently deletes your account and everything in your plan: every item, schedule and recorded payment. It can't be undone.</p>
         <p>To only clear your plan and keep your account, use Start over instead.</p>
         <BackupButton label="Download a backup first" />
         {unsaved ? (
@@ -156,16 +156,16 @@ function KeepThisPlan() {
   if (sent) {
     return (
       <div className="stack-sm">
-        <p role="status">We sent a link to {email}. Open it in this browser to confirm it; then you’ll choose a password.</p>
+        <p role="status">We sent a link to {email}. Open it in this browser to confirm it; then you'll choose a password.</p>
         <button type="button" className="button small secondary" onClick={() => void account.checkEmailConfirmed()}>
-          I’ve confirmed it
+          I've confirmed it
         </button>
       </div>
     );
   }
   return (
     <form className="stack-sm" onSubmit={(e) => void submit(e)} noValidate aria-label="Keep this plan">
-      <p>This plan belongs to a temporary development identity, which can’t be signed back into. Add an email and a password to keep it as an account.</p>
+      <p>This plan belongs to a temporary development identity, which can't be signed back into. Add an email and a password to keep it as an account.</p>
       <Field label="Email">{(p) => <input {...p} type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value.trim())} />}</Field>
       <FormError message={error} />
       <button type="submit" className="button small primary" disabled={busy}>
@@ -265,9 +265,9 @@ export function SessionGuard() {
   return (
     <Modal title="Sign in again to save" onClose={() => undefined}>
       <form className="stack" onSubmit={(e) => void submit(e)} noValidate aria-label="Sign in again">
-        <p>Your session ended, so your latest changes aren’t saved yet. They’re still here.</p>
+        <p>Your session ended, so your latest changes aren't saved yet. They're still here.</p>
         {account.user.anonymous ? (
-          <p>This temporary identity can’t be signed back into. Download a backup to keep your changes.</p>
+          <p>This temporary identity can't be signed back into. Download a backup to keep your changes.</p>
         ) : (
           <>
             <p>
@@ -282,7 +282,7 @@ export function SessionGuard() {
         )}
         <BackupButton />
         {confirmLeave ? (
-          <button type="button" className="button danger full" onClick={() => account.leave('You signed out. Changes that weren’t saved were left behind.')}>
+          <button type="button" className="button danger full" onClick={() => account.leave("You signed out. Changes that weren't saved were left behind.")}>
             Leave without saving
           </button>
         ) : (

@@ -14,10 +14,10 @@ import { toRows } from '../rows';
 import { FakeSupabase } from './fake-supabase';
 import { clock, richPlan, smallPlan, TODAY } from './fixtures';
 
-const OFFLINE = 'Couldn’t reach the server, so this change isn’t confirmed yet. Check your connection and try again.';
-const SIGNED_OUT = 'You’ve been signed out, so this change isn’t saved. Sign in again, then try again.';
-const CONFLICT = 'Your data was changed somewhere else, such as another device. Reload to see the latest version.';
-const SAVED_BUT_NEWER = 'Your change was saved, but your data has changed somewhere else since. Reload to see the latest version.';
+const OFFLINE = "Couldn't reach the server, so this change isn't confirmed yet. Check your connection and try again.";
+const SIGNED_OUT = "You've been signed out, so this change isn't saved. Sign in again, then try again.";
+const CONFLICT = 'Your data was changed on another device. Reload to see the latest.';
+const SAVED_BUT_NEWER = 'Your change was saved, but your data has changed on another device since. Reload to see the latest.';
 
 /** An adapter on a fake holding `plan` (or no workspace yet). */
 function setup(plan?: AppData) {
@@ -126,7 +126,7 @@ describe('saving', () => {
     expect(await adapter.load()).toEqual({ schemaVersion: 2, revision: 38, onboardingComplete: false, sources: [], records: [] });
     // A reset that isn't empty is refused, and says why.
     const r = await adapter.save({ ...loaded, revision: 38 }, 38, 'reset');
-    expect(r).toEqual({ ok: false, reason: 'error', message: 'This change couldn’t be saved: Starting over needs an empty plan in setup.' });
+    expect(r).toEqual({ ok: false, reason: 'error', message: "This change couldn't be saved: Starting over needs an empty plan in setup." });
   });
 
   it('20. the forecast after saving and reloading is the same, on every day checked', async () => {
@@ -259,7 +259,7 @@ describe('failures and conflicts', () => {
     const loaded = await adapter.load();
     expect(await adapter.save(repair(loaded, 80), 0)).toEqual({ ok: true, revision: 1 });
     const r = await adapter.save(repair({ ...loaded, revision: 1 }, 95), 1);
-    expect(r).toEqual({ ok: false, reason: 'error', message: 'This change couldn’t be saved: This save request was already used for a different change.' });
+    expect(r).toEqual({ ok: false, reason: 'error', message: "This change couldn't be saved: This save request was already used for a different change." });
     expect(fake.workspace.plan.records[0]!.scheduled_amount_cents).toBe(8000);
   });
 
@@ -267,7 +267,7 @@ describe('failures and conflicts', () => {
     const { fake, adapter } = setup(smallPlan());
     const changed = repair(await adapter.load(), 80);
     fake.failNext('check-violation');
-    expect(await adapter.save(changed, 0)).toEqual({ ok: false, reason: 'error', message: 'This change couldn’t be saved because the data didn’t pass a safety check. Nothing was changed.' });
+    expect(await adapter.save(changed, 0)).toEqual({ ok: false, reason: 'error', message: "This change couldn't be saved because the data didn't pass a safety check. Nothing was changed." });
     expect(fake.workspace!.revision).toBe(0);
     expect(await adapter.save(changed, 0)).toEqual({ ok: true, revision: 1 });
     expect(saveCalls(fake).map((c) => c.args!.p_save_id)).toEqual(['save-1', 'save-2']);
@@ -287,7 +287,7 @@ describe('failures and conflicts', () => {
   });
 });
 
-describe('with the app’s store', () => {
+describe("with the app's store", () => {
   let store: ReturnType<typeof useStore>;
   function Spy() {
     store = useStore();

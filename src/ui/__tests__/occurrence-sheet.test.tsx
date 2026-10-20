@@ -53,8 +53,8 @@ describe('OccurrenceSheet', () => {
     let closed = false;
     await renderSheet(adapter, '2026-10-16', () => (closed = true));
 
-    expect(screen.getByText(/not yet received/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Mark received' }));
+    expect(screen.getByText(/Record it, or move it to a new date/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Record received' }));
     const amount = screen.getByLabelText('Amount received');
     const date = screen.getByLabelText('Date received');
     expect(amount).toHaveValue('1800.00');
@@ -82,7 +82,7 @@ describe('OccurrenceSheet', () => {
   it('saves only one completion when the save button is tapped twice', async () => {
     const adapter = new MemoryAdapter(seed());
     await renderSheet(adapter, '2026-10-16');
-    fireEvent.click(screen.getByRole('button', { name: 'Mark received' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record received' }));
     const save = screen.getByRole('button', { name: 'Save as received' });
     act(() => {
       fireEvent.click(save);
@@ -97,7 +97,7 @@ describe('OccurrenceSheet', () => {
     const user = userEvent.setup();
     const adapter = new MemoryAdapter(seed());
     await renderSheet(adapter, '2026-10-11');
-    await user.click(screen.getByRole('button', { name: 'Mark received' }));
+    await user.click(screen.getByRole('button', { name: 'Record received' }));
     // Defaults to today because the expected date is still ahead.
     expect(screen.getByLabelText('Date received')).toHaveValue('2026-10-11');
     fireEvent.change(screen.getByLabelText('Date received'), { target: { value: '2026-10-15' } });
@@ -111,9 +111,9 @@ describe('OccurrenceSheet', () => {
     const user = userEvent.setup();
     const adapter = new MemoryAdapter(seed());
     await renderSheet(adapter, '2026-10-11');
-    await user.click(screen.getByRole('button', { name: 'Cancel this one' }));
+    await user.click(screen.getByRole('button', { name: 'Skip this payment' }));
     await user.type(screen.getByLabelText('Note (optional)'), 'Unpaid leave');
-    await user.click(screen.getByRole('button', { name: 'Cancel occurrence' }));
+    await user.click(screen.getByRole('button', { name: 'Skip payment' }));
     const saved = await savedWith(adapter, 1);
     expect(saved.records[0]).toMatchObject({ status: 'canceled', cancelNote: 'Unpaid leave', actualAmountCents: null });
     const f = buildForecast(saved, '2026-10-11');
@@ -130,10 +130,10 @@ describe('deleting a one-time item names it in words (defect D3)', () => {
   }
 
   it.each([
-    ['varied', undefined, 'Delete this varied spending'],
-    ['income', undefined, 'Delete this one-time income'],
-    ['reserve', undefined, 'Delete this Strategic Reserve amount'],
-    ['reserve', true, 'Delete this use of reserves'],
+    ['varied', undefined, 'Delete Item'],
+    ['income', undefined, 'Delete Item'],
+    ['reserve', undefined, 'Delete Item'],
+    ['reserve', true, 'Delete Item'],
   ] as const)('%s%s: "%s", never the internal kind id', async (kind, release, label) => {
     const user = userEvent.setup();
     render(

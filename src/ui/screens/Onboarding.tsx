@@ -32,7 +32,7 @@ const STEPS: StepDef[] = [
     name: 'Income',
     kinds: ['income'],
     title: 'When does money come in?',
-    body: 'Add your regular income, like a paycheck or benefits. Your forecast is built around your next expected payday.',
+    body: 'Add your regular income, like a paycheck or benefits. Your forecast starts from your next payday.',
   },
   {
     name: 'Bills',
@@ -49,14 +49,14 @@ const STEPS: StepDef[] = [
   {
     name: 'Liabilities',
     kinds: ['liability'],
-    title: 'What do you pay toward debts?',
+    title: 'Do you make loan or card payments?',
     body: 'Regular payments on a card, loan, or line of credit. Skip this if you have none.',
   },
   {
     name: 'Reserves',
     kinds: ['reserve'],
-    title: 'What do you set aside?',
-    body: 'Strategic Reserves: money you set aside on a schedule and keep. Cash flow shows what’s available after it. Optional: you can add it later.',
+    title: 'What do you save?',
+    body: "Strategic Reserves: money you save on a schedule and keep. Cash flow shows what's available after it. Optional: you can add it later.",
   },
   { name: 'Review', kinds: [], title: 'Check everything over', body: 'Tap anything to change it before you start.' },
 ];
@@ -286,9 +286,9 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
         <div className="callout callout-warn stack-sm" role="note">
           <p>
             <Icon icon={AlertCircle} size={16} />
-            <strong>Add recurring income to start your forecast.</strong>
+            <strong>Add your income to see what's ahead.</strong>
           </p>
-          <p>Your forecast starts the day before your next expected payday. You can add it now or later on the Income screen.</p>
+          <p>You can also continue and add it later.</p>
           <button type="button" className="button small secondary" onClick={() => goTo(STEP_OF.income)}>
             Add income
           </button>
@@ -325,7 +325,7 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
         <p className="callout callout-info" role="note">
           <Icon icon={Info} size={16} />
           <span>
-            {beforePayday.length === 1 ? '1 payment' : `${beforePayday.length} payments`} ({formatMoney(beforeTotal)}) {beforePayday.length === 1 ? 'is' : 'are'} due before your next payday. The running total starts at $0 on {formatShort(forecast.anchor)}, so it doesn’t include {beforePayday.length === 1 ? 'it' : 'them'}. Make sure the money you have now covers {beforePayday.length === 1 ? 'it' : 'them'}.
+            {beforePayday.length === 1 ? '1 payment' : `${beforePayday.length} payments`} ({formatMoney(beforeTotal)}) {beforePayday.length === 1 ? 'is' : 'are'} due before your next payday. Make sure the money you have now covers {beforePayday.length === 1 ? 'it' : 'them'}.
           </span>
         </p>
       )}
@@ -376,10 +376,9 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
         <Modal title="How the running total works" onClose={() => setAbout(false)}>
           <div className="stack">
             <p>
-              The running total starts at $0 on {formatMedium(forecast.anchor)}, the day before your next expected payday ({formatMedium(payday)}), and adds money in and subtracts money out day by day.
+              Your running total starts at $0 the day before your next paycheck, then adds what comes in and subtracts what goes out. It shows whether your income arrives in time for your payments; your bank balance can differ.
             </p>
-            <p>Anything due before then isn’t in the running total, because the app doesn’t know how much money you have now.</p>
-            <p>It shows timing, separate from your bank balance.</p>
+            <p>Payments due before {formatMedium(payday)} come from the money you have now.</p>
           </div>
         </Modal>
       )}
@@ -463,7 +462,7 @@ export function Onboarding() {
             <li>Record what actually happens, and the forecast updates</li>
           </ul>
           <p className="hint center">
-            Your income is all you need to see a forecast. You enter everything yourself, and it’s saved {account ? 'to your account' : 'only on this device'}.
+            Start with your income — that's enough for a forecast. Your data stays {account ? 'in your account' : 'on this device'}.
           </p>
           <button
             type="button"
@@ -476,7 +475,7 @@ export function Onboarding() {
           </button>
           <FormError message={sampleError} />
           <div className="center">
-            <RestoreBackupButton label="Have a backup? Restore it" />
+            <RestoreBackupButton label="Restore a backup" />
           </div>
           {slot ? <slot.Line /> : <SignedInLine />}
         </div>
@@ -486,7 +485,7 @@ export function Onboarding() {
 
       {needIncome && (
         <p className="callout callout-warn" role="alert">
-          <Icon icon={AlertCircle} size={16} /> Add at least one recurring income so we can start your forecast from your next payday. You can also continue and add it later.
+          <Icon icon={AlertCircle} size={16} /> Add your income to see what's ahead. You can also continue and add it later.
         </p>
       )}
 

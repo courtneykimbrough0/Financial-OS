@@ -53,7 +53,7 @@ describe('progress', () => {
     expect(p.projectedVsLastMonth).toMatchObject({ basis: 'projected-vs-recorded', differenceCents: usd(50), direction: 'up' });
   });
 
-  it('uses the forecast’s own figures: a month’s projection equals periodKpis for it', () => {
+  it("uses the forecast's own figures: a month's projection equals periodKpis for it", () => {
     const d = withOctober(1100);
     const f = buildForecast(d, TODAY);
     expect(homeView(d, TODAY).progress.thisMonth.projected).toEqual(periodKpis(f, '2026-10-01', '2026-10-31'));
@@ -199,7 +199,7 @@ describe('transfers', () => {
     expect(due.type === 'transfer' && [due.transfer.status, due.shortfallCents]).toEqual(['expected', null]);
   });
 
-  it('shows a planned transfer’s shortfall when its source balance is known', () => {
+  it("shows a planned transfer's shortfall when its source balance is known", () => {
     const d = unwrap(ops.setOpeningBalance(withTransfers(), 'acct-in', { amountCents: usd(20), date: '2026-10-10' }, clock));
     const due = homeView(d, TODAY).attention.find((i) => i.id === 'due')!;
     // $20 − $25 recorded on Oct 11 − $60 planned = −$65.
@@ -217,7 +217,7 @@ describe('transfers', () => {
 });
 
 describe('accounts on items', () => {
-  it('upcoming items carry their item’s account; recorded ones the account they were recorded in', () => {
+  it("upcoming items carry their item's account; recorded ones the account they were recorded in", () => {
     let d = week();
     d = unwrap(ops.addAccount(d, { name: 'Paycheck account', type: 'income' }, at(SETUP), 'acct-in'));
     d = unwrap(ops.addAccount(d, { name: 'Side account', type: 'income' }, at(SETUP), 'acct-side'));
@@ -310,7 +310,7 @@ describe('the viewed week', () => {
     expect(current.laterGaps.map((g) => g.id)).toEqual(['gap@2026-10-28']);
   });
 
-  it('reads the same forecast: a viewed week’s totals reconcile with periodKpis', () => {
+  it("reads the same forecast: a viewed week's totals reconcile with periodKpis", () => {
     const f = buildForecast(week(), TODAY, { through: '2026-10-31' });
     const v = view('2026-10-20');
     const expected = v.comingUp.filter((i) => i.type === 'occurrence').reduce((n, i) => n + (i.type === 'occurrence' ? i.entry.signedCents : 0), 0);

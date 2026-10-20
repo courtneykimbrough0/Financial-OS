@@ -379,7 +379,7 @@ describe('schedule and rate changes', () => {
     expect(s.observations.map((o) => o.originalDate)).toEqual(['2026-07-01', '2026-08-01', '2026-09-01']);
   });
 
-  it('after a known rate increase, older payments at the old rate don’t suggest going back', () => {
+  it("after a known rate increase, older payments at the old rate don't suggest going back", () => {
     let d = pay(item(140, '2026-01-01', { id: 'ins', name: 'Insurance' }), 'ins', [
       ['2026-03-01', 140],
       ['2026-04-01', 140],
@@ -394,7 +394,7 @@ describe('schedule and rate changes', () => {
     expect(analyzeEstimate(d, 'ins', TODAY)).toMatchObject({ suggestion: null, reason: 'insufficient-history' });
   });
 
-  it('a rate rise the person hasn’t entered yet: suggested once three payments show it', () => {
+  it("a rate rise the person hasn't entered yet: suggested once three payments show it", () => {
     const d = pay(item(140, '2026-01-01', { id: 'ins', name: 'Insurance' }), 'ins', [
       ['2026-04-01', 140],
       ['2026-05-01', 140],
@@ -575,7 +575,7 @@ describe('dismissing', () => {
     expect(buildForecast(next, TODAY)).toEqual(buildForecast(d, TODAY));
   });
 
-  it('doesn’t come back with the next payment unless the suggestion changes', () => {
+  it("doesn't come back with the next payment unless the suggestion changes", () => {
     let d = electricity();
     d = unwrap(dismissEstimate(d, suggestion(d), clock));
     expect(analyzeEstimate(d, 'elec', TODAY).reason).toBe('dismissed');
@@ -701,7 +701,7 @@ describe('repeatable and exact', () => {
   });
 });
 
-describe('why payments weren’t counted', () => {
+describe("why payments weren't counted", () => {
   it('marks unusual and older payments', () => {
     const d = pay(item(120, '2026-01-03'), 'elec', [
       ['2026-03-03', 148],

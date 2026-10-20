@@ -39,17 +39,17 @@ export function readBackup(text: string): ParsedBackup {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new Error('This file isn’t a Financial OS backup.');
+    throw new Error("This file isn't a Financial OS backup.");
   }
   const file = parsed as Partial<BackupFile>;
   if (!file || typeof file !== 'object' || file.format !== BACKUP_FORMAT || !file.data) {
-    throw new Error('This file isn’t a Financial OS backup.');
+    throw new Error("This file isn't a Financial OS backup.");
   }
   let data: AppData;
   try {
     data = migrate(file.data);
   } catch {
-    throw new Error('This backup is damaged or from a newer version of the app, so it can’t be restored.');
+    throw new Error("This backup is damaged or from a newer version of the app, so it can't be restored.");
   }
   const { isSample: _sample, ...rest } = data;
   return {

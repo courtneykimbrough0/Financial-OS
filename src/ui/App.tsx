@@ -108,7 +108,7 @@ function SampleBanner() {
   return (
     <div className="sample-banner" role="note">
       <p>
-        <strong>You’re exploring sample data.</strong> Your own data stays unchanged.
+        <strong>Sample data.</strong> Your own data stays unchanged.
       </p>
       <button
         type="button"
@@ -133,7 +133,7 @@ function UpdateBanner() {
   return (
     <div className="sample-banner update-banner" role="status">
       <p>
-        <strong>A new version of Financial OS is ready.</strong> Update when you’re done entering things.
+        <strong>A new version of Financial OS is ready.</strong> Update when you're done entering things.
       </p>
       <button type="button" className="button small secondary" onClick={apply} disabled={saveStatus === 'saving'}>
         <Icon icon={RefreshCw} size={16} /> Update

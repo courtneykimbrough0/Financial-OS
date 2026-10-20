@@ -133,7 +133,7 @@ describe('CloudAdapter', () => {
     expect(localStorage.getItem(cloudCacheKey(USER))).toBeNull();
   });
 
-  it('keeps each account’s device copy separate', async () => {
+  it("keeps each account's device copy separate", async () => {
     await adapter.save(withBill(emptyData(), 'Mine'), 0);
     const other = new CloudAdapter(new FakeServer(), 'user-2', localStorage);
     expect((await other.load()).records).toHaveLength(0);

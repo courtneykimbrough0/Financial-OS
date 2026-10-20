@@ -262,7 +262,7 @@ describe('variable income', () => {
   });
 
   it('rejects cases out of order or below $0', () => {
-    expect(evaluateIncomeCases(plan(), [], { ...tips, lowCents: usd(80) }, clock)).toEqual({ ok: false, error: 'The low case can’t be more than expected, and expected can’t be more than high.' });
+    expect(evaluateIncomeCases(plan(), [], { ...tips, lowCents: usd(80) }, clock)).toEqual({ ok: false, error: "The low case can't be more than expected, and expected can't be more than high." });
     expect(evaluateIncomeCases(plan(), [], { ...tips, lowCents: -1 }, clock)).toEqual({ ok: false, error: 'Enter each income case as $0 or more.' });
     expect(evaluateIncomeCases(plan(), [], { ...tips, schedule: null }, clock)).toEqual({ ok: false, error: 'Choose the date the income might arrive.' });
   });
@@ -278,12 +278,12 @@ describe('confirmed and hypothetical income', () => {
     expect(r.assumptions[0]).toMatchObject({ income: 'hypothetical', inRunningTotal: false });
   });
 
-  it('with no confirmed income, hypothetical income doesn’t create a running total to compare', () => {
+  it("with no confirmed income, hypothetical income doesn't create a running total to compare", () => {
     let d = unwrap(ops.completeOnboarding(ops.emptyData()));
     d = source(d, TODAY, 'bill', 'Rent', 1500, '2026-11-01', { type: 'monthly' }, 'rent');
     const r = run([{ kind: 'hypothetical-income', description: 'Side gig', amountCents: usd(400), schedule: { startDate: '2026-10-23', rule: { type: 'weekly' } } }], d);
     expect(r).toMatchObject({ comparable: false, reason: 'no-forecast', differences: { lowestCents: null, endingCents: null }, newGaps: [] });
-    expect(r.limitations[0]).toBe('There’s no upcoming income to start a running total from, so only cash flow is compared.');
+    expect(r.limitations[0]).toBe("There's no upcoming income to start a running total from, so only cash flow is compared.");
   });
 });
 
@@ -291,13 +291,13 @@ describe('forecast anchor', () => {
   it('moving the next payday makes the running totals not comparable', () => {
     const r = run([{ kind: 'occurrence-date', occurrenceId: 'pay@2026-10-23', date: '2026-10-26' }]);
     expect(r).toMatchObject({ comparable: false, reason: 'anchor-changed', differences: { incomeCents: 0, outflowCents: 0, reservesCents: 0, netCents: 0, lowestCents: null, endingCents: null } });
-    expect(r.limitations[0]).toBe('This scenario moves your next payday from Oct 23, 2026 to Oct 26, 2026, so the running totals start on different days and can’t be compared directly.');
+    expect(r.limitations[0]).toBe("This scenario moves your next payday from Oct 23, 2026 to Oct 26, 2026, so the running totals start on different days and can't be compared directly.");
   });
 
-  it('moving a payment to before the next payday isn’t shown as a fix', () => {
+  it("moving a payment to before the next payday isn't shown as a fix", () => {
     const r = run([{ kind: 'occurrence-date', occurrenceId: 'loan@2026-10-28', date: '2026-10-20' }]);
     expect(r).toMatchObject({ comparable: false, reason: 'before-payday' });
-    expect(r.limitations[0]).toBe('Car loan would move to before your next payday (Oct 23, 2026), where the running total starts, so it would drop out of it. The forecast can’t show whether money on hand covers it.');
+    expect(r.limitations[0]).toBe("Car loan would move to before your next payday (Oct 23, 2026), where the running total starts, so it would drop out of it. The forecast can't show whether money on hand covers it.");
   });
 
   it('an expense before the next payday counts in cash flow, not the running total', () => {
@@ -354,9 +354,9 @@ describe('invalid assumptions', () => {
     expect(err([{ kind: 'one-time-expense', description: 'Repair', amountCents: 0, date: '2026-11-10' }])).toBe('Amount must be greater than $0.');
     expect(err([{ kind: 'one-time-income', description: 'Bonus', amountCents: 100, date: '2026-10-01' }])).toBe('Hypothetical changes need today or a later date.');
     expect(err([{ kind: 'one-time-income', description: ' ', amountCents: 100, date: '2026-11-01' }])).toMatch(/description|name/i);
-    expect(err([{ kind: 'occurrence-amount', occurrenceId: 'rent@2026-11-02', amountCents: 100 }])).toBe('That transaction could not be found.');
+    expect(err([{ kind: 'occurrence-amount', occurrenceId: 'rent@2026-11-02', amountCents: 100 }])).toBe('That item could not be found.');
     expect(err([{ kind: 'extra-liability-payment', sourceId: 'rent', amountCents: 100, date: '2026-11-10' }])).toBe('Choose one of your liability payments.');
-    expect(err([{ kind: 'recurring-amount', sourceId: 'loan', amountCents: 100, from: '2026-11-15' }])).toBe('Choose one of Car loan’s upcoming payment dates to start from.');
+    expect(err([{ kind: 'recurring-amount', sourceId: 'loan', amountCents: 100, from: '2026-11-15' }])).toBe("Choose one of Car loan's upcoming payment dates to start from.");
     expect(
       err([
         { kind: 'one-time-income', description: 'Bonus', amountCents: 100, date: '2026-11-01' },
@@ -368,14 +368,14 @@ describe('invalid assumptions', () => {
         { kind: 'occurrence-amount', occurrenceId: 'rent@2026-11-01', amountCents: 100 },
         { kind: 'occurrence-date', occurrenceId: 'rent@2026-11-01', date: '2026-11-03' },
       ]),
-    ).toBe('Change each transaction only once in a scenario.');
+    ).toBe('Change each item only once in a scenario.');
   });
 
   it('refuses a recorded occurrence and a pending schedule change', () => {
     const paid = unwrap(ops.recordActual(plan(), 'loan@2026-10-28', { amountCents: usd(300), date: TODAY }, clock));
-    expect(err([{ kind: 'occurrence-amount', occurrenceId: 'loan@2026-10-28', amountCents: 100 }], paid)).toBe('Car loan on Oct 28, 2026 has already been recorded or canceled.');
+    expect(err([{ kind: 'occurrence-amount', occurrenceId: 'loan@2026-10-28', amountCents: 100 }], paid)).toBe('Car loan on Oct 28, 2026 has already been recorded or skipped.');
     const pending = unwrap(ops.changeSourceSchedule(plan(), 'loan', { startDate: '2026-12-28', amountCents: usd(350), rule: { type: 'monthly' } }, clock));
-    expect(err([{ kind: 'recurring-amount', sourceId: 'loan', amountCents: 100, from: '2026-11-28' }], pending)).toBe('Car loan already has a change set for Dec 28, 2026, so a scenario can’t change its amount yet.');
+    expect(err([{ kind: 'recurring-amount', sourceId: 'loan', amountCents: 100, from: '2026-11-28' }], pending)).toBe("Car loan already has a change set for Dec 28, 2026, so a scenario can't change its amount yet.");
   });
 });
 

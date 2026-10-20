@@ -172,7 +172,7 @@ export function changeSourceSchedule(data: AppData, id: string, change: Schedule
   const err =
     validateAmount(change.amountCents) ??
     (!isValidDateStr(change.startDate) ? 'Enter a valid date.' : null) ??
-    (change.startDate < clock.today ? 'Changes can only take effect today or later, so past occurrences keep their original expectations.' : null) ??
+    (change.startDate < clock.today ? 'Choose today or a later date.' : null) ??
     validateRule(change.rule, change.startDate);
   if (err) return fail(err);
   return withSource(data, id, (s) => {
@@ -315,7 +315,7 @@ export function addOneTime(data: AppData, input: OneTimeInput, clock: Clock, id 
 
 export function deleteOneTime(data: AppData, id: string): Result {
   const record = data.records.find((r) => r.id === id);
-  if (!record || record.sourceId !== null) return fail('Only one-time transactions can be deleted.');
+  if (!record || record.sourceId !== null) return fail('Only one-time items can be deleted.');
   return ok({ ...data, records: data.records.filter((r) => r.id !== id) });
 }
 
@@ -331,7 +331,7 @@ function withOccurrence(
   fn: (r: OccurrenceRecord) => OccurrenceRecord | string,
 ): Result {
   const occ = findOccurrence(data, id, clock.today);
-  if (!occ) return fail('That transaction could not be found.');
+  if (!occ) return fail('That item could not be found.');
   const { displayStatus: _ds, virtual, ...record } = occ;
   void _ds;
   const next = fn(record);
@@ -361,8 +361,8 @@ export function recordActual(data: AppData, id: string, actual: ActualInput, clo
   const err = validateActual(actual, clock);
   if (err) return fail(err);
   return withOccurrence(data, id, clock, (r) => {
-    if (r.status === 'completed') return 'This transaction has already been recorded.';
-    if (r.status === 'canceled') return 'This transaction was canceled. Restore it before recording what happened.';
+    if (r.status === 'completed') return 'This item has already been recorded.';
+    if (r.status === 'canceled') return 'This was skipped. Undo the skip first.';
     // A recurring occurrence keeps the account its item has now, so moving the item later never moves recorded money.
     const account = r.sourceId === null ? undefined : data.sources.find((s) => s.id === r.sourceId)?.accountId;
     return { ...r, status: 'completed', actualAmountCents: actual.amountCents, actualDate: actual.date, completedAt: clock.now, ...(account ? { accountId: account } : {}) };
@@ -374,7 +374,7 @@ export function correctActual(data: AppData, id: string, actual: ActualInput, cl
   const err = validateActual(actual, clock);
   if (err) return fail(err);
   return withOccurrence(data, id, clock, (r) =>
-    r.status !== 'completed' ? 'Only recorded transactions can be corrected.' : { ...r, actualAmountCents: actual.amountCents, actualDate: actual.date },
+    r.status !== 'completed' ? 'Only recorded items can be corrected.' : { ...r, actualAmountCents: actual.amountCents, actualDate: actual.date },
   );
 }
 
@@ -383,7 +383,7 @@ export function rescheduleOccurrence(data: AppData, id: string, change: { date: 
   const err = validateAmount(change.amountCents) ?? (!isValidDateStr(change.date) ? 'Enter a valid date.' : null);
   if (err) return fail(err);
   return withOccurrence(data, id, clock, (r) => {
-    if (r.status !== 'scheduled') return 'Only outstanding transactions can be changed.';
+    if (r.status !== 'scheduled') return 'Only expected items can be changed.';
     if (change.date !== r.scheduledDate && change.date < clock.today) return 'Choose today or a later date.';
     return { ...r, scheduledDate: change.date, scheduledAmountCents: change.amountCents };
   });
@@ -392,8 +392,8 @@ export function rescheduleOccurrence(data: AppData, id: string, change: { date: 
 /** Cancels an outstanding occurrence: it stays on record but is never counted. */
 export function cancelOccurrence(data: AppData, id: string, note: string, clock: Clock): Result {
   return withOccurrence(data, id, clock, (r) => {
-    if (r.status === 'canceled') return 'This transaction is already canceled.';
-    if (r.status === 'completed') return 'This transaction was already recorded. Undo the recorded outcome first.';
+    if (r.status === 'canceled') return 'This is already skipped.';
+    if (r.status === 'completed') return 'This item was already recorded. Undo the recorded outcome first.';
     return { ...r, status: 'canceled', canceledAt: clock.now, cancelNote: note.trim() || null };
   });
 }
@@ -407,7 +407,7 @@ export function cancelOccurrence(data: AppData, id: string, note: string, clock:
  */
 export function restoreOccurrence(data: AppData, id: string, clock: Clock): Result {
   const result = withOccurrence(data, id, clock, (r) => {
-    if (r.status === 'scheduled') return 'This transaction is already outstanding.';
+    if (r.status === 'scheduled') return 'This item is already expected.';
     // Outstanding again, a recurring occurrence follows its item's account.
     const { accountId: _recorded, ...rest } = r;
     const base = r.sourceId === null ? r : rest;
@@ -426,7 +426,7 @@ export function restoreOccurrence(data: AppData, id: string, clock: Clock): Resu
 /** Applies `fn` to each selected occurrence in turn; all succeed or nothing changes. */
 function forEachSelected(data: AppData, ids: string[], today: DateStr, fn: (d: AppData, id: string) => Result): Result {
   const unique = [...new Set(ids)];
-  if (unique.length === 0) return fail('Select at least one transaction.');
+  if (unique.length === 0) return fail('Select at least one item.');
   let next = data;
   for (const id of unique) {
     const r = fn(next, id);
@@ -440,7 +440,7 @@ function forEachSelected(data: AppData, ids: string[], today: DateStr, fn: (d: A
 }
 
 /** Batches take only items that are due: dated today or earlier. An early payment is recorded one at a time. */
-const NOT_DUE = 'This isn’t due yet. Open it to record it early.';
+const NOT_DUE = "This isn't due yet. Open it to record it early.";
 
 /**
  * Marks each selected outstanding occurrence done exactly as expected: its
@@ -452,7 +452,7 @@ const NOT_DUE = 'This isn’t due yet. Open it to record it early.';
 export function recordAsExpected(data: AppData, ids: string[], clock: Clock): Result {
   return forEachSelected(data, ids, clock.today, (d, id) => {
     const o = findOccurrence(d, id, clock.today);
-    if (!o) return fail('That transaction could not be found.');
+    if (!o) return fail('That item could not be found.');
     if (o.status === 'scheduled' && o.scheduledDate > clock.today) return fail(NOT_DUE);
     return recordActual(d, id, { amountCents: o.scheduledAmountCents, date: defaultActualDate(o.scheduledDate, clock.today) }, clock);
   });
@@ -462,7 +462,7 @@ export function recordAsExpected(data: AppData, ids: string[], clock: Clock): Re
 export function rescheduleSelected(data: AppData, ids: string[], date: DateStr, clock: Clock): Result {
   return forEachSelected(data, ids, clock.today, (d, id) => {
     const o = findOccurrence(d, id, clock.today);
-    if (!o) return fail('That transaction could not be found.');
+    if (!o) return fail('That item could not be found.');
     if (o.status === 'scheduled' && o.scheduledDate > clock.today) return fail(NOT_DUE);
     return rescheduleOccurrence(d, id, { date, amountCents: o.scheduledAmountCents }, clock);
   });

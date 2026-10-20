@@ -44,7 +44,7 @@ describe('mapping a plan to rows and back', () => {
     expect('review' in back).toBe(false);
   });
 
-  it('doesn’t add optional fields that were absent', () => {
+  it("doesn't add optional fields that were absent", () => {
     const back = fromRows(loaded(richPlan()));
     const rent = back.sources.find((s) => s.id === 'rent')!;
     expect(Object.keys(rent).sort()).toEqual(['active', 'createdAt', 'description', 'endDate', 'id', 'kind', 'pausedRanges', 'tags', 'updatedAt', 'versions']);

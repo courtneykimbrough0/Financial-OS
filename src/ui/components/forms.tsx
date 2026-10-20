@@ -43,8 +43,8 @@ export const KIND_COPY: Record<TransactionKind, { noun: string; nameLabel: strin
     noun: 'reserve',
     nameLabel: 'What is this reserve for?',
     placeholder: 'e.g. Emergency fund',
-    amountLabel: 'Amount you plan to set aside',
-    dateLabel: 'Next date you’ll set it aside',
+    amountLabel: 'Amount you plan to save',
+    dateLabel: "Next date you'll save it",
   },
   varied: {
     noun: 'spending',
@@ -190,7 +190,7 @@ function RecurrenceFields({ value, onChange }: { value: RuleState; onChange: (v:
             <option value="weekly">Every week</option>
             <option value="biweekly">Every 2 weeks</option>
             <option value="twiceMonthly">Twice a month (two set days)</option>
-            <option value="monthly">Once a month</option>
+            <option value="monthly">Monthly</option>
             <option value="custom">Custom</option>
           </select>
         )}
@@ -239,7 +239,7 @@ function RecurrenceFields({ value, onChange }: { value: RuleState; onChange: (v:
           </Field>
         </fieldset>
       )}
-      {value.freq === 'monthly' && <p className="hint">Repeats on the same day each month. If a month is shorter, it falls on that month’s last day.</p>}
+      {value.freq === 'monthly' && <p className="hint">Repeats on the same day each month. If a month is shorter, it falls on that month's last day.</p>}
     </>
   );
 }
@@ -342,7 +342,7 @@ export function SourceForm({
       {source && !source.active && <p className="callout callout-info">This item is turned off. Turn it back on to change its amount or schedule.</p>}
       {source && source.active && !fresh && (
         <p className="callout callout-info">
-          Changes to the amount or schedule apply starting on the date below. Earlier transactions and anything you have already recorded keep their original values.
+          Changes apply from this date. Earlier payments stay as they were.
         </p>
       )}
       {(!source || source.active) && (
@@ -351,7 +351,7 @@ export function SourceForm({
         {(p) => <MoneyInput {...p} value={amount} onChange={setAmount} />}
       </Field>
       <Field
-        label={source && !fresh ? 'Changes start with the payment on' : copy.dateLabel}
+        label={source && !fresh ? 'Starting with the payment on' : copy.dateLabel}
         error={fieldErrors.startDate}
         hint={source && !fresh ? `Currently: ${describeRule(current!.rule, current!.startDate)}, ${formatMoney(current!.amountCents)}.` : undefined}
       >
@@ -375,7 +375,7 @@ export function SourceForm({
   );
 }
 
-const ONE_TIME_PLACEHOLDER: Record<ops.OneTimeInput['kind'], string> = { income: 'e.g. Tax refund', reserve: 'e.g. Bonus set aside', varied: 'e.g. Car repair' };
+const ONE_TIME_PLACEHOLDER: Record<ops.OneTimeInput['kind'], string> = { income: 'e.g. Tax refund', reserve: 'e.g. Bonus saved', varied: 'e.g. Car repair' };
 
 export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; onDone: () => void }) {
   const { run, today } = useStore();
@@ -416,10 +416,10 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
       <p className="hint">This happens once and will not repeat.</p>
       {canRelease && (
         <fieldset className="choice-field">
-          <legend className="sr-only">Set aside or use</legend>
+          <legend className="sr-only">Save or use</legend>
           <div className="choice-pills">
             {[
-              [false, 'Set aside'],
+              [false, 'Save'],
               [true, 'Use reserves'],
             ].map(([value, label]) => (
               <label key={String(value)} className={`choice-pill${release === value ? ' selected' : ''}`}>
@@ -469,7 +469,7 @@ export function ReactivateForm({ source, onDone }: { source: RecurringSource; on
   };
   return (
     <form onSubmit={submit} noValidate className="stack">
-      <Field label="Next expected date" hint="Nothing is added for the time it was turned off.">
+      <Field label="Next expected date" hint="Payments restart from this date.">
         {(p) => <input {...p} type="date" min={today} value={date} onChange={(e) => setDate(e.target.value)} data-autofocus />}
       </Field>
       <FormError message={error} />

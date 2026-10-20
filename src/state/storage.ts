@@ -199,7 +199,7 @@ export function migrate(raw: unknown): AppData {
   };
 }
 
-const CONFLICT_MESSAGE = 'Your data was changed somewhere else, such as another window. Reload to see the latest version.';
+const CONFLICT_MESSAGE = 'Your data was changed in another window. Reload to see the latest.';
 
 /** Device storage (localStorage). Used for testing and before accounts exist. */
 export class LocalStorageAdapter implements StorageAdapter {

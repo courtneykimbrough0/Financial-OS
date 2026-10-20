@@ -87,7 +87,7 @@ export function EstimateSheet({ sourceId, onClose }: { sourceId: string; onClose
     return (
       <Modal title={`Suggestion for ${name}`} onClose={onClose}>
         <div className="stack">
-          <p>There’s no suggestion for this item right now. Its estimate stays as it is.</p>
+          <p>There's no suggestion for this item right now. Its estimate stays as it is.</p>
           <FormError message={error} />
         </div>
       </Modal>
@@ -149,7 +149,7 @@ export function EstimateSheet({ sourceId, onClose }: { sourceId: string; onClose
                 ? `Expect ${formatMoney(s.proposedCents)} for the ${formatMedium(s.effectiveDate)} ${s.description} payment instead of ${formatMoney(s.currentCents)}. Later payments stay at their current estimate.`
                 : `Change the ${s.description} estimate from ${formatMoney(s.currentCents)} to ${formatMoney(s.proposedCents)}, starting with the ${formatMedium(s.effectiveDate)} payment.`}
             </p>
-            <p className="hint">Earlier payments, what you’ve recorded, and what was originally expected stay as they are. This changes your Financial OS forecast only.</p>
+            <p className="hint">Earlier payments and what you've recorded stay as they are. This changes your forecast only.</p>
             <div className="form-actions">
               <button
                 type="button"
@@ -236,7 +236,7 @@ export function EstimateSheet({ sourceId, onClose }: { sourceId: string; onClose
               </button>
             </div>
             <p className="hint">
-              Dismiss keeps {formatMoney(s.currentCents)} and doesn’t suggest this again until your payments change. Not now closes this; the suggestion stays here for later.
+              {/* button labels say it — audit #54 */}
             </p>
           </>
         )}
@@ -282,8 +282,8 @@ function EstimatePreviewView({ data, suggestion, today }: { data: AppData; sugge
       {!p.comparable && (
         <p className="callout callout-info">
           {p.reason === 'anchor-changed'
-            ? 'This would change your next payday, when the running total starts, so the two running totals can’t be compared directly.'
-            : 'There’s no upcoming payday to start a running total from, so only the payment amounts are shown.'}
+            ? 'This moves your first payday, so cash flow is compared instead of running totals.'
+            : "There's no upcoming payday to start a running total from."}
         </p>
       )}
       {p.comparable && <GapChanges newGaps={p.newGaps} worsenedGaps={p.worsenedGaps} reducedGaps={p.reducedGaps} resolvedGaps={p.resolvedGaps} proposedGaps={p.proposed.gaps} />}

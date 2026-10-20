@@ -97,7 +97,7 @@ describe('StoreProvider load and save ordering', () => {
     expect(await stored(adapter)).toEqual(['Bill 1', 'Bill 2']);
   });
 
-  it('switching storage during a save: the late result doesn’t touch the new storage', async () => {
+  it("switching storage during a save: the late result doesn't touch the new storage", async () => {
     const device = new SlowAdapter();
     const account = new MemoryAdapter(withItems('Rent'));
     const { switchTo } = mount(device);
@@ -113,7 +113,7 @@ describe('StoreProvider load and save ordering', () => {
     expect(await stored(device)).toEqual(['Bill 1']);
   });
 
-  it('switching storage during a save that then fails doesn’t report the new storage as unsaved', async () => {
+  it("switching storage during a save that then fails doesn't report the new storage as unsaved", async () => {
     const device = new SlowAdapter();
     device.failSaves = true;
     const account = new MemoryAdapter(withItems('Rent'));

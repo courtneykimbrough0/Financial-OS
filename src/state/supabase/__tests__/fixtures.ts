@@ -134,6 +134,6 @@ export function allPlans(): [string, AppData][] {
     ['small plan', smallPlan()],
     ['empty plan in setup', ops.emptyData()],
     ['legacy document', legacyPlan()],
-    ['sample data (as if it were the person’s own)', sampleAsOwn],
+    ["sample data (as if it were the person's own)", sampleAsOwn],
   ];
 }

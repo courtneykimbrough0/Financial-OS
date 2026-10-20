@@ -182,7 +182,7 @@ function Attention({ view, onOpen }: { view: HomeView; onOpen: (i: HomeItem) => 
     setMoving(false);
     toast(message);
   };
-  const markDone = () => apply((d, c) => ops.recordAsExpected(d, selected, c), `Marked ${items(selected.length)} done as expected.`);
+  const markDone = () => apply((d, c) => ops.recordAsExpected(d, selected, c), `Recorded ${items(selected.length)} as expected.`);
   const move = (e: FormEvent) => {
     e.preventDefault();
     if (!moveDate) return setError('Choose a date.');
@@ -233,12 +233,12 @@ function Attention({ view, onOpen }: { view: HomeView; onOpen: (i: HomeItem) => 
       {selected.length > 0 && !moving && (
         <div className="pick-actions">
           <button type="button" className="button primary" onClick={markDone}>
-            Mark {items(selected.length)} done
+            Record {items(selected.length)} as expected
           </button>
           <button type="button" className="button secondary" onClick={() => setMoving(true)}>
             Move to a date
           </button>
-          <p className="hint">Done uses each item’s expected amount and date. To record a different amount, open the item.</p>
+          <p className="hint">Each is recorded at its expected amount and date. To record a different amount, open the item.</p>
         </div>
       )}
       {selected.length > 0 && moving && (

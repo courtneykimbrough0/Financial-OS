@@ -15,7 +15,7 @@ const LOOPBACK = ['127.0.0.1', 'localhost', '[::1]'];
 const REF = /^[a-z]{20}$/;
 
 function keyProblem(key: string | undefined, ref: string | null): string | null {
-  if (!key) return 'Set VITE_SUPABASE_ANON_KEY to the project’s anon or publishable key.';
+  if (!key) return "Set VITE_SUPABASE_ANON_KEY to the project's anon or publishable key.";
   if (key.startsWith('sb_publishable_')) return null;
   if (key.startsWith('sb_secret_')) return 'VITE_SUPABASE_ANON_KEY is a secret key. Use the anon or publishable key.';
   try {
@@ -24,7 +24,7 @@ function keyProblem(key: string | undefined, ref: string | null): string | null 
     if (ref && claims.ref && claims.ref !== ref) return `VITE_SUPABASE_ANON_KEY belongs to project ${claims.ref}, not ${ref}.`;
     return null;
   } catch {
-    return 'VITE_SUPABASE_ANON_KEY isn’t a Supabase key.';
+    return "VITE_SUPABASE_ANON_KEY isn't a Supabase key.";
   }
 }
 
@@ -37,14 +37,14 @@ export function devConfigProblem(url: string | undefined, key: string | undefine
     // reported below
   }
   if (!LOOPBACK.includes(host)) return 'VITE_SUPABASE_URL must be a local Supabase stack (127.0.0.1 or localhost).';
-  if (!key) return 'Set VITE_SUPABASE_ANON_KEY to the local stack’s anon or publishable key (shown by `supabase status`).';
+  if (!key) return "Set VITE_SUPABASE_ANON_KEY to the local stack's anon or publishable key (shown by `supabase status`).";
   return keyProblem(key, null);
 }
 
 /** The hosted test project: why this configuration can't be used, or null. `approved` lists the approved project refs. */
 export function hostedTestConfigProblem(url: string | undefined, key: string | undefined, ref: string | undefined, approved: readonly string[]): string | null {
-  if (!ref || !REF.test(ref)) return 'Set VITE_SUPABASE_PROJECT_REF to the hosted test project’s 20-letter ref.';
-  if (!approved.includes(ref)) return `Project ${ref} isn’t an approved test project (supabase/hosted-test/projects.json).`;
+  if (!ref || !REF.test(ref)) return "Set VITE_SUPABASE_PROJECT_REF to the hosted test project's 20-letter ref.";
+  if (!approved.includes(ref)) return `Project ${ref} isn't an approved test project (supabase/hosted-test/projects.json).`;
   if ((url ?? '').replace(/\/$/, '') !== `https://${ref}.supabase.co`) return `VITE_SUPABASE_URL must be exactly https://${ref}.supabase.co.`;
   return keyProblem(key, ref);
 }

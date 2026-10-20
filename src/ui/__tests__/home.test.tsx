@@ -154,7 +154,7 @@ describe('Progress', () => {
     expect(progress).toHaveTextContent(/Down \$900\.00 from Sep 1 – 2/);
   });
 
-  it('the projected month is the forecast’s own figure: it equals the Forecast month total', async () => {
+  it("the projected month is the forecast's own figure: it equals the Forecast month total", async () => {
     const user = await renderHome(plan());
     const progress = await screen.findByRole('region', { name: /Cash flow so far in October/ });
     const projected = /October ends at\s*([+−]?\$[\d,]+\.\d\d)/.exec(progress.textContent ?? '')![1]!;
@@ -187,7 +187,7 @@ describe('Needs attention', () => {
     const attention = await screen.findByRole('region', { name: 'Needs attention' });
     await user.click(within(attention).getByRole('button', { name: /Phone/ }));
     const sheet = await screen.findByRole('dialog', { name: 'Phone' });
-    expect(within(sheet).getByRole('button', { name: /^Mark paid$/ })).toBeInTheDocument();
+    expect(within(sheet).getByRole('button', { name: /^Record paid$/ })).toBeInTheDocument();
   });
 
   it('records a payment from the sheet and the item leaves the list, with the record kept', async () => {
@@ -195,18 +195,18 @@ describe('Needs attention', () => {
     const attention = await screen.findByRole('region', { name: 'Needs attention' });
     await user.click(within(attention).getByRole('button', { name: /Phone/ }));
     const sheet = await screen.findByRole('dialog', { name: 'Phone' });
-    await user.click(within(sheet).getByRole('button', { name: /^Mark paid$/ }));
+    await user.click(within(sheet).getByRole('button', { name: /^Record paid$/ }));
     await user.click(within(sheet).getByRole('button', { name: 'Save as paid' }));
     await waitFor(() => expect(stored().records.find((r) => r.id === 'phone@2026-10-12')).toMatchObject({ status: 'completed', actualAmountCents: usd(60) }));
     await waitFor(() => expect(within(screen.getByRole('region', { name: 'Needs attention' })).queryByText('Phone')).toBeNull());
     expect(within(region('Happened this week')).getByText('Phone')).toBeInTheDocument();
   });
 
-  it('marks several due items done in one step with no Undo, using each item’s expected amount and date', async () => {
+  it("marks several due items done in one step with no Undo, using each item's expected amount and date", async () => {
     const user = await renderHome(plan());
     const attention = await screen.findByRole('region', { name: 'Needs attention' });
     await user.click(within(attention).getByRole('button', { name: 'Select all' }));
-    await user.click(within(attention).getByRole('button', { name: 'Mark 2 items done' }));
+    await user.click(within(attention).getByRole('button', { name: 'Record 2 items as expected' }));
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Needs attention' })).toBeNull());
     const done = stored().records.filter((r) => ['phone@2026-10-12', 'trip'].includes(r.id)).map((r) => [r.id, r.status, r.actualAmountCents, r.actualDate]);
     expect(done.sort()).toEqual([
@@ -237,7 +237,7 @@ describe('Needs attention', () => {
     // The Friday paycheck is not due, but can be recorded early on its own.
     await user.click(within(region('Coming up')).getByRole('button', { name: /Paycheck/ }));
     const sheet = await screen.findByRole('dialog', { name: 'Paycheck' });
-    await user.click(within(sheet).getByRole('button', { name: /^Mark received$/ }));
+    await user.click(within(sheet).getByRole('button', { name: /^Record received$/ }));
     await user.clear(within(sheet).getByLabelText('Date received'));
     await user.type(within(sheet).getByLabelText('Date received'), TODAY);
     await user.click(within(sheet).getByRole('button', { name: 'Save as received' }));

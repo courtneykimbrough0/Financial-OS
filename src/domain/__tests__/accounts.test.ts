@@ -25,7 +25,7 @@ function plan(d: AppData = ops.emptyData()): AppData {
 }
 
 describe('creating accounts', () => {
-  it('creates income, distribution and payment accounts with the person’s own names', () => {
+  it("creates income, distribution and payment accounts with the person's own names", () => {
     const d = withAccounts();
     expect(d.accounts).toEqual([
       { id: 'acct-income', name: 'Paycheck account', type: 'income', createdAt: clock.now, updatedAt: clock.now },
@@ -83,7 +83,7 @@ describe('assigning items to accounts', () => {
     expect('accountId' in d.sources.find((s) => s.id === 'rent')!).toBe(false);
   });
 
-  it('refuses an account whose type doesn’t suit the item, and unknown items or accounts', () => {
+  it("refuses an account whose type doesn't suit the item, and unknown items or accounts", () => {
     const d = plan(withAccounts());
     expect(ops.assignAccount(d, 'pay', 'acct-bills', clock)).toEqual({ ok: false, error: 'Income goes to an income account.' });
     expect(ops.assignAccount(d, 'rent', 'acct-income', clock)).toEqual({ ok: false, error: 'Payments come from a payment account.' });

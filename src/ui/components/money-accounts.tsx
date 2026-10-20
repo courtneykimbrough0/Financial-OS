@@ -175,7 +175,7 @@ function AccountSheet({ account, onClose }: { account: Account; onClose: () => v
             </button>
           )}
         </div>
-        {account.opening && <p className="hint">From {formatMoney(account.opening.amountCents)} on {formatMedium(account.opening.date)}, with what you’ve recorded since.</p>}
+        {account.opening && <p className="hint">From {formatMoney(account.opening.amountCents)} on {formatMedium(account.opening.date)}, with what you've recorded since.</p>}
         {transfers.length > 0 && (
           <section className="stack-sm" aria-label="Transfers">
             <h3 className="subhead">Transfers</h3>

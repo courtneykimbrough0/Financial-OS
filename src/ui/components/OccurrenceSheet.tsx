@@ -16,13 +16,6 @@ type Mode = 'view' | 'record' | 'correct' | 'reschedule' | 'cancel' | 'delete';
 
 const doneVerb = (o: Occurrence) => kindDoneVerb(o);
 
-/** What a one-time item is, in words: "one-time income", "varied spending", "Strategic Reserve amount", "use of reserves". */
-function oneTimeName(o: Occurrence): string {
-  if (o.kind === 'varied') return 'varied spending';
-  if (o.kind === 'reserve') return o.release ? 'use of reserves' : 'Strategic Reserve amount';
-  return `one-time ${KIND_LABEL[o.kind].toLowerCase()}`;
-}
-
 /** "1 day late", "2 days early", "on time" */
 function timing(expected: DateStr, actual: DateStr): string {
   const d = diffDays(expected, actual);
@@ -32,9 +25,9 @@ function timing(expected: DateStr, actual: DateStr): string {
 }
 
 function Comparison({ o }: { o: Occurrence }) {
-  const rows: [string, string][] = [[`Originally expected`, `${formatMoney(o.expectedAmountCents)} on ${formatMedium(o.expectedDate)}`]];
+  const rows: [string, string][] = [[`Expected`, `${formatMoney(o.expectedAmountCents)} on ${formatMedium(o.expectedDate)}`]];
   if (o.scheduledDate !== o.expectedDate || o.scheduledAmountCents !== o.expectedAmountCents) {
-    rows.push(['Updated expectation', `${formatMoney(o.scheduledAmountCents)} on ${formatMedium(o.scheduledDate)}`]);
+    rows.push(['Now expected', `${formatMoney(o.scheduledAmountCents)} on ${formatMedium(o.scheduledDate)}`]);
   }
   if (o.status === 'completed' && o.actualAmountCents !== null && o.actualDate !== null) {
     const diff = o.actualAmountCents - o.expectedAmountCents;
@@ -67,8 +60,8 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
   const o = findOccurrence(data, occurrenceId, today);
   if (!o) {
     return (
-      <Modal title="Transaction" onClose={onClose}>
-        <p>This transaction no longer exists.</p>
+      <Modal title="Item" onClose={onClose}>
+        <p>This item no longer exists.</p>
       </Modal>
     );
   }
@@ -135,7 +128,7 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
       {o.displayStatus === 'overdue' && (
         <p className="callout callout-warn">
           <Icon icon={AlertCircle} size={16} /> 
-          Expected {formatMedium(o.scheduledDate)} — not yet {doneVerb(o)}. Record, reschedule, or cancel it to update your forecast.
+          Due {formatMedium(o.scheduledDate)}. Record it, or move it to a new date.
         </p>
       )}
       <Comparison o={o} />
@@ -145,34 +138,34 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
           {outstanding && (
             <>
               <button type="button" className="button primary" onClick={() => open('record')} data-autofocus>
-                Mark {doneVerb(o)}
+                Record {doneVerb(o)}
               </button>
               <button type="button" className="button secondary" onClick={() => open('reschedule')}>
-                {o.sourceId ? 'Change just this one' : 'Change date or amount'}
+                Change date or amount
               </button>
               <button type="button" className="button secondary" onClick={() => open('cancel')}>
-                Cancel this one
+                Skip this payment
               </button>
             </>
           )}
           {o.status === 'completed' && (
             <>
               <button type="button" className="button secondary" onClick={() => open('correct')}>
-                Fix what was {doneVerb(o)}
+                Edit {doneVerb(o)}
               </button>
-              <button type="button" className="button secondary" onClick={() => apply((d, c) => ops.restoreOccurrence(d, o.id, c), `Marked ${o.description} as not ${doneVerb(o)} yet.`, false)}>
-                Undo: not {doneVerb(o)} yet
+              <button type="button" className="button secondary" onClick={() => apply((d, c) => ops.restoreOccurrence(d, o.id, c), `Undid ${doneVerb(o)} for ${o.description}.`, false)}>
+                Undo {doneVerb(o)}
               </button>
             </>
           )}
           {o.status === 'canceled' && (
             <button type="button" className="button secondary" onClick={() => apply((d, c) => ops.restoreOccurrence(d, o.id, c), `Restored ${o.description}.`, false)}>
-              Restore to expected
+              Undo skip
             </button>
           )}
           {o.sourceId === null && (
             <button type="button" className="button danger-link" onClick={() => open('delete')}>
-              Delete this {oneTimeName(o)}
+              Delete {o.description}
             </button>
           )}
           {o.sourceId !== null && outstanding && (
@@ -185,10 +178,10 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
                   navigate(SOURCE_ROUTE[o.kind]);
                 }}
               >
-                Change this and later ones
+                Edit {o.description}
               </button>
               <p className="hint">
-                “Just this one” changes only the {formatMedium(o.scheduledDate)} occurrence. To change the amount or schedule from a date on, edit {o.description} on its screen.
+                This changes {formatMedium(o.scheduledDate)} only. To change every payment from a date on, edit {o.description}.
               </p>
             </>
           )}
@@ -197,9 +190,9 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
 
       {(mode === 'record' || mode === 'correct' || mode === 'reschedule') && (
         <form className="stack" onSubmit={submitAmountDate} noValidate>
-          <h3>{mode === 'record' ? `What was ${doneVerb(o)}?` : mode === 'correct' ? `Fix what was ${doneVerb(o)}` : 'New expected date or amount'}</h3>
+          <h3>{mode === 'record' ? `Record ${doneVerb(o)}` : mode === 'correct' ? `Edit ${doneVerb(o)}` : 'New expected date or amount'}</h3>
           <Field label={mode === 'reschedule' ? 'Expected amount' : `Amount ${doneVerb(o)}`}>{(p) => <MoneyInput {...p} value={amount} onChange={setAmount} autoFocus />}</Field>
-          <Field label={mode === 'reschedule' ? 'Expected date' : `Date ${doneVerb(o)}`} hint={mode === 'reschedule' ? 'The original prediction is kept for comparison.' : undefined}>
+          <Field label={mode === 'reschedule' ? 'Expected date' : `Date ${doneVerb(o)}`}>
             {(p) =>
               mode === 'reschedule' ? (
                 <input {...p} type="date" min={today} value={date} onChange={(e) => setDate(e.target.value)} />
@@ -225,11 +218,11 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
           className="stack"
           onSubmit={(e) => {
             e.preventDefault();
-            apply((d, c) => ops.cancelOccurrence(d, o.id, note, c), `Canceled ${o.description} on ${formatMedium(o.scheduledDate)}.`);
+            apply((d, c) => ops.cancelOccurrence(d, o.id, note, c), `Skipped ${o.description} on ${formatMedium(o.scheduledDate)}.`);
           }}
         >
-          <h3>Cancel this occurrence?</h3>
-          <p>It will be removed from your forecast but kept on record as canceled. {o.sourceId ? 'Future occurrences are not affected.' : ''}</p>
+          <h3>Skip the {formatMedium(o.scheduledDate)} {o.description}?</h3>
+          <p>It comes off your forecast.{o.sourceId ? ' Later payments stay.' : ''}</p>
           <Field label="Note (optional)">{(p) => <input {...p} type="text" maxLength={120} value={note} onChange={(e) => setNote(e.target.value)} autoFocus />}</Field>
           <FormError message={error} />
           <div className="form-actions">
@@ -237,7 +230,7 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
               Keep it
             </button>
             <button type="submit" className="button danger">
-              Cancel occurrence
+              Skip payment
             </button>
           </div>
         </form>
@@ -245,8 +238,8 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
 
       {mode === 'delete' && (
         <div className="stack">
-          <h3>Delete this {oneTimeName(o)}?</h3>
-          <p>Use this if it was added by mistake. To keep a record that it didn’t happen, cancel it instead.</p>
+          <h3>Delete {o.description}?</h3>
+          <p>Use this if it was added by mistake. To keep a record that it didn't happen, skip it instead.</p>
           <FormError message={error} />
           <div className="form-actions">
             <button type="button" className="button secondary" onClick={() => setMode('view')} data-autofocus>

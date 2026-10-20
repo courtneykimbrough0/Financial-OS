@@ -359,7 +359,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Explore with sample data' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Show sample data' }).click();
-  await page.getByText('You’re exploring sample data.').waitFor();
+  await page.getByText('You're exploring sample data.').waitFor();
   // Unpaid bill: stays visible as overdue.
   assert.match(await page.getByRole('region', { name: 'Needs attention' }).innerText(), /Phone/);
   await page.getByRole('button', { name: 'Full forecast and calendar' }).click();
@@ -409,7 +409,7 @@ try {
   assert.match(sampleDates, /Oct 27, 2026[\s\S]*Expected/);
   await page.getByRole('button', { name: 'Leave sample data' }).click();
   await page.getByRole('heading', { name: /^Home/ }).waitFor();
-  assert.equal(await page.getByText('You’re exploring sample data.').count(), 0);
+  assert.equal(await page.getByText('You're exploring sample data.').count(), 0);
   await page.goto(`${BASE}#/plan/income`);
   assert.match(await page.locator('.source-card').innerText(), /Paycheck[\s\S]*Next: Oct 29, 2026/);
 
@@ -575,7 +575,7 @@ try {
   const dataBeforeReset = JSON.parse(await page.evaluate(() => localStorage.getItem('financial-os:data')));
   await page.getByRole('button', { name: 'Start over' }).click();
   const startOver = page.getByRole('dialog', { name: 'Start over?' });
-  assert.match(await startOver.innerText(), /This erases all 3 items you’ve entered, with everything recorded for them, and takes you back to setup\./);
+  assert.match(await startOver.innerText(), /This erases all 3 items you've entered, with everything recorded for them, and takes you back to setup\./);
   const [resetDownload] = await Promise.all([page.waitForEvent('download'), startOver.getByRole('button', { name: 'Download a backup of your data' }).click()]);
   const resetBackupPath = `${SHOTS}before-start-over.json`;
   await resetDownload.saveAs(resetBackupPath);

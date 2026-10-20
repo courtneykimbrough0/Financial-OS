@@ -131,7 +131,7 @@ describe('the review', () => {
 
   it('says when payments fall before the running total starts', async () => {
     await reachReview((user) => addItem(user, 'Add another bill', [['What is this bill?', 'Phone'], ['Amount you expect to pay', '60'], ['How often?', 'monthly'], ['Next due date', '2026-10-20']]));
-    expect(screen.getByRole('note')).toHaveTextContent('1 payment ($60.00) is due before your next payday. The running total starts at $0 on Oct 22, so it doesn’t include it. Make sure the money you have now covers it.');
+    expect(screen.getByRole('note')).toHaveTextContent("1 payment ($60.00) is due before your next payday. Make sure the money you have now covers it.");
   });
 
   it('says nothing about that when nothing is due before payday', async () => {

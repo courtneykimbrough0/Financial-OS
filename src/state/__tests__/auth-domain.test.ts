@@ -4,7 +4,7 @@ import { forwardedAuthDomain } from '../auth-domain';
 const respond = (body: string, ok = true) => (async () => new Response(body, { status: ok ? 200 : 404 })) as typeof fetch;
 
 describe('forwardedAuthDomain', () => {
-  it('uses the app’s own address when server.mjs forwards sign-in', async () => {
+  it("uses the app's own address when server.mjs forwards sign-in", async () => {
     expect(await forwardedAuthDomain(respond('{"authProxy":true}'), 'app.example.run.app')).toBe('app.example.run.app');
   });
 

@@ -45,12 +45,12 @@ interface Unknown {
   plan: PlanRows;
 }
 
-const SIGNED_OUT = 'You’ve been signed out, so this change isn’t saved. Sign in again, then try again.';
+const SIGNED_OUT = "You've been signed out, so this change isn't saved. Sign in again, then try again.";
 // No usable reply: the change may or may not have reached the database, so this never says it failed.
-const OFFLINE = 'Couldn’t reach the server, so this change isn’t confirmed yet. Check your connection and try again.';
-const CONFLICT = 'Your data was changed somewhere else, such as another device. Reload to see the latest version.';
-const SAVED_BUT_NEWER = 'Your change was saved, but your data has changed somewhere else since. Reload to see the latest version.';
-export const ACCOUNT_CHANGED = 'Another account signed in on this device, so this change wasn’t sent. It’s kept aside for its own account.';
+const OFFLINE = "Couldn't reach the server, so this change isn't confirmed yet. Check your connection and try again.";
+const CONFLICT = 'Your data was changed on another device. Reload to see the latest.';
+const SAVED_BUT_NEWER = 'Your change was saved, but your data has changed on another device since. Reload to see the latest.';
+export const ACCOUNT_CHANGED = "Another account signed in on this device, so this change wasn't sent. It's kept aside for its own account.";
 
 type Outcome =
   | { kind: 'saved'; reply: SaveReply }
@@ -67,13 +67,13 @@ function classify(data: unknown, error: RpcError | null, status: number): Outcom
   if (code === 'FO401') return { kind: 'refused', message: ACCOUNT_CHANGED };
   // Not signed in, an expired session, or the signed-out (anon) role.
   if (code === 'PT401' || code === 'PGRST301' || code === 'PGRST302' || code === '42501' || status === 401) return { kind: 'refused', message: SIGNED_OUT };
-  if (code === 'PT422') return { kind: 'refused', message: `This change couldn’t be saved: ${error.message}` };
-  if (code === 'PT404') return { kind: 'refused', message: 'There’s no plan to save to. Reload and try again.' };
+  if (code === 'PT422') return { kind: 'refused', message: `This change couldn't be saved: ${error.message}` };
+  if (code === 'PT404') return { kind: 'refused', message: "There's no plan to save to. Reload and try again." };
   // A check or key in the database refused the plan; nothing was applied.
-  if (/^(22|23)/.test(code)) return { kind: 'refused', message: 'This change couldn’t be saved because the data didn’t pass a safety check. Nothing was changed.' };
+  if (/^(22|23)/.test(code)) return { kind: 'refused', message: "This change couldn't be saved because the data didn't pass a safety check. Nothing was changed." };
   // No reply (network), a gateway or server failure, or a timeout: the outcome is unknown.
   if (status === 0 || status >= 500 || code === '57014') return { kind: 'unknown', message: OFFLINE };
-  return { kind: 'refused', message: `This change couldn’t be saved (${code || status}).` };
+  return { kind: 'refused', message: `This change couldn't be saved (${code || status}).` };
 }
 
 let counter = 0;
@@ -81,7 +81,7 @@ const newSaveId = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `00000000-0000-4000-8000-${(Date.now() + counter++).toString(16).padStart(12, '0').slice(-12)}`;
 
 export const CLEAR_UNSUPPORTED =
-  'Supabase storage doesn’t erase a plan this way. To clear the plan, start over (a reset save); deleting an account and its data is part of sign-in (Step 10d).';
+  "Supabase storage doesn't erase a plan this way. To clear the plan, start over (a reset save); deleting an account and its data is part of sign-in (Step 10d).";
 
 export class SupabaseStorageAdapter implements StorageAdapter {
   readonly onlineFirst = true;

@@ -156,11 +156,11 @@ describe('Plan', () => {
     expect(screen.getByRole('button', { name: 'Add one-time' })).toBeInTheDocument();
   });
 
-  it('an item’s “Change this and later ones” opens its own Plan section', async () => {
+  it("an item's Edit link opens its own Plan section", async () => {
     const user = await open('#/home');
     const coming = await screen.findByRole('region', { name: 'Coming up' });
     await user.click(within(coming).getByRole('button', { name: /Car loan/ }));
-    await user.click(await screen.findByRole('button', { name: 'Change this and later ones' }));
+    await user.click(await screen.findByRole('button', { name: 'Edit Car loan' }));
     await screen.findByRole('heading', { level: 1, name: 'Liabilities' });
     expect(window.location.hash).toBe('#/plan/liabilities');
   });

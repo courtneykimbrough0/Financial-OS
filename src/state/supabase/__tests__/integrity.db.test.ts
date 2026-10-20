@@ -64,7 +64,7 @@ describe('each event counts once, as itself', () => {
     expect(back.records[0]).toMatchObject({ id: 'elec@2026-11-03', expectedDate: '2026-11-03', scheduledDate: '2026-11-06' });
   });
 
-  it('a canceled payment is kept and never counts, and isn’t an actual', () => {
+  it("a canceled payment is kept and never counts, and isn't an actual", () => {
     const { user, data } = stored();
     const back = saveOk(user, unwrap(ops.cancelOccurrence(data, 'elec@2026-12-03', 'Moved out', clock)));
     expect(entries(back, 'elec@2026-12-03')).toEqual([['2026-12-03', 18000, false]]);
@@ -85,7 +85,7 @@ describe('each event counts once, as itself', () => {
     expect(entries(back, 'elec@2026-12-03')).toEqual([['2026-12-03', 18000, true]]);
   });
 
-  it('a schedule change after a payment keeps the payment and doesn’t bring the occurrence back', () => {
+  it("a schedule change after a payment keeps the payment and doesn't bring the occurrence back", () => {
     const { user, data } = stored();
     let back = saveOk(user, unwrap(ops.recordActual(data, 'elec@2026-10-03', { amountCents: usd(230), date: '2026-10-03' }, clock)));
     back = saveOk(user, unwrap(ops.changeSourceSchedule(back, 'elec', { startDate: '2026-10-20', amountCents: usd(200), rule: { type: 'monthly' } }, clock)));
@@ -117,7 +117,7 @@ describe('each event counts once, as itself', () => {
     expect(back.revision).toBe(4);
   });
 
-  it('refuses a repeated occurrence id, an id that isn’t its source and date, and a second record for one occurrence', () => {
+  it("refuses a repeated occurrence id, an id that isn't its source and date, and a second record for one occurrence", () => {
     const { user, data } = stored();
     const rows = toRows(unwrap(ops.recordActual(data, 'elec@2026-10-03', { amountCents: usd(230), date: '2026-10-03' }, clock)));
     const twice = savePlan(user, data.revision, { ...rows, records: [rows.records[0]!, { ...rows.records[0]!, position: 1 }] });
@@ -197,7 +197,7 @@ describe('deleting, replacing and starting over', () => {
     expect(saveOk(user, unwrap(ops.deleteSource(data, 'rent'))).sources.map((s) => s.id)).toEqual(['elec', 'pay']);
   });
 
-  it('an item with recorded history can’t be removed by an ordinary save', () => {
+  it("an item with recorded history can't be removed by an ordinary save", () => {
     const { user, data } = stored();
     const paid = saveOk(user, unwrap(ops.recordActual(data, 'elec@2026-10-03', { amountCents: usd(180), date: '2026-10-03' }, clock)));
     // The app refuses (deleteSource); a client that tried anyway is refused by the database.
@@ -207,7 +207,7 @@ describe('deleting, replacing and starting over', () => {
     expect(load(user).records).toHaveLength(1);
   });
 
-  it('an empty or truncated plan can’t erase a populated one in an ordinary save', () => {
+  it("an empty or truncated plan can't erase a populated one in an ordinary save", () => {
     const { user, data } = stored(richPlan());
     const empty = save(user, { ...data, sources: [], records: [] });
     expect(empty.code).toBe('PT422');
@@ -275,7 +275,7 @@ describe('history is kept, legitimate corrections still work', () => {
     expect(d.records.map((x) => x.id)).toEqual(['elec@2026-12-03']);
   });
 
-  it('an ordinary save can’t rewrite an original prediction or an existing schedule', () => {
+  it("an ordinary save can't rewrite an original prediction or an existing schedule", () => {
     const { user, data } = stored();
     const paid = saveOk(user, unwrap(ops.recordActual(data, 'elec@2026-10-03', { amountCents: usd(230), date: '2026-10-03' }, clock)));
     const rewritten: AppData = { ...paid, records: paid.records.map((r) => ({ ...r, expectedAmountCents: 23000 })) };
@@ -285,7 +285,7 @@ describe('history is kept, legitimate corrections still work', () => {
     expect(load(user)).toEqual(paid);
   });
 
-  it('a restore can bring back a backup’s own predictions and schedules', () => {
+  it("a restore can bring back a backup's own predictions and schedules", () => {
     const { user, data } = stored();
     const backup = richPlan();
     const back = saveOk(user, { ...backup, revision: data.revision }, 'replace');

@@ -173,7 +173,7 @@ describe('several payments and several gaps', () => {
     });
   });
 
-  it('uses exactly the forecast’s running totals', () => {
+  it("uses exactly the forecast's running totals", () => {
     const f = buildForecast(household(), TODAY);
     const gaps = explainTimingGaps(f);
     expect(gaps.map(({ start, end, days, lowestCents, lowestDate }) => ({ start, end, days, lowestCents, lowestDate }))).toEqual(timingGapsAhead(f));

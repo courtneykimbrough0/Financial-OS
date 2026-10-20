@@ -18,7 +18,7 @@ function twoUsers() {
 const TABLES = ['workspaces', 'sources', 'schedule_versions', 'source_pauses', 'occurrence_records'];
 
 describe('each person reaches only their own plan', () => {
-  it('1. A reads A’s plan', () => {
+  it("1. A reads A's plan", () => {
     const { a, wsA } = twoUsers();
     const rows = loadRows(a)!;
     expect(rows.workspace_id).toBe(wsA);
@@ -26,7 +26,7 @@ describe('each person reaches only their own plan', () => {
     expect(sql({ user: a }, `select count(*) from public.occurrence_records where workspace_id = '${wsA}';`).out).toBe(String(rows.records.length));
   });
 
-  it('2–4. B can’t read A’s workspace, sources, schedules, pauses or records, even by id', () => {
+  it("2–4. B can't read A's workspace, sources, schedules, pauses or records, even by id", () => {
     const { b, wsA, wsB } = twoUsers();
     for (const t of TABLES) {
       const col = t === 'workspaces' ? 'id' : 'workspace_id';
@@ -38,7 +38,7 @@ describe('each person reaches only their own plan', () => {
     expect(loadRows(b)!.workspace_id).toBe(wsB);
   });
 
-  it('5. B’s save_plan only ever touches B’s own workspace; A’s plan is unchanged', () => {
+  it("5. B's save_plan only ever touches B's own workspace; A's plan is unchanged", () => {
     const { a, b } = twoUsers();
     const before = load(a);
     // There is no parameter for whose plan to save: it is always the caller's.
@@ -47,7 +47,7 @@ describe('each person reaches only their own plan', () => {
     expect(load(a)).toEqual(before);
   });
 
-  it('6. a plan can’t link to another workspace’s rows', () => {
+  it("6. a plan can't link to another workspace's rows", () => {
     const { a, b, wsA } = twoUsers();
     // Rows carry no workspace id in the request; any sent is ignored and the caller's is used.
     const rows = toRows(smallPlan());
@@ -82,7 +82,7 @@ describe('each person reaches only their own plan', () => {
     expect(load(a).sources.find((s) => s.id === 'pay')!.description).toBe('Paycheck');
   });
 
-  it('10. a signed-out caller can’t run any of the functions or read any table', () => {
+  it("10. a signed-out caller can't run any of the functions or read any table", () => {
     twoUsers();
     for (const q of ['select public.load_plan();', 'select public.create_workspace();', `select public.save_plan(0, '${randomUUID()}', 'update', '{}'::jsonb);`, ...TABLES.map((t) => `select count(*) from public.${t};`)]) {
       const r = sql('anon', q);
@@ -90,7 +90,7 @@ describe('each person reaches only their own plan', () => {
     }
   });
 
-  it('11. ownership can’t be changed through the request', () => {
+  it("11. ownership can't be changed through the request", () => {
     const { a, b, wsA } = twoUsers();
     const rows = { ...toRows(smallPlan()), owner_id: a, workspace_id: wsA };
     const r = sql({ user: b }, `select public.save_plan(${load(b).revision}, '${randomUUID()}', 'replace', ${json(rows)});`);
@@ -101,7 +101,7 @@ describe('each person reaches only their own plan', () => {
     expect(sql({ user: b }, 'select public.create_workspace();').out).toBe(workspaceOf(b));
   });
 
-  it('12. a signed-in caller with no workspace gets no plan, and can’t save one', () => {
+  it("12. a signed-in caller with no workspace gets no plan, and can't save one", () => {
     const c = randomUUID();
     sql('owner', `insert into auth.users (id) values ('${c}');`);
     expect(sql({ user: c }, 'select public.load_plan() is null;').out).toBe('t');

@@ -64,7 +64,7 @@ export function SupabaseDevelopment({ children }: { children: (adapter: StorageA
   if (!client) {
     return (
       <div className="load-screen" role="alert">
-        <p>Development storage couldn’t start. {problem}</p>
+        <p>Development storage couldn't start. {problem}</p>
       </div>
     );
   }

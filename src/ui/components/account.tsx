@@ -40,7 +40,7 @@ export function AccountActions() {
       forgetSampleData();
       window.location.hash = '';
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Your account couldn’t be deleted. Try again.');
+      setError(err instanceof Error ? err.message : "Your account couldn't be deleted. Try again.");
       setBusy(false);
     }
   };
@@ -65,8 +65,8 @@ export function AccountActions() {
       {sheet === 'sign-out' && (
         <Modal title="Sign out now?" onClose={() => setSheet(null)}>
           <div className="stack">
-            <p>Some of your changes haven’t reached your account yet. Signing out removes them from this device.</p>
-            <p>Stay signed in until you’re back online and they’ll be saved, or download a backup to keep a copy.</p>
+            <p>Some of your changes haven't reached your account yet. Signing out removes them from this device.</p>
+            <p>Stay signed in until you're back online and they'll be saved, or download a backup to keep a copy.</p>
             <div className="form-actions">
               <button type="button" className="button secondary" onClick={() => setSheet(null)} data-autofocus>
                 Stay signed in
@@ -83,9 +83,9 @@ export function AccountActions() {
         <Modal title="Delete your account?" onClose={() => !busy && setSheet(null)}>
           <div className="stack">
             <p>
-              This permanently deletes your account and everything saved in it from Financial OS. It can’t be undone.
+              This permanently deletes your account and everything saved in it from Financial OS. It can't be undone.
             </p>
-            <p>Download a backup first if you want to keep a copy. You’ll be asked to confirm with Google before anything is deleted.</p>
+            <p>Download a backup first if you want to keep a copy. You'll be asked to confirm with Google before anything is deleted.</p>
             <button
               type="button"
               className="button secondary full"
@@ -152,10 +152,10 @@ export function RecoveredChangesNotice() {
         <p>
           Changes made on this device on {when} reached your account after newer changes from another device or window, so your forecast now shows the newer version.
         </p>
-        <p>Download this device’s changes as a backup file to keep them. You can open the file anytime to compare, or restore it to use that version instead.</p>
+        <p>Download this device's changes as a backup file to keep them. You can open the file anytime to compare, or restore it to use that version instead.</p>
         {confirmDiscard && (
           <p className="callout callout-warn" role="alert">
-            <Icon icon={AlertCircle} size={16} /> Discard removes this device’s changes for good.
+            <Icon icon={AlertCircle} size={16} /> Discard removes this device's changes for good.
           </p>
         )}
         <div className="form-actions">
@@ -232,7 +232,7 @@ export function DeviceDataOffer() {
   };
 
   return (
-    <Modal title="Move this device’s forecast to your account?" onClose={keepSeparate}>
+    <Modal title="Move this device's forecast to your account?" onClose={keepSeparate}>
       <div className="stack">
         <p>
           This device has a forecast from before you signed in, with {items === 1 ? '1 item' : `${items} items`}. Move it into your account to keep using it here and on your other devices.

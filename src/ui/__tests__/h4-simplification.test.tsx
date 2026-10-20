@@ -114,13 +114,13 @@ describe('simplified language', () => {
   it('week-list hint is concise', async () => {
     await open('#/forecast');
     await screen.findByRole('heading', { level: 1, name: /Your cash flow/ });
-    expect(screen.getByText(/Tap a week to see its days/)).toBeInTheDocument();
+    expect(screen.queryByText(/Tap a week to see its days/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Weeks run Sunday to Saturday/)).not.toBeInTheDocument();
   });
 
   it('running-total OK message uses "above" not "at or above"', async () => {
     await open('#/forecast');
-    const ok = await screen.findAllByText(/Running total stays above \$0/);
+    const ok = await screen.findAllByText(/You stay above \$0/);
     expect(ok.length).toBeGreaterThanOrEqual(1);
   });
 });

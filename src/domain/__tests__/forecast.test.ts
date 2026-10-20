@@ -315,7 +315,7 @@ describe('overdue, rescheduled, and canceled occurrences', () => {
     expect(canceled.occurrence.cancelNote).toBe('Promo month');
     expect(tallyOn(f, '2026-10-25')).toBe(usd(1450));
     expect(entriesInRange(f, '2026-11-25', '2026-11-25')[0]!.counts).toBe(true);
-    expectError(ops.recordActual(d, id(PHONE, '2026-10-25'), { amountCents: usd(60), date: TODAY }, clockAt(TODAY)), /canceled/);
+    expectError(ops.recordActual(d, id(PHONE, '2026-10-25'), { amountCents: usd(60), date: TODAY }, clockAt(TODAY)), /skipped/);
     // Restoring brings it back.
     const restored = unwrap(ops.restoreOccurrence(d, id(PHONE, '2026-10-25'), clockAt(TODAY)));
     expect(tallyOn(buildForecast(restored, TODAY), '2026-10-25')).toBe(usd(1390));
@@ -346,7 +346,7 @@ describe('recurring schedule changes', () => {
   });
 
   it('refuses effective dates in the past so history is not rewritten', () => {
-    expectError(ops.changeSourceSchedule(baseline(), PAY, { startDate: '2026-10-01', amountCents: usd(1900), rule: { type: 'biweekly' } }, clockAt(TODAY)), /today or later/);
+    expectError(ops.changeSourceSchedule(baseline(), PAY, { startDate: '2026-10-01', amountCents: usd(1900), rule: { type: 'biweekly' } }, clockAt(TODAY)), /today or a later date/);
   });
 
   it('a stored outcome survives a later schedule change', () => {

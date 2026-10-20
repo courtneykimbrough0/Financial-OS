@@ -93,7 +93,7 @@ describe('accounts in Settings and on item forms', () => {
     expect(stored().accounts).toHaveLength(3);
   });
 
-  it('an item’s form offers only accounts that suit it, and assigning one changes nothing else', async () => {
+  it("an item's form offers only accounts that suit it, and assigning one changes nothing else", async () => {
     let d = plan();
     const clock = { today: TODAY, now: '2026-10-11T12:00:00.000Z' };
     d = unwrap(ops.addAccount(d, { name: 'Paycheck account', type: 'income' }, clock, 'acct-income'));
@@ -143,7 +143,7 @@ describe('AC2: accounts on items, deleting accounts, balances and transfers', ()
     window.location.hash = '';
   });
 
-  it('shows an item’s account on its row', async () => {
+  it("shows an item's account on its row", async () => {
     await renderAt('plan/expenses', withAccounts());
     const card = (await screen.findByRole('heading', { name: 'Rent' })).closest('li')!;
     expect(card).toHaveTextContent('Account: Bills');
@@ -188,7 +188,7 @@ describe('AC2: accounts on items, deleting accounts, balances and transfers', ()
     expect(schedule(rent.versions)).toEqual(schedule(withAccounts().sources.find((s) => s.id === 'rent')!.versions));
   });
 
-  it('an opening balance shows the account’s balance; moving money changes two balances and no cash flow', async () => {
+  it("an opening balance shows the account's balance; moving money changes two balances and no cash flow", async () => {
     const before = withAccounts();
     const user = await renderAt('settings', before);
     await user.click(await screen.findByRole('button', { name: /^Paycheck account/ }));
@@ -224,7 +224,7 @@ describe('AC2: accounts on items, deleting accounts, balances and transfers', ()
     expect(sheet).toHaveTextContent('Choose two different accounts.');
   });
 
-  it('an account with a transfer can’t be deleted until the transfer is gone', async () => {
+  it("an account with a transfer can't be deleted until the transfer is gone", async () => {
     const d = unwrap(ops.addTransfer(withAccounts(), { fromAccountId: 'acct-income', toAccountId: 'acct-bills', amountCents: 10000, date: TODAY }, 'recorded', clock, 't'));
     const user = await renderAt('settings', d);
     await user.click(await screen.findByRole('button', { name: /^Bills/ }));
@@ -278,7 +278,7 @@ describe('regressions', () => {
     await waitFor(() => expect(stored().transfers![0]).toMatchObject({ fromAccountId: 'a', toAccountId: 'b', amountCents: 5000 }));
   });
 
-  it('the Supabase development build, which can’t store releases yet, doesn’t offer “Use reserves”', async () => {
+  it("the Supabase development build, which can't store releases yet, doesn't offer \"Use reserves\"", async () => {
     const slot: AccountSlot = { Card: () => null, Line: () => null, Guard: () => null, dataNote: '' };
     await new LocalStorageAdapter().save(plan(), 0);
     window.location.hash = '#/plan/reserves';
@@ -315,7 +315,7 @@ describe('signed in with Firebase', () => {
     window.location.hash = '';
   });
 
-  it('hides accounts, since the account can’t store them yet', async () => {
+  it("hides accounts, since the account can't store them yet", async () => {
     const server = new FakeServer();
     const user: AccountUser = { id: 'u1', email: 'alex@example.com' };
     const auth: AuthService = {

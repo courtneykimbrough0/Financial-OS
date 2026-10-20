@@ -58,7 +58,7 @@ interface Store {
 /** `canRetry`: the same restore or start over can be sent again (its outcome isn't known or it failed to send). */
 export type ReplaceOutcome = { ok: true } | { ok: false; error: string; canRetry: boolean };
 
-const BUSY = 'Your latest change hasn’t been saved yet. Wait for it to save, or use Try again, then do this again.';
+const BUSY = 'Saving your last change… Try this again in a moment.';
 const CONFLICTED = 'Reload to see the latest version before making changes.';
 const REPLACING = 'Wait until this finishes saving, or cancel it.';
 
@@ -202,7 +202,7 @@ export function StoreProvider({ adapter, today: todayOverride, children }: { ada
   /** Sends the unconfirmed restore or start over (the same one each time, so a retry is recognized). */
   const sendReplace = useCallback(async (): Promise<ReplaceOutcome> => {
     const pend = replacing.current;
-    if (!pend) return { ok: false, error: 'There’s nothing to save.', canRetry: false };
+    if (!pend) return { ok: false, error: "There's nothing to save.", canRetry: false };
     if (saving.current) return { ok: false, error: REPLACING, canRetry: false };
     saving.current = true;
     setSaveStatus('saving');

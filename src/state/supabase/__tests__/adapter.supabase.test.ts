@@ -22,10 +22,10 @@ import { confirmedAccount, deleteTestAccounts } from './local-auth';
 const URL = process.env.SUPABASE_TEST_URL!;
 const KEY = process.env.SUPABASE_TEST_ANON_KEY!;
 
-const OFFLINE = 'Couldn’t reach the server, so this change isn’t confirmed yet. Check your connection and try again.';
-const SIGNED_OUT = 'You’ve been signed out, so this change isn’t saved. Sign in again, then try again.';
-const CONFLICT = 'Your data was changed somewhere else, such as another device. Reload to see the latest version.';
-const SAVED_BUT_NEWER = 'Your change was saved, but your data has changed somewhere else since. Reload to see the latest version.';
+const OFFLINE = "Couldn't reach the server, so this change isn't confirmed yet. Check your connection and try again.";
+const SIGNED_OUT = "You've been signed out, so this change isn't saved. Sign in again, then try again.";
+const CONFLICT = 'Your data was changed on another device. Reload to see the latest.';
+const SAVED_BUT_NEWER = 'Your change was saved, but your data has changed on another device since. Reload to see the latest.';
 
 const TABLES = ['workspaces', 'sources', 'schedule_versions', 'source_pauses', 'occurrence_records'];
 afterAll(() => deleteTestAccounts(URL, KEY));
@@ -93,7 +93,7 @@ describe('through real Supabase Auth and API', () => {
     await expect(adapterFor(sb).load()).rejects.toThrow(SIGNED_OUT);
   });
 
-  it('a token that isn’t valid is refused as signed out', async () => {
+  it("a token that isn't valid is refused as signed out", async () => {
     const bad = createClient(URL, KEY, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: { Authorization: 'Bearer not-a-real-token' } } });
     const r = await bad.rpc('load_plan');
     expect([r.status, r.error?.code]).toEqual([401, 'PGRST301']);
@@ -131,7 +131,7 @@ describe('through real Supabase Auth and API', () => {
     }
   });
 
-  it('two people: neither can read, write or reach the other’s plan', async () => {
+  it("two people: neither can read, write or reach the other's plan", async () => {
     const planA = richPlan();
     const a = await withPlan(planA);
     const b = await withPlan(smallPlan());
@@ -246,13 +246,13 @@ describe('through real Supabase Auth and API', () => {
     expect([r.status, r.error?.code]).toEqual([409, 'PT409']);
   });
 
-  it('an ordinary save can’t erase a populated plan; start over (reset) can, and only with an empty plan', async () => {
+  it("an ordinary save can't erase a populated plan; start over (reset) can, and only with an empty plan", async () => {
     const u = await withPlan(richPlan());
     const empty = { ...ops.emptyData(), revision: 1 };
     const wipe = await u.adapter.save(empty, 1);
     expect(wipe.ok).toBe(false);
     expect(wipe).toMatchObject({ reason: 'error' });
-    expect((wipe as { message: string }).message).toMatch(/^This change couldn’t be saved: /);
+    expect((wipe as { message: string }).message).toMatch(/^This change couldn't be saved: /);
     const notEmpty = await u.adapter.save({ ...smallPlan(), revision: 1 }, 1, 'reset');
     expect(notEmpty).toMatchObject({ ok: false, reason: 'error' });
     expect((await u.sb.from('workspaces').select('revision')).data).toEqual([{ revision: 1 }]);
@@ -268,7 +268,7 @@ describe('through real Supabase Auth and API', () => {
     expect((await u.sb.from('occurrence_records').select('id')).data).toEqual([]);
   });
 
-  it('save_receipts can’t be reached through the API, even by its owner', async () => {
+  it("save_receipts can't be reached through the API, even by its owner", async () => {
     const u = await withPlan(smallPlan());
     const r = await u.sb.from('save_receipts').select('*');
     expect([r.status, r.error?.code]).toEqual([403, '42501']);

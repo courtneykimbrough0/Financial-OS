@@ -69,7 +69,8 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | C1, the week view | **Complete** (as Home, H2) | Phase C1 |
 | C2, navigation | **Complete** (Home, Forecast, Activity, Plan) | Phases C2, H3, C3 |
 | C3, Activity view | **Complete** | Phase C3 |
-| C4 visibility, C5 Plan screens, C6 one "See what happens if…", B1 wording, D redesign | **Planned** | Phases |
+| B1, wording | **Complete** | Phase B1 |
+| C4 visibility, C5 Plan screens, C6 one "See what happens if…", D redesign | **Planned** | Phases |
 | E, income expansion | **Planned**, needs separate approval and decision D8 | Phase E |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
 | AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
@@ -276,10 +277,13 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 
 #### B. Product language
 
-**B1. Wording** (PRODUCT_EXPERIENCE.md §2; docs/PRODUCT-AUDIT.md §4, minus rows made moot by R1–R2). Complexity: **low–medium**.
-- **Scope:** the voice rules adopted, "debt" removed, and one word per state.
-- **Placement:** after C1, so the week view's text is written once. Wording on screens untouched by C2–C6 can go earlier.
-- **Tests:** updated text assertions; a scan for banned terms ("debt", "transaction", "occurrence", "prediction", "outstanding").
+**B1. Wording** (PRODUCT_EXPERIENCE.md §2; docs/PRODUCT-AUDIT.md §4, minus rows made moot by R1–R2). Complexity: **low–medium**. **Complete (October 2026).**
+- Applied the 14 voice/tone rules from §2.2 across all screens and domain messages.
+- Replaced "transaction" with "item", "canceled" with "skipped", "outstanding" with "expected", "Cancel" with "Skip", "prediction" with "original estimate".
+- Replaced curly (Unicode) quotes with straight quotes project-wide.
+- Rewrote onboarding steps, ScenarioSheet prompts, OccurrenceSheet actions, and error messages in everyday language.
+- Updated all test assertions to match changed text; 718 tests passing.
+- Product-owner decisions S1, S2, S7 recorded (§9).
 
 #### D. Visual redesign
 

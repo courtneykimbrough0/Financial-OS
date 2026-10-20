@@ -88,7 +88,7 @@ describe('WhatIfSheet', () => {
     await user.click(screen.getByRole('radio', { name: 'Skip this one' }));
     await user.click(screen.getByRole('button', { name: 'Apply change…' }));
     expect(screen.getByRole('group', { name: 'Apply this change?' })).toHaveTextContent('Leave Repair on Oct 20, 2026 out of your forecast.');
-    expect(screen.getByText(/doesn’t change any payment arrangement outside the app/)).toBeInTheDocument();
+    expect(screen.getByText('This changes your forecast only.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Keep exploring' }));
     expect(store.data).toBe(before);
     expect((await adapter.load()).records).toEqual(before.records);
@@ -137,8 +137,8 @@ describe('WhatIfSheet', () => {
   it('explains instead of comparing when the next payday would move, and offers no Apply', async () => {
     const { user } = await open('pay@2026-10-15');
     await setDate(user, '2026-10-16');
-    expect(preview()).toHaveTextContent('This changes your next payday from Oct 15, 2026 to Oct 16, 2026.');
-    expect(preview()).not.toHaveTextContent('lowest running total would');
+    expect(preview()).toHaveTextContent('Move Paycheck from Oct 15, 2026 to Oct 16, 2026.');
+    expect(preview()).toHaveTextContent('This moves your first payday, so cash flow is compared instead of running totals.');
     expect(screen.queryByRole('button', { name: 'Apply change…' })).toBeNull();
   });
 
@@ -149,7 +149,7 @@ describe('WhatIfSheet', () => {
     expect(screen.queryByRole('button', { name: 'Apply change…' })).toBeNull();
   });
 
-  it('won’t preview a recorded payment', async () => {
+  it("won't preview a recorded payment", async () => {
     const data = unwrap(ops.recordActual(seed(), 'repair', { amountCents: usd(1300), date: TODAY }, clock));
     await open('repair', data);
     expect(screen.getByText(/already been recorded or changed/)).toBeInTheDocument();
@@ -175,7 +175,7 @@ describe('skipping, in plain words', () => {
   it('a liability payment: says the loan and what is owed are unchanged, before and at confirmation', async () => {
     const { user } = await open('car@2026-10-22', withLoan());
     await user.click(screen.getByRole('radio', { name: 'Skip this one' }));
-    const note = 'Shows your forecast without this payment. Your loan and the payment you owe don’t change; Financial OS just leaves this one out.';
+    const note = 'This only changes your forecast. Your loan and its payments stay the same.';
     expect(screen.getByText(note)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Apply change…' }));
     const confirm = screen.getByRole('group', { name: 'Apply this change?' });
@@ -193,14 +193,14 @@ describe('skipping, in plain words', () => {
   it('income: talks about income, not a payment', async () => {
     const { user } = await open('pay@2026-10-29');
     await user.click(screen.getByRole('radio', { name: 'Skip this one' }));
-    expect(screen.getByText('Shows your forecast without this income. It doesn’t change what you’re owed.')).toBeInTheDocument();
+    expect(screen.getByText('Shows your forecast without this income.')).toBeInTheDocument();
     expect(screen.queryByText(/without this payment/)).toBeNull();
   });
 
-  it('a bill: says it isn’t canceled, waived, or paid', async () => {
+  it("a bill: says it isn't canceled, waived, or paid", async () => {
     const { user } = await open();
     await user.click(screen.getByRole('radio', { name: 'Skip this one' }));
-    expect(screen.getByText('Shows your forecast without this payment. It doesn’t cancel, waive, or pay it.')).toBeInTheDocument();
+    expect(screen.getByText('This only changes your forecast.')).toBeInTheDocument();
   });
 });
 

@@ -61,7 +61,7 @@ function WithAccounts() {
   if (failed) {
     return (
       <div className="load-screen" role="alert">
-        <p>Financial OS couldn’t start. Check your connection, then try again.</p>
+        <p>Financial OS couldn't start. Check your connection, then try again.</p>
         <button type="button" className="button primary" onClick={() => window.location.reload()}>
           Try again
         </button>

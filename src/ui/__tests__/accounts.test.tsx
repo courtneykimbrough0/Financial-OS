@@ -98,14 +98,14 @@ describe('accounts', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('blocked the Google sign-in window');
     await user.click(screen.getByRole('button', { name: /Continue with Google/ }));
 
-    expect(await screen.findByText(/it’s saved to your account/)).toBeInTheDocument();
+    expect(await screen.findByText(/Your data stays in your account/)).toBeInTheDocument();
     expect(screen.getByText(/Signed in as alex@example.com/)).toBeInTheDocument();
     // Getting started makes no data change yet; skipping ahead to finish saves to the account.
     await user.click(screen.getByRole('button', { name: 'Get started' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('button', { name: 'Continue without income' }));
     // Bills, subscriptions, liabilities, and reserves each have their own step.
-    for (const step of ['What bills do you pay?', 'What subscriptions renew?', 'What do you pay toward debts?', 'What do you set aside?']) {
+    for (const step of ['What bills do you pay?', 'What subscriptions renew?', 'Do you make loan or card payments?', 'What do you save?']) {
       expect(screen.getByRole('heading', { name: step })).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: 'Continue' }));
     }
@@ -126,7 +126,7 @@ describe('accounts', () => {
     auth.user = USER;
     renderApp(auth);
 
-    const dialog = await screen.findByRole('dialog', { name: 'Move this device’s forecast to your account?' });
+    const dialog = await screen.findByRole('dialog', { name: "Move this device's forecast to your account?" });
     expect(dialog).toHaveTextContent('with 1 item');
     await user.click(within(dialog).getByRole('button', { name: 'Move to my account' }));
     await waitFor(() => expect(server.row?.revision).toBe(1));
@@ -136,7 +136,7 @@ describe('accounts', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('“Start fresh” leaves the device forecast alone and doesn’t ask again', async () => {
+  it("\"Start fresh\" leaves the device forecast alone and doesn't ask again", async () => {
     const user = userEvent.setup();
     await new LocalStorageAdapter(localStorage).save(forecast(), 0);
     const auth = new FakeAuth(new FakeServer());

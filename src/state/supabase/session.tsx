@@ -75,15 +75,15 @@ export const CONVERTING_KEY = 'financial-os:supabase-dev-converting';
 /** Plain-language messages for Supabase Auth errors; none says whether an account exists. */
 export function authMessage(error: AuthError | null | undefined): string {
   const code = error?.code ?? '';
-  if (code === 'invalid_credentials') return 'That email and password don’t match an account. Check them and try again.';
+  if (code === 'invalid_credentials') return "That email and password don't match an account. Check them and try again.";
   if (code === 'email_not_confirmed') return 'Confirm your email first: open the link we sent when you created your account.';
   if (code === 'weak_password') return 'Choose a longer password: at least 8 characters.';
-  if (code === 'same_password') return 'Choose a password you haven’t used for this account.';
+  if (code === 'same_password') return "Choose a password you haven't used for this account.";
   if (code === 'over_request_rate_limit' || code === 'over_email_send_rate_limit') return 'Too many attempts. Wait a few minutes, then try again.';
   if (code === 'email_address_invalid' || code === 'validation_failed') return 'Enter a valid email address.';
-  if (code === 'email_exists') return 'That email can’t be used. Try another, or sign in to that account.';
-  if ((error as { status?: number } | null)?.status === 0 || /fetch|network/i.test(error?.message ?? '')) return 'Couldn’t reach the server. Check your connection and try again.';
-  return 'That didn’t work. Try again in a moment.';
+  if (code === 'email_exists') return "That email can't be used. Try another, or sign in to that account.";
+  if ((error as { status?: number } | null)?.status === 0 || /fetch|network/i.test(error?.message ?? '')) return "Couldn't reach the server. Check your connection and try again.";
+  return "That didn't work. Try again in a moment.";
 }
 
 const DELETED = 'Your account and everything in it were deleted.';
@@ -244,12 +244,12 @@ export function SupabaseAccountGate({
 
   const reauthenticate = useCallback(
     async (password: string) => {
-      if (!user?.email) return 'This identity can’t be signed back into.';
+      if (!user?.email) return "This identity can't be signed back into.";
       const { data, error } = await client.auth.signInWithPassword({ email: user.email, password });
       if (error) return authMessage(error);
       if (data.user.id !== user.id) {
         await signOut();
-        return 'That’s a different account.';
+        return "That's a different account.";
       }
       setSessionEnded(false);
       return null;
@@ -262,22 +262,22 @@ export function SupabaseAccountGate({
       if (!user?.email) return 'This identity has no password to confirm.';
       // A fresh password sign-in: the database requires one from the last 5 minutes.
       const check = await client.auth.signInWithPassword({ email: user.email, password });
-      if (check.error) return check.error.code === 'invalid_credentials' ? 'That password isn’t right. Nothing was deleted.' : authMessage(check.error);
+      if (check.error) return check.error.code === 'invalid_credentials' ? "That password isn't right. Nothing was deleted." : authMessage(check.error);
       // Bound to this account: if another tab switched the browser's session in the meantime, this is stopped, not sent as someone else.
       const { error, status } = await client.rpc('delete_account').setHeader(OWNER_HEADER, user.id);
       if (!error) {
         leave(DELETED);
         return null;
       }
-      if (status !== 0 && status < 500) return `Your account wasn’t deleted. ${error.message}`;
+      if (status !== 0 && status < 500) return `Your account wasn't deleted. ${error.message}`;
       // No reply: the deletion may or may not have happened. Ask the auth server whether the account is still there; never delete again on a guess.
       const still = await client.auth.getUser();
-      if (still.data.user?.id === user.id) return 'Your account wasn’t deleted: the server didn’t answer. Try again.';
+      if (still.data.user?.id === user.id) return "Your account wasn't deleted: the server didn't answer. Try again.";
       if (still.error?.code === 'user_not_found') {
         leave(DELETED);
         return null;
       }
-      leave('We couldn’t confirm whether your account was deleted, so you’ve been signed out. Sign in again to check: if it was deleted, the sign-in won’t find it.');
+      leave("We couldn't confirm whether your account was deleted, so you've been signed out. Sign in again to check: if it was deleted, the sign-in won't find it.");
       return null;
     },
     [client, user, leave],
