@@ -113,20 +113,20 @@ describe('GapsSheet', () => {
     expect(closed()).toBe(true);
   });
 
-  it('offers "What if…" on each outstanding entry, when asked to', async () => {
+  it('offers "See what happens if…" on each outstanding entry, when asked to', async () => {
     const user = userEvent.setup();
     let d = source(paid(), TODAY, 'bill', 'Rent', 1200, '2026-10-19', { type: 'monthly' }, 'rent');
     d = oneTime(d, 'Phone', 60, '2026-10-24');
-    // A recorded payment (dated today or earlier) never sits in a future gap; the what-if sheet refuses those itself.
+    // A recorded payment (dated today or earlier) never sits in a future gap; the sheet refuses those itself.
     const asked: string[] = [];
     show(d, (id) => asked.push(id));
     const [gap] = screen.getAllByRole('group');
-    expect(within(gap!).getAllByRole('button', { name: /^What if/ }).map((b) => b.getAttribute('aria-label'))).toEqual([
-      'What if: Rent, Oct 19',
-      'What if: Phone, Oct 24',
-      'What if: Paycheck, Oct 29',
+    expect(within(gap!).getAllByRole('button', { name: /^See what happens if/ }).map((b) => b.getAttribute('aria-label'))).toEqual([
+      'See what happens if Rent on Oct 19 changes',
+      'See what happens if Phone on Oct 24 changes',
+      'See what happens if Paycheck on Oct 29 changes',
     ]);
-    await user.click(within(gap!).getByRole('button', { name: 'What if: Phone, Oct 24' }));
+    await user.click(within(gap!).getByRole('button', { name: 'See what happens if Phone on Oct 24 changes' }));
     expect(asked).toEqual(['one-phone']);
   });
 

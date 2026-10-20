@@ -11,7 +11,7 @@ import { EntryButton, PeriodNav, shortDay } from '../components/entries';
 import { GapsSheet } from '../components/gaps';
 import { AccountLabel, TransferForm, TransferRow, useAccountsAvailable } from '../components/money-accounts';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
-import { WhatIfSheet } from '../components/WhatIfSheet';
+import { ScenarioSheet } from '../components/ScenarioSheet';
 
 /** Which sheet is open. Every one is an existing sheet; Home adds no workflow of its own. */
 type Sheet = { kind: 'occurrence'; id: string } | { kind: 'transfer'; id: string } | { kind: 'gap'; start: DateStr };
@@ -347,11 +347,11 @@ function TransferSheet({ id, onClose }: { id: string; onClose: () => void }) {
   );
 }
 
-/** The timing-gap explanation, with "What if…" on its entries, as the forecast offers. */
+/** The timing-gap explanation, with "See what happens if…" on its entries, as the forecast offers. */
 function GapFlow({ view, start, onClose }: { view: HomeView; start: DateStr; onClose: () => void }) {
   const [whatIf, setWhatIf] = useState<string | null>(null);
   const found = [...view.attention, ...view.comingUp, ...view.laterGaps].find((i): i is HomeGap => i.type === 'gap' && i.gap.start === start);
   if (!found) return null;
-  if (whatIf) return <WhatIfSheet occurrenceId={whatIf} through={found.gap.end} onBack={() => setWhatIf(null)} onDone={onClose} />;
+  if (whatIf) return <ScenarioSheet occurrenceId={whatIf} through={found.gap.end} onClose={() => setWhatIf(null)} onApplied={onClose} />;
   return <GapsSheet gaps={[found.gap]} horizonEnd={view.horizonEnd} onClose={onClose} onWhatIf={setWhatIf} />;
 }

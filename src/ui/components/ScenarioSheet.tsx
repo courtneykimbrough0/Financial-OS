@@ -1,9 +1,11 @@
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { formatMedium, formatShort, type DateStr } from '../../domain/dates';
+import { addDays, formatMedium, formatShort, maxDate, type DateStr } from '../../domain/dates';
 import { formatMoney, formatSignedMoney, parseMoney, centsToInput } from '../../domain/money';
 import { findOccurrence } from '../../domain/occurrences';
+import { applyPreviewedChange, type ProposedChange } from '../../domain/preview';
 import {
+  applicableChange,
   evaluateIncomeCases,
   evaluateScenario,
   firstShortfall,
@@ -14,18 +16,17 @@ import {
   type ScenarioResult,
   type ScenarioSchedule,
 } from '../../domain/scenarios';
-import type { AppData, RecurrenceRule } from '../../domain/types';
+import { LIABILITY_TYPE_LABEL, type AppData, type Occurrence, type RecurrenceRule } from '../../domain/types';
 import { useStore } from '../../state/store';
-import { Field, Icon, Modal, MoneyInput, SectionLabel } from './common';
+import { Field, FormError, Icon, Modal, MoneyInput, SectionLabel, useToast } from './common';
 import { GapChanges, Money } from './comparison';
 
-type ChangeType = 'income' | 'expense' | 'move' | 'amount' | 'liability' | 'reserve' | 'variable';
+type ChangeType = 'income' | 'expense' | 'payment' | 'liability' | 'reserve' | 'variable';
 
 const TYPES: { type: ChangeType; label: string; hint: string }[] = [
   { type: 'income', label: 'Additional income', hint: 'Money that might come in once' },
   { type: 'expense', label: 'Unexpected expense', hint: 'A cost that might come up once' },
-  { type: 'move', label: 'Move an expected payment', hint: 'One upcoming payment on another date' },
-  { type: 'amount', label: 'Change an expected amount', hint: 'One upcoming payment at another amount' },
+  { type: 'payment', label: 'Change an expected payment', hint: 'Move one, change its amount, or leave it out' },
   { type: 'liability', label: 'Increase a liability payment', hint: 'A higher payment from a date on' },
   { type: 'reserve', label: 'Build reserves', hint: 'An amount saved on a schedule' },
   { type: 'variable', label: 'Explore variable income', hint: 'Low, expected and high amounts' },
@@ -43,9 +44,9 @@ function typeOf(c: ScenarioChange): ChangeType {
     case 'extra-liability-payment':
       return 'expense';
     case 'occurrence-date':
-      return 'move';
     case 'occurrence-amount':
-      return 'amount';
+    case 'occurrence-skip':
+      return 'payment';
     case 'recurring-amount':
       return 'liability';
     case 'recurring-reserve':
@@ -77,6 +78,10 @@ function changeLabel(c: ScenarioChange, data: AppData, today: DateStr): string {
       const o = occ(c.occurrenceId);
       return `${o?.description ?? 'Payment'} on ${o ? formatMedium(o.scheduledDate) : ''}: ${formatMoney(c.amountCents)}`;
     }
+    case 'occurrence-skip': {
+      const o = occ(c.occurrenceId);
+      return `${o?.description ?? 'Payment'} on ${o ? formatMedium(o.scheduledDate) : ''}: left out`;
+    }
     case 'recurring-amount':
       return `${data.sources.find((s) => s.id === c.sourceId)?.description ?? 'Payment'}: ${formatMoney(c.amountCents)} from ${formatMedium(c.from)}`;
     case 'recurring-reserve':
@@ -102,7 +107,7 @@ function attribute(error: string, changes: ScenarioChange[], hasIncome: boolean)
   }
   if (hasIncome && RANGE_ERRORS.some((p) => error.startsWith(p))) return { target: 'income', message: error };
   const dup = (key: (c: ScenarioChange) => string | null) => changes.findIndex((c, i) => key(c) !== null && changes.slice(0, i).some((d) => key(d) === key(c)));
-  const sameOcc = dup((c) => (c.kind === 'occurrence-amount' || c.kind === 'occurrence-date' ? c.occurrenceId : null));
+  const sameOcc = dup((c) => (c.kind === 'occurrence-amount' || c.kind === 'occurrence-date' || c.kind === 'occurrence-skip' ? c.occurrenceId : null));
   if (sameOcc >= 0) return { target: sameOcc, message: error };
   const sameSource = dup((c) => (c.kind === 'recurring-amount' ? c.sourceId : null));
   if (sameSource >= 0) return { target: sameSource, message: error };
@@ -113,21 +118,56 @@ function attribute(error: string, changes: ScenarioChange[], hasIncome: boolean)
 
 type Editing = { type: ChangeType; index: number | null };
 
+/** What leaving a payment out means for this kind of item: only the forecast changes. */
+function skipNote(o: Pick<Occurrence, 'kind' | 'sourceId'>, data: AppData): string {
+  if (o.kind === 'income') return 'Shows your forecast without this income.';
+  if (o.kind === 'liability') {
+    const type = data.sources.find((s) => s.id === o.sourceId)?.liabilityType;
+    const what = type ? LIABILITY_TYPE_LABEL[type].toLowerCase() : 'balance';
+    return `This only changes your forecast. Your ${what} and its payments stay the same.`;
+  }
+  return 'This only changes your forecast.';
+}
+
+function describeChange(name: string, change: ProposedChange, from: DateStr, done: boolean): string {
+  if (change.kind === 'move') return done ? `Moved ${name} to ${formatMedium(change.date)}.` : `Move ${name} from ${formatMedium(from)} to ${formatMedium(change.date)}.`;
+  if (change.kind === 'amount') return done ? `${name} now expected ${formatMoney(change.amountCents)}.` : `Expect ${formatMoney(change.amountCents)} for ${name} on ${formatMedium(from)}.`;
+  return done ? `Left ${name} on ${formatMedium(from)} out of your forecast.` : `Leave ${name} on ${formatMedium(from)} out of your forecast.`;
+}
+
 /**
- * Explore a scenario: a few hypothetical changes, combined, compared with
- * the forecast as it is. Everything is held on screen only and evaluated by
- * `evaluateScenario` / `evaluateIncomeCases`; nothing is saved, and closing
- * leaves the plan exactly as it was.
+ * See what happens if…: one or more hypothetical changes, combined, compared
+ * with the forecast as it is. Everything is held on screen only and evaluated
+ * by `evaluateScenario` / `evaluateIncomeCases`; nothing is saved, and closing
+ * leaves the plan exactly as it was. When the only change is to an expected
+ * payment, it can be applied after the person confirms it
+ * (`applyPreviewedChange`, which refuses a stale or uncomparable preview).
+ *
+ * `occurrenceId` opens straight on a change to that payment (from a timing
+ * gap); `through` extends the comparison to the period being viewed.
  */
-export function ScenarioSheet({ onClose }: { onClose: () => void }) {
-  const { data, today } = useStore();
+export function ScenarioSheet({ onClose, onApplied, occurrenceId, through }: { onClose: () => void; onApplied?: () => void; occurrenceId?: string; through?: DateStr }) {
+  const { data, today, run } = useStore();
+  const toast = useToast();
   const [changes, setChanges] = useState<ScenarioChange[]>([]);
   const [income, setIncome] = useState<IncomeRange | null>(null);
   const [picking, setPicking] = useState(false);
-  const [editing, setEditing] = useState<Editing | null>(null);
+  const [editing, setEditing] = useState<Editing | null>(occurrenceId ? { type: 'payment', index: null } : null);
+  const [confirming, setConfirming] = useState<{ change: ProposedChange; previewedOn: AppData } | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const addRef = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
-  const options = useMemo(() => scenarioOptions(data, today), [data, today]);
+  const opened = occurrenceId ? findOccurrence(data, occurrenceId, today) : null;
+  const options = useMemo(() => {
+    const o = scenarioOptions(data, today, through ? maxDate(addDays(today, 90), through) : undefined);
+    // The payment it was opened on is always offered, even an overdue one that the upcoming list leaves out.
+    const first = occurrenceId ? findOccurrence(data, occurrenceId, today) : null;
+    if (!first || first.status !== 'scheduled' || o.occurrences.some((x) => x.id === first.id)) return o;
+    return { ...o, occurrences: [{ id: first.id, description: first.description, kind: first.kind, date: first.scheduledDate, amountCents: first.scheduledAmountCents }, ...o.occurrences] };
+  }, [data, today, through, occurrenceId]);
+
+  // A confirmation is for the changes it was opened on; any edit asks again.
+  useEffect(() => setConfirming(null), [changes, income]);
 
   useEffect(() => {
     if (returnFocus.current && !editing && !picking) {
@@ -138,11 +178,34 @@ export function ScenarioSheet({ onClose }: { onClose: () => void }) {
 
   const outcome = useMemo(() => {
     const clock = { today, now: `${today}T00:00:00.000Z` };
-    if (income) return evaluateIncomeCases(data, changes, income, clock);
-    if (changes.length) return evaluateScenario(data, changes, clock);
+    if (income) return evaluateIncomeCases(data, changes, income, clock, { through });
+    if (changes.length) return evaluateScenario(data, changes, clock, { through });
     return null;
-  }, [data, today, changes, income]);
+  }, [data, today, changes, income, through]);
   const problem = outcome && !outcome.ok ? attribute(outcome.error, changes, income !== null) : null;
+  // Only a single change to an expected payment can be made real, and only when it compares cleanly.
+  const proposal = income ? null : applicableChange(changes);
+  const canApply = proposal !== null && outcome?.ok === true && 'result' in outcome && outcome.result.comparable;
+  const target = proposal ? findOccurrence(data, proposal.occurrenceId, today) : null;
+
+  if (occurrenceId && (!opened || opened.status !== 'scheduled') && changes.length === 0) {
+    return (
+      <Modal title="See what happens if…" onClose={onClose}>
+        <p>This has already been recorded or changed and can't be previewed.</p>
+      </Modal>
+    );
+  }
+
+  const apply = () => {
+    if (!confirming || !target) return;
+    const r = run((d, clock) => applyPreviewedChange(d, confirming.previewedOn, confirming.change, clock));
+    if (!r.ok) {
+      setConfirming(null);
+      return setApplyError(r.error);
+    }
+    toast(describeChange(target.description, confirming.change, target.scheduledDate, true));
+    (onApplied ?? onClose)();
+  };
 
   const close = () => {
     returnFocus.current = true;
@@ -159,9 +222,9 @@ export function ScenarioSheet({ onClose }: { onClose: () => void }) {
   const count = changes.length + (income ? 1 : 0);
 
   return (
-    <Modal title="Explore a scenario" onClose={onClose}>
+    <Modal title="See what happens if…" onClose={onClose}>
       <div className="stack scenario">
-        <p className="hint">Try changes together and see how your forecast would look. Your plan stays as it is.</p>
+        <p className="hint">Try a change, or several together, and compare with your forecast. Nothing is saved unless you apply a single change.</p>
 
         {editing ? (
           <ChangeForm
@@ -169,6 +232,7 @@ export function ScenarioSheet({ onClose }: { onClose: () => void }) {
             initial={editing.type === 'variable' ? income : editing.index != null ? changes[editing.index]! : null}
             today={today}
             options={options}
+            occurrenceId={occurrenceId}
             onSave={save}
             onCancel={close}
           />
@@ -181,7 +245,7 @@ export function ScenarioSheet({ onClose }: { onClose: () => void }) {
                   <button
                     type="button"
                     className="scenario-type"
-                    disabled={(t.type === 'move' || t.type === 'amount') && options.occurrences.length === 0 ? true : t.type === 'liability' && options.liabilities.length === 0}
+                    disabled={t.type === 'payment' ? options.occurrences.length === 0 : t.type === 'liability' && options.liabilities.length === 0}
                     onClick={() => {
                       setPicking(false);
                       setEditing({ type: t.type, index: null });
@@ -189,7 +253,7 @@ export function ScenarioSheet({ onClose }: { onClose: () => void }) {
                   >
                     <span className="entry-title">{t.label}</span>
                     <span className="entry-sub">
-                      {t.type === 'liability' && options.liabilities.length === 0 ? 'No liability payments to change' : (t.type === 'move' || t.type === 'amount') && options.occurrences.length === 0 ? 'No upcoming payments' : t.hint}
+                      {t.type === 'liability' && options.liabilities.length === 0 ? 'No liability payments to change' : t.type === 'payment' && options.occurrences.length === 0 ? 'No upcoming payments' : t.hint}
                     </span>
                   </button>
                 </li>
@@ -251,6 +315,41 @@ export function ScenarioSheet({ onClose }: { onClose: () => void }) {
             )}
             {outcome?.ok && 'result' in outcome && <ScenarioComparison r={outcome.result} />}
             {outcome?.ok && 'cases' in outcome && <IncomeCases cases={outcome.cases} />}
+            <FormError message={applyError} />
+            {canApply && target && proposal && !confirming && (
+              <button
+                type="button"
+                className="button primary"
+                onClick={() => {
+                  setApplyError(null);
+                  setConfirming({ change: proposal, previewedOn: data });
+                }}
+              >
+                Apply change…
+              </button>
+            )}
+            {confirming && target && (
+              <div className="stack-sm" role="group" aria-labelledby="scenario-confirm">
+                <h3 id="scenario-confirm">Apply this change?</h3>
+                <p>{describeChange(target.description, confirming.change, target.scheduledDate, false)}</p>
+                {confirming.change.kind === 'skip' && <p className="callout callout-info">{skipNote(target, data)}</p>}
+                <p className="hint">
+                  {target.sourceId ? `Only this one on ${formatMedium(target.scheduledDate)} changes; later ones keep their schedule. ` : ''}
+                  This changes your forecast only.
+                </p>
+                <div className="form-actions">
+                  <button type="button" className="button secondary" onClick={() => setConfirming(null)} data-autofocus>
+                    Keep exploring
+                  </button>
+                  <button type="button" className="button primary" onClick={apply}>
+                    Apply change
+                  </button>
+                </div>
+              </div>
+            )}
+            {outcome?.ok && !canApply && changes.length > 1 && changes.some((c) => typeOf(c) === 'payment') && (
+              <p className="hint">To apply a change to a payment, make it the only change here.</p>
+            )}
           </>
         )}
 
@@ -495,11 +594,19 @@ const FREQUENCIES: Record<'reserve' | 'variable', Frequency[]> = {
   variable: ['once', 'weekly', 'biweekly', 'monthly'],
 };
 
+type PaymentAction = 'move' | 'amount' | 'skip';
+const PAYMENT_ACTIONS: { action: PaymentAction; label: string }[] = [
+  { action: 'move', label: 'Move date' },
+  { action: 'amount', label: 'Change amount' },
+  { action: 'skip', label: 'Leave it out' },
+];
+
 function ChangeForm({
   type,
   initial,
   today,
   options,
+  occurrenceId: openedOn,
   onSave,
   onCancel,
 }: {
@@ -507,20 +614,24 @@ function ChangeForm({
   initial: ScenarioChange | IncomeRange | null;
   today: DateStr;
   options: ReturnType<typeof scenarioOptions>;
+  occurrenceId?: string;
   onSave: (value: ScenarioChange | IncomeRange) => void;
   onCancel: () => void;
 }) {
+  const { data } = useStore();
   const c = initial && 'kind' in initial ? initial : null;
   const range = initial && !('kind' in initial) ? initial : null;
   const title = TYPES.find((t) => t.type === type)!.label;
-  const firstOcc = options.occurrences[0];
+  const firstOcc = options.occurrences.find((o) => o.id === openedOn) ?? options.occurrences[0];
+  const pillsId = useId();
+  const [action, setAction] = useState<PaymentAction>(c?.kind === 'occurrence-amount' ? 'amount' : c?.kind === 'occurrence-skip' ? 'skip' : 'move');
   const firstLiability = options.liabilities[0];
 
   const [description, setDescription] = useState(
     c && 'description' in c ? c.description : range ? range.description : type === 'income' ? 'Extra income' : type === 'expense' ? 'Unexpected expense' : type === 'reserve' ? 'Reserves' : 'Variable income',
   );
-  const [amount, setAmount] = useState(c && 'amountCents' in c ? centsToInput(c.amountCents) : type === 'amount' && firstOcc ? centsToInput(firstOcc.amountCents) : type === 'liability' && firstLiability ? centsToInput(firstLiability.amountCents) : '');
-  const [date, setDate] = useState<DateStr>(c && 'date' in c ? c.date : range?.date ?? (c?.kind === 'recurring-reserve' ? c.schedule.startDate : range?.schedule ? range.schedule.startDate : type === 'move' && firstOcc ? firstOcc.date : today));
+  const [amount, setAmount] = useState(c && 'amountCents' in c ? centsToInput(c.amountCents) : type === 'payment' && firstOcc ? centsToInput(firstOcc.amountCents) : type === 'liability' && firstLiability ? centsToInput(firstLiability.amountCents) : '');
+  const [date, setDate] = useState<DateStr>(c && 'date' in c ? c.date : range?.date ?? (c?.kind === 'recurring-reserve' ? c.schedule.startDate : range?.schedule ? range.schedule.startDate : type === 'payment' && firstOcc ? maxDate(firstOcc.date, today) : today));
   const [occurrenceId, setOccurrenceId] = useState(c && 'occurrenceId' in c ? c.occurrenceId : (firstOcc?.id ?? ''));
   const [sourceId, setSourceId] = useState(c?.kind === 'recurring-amount' ? c.sourceId : (firstLiability?.sourceId ?? ''));
   const [from, setFrom] = useState(c?.kind === 'recurring-amount' ? c.from : (firstLiability?.dates[0] ?? ''));
@@ -540,14 +651,15 @@ function ChangeForm({
       if (v === null || v < 0 || (!allowZero && v === 0)) e[key] = allowZero ? 'Enter $0 or more.' : 'Enter an amount above $0.';
       return v ?? 0;
     };
-    const needsDate = type === 'income' || type === 'expense' || type === 'move' || type === 'reserve' || type === 'variable';
+    const needsDate = type === 'income' || type === 'expense' || (type === 'payment' && action === 'move') || type === 'reserve' || type === 'variable';
     if (needsDate && !date) e.date = 'Choose a date.';
     if ((type === 'income' || type === 'expense' || type === 'reserve' || type === 'variable') && !description.trim()) e.description = 'Enter a short name.';
     let value: ScenarioChange | IncomeRange | null = null;
     if (type === 'income') value = { kind: 'one-time-income', description: description.trim(), amountCents: cents(amount, 'amount'), date };
     if (type === 'expense') value = { kind: 'one-time-expense', description: description.trim(), amountCents: cents(amount, 'amount'), date };
-    if (type === 'move') value = { kind: 'occurrence-date', occurrenceId, date };
-    if (type === 'amount') value = { kind: 'occurrence-amount', occurrenceId, amountCents: cents(amount, 'amount') };
+    if (type === 'payment' && action === 'move') value = { kind: 'occurrence-date', occurrenceId, date };
+    if (type === 'payment' && action === 'amount') value = { kind: 'occurrence-amount', occurrenceId, amountCents: cents(amount, 'amount') };
+    if (type === 'payment' && action === 'skip') value = { kind: 'occurrence-skip', occurrenceId };
     if (type === 'liability') value = { kind: 'recurring-amount', sourceId, amountCents: cents(amount, 'amount'), from };
     if (type === 'reserve') value = { kind: 'recurring-reserve', description: description.trim(), amountCents: cents(amount, 'amount'), schedule: scheduleFor(frequency, date)! };
     if (type === 'variable') {
@@ -577,7 +689,7 @@ function ChangeForm({
           {(p) => <input {...p} value={description} maxLength={60} onChange={(ev) => setDescription(ev.target.value)} />}
         </Field>
       )}
-      {(type === 'move' || type === 'amount') && (
+      {type === 'payment' && (
         <Field label="Payment">
           {(p) => (
             <select
@@ -586,8 +698,10 @@ function ChangeForm({
               onChange={(ev) => {
                 setOccurrenceId(ev.target.value);
                 const o = options.occurrences.find((x) => x.id === ev.target.value);
-                if (o && type === 'amount') setAmount(centsToInput(o.amountCents));
-                if (o && type === 'move') setDate(o.date);
+                if (o) {
+                  setAmount(centsToInput(o.amountCents));
+                  setDate(maxDate(o.date, today));
+                }
               }}
             >
               {options.occurrences.map((o) => (
@@ -636,8 +750,26 @@ function ChangeForm({
           </Field>
         </>
       )}
-      {type !== 'move' && type !== 'variable' && (
-        <Field label={type === 'amount' || type === 'liability' ? 'New amount' : type === 'reserve' ? 'Amount each time' : 'Amount'} error={errors.amount}>
+      {type === 'payment' && (
+        <fieldset className="choice-field">
+          <legend className="sr-only">What to change</legend>
+          <div className="choice-pills">
+            {PAYMENT_ACTIONS.map((a) => (
+              <label key={a.action} className={`choice-pill${action === a.action ? ' selected' : ''}`}>
+                <input type="radio" name={`${pillsId}-action`} value={a.action} checked={action === a.action} onChange={() => setAction(a.action)} />
+                {a.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
+      {type === 'payment' && action === 'skip' && (() => {
+        const o = options.occurrences.find((x) => x.id === occurrenceId);
+        const sourceId = o ? (findOccurrence(data, o.id, today)?.sourceId ?? null) : null;
+        return o ? <p className="hint">{skipNote({ kind: o.kind, sourceId }, data)}</p> : null;
+      })()}
+      {!(type === 'payment' && action !== 'amount') && type !== 'variable' && (
+        <Field label={type === 'payment' || type === 'liability' ? 'New amount' : type === 'reserve' ? 'Amount each time' : 'Amount'} error={errors.amount}>
           {(p) => <MoneyInput {...p} value={amount} onChange={setAmount} />}
         </Field>
       )}
@@ -667,8 +799,8 @@ function ChangeForm({
           )}
         </Field>
       )}
-      {(type === 'income' || type === 'expense' || type === 'move' || type === 'reserve' || type === 'variable') && (
-        <Field label={type === 'move' ? 'New date' : (type === 'reserve' || type === 'variable') && frequency !== 'once' ? 'First date' : 'Date'} error={errors.date}>
+      {(type === 'income' || type === 'expense' || (type === 'payment' && action === 'move') || type === 'reserve' || type === 'variable') && (
+        <Field label={type === 'payment' ? 'New date' : (type === 'reserve' || type === 'variable') && frequency !== 'once' ? 'First date' : 'Date'} error={errors.date}>
           {(p) => <input {...p} type="date" min={today} value={date} onChange={(ev) => setDate(ev.target.value)} />}
         </Field>
       )}

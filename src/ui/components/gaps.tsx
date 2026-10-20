@@ -48,7 +48,7 @@ export function GapsSheet({
   horizonEnd: DateStr;
   note?: string;
   onClose: () => void;
-  /** When given, outstanding entries offer "What if…" to preview a change to them. */
+  /** When given, outstanding entries offer "See what happens if…" to preview a change to them. */
   onWhatIf?: (occurrenceId: string) => void;
 }) {
   return (
@@ -137,9 +137,9 @@ function EntryLines({ entries, onWhatIf }: { entries: ForecastEntry[]; onWhatIf?
               type="button"
               className="button small link gap-whatif"
               onClick={() => onWhatIf(e.occurrence.id)}
-              aria-label={`What if: ${e.occurrence.description}, ${formatShort(e.date)}`}
+              aria-label={`See what happens if ${e.occurrence.description} on ${formatShort(e.date)} changes`}
             >
-              What if…
+              See what happens if…
             </button>
           )}
         </li>

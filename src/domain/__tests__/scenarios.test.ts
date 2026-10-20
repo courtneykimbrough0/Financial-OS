@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { dismissEstimate, analyzeEstimate } from '../estimates';
 import { buildForecast, dailyTimeline, explainTimingGaps, lowestPoint, periodKpis, tallyOn } from '../forecast';
 import * as ops from '../operations';
-import { evaluateIncomeCases, evaluateScenario, firstShortfall, scenarioOptions, type ScenarioChange, type ScenarioResult } from '../scenarios';
+import { applyPreviewedChange, previewChange } from '../preview';
+import { applicableChange, evaluateIncomeCases, evaluateScenario, firstShortfall, scenarioOptions, type ScenarioChange, type ScenarioResult } from '../scenarios';
 import type { AppData } from '../types';
 import { clockAt, source, unwrap, usd } from './helpers';
 
@@ -414,5 +415,71 @@ describe('choosing and summarizing', () => {
     const deeper = run([{ kind: 'occurrence-amount', occurrenceId: 'rent@2026-12-01', amountCents: usd(1700) }]);
     expect(firstShortfall(deeper)).toMatchObject({ gap: { start: '2026-12-01', lowestCents: -80000 }, created: false, despiteGain: false });
     expect(firstShortfall(run([{ kind: 'one-time-income', description: 'Bonus', amountCents: usd(500), date: '2026-11-01' }]))).toBeNull();
+  });
+});
+
+describe('leaving one expected payment out (merged from What if…)', () => {
+  it('compares the forecast without it: rent on Nov 1 left out closes both timing gaps', () => {
+    const r = run([{ kind: 'occurrence-skip', occurrenceId: 'rent@2026-11-01' }]);
+    expect(r.comparable).toBe(true);
+    expect([r.baseline.cashFlow.netCents, r.scenario.cashFlow.netCents, r.differences.netCents]).toEqual([usd(1600), usd(3100), usd(1500)]);
+    expect(r.scenario.lowest).toEqual({ date: '2026-10-28', tallyCents: usd(700) });
+    expect(r.resolvedGaps.map((g) => g.start)).toEqual(['2026-11-01', '2026-12-01']);
+    expect(r.scenario.gaps).toEqual([]);
+    expect(r.assumptions[0]).toMatchObject({ label: 'Rent on Nov 1, 2026 left out ($1,500.00)', direction: 'out', amountCents: usd(1500), dates: ['2026-11-01'], inRunningTotal: true });
+  });
+
+  it('agrees with the single-change preview the apply step checks', () => {
+    for (const [change, proposed] of [
+      [{ kind: 'occurrence-skip', occurrenceId: 'rent@2026-11-01' }, { kind: 'skip', occurrenceId: 'rent@2026-11-01' }],
+      [{ kind: 'occurrence-date', occurrenceId: 'rent@2026-11-01', date: '2026-11-06' }, { kind: 'move', occurrenceId: 'rent@2026-11-01', date: '2026-11-06' }],
+      [{ kind: 'occurrence-amount', occurrenceId: 'rent@2026-12-01', amountCents: usd(1700) }, { kind: 'amount', occurrenceId: 'rent@2026-12-01', amountCents: usd(1700) }],
+    ] as const) {
+      const r = run([change]);
+      const p = previewChange(plan(), proposed, clock);
+      if (!p.ok) throw new Error(p.error);
+      expect([r.comparable, r.baseline.lowest, r.scenario.lowest]).toEqual([p.preview.comparable, p.preview.current.lowest, p.preview.proposed.lowest]);
+      expect(applicableChange([change])).toEqual(proposed);
+    }
+  });
+
+  it('changes nothing in the plan', () => {
+    const d = plan();
+    const copy = structuredClone(d);
+    run([{ kind: 'occurrence-skip', occurrenceId: 'rent@2026-11-01' }], d);
+    expect(d).toEqual(copy);
+  });
+
+  it('counts as changing that item, so it can be changed only once', () => {
+    const r = evaluateScenario(plan(), [{ kind: 'occurrence-skip', occurrenceId: 'rent@2026-11-01' }, { kind: 'occurrence-date', occurrenceId: 'rent@2026-11-01', date: '2026-11-03' }], clock);
+    expect(r).toEqual({ ok: false, error: 'Change each item only once in a scenario.' });
+  });
+
+  it('refuses a payment already recorded', () => {
+    const d = unwrap(ops.recordActual(plan(), 'pay@2026-10-23', { amountCents: usd(1000), date: TODAY }, clock));
+    expect(evaluateScenario(d, [{ kind: 'occurrence-skip', occurrenceId: 'pay@2026-10-23' }], clock)).toEqual({ ok: false, error: 'Paycheck on Oct 23, 2026 has already been recorded or skipped.' });
+  });
+});
+
+describe('which scenario can be applied', () => {
+  it('only exactly one change to an expected payment', () => {
+    expect(applicableChange([])).toBeNull();
+    expect(applicableChange([{ kind: 'one-time-expense', description: 'Repair', amountCents: usd(100), date: '2026-10-20' }])).toBeNull();
+    expect(applicableChange([{ kind: 'recurring-amount', sourceId: 'loan', amountCents: usd(400), from: '2026-11-28' }])).toBeNull();
+    expect(
+      applicableChange([
+        { kind: 'occurrence-skip', occurrenceId: 'rent@2026-11-01' },
+        { kind: 'occurrence-skip', occurrenceId: 'rent@2026-12-01' },
+      ]),
+    ).toBeNull();
+  });
+
+  it('applying it changes that one occurrence, through the existing confirmed-apply step', () => {
+    const d = plan();
+    const proposed = applicableChange([{ kind: 'occurrence-date', occurrenceId: 'rent@2026-11-01', date: '2026-11-06' }])!;
+    const after = unwrap(applyPreviewedChange(d, d, proposed, clock));
+    expect(after.records.find((r) => r.id === 'rent@2026-11-01')).toMatchObject({ expectedDate: '2026-11-01', scheduledDate: '2026-11-06', scheduledAmountCents: usd(1500), status: 'scheduled' });
+    expect(after.sources).toEqual(d.sources);
+    expect(after.records.filter((r) => r.id !== 'rent@2026-11-01')).toEqual(d.records);
   });
 });

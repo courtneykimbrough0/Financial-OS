@@ -39,15 +39,15 @@ async function mount(data = plan()) {
       </ToastProvider>
     </StoreProvider>,
   );
-  await screen.findByRole('button', { name: 'Explore a scenario' });
+  await screen.findByRole('button', { name: 'See what happens if…' });
   return { adapter, user: userEvent.setup() };
 }
 
 type User = ReturnType<typeof userEvent.setup>;
-const sheet = () => screen.getByRole('dialog', { name: 'Explore a scenario' });
+const sheet = () => screen.getByRole('dialog', { name: 'See what happens if…' });
 
 async function open(user: User) {
-  await user.click(screen.getByRole('button', { name: 'Explore a scenario' }));
+  await user.click(screen.getByRole('button', { name: 'See what happens if…' }));
   return sheet();
 }
 
@@ -75,6 +75,16 @@ async function add(user: User, type: string, fields: Record<string, string>) {
   await user.click(within(form).getByRole('button', { name: 'Add to scenario' }));
 }
 
+/** A change to one expected payment: pick it, then Move date, Change amount or Leave it out. */
+async function changePayment(user: User, action: 'Move date' | 'Change amount' | 'Leave it out', fields: Record<string, string>) {
+  const form = await choose(user, 'Change an expected payment');
+  if (fields.Payment) await fill(user, form, { Payment: fields.Payment });
+  await user.click(within(form).getByRole('radio', { name: action }));
+  const { Payment: _picked, ...rest } = fields;
+  await fill(user, form, rest);
+  await user.click(within(form).getByRole('button', { name: 'Add to scenario' }));
+}
+
 const changes = () => within(within(sheet()).getByRole('region', { name: 'Your changes' })).queryAllByRole('listitem').map((li) => li.textContent);
 const comparison = () => within(sheet()).getByRole('region', { name: 'Scenario comparison' });
 const rows = (table: HTMLElement) => within(table).getAllByRole('row').map((r) => [...r.querySelectorAll('th, td')].map((c) => c.textContent));
@@ -85,17 +95,17 @@ describe('opening and closing', () => {
   it('opens from the dashboard empty, and Done or Escape closes it', async () => {
     const { user } = await mount();
     const s = await open(user);
-    expect(s).toHaveTextContent('Try changes together and see how your forecast would look. Your plan stays as it is.');
+    expect(s).toHaveTextContent('Try a change, or several together, and compare with your forecast. Nothing is saved unless you apply a single change.');
     expect(s).toHaveTextContent('Add a change to compare.');
     await user.click(within(s).getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     await open(user);
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Explore a scenario' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'See what happens if…' })).toHaveFocus();
   });
 
-  it('offers the seven kinds of change in everyday words', async () => {
+  it('offers six kinds of change in everyday words', async () => {
     const { user } = await mount();
     await open(user);
     await user.click(within(sheet()).getByRole('button', { name: 'Add a change' }));
@@ -103,8 +113,7 @@ describe('opening and closing', () => {
     expect(within(list).getAllByRole('button').map((b) => b.textContent)).toEqual([
       'Additional incomeMoney that might come in once',
       'Unexpected expenseA cost that might come up once',
-      'Move an expected paymentOne upcoming payment on another date',
-      'Change an expected amountOne upcoming payment at another amount',
+      'Change an expected paymentMove one, change its amount, or leave it out',
       'Increase a liability paymentA higher payment from a date on',
       'Build reservesAn amount saved on a schedule',
       'Explore variable incomeLow, expected and high amounts',
@@ -182,7 +191,8 @@ describe('one change', () => {
   it("moving an existing payment, chosen from what's already expected", async () => {
     const { user } = await mount();
     await open(user);
-    const form = await choose(user, 'Move an expected payment');
+    const form = await choose(user, 'Change an expected payment');
+    expect(within(form).getByRole('radio', { name: 'Move date' })).toBeChecked();
     expect(within(within(form).getByLabelText('Payment')).getAllByRole('option').map((o) => o.textContent).slice(0, 3)).toEqual(['Paycheck · Oct 23, 2026 · $1,000.00', 'Car loan · Oct 28, 2026 · $300.00', 'Rent · Nov 1, 2026 · $1,500.00']);
     await fill(user, form, { Payment: 'loan@2026-11-28', 'New date': '2026-12-05' });
     await user.click(within(form).getByRole('button', { name: 'Add to scenario' }));
@@ -193,8 +203,9 @@ describe('one change', () => {
   it('changing an existing amount, starting from the amount it has now', async () => {
     const { user } = await mount();
     await open(user);
-    const form = await choose(user, 'Change an expected amount');
+    const form = await choose(user, 'Change an expected payment');
     await fill(user, form, { Payment: 'rent@2026-12-01' });
+    await user.click(within(form).getByRole('radio', { name: 'Change amount' }));
     expect((within(form).getByLabelText('New amount') as HTMLInputElement).value).toBe('1500.00');
     await fill(user, form, { 'New amount': '1700' });
     await user.click(within(form).getByRole('button', { name: 'Add to scenario' }));
@@ -257,8 +268,8 @@ describe('problems and limits', () => {
   it('a conflicting change is pointed out on that change', async () => {
     const { user } = await mount();
     await open(user);
-    await add(user, 'Move an expected payment', { Payment: 'rent@2026-11-01', 'New date': '2026-11-03' });
-    await add(user, 'Change an expected amount', { Payment: 'rent@2026-11-01', 'New amount': '1200' });
+    await changePayment(user, 'Move date', { Payment: 'rent@2026-11-01', 'New date': '2026-11-03' });
+    await changePayment(user, 'Change amount', { Payment: 'rent@2026-11-01', 'New amount': '1200' });
     const items = within(within(sheet()).getByRole('region', { name: 'Your changes' })).getAllByRole('listitem');
     expect(items[0]).not.toHaveTextContent('Change each item only once');
     expect(items[1]).toHaveTextContent('Change each item only once in a scenario.');
@@ -285,7 +296,7 @@ describe('problems and limits', () => {
   it("moving the next payday: running totals aren't compared, and it says why", async () => {
     const { user } = await mount();
     await open(user);
-    await add(user, 'Move an expected payment', { Payment: 'pay@2026-10-23', 'New date': '2026-10-26' });
+    await changePayment(user, 'Move date', { Payment: 'pay@2026-10-23', 'New date': '2026-10-26' });
     const c = comparison();
     expect(c).toHaveTextContent("This scenario moves your next payday from Oct 23, 2026 to Oct 26, 2026, so the running totals start on different days and can't be compared directly.");
     expect(rows(within(c).getByRole('table'))).toEqual([
@@ -312,7 +323,7 @@ describe('the plan stays as it is', () => {
     const saved = JSON.stringify(await adapter.load());
     await open(user);
     await add(user, 'Unexpected expense', { Name: 'Car repair', Amount: '800', Date: '2026-11-10' });
-    await add(user, 'Change an expected amount', { Payment: 'rent@2026-12-01', 'New amount': '1700' });
+    await changePayment(user, 'Change amount', { Payment: 'rent@2026-12-01', 'New amount': '1700' });
     await add(user, 'Build reserves', { 'Amount each time': '100' });
     expect(store.data).toBe(loaded);
     await user.click(within(sheet()).getByRole('button', { name: 'Done' }));
@@ -328,7 +339,7 @@ describe('the plan stays as it is', () => {
 describe('keyboard', () => {
   it('adds a change and returns focus without a mouse', async () => {
     const { user } = await mount();
-    screen.getByRole('button', { name: 'Explore a scenario' }).focus();
+    screen.getByRole('button', { name: 'See what happens if…' }).focus();
     await user.keyboard('{Enter}');
     within(sheet()).getByRole('button', { name: 'Add a change' }).focus();
     await user.keyboard('{Enter}');

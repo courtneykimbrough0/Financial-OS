@@ -108,7 +108,7 @@ The structure follows the information model. The full proposal, with the reasons
 - **Settings** sits behind the gear.
 - **"+ Add"** in the top bar opens a short sheet with two choices: Add income, and Add a bill or payment. Record a payment is in the week view, where the due items are.
 - **Wide screens** move the tabs to a left rail (section 7.6).
-- **Today:** the tabs are Home (the opening screen, carrying the week view; section 3.2), Forecast (Month, Paycheck and Custom views; no separate week view), Activity (recorded entries with expected-vs-actual and month summary; section 4) and Plan (Income, Expenses with Bills, Subscriptions and Varied, Liabilities, Reserves), with Settings behind the gear (**Implemented**, roadmap H2, H3 and C3). "+ Add" and the merged "See what happens if…" are not built yet (**Proposed**).
+- **Today:** the tabs are Home (the opening screen, carrying the week view; section 3.2), Forecast (Month, Paycheck and Custom views; no separate week view), Activity (recorded entries with expected-vs-actual and month summary; section 4) and Plan (Income, Expenses with Bills, Subscriptions and Varied, Liabilities, Reserves), with Settings behind the gear (**Implemented**, roadmap H2, H3 and C3). The merged "See what happens if…" is built (C6). "+ Add" is not built yet (**Proposed**).
 
 ### 3.2 The week view
 
@@ -139,7 +139,7 @@ The original proposal:
 
 - **Month calendar.** Today's grid, with a simpler encoding (section 7.2). Days without activity are plain cells (section 5).
 - **Timing gaps ahead,** each opening the explanation, with "See what happens if…" on each item.
-- **"See what happens if…"** is one tool: today's What if… and scenarios merged. A single change can still be applied after confirmation.
+- **"See what happens if…"** is one tool: today's What if… and scenarios merged. A single change can still be applied after confirmation. **Implemented (C6):** opened from Forecast, or from a timing-gap item on that payment; "Change an expected payment" moves one, changes its amount or leaves it out; only a single such change, compared cleanly, offers Apply…, with confirmation.
 - **Range chip:**
   - This month
   - Next month

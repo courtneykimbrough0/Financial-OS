@@ -42,7 +42,6 @@ import { EntryButton, PeriodNav, shortDay } from '../components/entries';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 import { ScenarioSheet } from '../components/ScenarioSheet';
 import { GapsSheet } from '../components/gaps';
-import { WhatIfSheet } from '../components/WhatIfSheet';
 import { PeriodBreakdown, TagBreakdown } from '../components/plan';
 import { DayTransfers } from '../components/money-accounts';
 import { consumeForecastDate, navigate, parseForecastDate } from '../router';
@@ -114,7 +113,7 @@ export function Forecast() {
       {forecast.issue !== 'no-recurring-income' && (
         <>
           <button type="button" className="button small secondary scenario-entry" onClick={() => setSheet({ kind: 'scenario' })} aria-haspopup="dialog">
-            Explore a scenario
+            See what happens if…
           </button>
 
           <div className="segmented" role="tablist" aria-label="Forecast view">
@@ -285,7 +284,7 @@ function PeriodGapsSheet({ forecast, range, onClose }: { forecast: Forecast; ran
     return explainTimingGaps(forecast, days).filter((g) => g.end >= start && g.start <= end);
   }, [forecast, start, end]);
   const [whatIf, setWhatIf] = useState<string | null>(null);
-  if (whatIf) return <WhatIfSheet occurrenceId={whatIf} through={end} onBack={() => setWhatIf(null)} onDone={onClose} />;
+  if (whatIf) return <ScenarioSheet occurrenceId={whatIf} through={end} onClose={() => setWhatIf(null)} onApplied={onClose} />;
   if (gaps.length === 0) return null;
   return <GapsSheet gaps={gaps} horizonEnd={forecast.horizonEnd} onClose={onClose} onWhatIf={setWhatIf} />;
 }

@@ -392,20 +392,25 @@ try {
   await firstGap.locator('summary').focus();
   await page.keyboard.press('Enter');
   assert.equal(await firstGap.getAttribute('open'), null);
-  // What if… from the explanation: preview, then apply after confirming.
+  // "See what happens if…" from the explanation: compare, then apply after confirming.
   await page.keyboard.press('Enter');
-  await firstGap.getByRole('button', { name: /^What if: Car repair/ }).click();
-  const whatIf = page.getByRole('dialog', { name: 'What if…' });
-  // Back returns to the explanation, unchanged.
-  await whatIf.getByRole('button', { name: 'Back' }).click();
-  await gapSheet.getByRole('group').first().getByRole('button', { name: /^What if: Car repair/ }).click();
-  // Choose "Skip this one" from the keyboard.
-  await whatIf.getByRole('radio', { name: 'Skip this one' }).focus();
+  await firstGap.getByRole('button', { name: /^See what happens if Car repair/ }).click();
+  const whatIf = page.getByRole('dialog', { name: 'See what happens if…' });
+  // It opens on that payment; closing returns to the explanation, unchanged.
+  assert.match(await whatIf.getByLabel('Payment', { exact: true }).locator('option:checked').innerText(), /^Car repair · Nov 5, 2026/);
+  await page.keyboard.press('Escape');
+  await gapSheet.getByRole('group').first().getByRole('button', { name: /^See what happens if Car repair/ }).click();
+  // Choose "Leave it out" from the keyboard.
+  await whatIf.getByRole('radio', { name: 'Leave it out' }).focus();
   await page.keyboard.press('Space');
-  assert.equal(await whatIf.getByRole('radio', { name: 'Skip this one' }).isChecked(), true);
+  assert.equal(await whatIf.getByRole('radio', { name: 'Leave it out' }).isChecked(), true);
+  await whatIf.getByRole('button', { name: 'Add to scenario' }).click();
   await whatIf.getByText('The timing gap Nov 5 – 9 would be gone.').waitFor();
+  // Change it to a move instead.
+  await whatIf.getByRole('button', { name: /^Edit Car repair on Nov 5, 2026: left out/ }).click();
   await whatIf.getByRole('radio', { name: 'Move date' }).check();
   await whatIf.getByLabel('New date').fill('2026-11-10');
+  await whatIf.getByRole('button', { name: 'Save change' }).click();
   await whatIf.getByText('The timing gap Nov 5 – 9 would be gone.').waitFor();
   await shot('11c-what-if');
   await whatIf.getByRole('button', { name: 'Apply change…' }).click();
@@ -539,9 +544,9 @@ try {
   await page.goto(`${BASE}#/forecast`);
   const planBefore = await page.evaluate(() => localStorage.getItem('financial-os:data'));
   // Open from the keyboard.
-  await page.getByRole('button', { name: 'Explore a scenario' }).focus();
+  await page.getByRole('button', { name: 'See what happens if…' }).focus();
   await page.keyboard.press('Enter');
-  const scenario = page.getByRole('dialog', { name: 'Explore a scenario' });
+  const scenario = page.getByRole('dialog', { name: 'See what happens if…' });
   const addChange = async (type, fill) => {
     await scenario.getByRole('button', { name: 'Add a change' }).click();
     await scenario.getByRole('button', { name: new RegExp(`^${type}`) }).click();
@@ -591,7 +596,7 @@ try {
   await page.keyboard.press('Escape');
   assert.equal(await page.getByRole('dialog').count(), 0);
   assert.equal(await page.evaluate(() => localStorage.getItem('financial-os:data')), planBefore);
-  await page.getByRole('button', { name: 'Explore a scenario' }).click();
+  await page.getByRole('button', { name: 'See what happens if…' }).click();
   assert.match(await scenario.innerText(), /Add a change to compare\./);
   await page.keyboard.press('Escape');
 
