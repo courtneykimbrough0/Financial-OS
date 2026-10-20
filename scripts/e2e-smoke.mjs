@@ -78,8 +78,8 @@ try {
   await sheet.getByRole('button', { name: 'Save' }).click();
   await page.getByText('Every 2 weeks · next Oct 15, 2026').waitFor();
   assert.match(await page.locator('.entry-list').innerText(), /\+\$1,800\.00/);
-  // Cash flow covers the first pay period, Oct 15 – 28.
-  assert.match(await page.locator('.left-to-spend').innerText(), /Cash flow[\s\S]*Oct 15 – 28[\s\S]*\+\$1,800\.00/);
+  // Cash flow covers the next four weeks from today, Oct 11 – Nov 7: paychecks Oct 15 and 29.
+  assert.match(await page.locator('.left-to-spend').innerText(), /Cash flow[\s\S]*Next 4 weeks · Oct 11 – Nov 7[\s\S]*\+\$3,600\.00/);
   await page.getByRole('button', { name: 'Continue' }).click();
 
   step('onboarding: step 2 of 3 holds every regular payment in one list, picked by kind');
@@ -102,8 +102,8 @@ try {
   await sheet.getByRole('button', { name: 'Remove tag Housing' }).waitFor();
   await shot('02b-bill-with-tag');
   await sheet.getByRole('button', { name: 'Save' }).click();
-  // Rent is due Nov 1, after the first pay period, so cash flow is unchanged.
-  assert.match(await page.locator('.left-to-spend').innerText(), /\$1,740\.00/);
+  // Phone (Oct 25) and rent (Nov 1) both fall in the four weeks.
+  assert.match(await page.locator('.left-to-spend').innerText(), /\$2,340\.00/);
 
   step('onboarding: varied spending counts in its period');
   await page.getByRole('button', { name: 'Add spending' }).click();
@@ -112,12 +112,12 @@ try {
   await sheet.getByLabel('Expected amount').fill('100');
   await sheet.getByLabel('Expected date').fill('2026-10-26');
   await sheet.getByRole('button', { name: 'Add spending' }).click();
-  assert.match(await page.locator('.left-to-spend').innerText(), /\$1,640\.00/);
+  assert.match(await page.locator('.left-to-spend').innerText(), /\$2,240\.00/);
   await page.getByText('One time · Oct 26, 2026').waitFor();
   await shot('02c-bills-step');
   await page.getByRole('button', { name: /^Car repair/ }).click();
   await page.getByRole('dialog', { name: 'Car repair' }).getByRole('button', { name: 'Remove Car repair' }).click();
-  assert.match(await page.locator('.left-to-spend').innerText(), /\$1,740\.00/);
+  assert.match(await page.locator('.left-to-spend').innerText(), /\$2,340\.00/);
 
   step('onboarding: a loan payment joins the same list; reserves are optional');
   await page.getByText('Set money aside on a schedule (optional).').waitFor();
@@ -135,27 +135,27 @@ try {
   await shot('02d-liability-type');
   await sheet.getByLabel('Next payment due date').fill('2026-10-20');
   await sheet.getByRole('button', { name: 'Save' }).click();
-  assert.match(await page.locator('.left-to-spend').innerText(), /\$1,390\.00/);
+  assert.match(await page.locator('.left-to-spend').innerText(), /\$1,990\.00/);
   await page.getByText('Loan · Monthly on the 20th').waitFor();
   assert.match(await page.locator('.entry-list').first().innerText(), /Phone[\s\S]*Rent[\s\S]*Car loan/);
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  step('onboarding: step 3 of 3, the review with first pay period breakdown');
+  step('onboarding: step 3 of 3, the review of the next four weeks');
   await page.getByText('Next expected payday', { exact: true }).waitFor();
   const hero = await page.locator('.review-hero').innerText();
   assert.match(hero, /Oct 15[\s\S]*in 4 days/);
-  assert.match(hero, /Lowest running total before Oct 28: \$1,390\.00/);
+  assert.match(hero, /Lowest running total through Nov 7: \$1,390\.00 · Oct 25/);
   // No timing gaps in this setup, so no warning appears.
   assert.equal(await page.locator('.gap-banner').count(), 0);
   const breakdown = await page.locator('section[aria-labelledby="breakdown-period"]').innerText();
-  assert.match(breakdown, /Oct 15 – 28/);
-  assert.match(breakdown, /Income\s+\+\$1,800\.00/);
-  assert.match(breakdown, /Spending\s+−\$410\.00/);
-  assert.match(breakdown, /Bills\s+\$60\.00/);
+  assert.match(breakdown, /Next 4 weeks[\s\S]*Oct 11 – Nov 7/i);
+  assert.match(breakdown, /Income\s+\+\$3,600\.00/);
+  assert.match(breakdown, /Spending\s+−\$1,610\.00/);
+  assert.match(breakdown, /Bills\s+\$1,260\.00/);
   assert.match(breakdown, /Liability payments\s+\$350\.00/);
   // Classifications with nothing in the period are left out.
   assert.doesNotMatch(breakdown, /reserves|Subscriptions/);
-  assert.match(breakdown, /Cash flow\s+\+\$1,390\.00/);
+  assert.match(breakdown, /Cash flow\s+\+\$1,990\.00/);
   const mainText = await page.locator('main').innerText();
   assert.match(mainText, /INCOME[\s\S]*Paycheck[\s\S]*BILLS[\s\S]*Phone[\s\S]*Rent[\s\S]*LIABILITY PAYMENTS[\s\S]*Car loan/i);
   await shot('03-review');
@@ -725,7 +725,7 @@ try {
     await addItem(/^Add (a|another) payment$/, 'What is this bill?', 'Rent', 'Amount you expect to pay', '1000', 'Next due date', '2026-10-22', 'monthly');
     await p2.getByRole('button', { name: 'Continue' }).click();
     await p2.getByRole('heading', { name: 'Check everything over' }).waitFor();
-    assert.match(await p2.locator('.review-hero').innerText(), /Oct 19\s*in 8 days[\s\S]*Lowest running total before Nov 1: −\$600\.00 · Oct 22/);
+    assert.match(await p2.locator('.review-hero').innerText(), /Oct 19\s*in 8 days[\s\S]*Lowest running total through Nov 7: −\$600\.00 · Oct 22/);
     await p2.getByRole('button', { name: /1 timing gap ahead/ }).waitFor();
     assert.equal(await p2.getByText(/due before your next payday/).count(), 0);
     await p2.getByRole('button', { name: 'Looks right' }).click();

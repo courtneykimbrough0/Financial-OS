@@ -10,8 +10,8 @@ import { Onboarding } from '../screens/Onboarding';
 
 /*
  * Today is Fri 2026-10-16. The minimum setup: paid $1,000 every other Friday
- * from Oct 23, rent $1,500 monthly from Nov 1. First pay period Oct 23 – Nov 5:
- * +$1,000 − $1,500 = −$500. Running totals: Oct 23 1,000; Nov 1 −500; Nov 6
+ * from Oct 23, rent $1,500 monthly from Nov 1. The next four weeks, Oct 16 –
+ * Nov 12: +$2,000 − $1,500 = +$500. Running totals: Oct 23 1,000; Nov 1 −500; Nov 6
  * 500; Nov 20 1,500; Dec 1 0 (not below $0); so one timing gap, Nov 1 – 5.
  */
 const TODAY = '2026-10-16';
@@ -82,18 +82,19 @@ describe('the minimum useful setup', () => {
     // No cash flow figure before there's income to base it on.
     expect(screen.queryByText('Cash flow', { selector: '.lts-label' })).toBeNull();
     await addItem(user, 'Add income', paycheck);
-    expect(cashFlow()).toHaveTextContent('Cash flowFirst pay period · Oct 23 – Nov 5+$1,000.00');
+    // The next four weeks from today, Oct 16 – Nov 12: paychecks Oct 23 and Nov 6.
+    expect(cashFlow()).toHaveTextContent('Cash flowNext 4 weeks · Oct 16 – Nov 12+$2,000.00');
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.getByRole('heading', { name: 'What do you pay regularly?' })).toHaveFocus();
     expect(screen.getByText('Step 2 of 3 · Payments')).toBeInTheDocument();
     await addItem(user, 'Add a payment', rent);
-    expect(cashFlow()).toHaveTextContent('Cash flowFirst pay period · Oct 23 – Nov 5−$500.00');
+    expect(cashFlow()).toHaveTextContent('Cash flowNext 4 weeks · Oct 16 – Nov 12+$500.00');
 
     // Subscriptions, liabilities and reserves can wait.
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.getByRole('heading', { name: 'Check everything over' })).toHaveFocus();
     expect(screen.getByText('Next expected payday').closest('section')).toHaveTextContent('Next expected paydayOct 23in 7 days');
-    expect(screen.getByText(/Lowest running total before Nov 5:/).closest('span')).toHaveTextContent('Lowest running total before Nov 5: −$500.00 · Nov 1');
+    expect(screen.getByText(/Lowest running total through Nov 12:/).closest('span')).toHaveTextContent('Lowest running total through Nov 12: −$500.00 · Nov 1');
     expect(screen.getByRole('button', { name: /1 timing gap ahead/ })).toBeInTheDocument();
     // Kinds with nothing added collapse into one line, each name a way to add it.
     for (const label of ['Subscriptions', 'Liability payments', 'Strategic Reserves']) expect(screen.queryByRole('region', { name: label })).toBeNull();
@@ -184,7 +185,7 @@ describe('the review', () => {
     await user.clear(amount);
     await user.type(amount, '1400');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
-    expect(screen.getByText(/Lowest running total before Nov 5:/).closest('span')).toHaveTextContent('Lowest running total before Nov 5: −$400.00 · Nov 1');
+    expect(screen.getByText(/Lowest running total through Nov 12:/).closest('span')).toHaveTextContent('Lowest running total through Nov 12: −$400.00 · Nov 1');
     expect(store.data.sources.find((s) => s.description === 'Rent')!.versions.map((v) => v.amountCents)).toEqual([140000]);
   });
 

@@ -416,31 +416,6 @@ export function monthWeekSummaries(forecast: Forecast, monthDate: DateStr): Week
   return weekSummaries(forecast, startOfMonth(monthDate), endOfMonth(monthDate));
 }
 
-/**
- * The first stretch of the forecast that setup describes: from the forecast
- * start to the day before the earliest income source's second upcoming
- * payday. Begins with the first income of any kind so no early payments are
- * left out. Null until there are at least two upcoming paydays.
- */
-export function firstPeriod(forecast: Forecast): [DateStr, DateStr] | null {
-  if (!forecast.forecastStart) return null;
-  const first = forecast.entries.find(
-    (e) => e.counts && e.occurrence.kind === 'income' && e.occurrence.sourceId && e.date >= forecast.forecastStart!,
-  );
-  if (!first) return null;
-  const sourceId = first.occurrence.sourceId;
-  const dates: DateStr[] = [];
-  for (const e of forecast.entries) {
-    if (!e.counts || e.occurrence.kind !== 'income' || e.occurrence.sourceId !== sourceId || e.date < forecast.forecastStart!) continue;
-    if (!dates.includes(e.date)) {
-      dates.push(e.date);
-      if (dates.length === 2) break;
-    }
-  }
-  if (dates.length < 2) return null;
-  return [minDate(forecast.forecastStart, dates[0]!), addDays(dates[1]!, -1)];
-}
-
 /** Outstanding occurrences whose date has passed, oldest first. */
 export function overdueEntries(forecast: Forecast): ForecastEntry[] {
   return forecast.entries

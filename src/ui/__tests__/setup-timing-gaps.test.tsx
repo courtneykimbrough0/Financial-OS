@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { source } from '../../domain/__tests__/helpers';
+import { source, unwrap } from '../../domain/__tests__/helpers';
 import * as ops from '../../domain/operations';
 import type { AppData } from '../../domain/types';
 import { DataModeProvider } from '../../state/mode';
@@ -22,8 +22,12 @@ async function reachReview(data: AppData) {
     </DataModeProvider>,
   );
   await screen.findByRole('heading', { name: 'When do you get paid?' });
-  // Income, then regular payments, then the review.
-  for (let i = 0; i < 2; i++) await user.click(screen.getByRole('button', { name: 'Continue' }));
+  // Income, then regular payments, then the review. Without income, setup asks once before moving on.
+  for (let i = 0; i < 2; i++) {
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    const anyway = screen.queryByRole('button', { name: 'Continue without income' });
+    if (anyway) await user.click(anyway);
+  }
   await screen.findByRole('heading', { name: 'Check everything over' });
   return user;
 }
@@ -42,7 +46,7 @@ describe('timing gaps at the end of setup', () => {
     const user = await reachReview(d);
 
     // The lowest point stays on the summary card.
-    expect(screen.getByText(/Lowest running total before Oct 28:/)).toBeInTheDocument();
+    expect(screen.getByText(/Lowest running total through Nov 7:/).closest('span')).toHaveTextContent('Lowest running total through Nov 7: −$600.00 · Oct 20');
 
     await user.click(screen.getByRole('button', { name: /2 timing gaps ahead/ }));
     const sheet = screen.getByRole('dialog', { name: '2 timing gaps ahead' });
@@ -55,14 +59,38 @@ describe('timing gaps at the end of setup', () => {
     expect(items[1]).toHaveTextContent('Down to −$200.00 on Nov 20');
   });
 
-  it('shows nothing when there are no timing gaps', async () => {
+  it('one income: the first look is the next four weeks from today, and shows nothing about gaps when there are none', async () => {
     let d = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1800, '2026-10-15', { type: 'biweekly' }, 'pay');
     d = source(d, TODAY, 'bill', 'Rent', 1200, '2026-11-01', { type: 'monthly' }, 'rent');
     await reachReview(d);
     expect(screen.queryByText(/timing gap/i)).toBeNull();
-    expect(screen.getByText(/Lowest running total before Oct 28:/)).toBeInTheDocument();
+    // Oct 11 – Nov 7: paychecks Oct 15 and 29, rent Nov 1. $1,800 × 2 − $1,200.
+    expect(document.querySelector('.left-to-spend')).toHaveTextContent('Cash flowNext 4 weeks · Oct 11 – Nov 7+$2,400.00');
+    const breakdown = screen.getByRole('region', { name: 'Next 4 weeks' });
+    expect(breakdown).toHaveTextContent(/Oct 11 – Nov 7Income\+\$3,600\.00Spending−\$1,200\.00/);
+    expect(screen.getByText(/Lowest running total through Nov 7:/).closest('span')).toHaveTextContent('Lowest running total through Nov 7: $1,800.00 · Oct 15');
+    expect(screen.queryByText(/First pay period/)).toBeNull();
   });
-  it('starts from the earliest income, so the gap before a later paycheck shows (whatever was entered first)', async () => {
+
+  it('a payment already recorded in the window counts once, at what actually came in', async () => {
+    let d = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1800, '2026-10-15', { type: 'biweekly' }, 'pay');
+    d = source(d, TODAY, 'bill', 'Rent', 1200, '2026-11-01', { type: 'monthly' }, 'rent');
+    d = unwrap(ops.recordActual(d, 'pay@2026-10-15', { amountCents: 95000, date: TODAY }, { today: TODAY, now: `${TODAY}T12:00:00Z` }));
+    await reachReview(d);
+    // $950 received today, then $1,800 on Oct 29, less $1,200 rent.
+    expect(document.querySelector('.left-to-spend')).toHaveTextContent('Cash flowNext 4 weeks · Oct 11 – Nov 7+$1,550.00');
+    expect(screen.getByRole('region', { name: 'Next 4 weeks' })).toHaveTextContent(/Income\+\$2,750\.00/);
+  });
+
+  it('no income: no cash flow figure, breakdown or lowest running total, only the prompt to add income', async () => {
+    const d = source(ops.emptyData(), TODAY, 'bill', 'Rent', 1200, '2026-11-01', { type: 'monthly' }, 'rent');
+    await reachReview(d);
+    expect(screen.getByText("Add your income to see what's ahead.")).toBeInTheDocument();
+    expect(document.querySelector('.left-to-spend')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Next 4 weeks' })).toBeNull();
+    expect(screen.queryByText(/Lowest running total/)).toBeNull();
+  });
+  it('several incomes: all of them count in the four weeks, and the gap before a later paycheck shows (whatever was entered first)', async () => {
     // The Oct 27 paycheck is entered first; the Oct 19 weekend job arrives before it.
     let d = source(ops.emptyData(), TODAY, 'income', 'Restaurant paycheck', 900, '2026-10-27', { type: 'biweekly' }, 'late');
     d = source(d, TODAY, 'income', 'Weekend job', 400, '2026-10-19', { type: 'biweekly' }, 'early');
@@ -70,11 +98,11 @@ describe('timing gaps at the end of setup', () => {
     await reachReview(d);
 
     expect(screen.getByText('Next expected payday').closest('section')).toHaveTextContent('Oct 19in 8 days');
-    expect(screen.getByText(/Lowest running total before Nov 1:/).closest('span')).toHaveTextContent('Lowest running total before Nov 1: −$600.00 · Oct 22');
+    expect(screen.getByText(/Lowest running total through Nov 7:/).closest('span')).toHaveTextContent('Lowest running total through Nov 7: −$600.00 · Oct 22');
     expect(screen.getByRole('button', { name: /1 timing gap ahead/ })).toBeInTheDocument();
     // Rent comes after the first income, so it isn't described as due before payday.
     expect(screen.queryByText(/due before your next payday/)).toBeNull();
-    // Cash flow covers Oct 19 – Nov 1: $400 + $900 − $1,000.
-    expect(document.querySelector('.left-to-spend')).toHaveTextContent('Cash flowFirst pay period · Oct 19 – Nov 1+$300.00');
+    // Oct 11 – Nov 7: weekend job Oct 19 and Nov 2, restaurant paycheck Oct 27, rent Oct 22. $400 + $900 + $400 − $1,000.
+    expect(document.querySelector('.left-to-spend')).toHaveTextContent('Cash flowNext 4 weeks · Oct 11 – Nov 7+$700.00');
   });
 });

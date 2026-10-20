@@ -13,7 +13,7 @@ export function CashFlowBanner({ plan }: { plan: PeriodPlan | null }) {
     <div className={`left-to-spend${negative ? ' negative' : ''}`} role="status" aria-live="polite">
       <span className="lts-label">
         Cash flow
-        <span className="lts-sub">{plan ? `First pay period · ${formatRange(plan.start, plan.end)}` : 'Add income to see this'}</span>
+        <span className="lts-sub">{plan ? `Next 4 weeks · ${formatRange(plan.start, plan.end)}` : 'Add income to see this'}</span>
       </span>
       <span className="lts-value">
         {negative && <Icon icon={TrendingDown} size={20} />}
