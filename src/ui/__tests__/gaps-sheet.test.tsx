@@ -90,12 +90,12 @@ describe('GapsSheet', () => {
     expect(gap).toHaveTextContent('Running total, Oct 29$740.00');
   });
 
-  it('says so when the running total doesn’t recover within the forecast', () => {
+  it("says so when the running total doesn't recover within the forecast", () => {
     let d = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1000, '2026-10-15', { type: 'monthly' }, 'pay');
     d = source(d, TODAY, 'bill', 'Rent', 2100, '2026-10-20', { type: 'monthly' }, 'rent');
     show(d);
     const [gap] = screen.getAllByRole('group');
-    expect(gap).toHaveTextContent('The running total doesn’t return to $0 or more in the forecast, which runs through Nov 15, 2027.');
+    expect(gap).toHaveTextContent("It stays below $0 through Nov 15, 2027.");
     expect(within(gap!).queryByText(/Running total, (Jan|Feb)/)).toBeNull();
   });
 
@@ -113,7 +113,7 @@ describe('GapsSheet', () => {
     expect(closed()).toBe(true);
   });
 
-  it('offers “What if…” on each outstanding entry, when asked to', async () => {
+  it('offers "What if…" on each outstanding entry, when asked to', async () => {
     const user = userEvent.setup();
     let d = source(paid(), TODAY, 'bill', 'Rent', 1200, '2026-10-19', { type: 'monthly' }, 'rent');
     d = oneTime(d, 'Phone', 60, '2026-10-24');
@@ -130,7 +130,7 @@ describe('GapsSheet', () => {
     expect(asked).toEqual(['one-phone']);
   });
 
-  it('has no “What if…” without a handler (as at the end of setup)', () => {
+  it('has no "What if…" without a handler (as at the end of setup)', () => {
     show(source(paid(), TODAY, 'bill', 'Rent', 1200, '2026-10-19', { type: 'monthly' }, 'rent'));
     expect(screen.queryByRole('button', { name: /^What if/ })).toBeNull();
   });

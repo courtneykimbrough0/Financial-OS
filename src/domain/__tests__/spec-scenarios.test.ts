@@ -229,7 +229,7 @@ describe('I. Canceled transaction', () => {
     expect(periodKpis(f, '2026-11-01', '2026-11-30').outflowCents).toBe(0);
     expect(tallyOn(f, '2026-11-30')).toBe(usd(2000));
     expect(periodKpis(f, '2026-12-01', '2026-12-31').outflowCents).toBe(usd(15));
-    expectError(ops.recordActual(d, occ('tv', '2026-11-12'), { amountCents: usd(15), date: today }, clockAt(today)), /canceled/);
+    expectError(ops.recordActual(d, occ('tv', '2026-11-12'), { amountCents: usd(15), date: today }, clockAt(today)), /skipped/);
   });
 });
 

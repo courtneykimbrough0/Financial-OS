@@ -30,7 +30,7 @@ export function SignIn({ auth, onSignedIn }: { auth: AuthService; onSignedIn: (u
       onSignedIn(await auth.signInWithGoogle());
     } catch (err) {
       const cancelled = typeof err === 'object' && err !== null && (err as { cancelled?: boolean }).cancelled;
-      if (!cancelled) setError(err instanceof Error ? err.message : 'Sign-in couldn’t be completed. Try again.');
+      if (!cancelled) setError(err instanceof Error ? err.message : "Sign-in couldn't be completed. Try again.");
       setBusy(false);
     }
   };

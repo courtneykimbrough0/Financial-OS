@@ -129,7 +129,7 @@ export function RestoreBackupButton({ label = 'Restore from backup' }: { label?:
     try {
       setPending(readBackup(await file.text()));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'This file couldn’t be read.');
+      setError(err instanceof Error ? err.message : "This file couldn't be read.");
     } finally {
       if (input.current) input.current.value = '';
     }
@@ -158,7 +158,7 @@ export function RestoreBackupButton({ label = 'Restore from backup' }: { label?:
             <KeepACopy />
             {replace.failure && (
               <p className="form-error" role="alert">
-                The restore hasn’t been confirmed. {replace.failure.error}
+                Couldn't restore your backup. {replace.failure.error}
               </p>
             )}
             <div className="form-actions">
@@ -175,7 +175,7 @@ export function RestoreBackupButton({ label = 'Restore from backup' }: { label?:
         </Modal>
       )}
       {error && (
-        <Modal title="Couldn’t restore" onClose={() => setError(null)}>
+        <Modal title="Couldn't restore" onClose={() => setError(null)}>
           <div className="stack">
             <p className="form-error">
               <Icon icon={AlertCircle} size={16} /> {error}
@@ -203,7 +203,7 @@ export function StartOverButton() {
   const count = countItems(data);
   const replace = useReplace(() => {
     setConfirming(false);
-    toast('Your data was erased. Set up again whenever you’re ready.');
+    toast("Your data was erased. Set up again whenever you're ready.");
     navigate('onboarding');
   });
   const erase = () => void replace.start((d) => ops.startOver(d), 'reset');
@@ -217,12 +217,12 @@ export function StartOverButton() {
         <Modal title="Start over?" onClose={close}>
           <div className="stack">
             <p>
-              This erases {count === 0 ? 'your setup' : `all ${itemsText(count)} you’ve entered, with everything recorded for them,`} and takes you back to setup.
+              This erases {count === 0 ? 'your setup' : `all ${itemsText(count)} you've entered, with everything recorded for them,`} and takes you back to setup.
             </p>
             <KeepACopy />
             {replace.failure && (
               <p className="form-error" role="alert">
-                Erasing hasn’t been confirmed. {replace.failure.error}
+                Couldn't erase your data. {replace.failure.error}
               </p>
             )}
             <div className="form-actions">
@@ -249,7 +249,7 @@ export function SaveStatusBar() {
   return (
     <div className="save-status" role="alert">
       <Icon icon={AlertCircle} size={20} />
-      <p>{saveStatus === 'error' ? `Your latest change hasn’t been saved. ${saveMessage ?? ''}` : saveMessage}</p>
+      <p>{saveStatus === 'error' ? `Your latest change hasn't been saved. ${saveMessage ?? ''}` : saveMessage}</p>
       {saveStatus === 'error' ? (
         <button type="button" className="button small secondary" onClick={retrySave}>
           <Icon icon={RefreshCw} size={16} /> Try again

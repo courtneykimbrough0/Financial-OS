@@ -31,8 +31,8 @@ describe('backups', () => {
   });
 
   it('reject files that are not backups, with a plain message', () => {
-    expect(() => readBackup('not json')).toThrow('This file isn’t a Financial OS backup.');
-    expect(() => readBackup(JSON.stringify({ hello: 'world' }))).toThrow('This file isn’t a Financial OS backup.');
+    expect(() => readBackup('not json')).toThrow("This file isn't a Financial OS backup.");
+    expect(() => readBackup(JSON.stringify({ hello: 'world' }))).toThrow("This file isn't a Financial OS backup.");
     expect(() => readBackup(JSON.stringify({ format: BACKUP_FORMAT, data: { schemaVersion: 99 } }))).toThrow(/damaged or from a newer version/);
     expect(() => readBackup(JSON.stringify({ format: BACKUP_FORMAT, data: { schemaVersion: 2, sources: [{ id: 1 }], records: [] } }))).toThrow(/damaged/);
   });

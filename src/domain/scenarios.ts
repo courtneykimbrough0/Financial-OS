@@ -164,8 +164,8 @@ function applyChange(data: AppData, change: ScenarioChange, index: number, clock
     case 'occurrence-amount':
     case 'occurrence-date': {
       const o = findOccurrence(data, change.occurrenceId, clock.today);
-      if (!o) return 'That transaction could not be found.';
-      if (o.status !== 'scheduled') return `${o.description} on ${formatMedium(o.scheduledDate)} has already been recorded or canceled.`;
+      if (!o) return 'That item could not be found.';
+      if (o.status !== 'scheduled') return `${o.description} on ${formatMedium(o.scheduledDate)} has already been recorded or skipped.`;
       if (change.kind === 'occurrence-date') {
         const err = notPast(change.date);
         if (err) return err;
@@ -184,14 +184,14 @@ function applyChange(data: AppData, change: ScenarioChange, index: number, clock
     }
     case 'recurring-amount': {
       const source = data.sources.find((s) => s.id === change.sourceId);
-      if (!source || !source.active) return 'Choose a recurring item that’s turned on.';
+      if (!source || !source.active) return "Choose a recurring item that's turned on.";
       const versions = [...source.versions].sort((a, b) => (a.startDate < b.startDate ? -1 : 1));
       const pending = versions.slice(1).find((v) => v.startDate > clock.today);
-      if (pending) return `${source.description} already has a change set for ${formatMedium(pending.startDate)}, so a scenario can’t change its amount yet.`;
+      if (pending) return `${source.description} already has a change set for ${formatMedium(pending.startDate)}, so a scenario can't change its amount yet.`;
       const version = versions[versions.length - 1]!;
       const dates = expandSource(source, clock.today, addDays(clock.today, 400)).map((g) => g.expectedDate);
       if (!dates.includes(change.from) || !startKeepsDates(version.rule, version.startDate, change.from)) {
-        return `Choose one of ${source.description}’s upcoming payment dates to start from.`;
+        return `Choose one of ${source.description}'s upcoming payment dates to start from.`;
       }
       const next = unwrap(ops.changeSourceSchedule(data, source.id, { startDate: change.from, amountCents: change.amountCents, rule: version.rule }, clock));
       if (typeof next === 'string') return next;
@@ -253,9 +253,9 @@ function outlook(f: Forecast, side: { lowest: LowPoint | null; gaps: GapExplanat
 export function evaluateScenario(data: AppData, changes: ScenarioChange[], clock: ops.Clock, options: { through?: DateStr; incomeCase?: IncomeCaseName } = {}): ScenarioOutcome {
   if (changes.length === 0) return fail('Add at least one change.');
   const touched = changes.flatMap((c) => (c.kind === 'occurrence-amount' || c.kind === 'occurrence-date' ? [c.occurrenceId] : []));
-  if (new Set(touched).size !== touched.length) return fail('Change each transaction only once in a scenario.');
+  if (new Set(touched).size !== touched.length) return fail('Change each item only once in a scenario.');
   const recurring = changes.flatMap((c) => (c.kind === 'recurring-amount' ? [c.sourceId] : []));
-  if (new Set(recurring).size !== recurring.length) return fail('Change each recurring item’s amount once per scenario.');
+  if (new Set(recurring).size !== recurring.length) return fail("Change each recurring item's amount once per scenario.");
 
   let copy = data;
   const pending: Applied['assumption'][] = [];
@@ -296,15 +296,15 @@ export function evaluateScenario(data: AppData, changes: ScenarioChange[], clock
     result: { ...base, comparable: false, reason, limitations: [text, ...limitations], differences: { ...money, lowestCents: null, endingCents: null }, newGaps: [], worsenedGaps: [], reducedGaps: [], resolvedGaps: [], shortfallDespiteGain: false },
   });
 
-  if (!before.forecastStart || !after.forecastStart) return notCompared('no-forecast', 'There’s no upcoming income to start a running total from, so only cash flow is compared.');
-  if (anchorChanged) return notCompared('anchor-changed', `This scenario moves your next payday from ${formatMedium(before.forecastStart)} to ${formatMedium(after.forecastStart)}, so the running totals start on different days and can’t be compared directly.`);
+  if (!before.forecastStart || !after.forecastStart) return notCompared('no-forecast', "There's no upcoming income to start a running total from, so only cash flow is compared.");
+  if (anchorChanged) return notCompared('anchor-changed', `This scenario moves your next payday from ${formatMedium(before.forecastStart)} to ${formatMedium(after.forecastStart)}, so the running totals start on different days and can't be compared directly.`);
   // A transaction moved from inside the running total to before it would just drop out of it.
   const was = new Map(before.entries.map((e) => [e.occurrence.id, e.date]));
   const dropped = after.entries.find((e) => {
     const d = was.get(e.occurrence.id);
     return d !== undefined && d >= before.forecastStart! && e.date < after.forecastStart!;
   });
-  if (dropped) return notCompared('before-payday', `${dropped.occurrence.description} would move to before your next payday (${formatMedium(after.forecastStart)}), where the running total starts, so it would drop out of it. The forecast can’t show whether money on hand covers it.`);
+  if (dropped) return notCompared('before-payday', `${dropped.occurrence.description} would move to before your next payday (${formatMedium(after.forecastStart)}), where the running total starts, so it would drop out of it. The forecast can't show whether money on hand covers it.`);
 
   const gaps = gapChanges(current.gaps, proposed.gaps);
   const differences = {
@@ -341,7 +341,7 @@ export interface IncomeRange {
 export function evaluateIncomeCases(data: AppData, changes: ScenarioChange[], range: IncomeRange, clock: ops.Clock, options: { through?: DateStr } = {}): { ok: true; cases: Record<IncomeCaseName, ScenarioResult> } | { ok: false; error: string } {
   const amounts = [range.lowCents, range.expectedCents, range.highCents];
   if (!amounts.every((a) => Number.isSafeInteger(a) && a >= 0)) return fail('Enter each income case as $0 or more.');
-  if (!(range.lowCents <= range.expectedCents && range.expectedCents <= range.highCents)) return fail('The low case can’t be more than expected, and expected can’t be more than high.');
+  if (!(range.lowCents <= range.expectedCents && range.expectedCents <= range.highCents)) return fail("The low case can't be more than expected, and expected can't be more than high.");
   if (range.expectedCents === 0 || range.highCents === 0) return fail('Enter an expected and high amount above $0.');
   if (range.schedule === null && !range.date) return fail('Choose the date the income might arrive.');
   const cases = {} as Record<IncomeCaseName, ScenarioResult>;
@@ -380,7 +380,7 @@ function baselineOnly(data: AppData, clock: ops.Clock, options: { through?: Date
       scenario: side,
       comparable,
       reason: comparable ? null : 'no-forecast',
-      limitations: comparable ? [] : ['There’s no upcoming income to start a running total from, so only cash flow is compared.'],
+      limitations: comparable ? [] : ["There's no upcoming income to start a running total from, so only cash flow is compared."],
       differences: { incomeCents: 0, outflowCents: 0, reservesCents: 0, netCents: 0, lowestCents: comparable ? 0 : null, endingCents: comparable ? 0 : null },
       newGaps: [],
       worsenedGaps: [],

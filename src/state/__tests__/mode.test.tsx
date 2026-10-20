@@ -63,10 +63,10 @@ function refusing(key: string): Storage {
   };
 }
 
-describe('when the device won’t store the sample data (defect D5)', () => {
+describe("when the device won't store the sample data (defect D5)", () => {
   beforeEach(() => localStorage.clear());
 
-  it('says so, stays on the person’s own data, and leaves it untouched', async () => {
+  it("says so, stays on the person's own data, and leaves it untouched", async () => {
     const r = addSource(emptyData(), { kind: 'income', description: 'My job', amountCents: 100000, startDate: '2099-01-01', rule: { type: 'monthly' } }, { today: '2026-10-11', now: 'x' });
     if (!r.ok) throw new Error(r.error);
     await new LocalStorageAdapter().save(r.data, 0);

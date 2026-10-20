@@ -45,10 +45,10 @@ interface DeviceCopy {
 export const cloudCacheKey = (userId: string) => `financial-os:account:${userId}`;
 const recoveredKey = (userId: string) => `${cloudCacheKey(userId)}:recovered`;
 
-export const OFFLINE_MESSAGE = 'Financial OS can’t reach your account right now. Your change is kept on this device and will be saved when you’re back online.';
+export const OFFLINE_MESSAGE = "Financial OS can't reach your account right now. Your change is kept on this device and will be saved when you're back online.";
 export const ACCESS_MESSAGE =
-  'Your account didn’t accept this change. Your change is kept on this device. Sign out and back in, and if this keeps happening, the app’s account setup needs attention.';
-const CONFLICT_MESSAGE = 'Your data was changed on another device or window. Reload to see the latest version.';
+  "Your account didn't accept this change. Your change is kept on this device. Sign out and back in, and if this keeps happening, the app's account setup needs attention.";
+const CONFLICT_MESSAGE = 'Your data was changed on another device or window. Reload to see the latest.';
 
 export class CloudAdapter implements StorageAdapter {
   private pendingAfterLoad = false;

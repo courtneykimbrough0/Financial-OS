@@ -77,7 +77,7 @@ describe('firestore.rules', () => {
     await denied(deleteDoc(ref(anon, 'alice')));
   });
 
-  it('denies reading, writing or deleting another user’s forecast', async () => {
+  it("denies reading, writing or deleting another user's forecast", async () => {
     await setDoc(ref(alice, 'alice'), forecast('alice', 1));
     await denied(getDoc(ref(bob, 'alice')));
     await denied(setDoc(ref(bob, 'alice'), forecast('alice', 2)));
@@ -90,7 +90,7 @@ describe('firestore.rules', () => {
     await denied(getDocs(collection(alice, COLLECTION)));
   });
 
-  it('denies a forecast whose userId isn’t the caller', async () => {
+  it("denies a forecast whose userId isn't the caller", async () => {
     await denied(setDoc(ref(alice, 'alice'), forecast('bob', 1)));
   });
 
@@ -136,7 +136,7 @@ describe('firestore.rules', () => {
     await allowed(setDoc(ref(alice, 'alice'), forecast('alice', 2)));
   });
 
-  it('requires updatedAt to be the server’s time', async () => {
+  it("requires updatedAt to be the server's time", async () => {
     await denied(setDoc(ref(alice, 'alice'), forecast('alice', 1, { updatedAt: Timestamp.fromDate(new Date('2026-01-01')) })));
     await denied(setDoc(ref(alice, 'alice'), forecast('alice', 1, { updatedAt: '2026-10-11T00:00:00Z' })));
   });

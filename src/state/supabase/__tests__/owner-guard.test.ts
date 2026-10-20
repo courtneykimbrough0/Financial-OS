@@ -10,7 +10,7 @@ const call = (owner: string | null, auth: string) => {
 };
 
 describe('requests bound to an account', () => {
-  it('go out with their own account’s token, without the binding mark', async () => {
+  it("go out with their own account's token, without the binding mark", async () => {
     const base = vi.fn(async (_r: Request) => new Response('{}', { status: 200 }));
     const res = await ownerGuardFetch(base as unknown as typeof fetch)(...call('user-a', token('user-a')));
     expect(res.status).toBe(200);
@@ -37,7 +37,7 @@ describe('requests bound to an account', () => {
     expect(base).toHaveBeenCalledTimes(1);
   });
 
-  it('reads the user from a token, and nothing from something that isn’t one', () => {
+  it("reads the user from a token, and nothing from something that isn't one", () => {
     expect([tokenUser(`Bearer ${token('u1')}`), tokenUser(`Bearer ${token()}`), tokenUser('Bearer sb_publishable_x'), tokenUser(null)]).toEqual(['u1', null, null, null]);
   });
 });

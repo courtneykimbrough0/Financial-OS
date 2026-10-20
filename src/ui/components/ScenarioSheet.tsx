@@ -27,7 +27,7 @@ const TYPES: { type: ChangeType; label: string; hint: string }[] = [
   { type: 'move', label: 'Move an expected payment', hint: 'One upcoming payment on another date' },
   { type: 'amount', label: 'Change an expected amount', hint: 'One upcoming payment at another amount' },
   { type: 'liability', label: 'Increase a liability payment', hint: 'A higher payment from a date on' },
-  { type: 'reserve', label: 'Build reserves', hint: 'An amount set aside on a schedule' },
+  { type: 'reserve', label: 'Build reserves', hint: 'An amount saved on a schedule' },
   { type: 'variable', label: 'Explore variable income', hint: 'Low, expected and high amounts' },
 ];
 
@@ -161,7 +161,7 @@ export function ScenarioSheet({ onClose }: { onClose: () => void }) {
   return (
     <Modal title="Explore a scenario" onClose={onClose}>
       <div className="stack scenario">
-        <p className="hint">Try a few what-ifs together and compare them with your forecast. Nothing here changes your plan or is saved.</p>
+        <p className="hint">Try changes together and see how your forecast would look. Your plan stays as it is.</p>
 
         {editing ? (
           <ChangeForm
@@ -206,7 +206,7 @@ export function ScenarioSheet({ onClose }: { onClose: () => void }) {
             <section className="stack-sm" aria-label="Your changes">
               <SectionLabel>Your changes</SectionLabel>
               {count === 0 ? (
-                <p className="hint">No changes yet. Add one to see how it would affect your forecast.</p>
+                <p className="hint">Add a change to compare.</p>
               ) : (
                 <ul className="scenario-changes">
                   {changes.map((c, i) => (
@@ -246,7 +246,7 @@ export function ScenarioSheet({ onClose }: { onClose: () => void }) {
             )}
             {problem && problem.target !== null && (
               <p className="field-error" role="alert">
-                One change needs attention before the scenario can be compared.
+                Fix {changes.length === 1 && !income ? '1 change' : `${changes.length + (income ? 1 : 0)} changes`} to see the comparison.
               </p>
             )}
             {outcome?.ok && 'result' in outcome && <ScenarioComparison r={outcome.result} />}
@@ -279,7 +279,7 @@ function ChangeRow({ label, error, onEdit, onRemove }: { label: string; error: s
       </span>
       {error && (
         <p className="field-error scenario-change-error" id={id}>
-          Needs attention: {error}
+          {error}
         </p>
       )}
     </li>
@@ -294,19 +294,19 @@ function ShortfallNote({ r }: { r: ScenarioResult }) {
   const s = firstShortfall(r);
   if (!s) return null;
   const amount = <Money cents={Math.abs(s.gap.lowestCents)} />;
-  const what = s.created ? <>creates a {amount} shortfall on {formatShort(s.gap.lowestDate)}</> : <>deepens a shortfall to {amount} on {formatShort(s.gap.lowestDate)}</>;
-  const recovery = s.gap.recoversOn ? `, back to $0 or more on ${formatShort(s.gap.recoversOn)}` : ', and it doesn’t recover within this period';
+  const what = s.created ? <>creates a {amount} timing gap on {formatShort(s.gap.lowestDate)}</> : <>deepens a timing gap to {amount} on {formatShort(s.gap.lowestDate)}</>;
+  const recovery = s.gap.recoversOn ? `, back to $0 or more on ${formatShort(s.gap.recoversOn)}` : ", and it doesn't recover within this period";
   const ending = r.differences.endingCents ?? 0;
   return (
     <p className="callout callout-danger scenario-shortfall" role="status">
       {s.despiteGain && ending > 0 ? (
         <>
-          Your projected ending total improves by <Money cents={ending} />, but this scenario {what}
+          Your ending running total improves by <Money cents={ending} />, but this scenario {what}
           {recovery}.
         </>
       ) : s.despiteGain ? (
         <>
-          Your projected cash flow improves by <Money cents={r.differences.netCents} />, but this scenario {what}
+          Your cash flow improves by <Money cents={r.differences.netCents} />, but this scenario {what}
           {recovery}.
         </>
       ) : (
@@ -404,7 +404,7 @@ function Assumptions({ r }: { r: ScenarioResult }) {
       </ul>
       <p className="hint">
         Cash flow from {formatMedium(r.period.start)} through {formatMedium(r.period.end)}
-        {r.period.runningTotalFrom ? `; running total from ${formatMedium(r.period.runningTotalFrom)}, the day of your next payday.` : '.'} The running total shows timing, separate from your bank balance.
+        {r.period.runningTotalFrom ? `; running total from ${formatMedium(r.period.runningTotalFrom)}, the day of your next payday.` : '.'}
       </p>
     </section>
   );
@@ -672,7 +672,7 @@ function ChangeForm({
           {(p) => <input {...p} type="date" min={today} value={date} onChange={(ev) => setDate(ev.target.value)} />}
         </Field>
       )}
-      {type === 'variable' && <p className="hint">Enter amounts you think are possible. They stay hypothetical and aren’t added to your forecast.</p>}
+      {type === 'variable' && <p className="hint">Enter amounts you think are possible. They stay hypothetical and aren't added to your forecast.</p>}
       <div className="form-actions">
         <button type="button" className="button secondary" onClick={onCancel}>
           Cancel

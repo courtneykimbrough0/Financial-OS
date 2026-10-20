@@ -121,9 +121,9 @@ export function signInMessage(err: unknown): string | null {
   const code = errorCode(err);
   if (CANCELLED.includes(code)) return null;
   if (code === 'auth/popup-blocked') return 'Your browser blocked the Google sign-in window. Allow pop-ups for Financial OS, then try again.';
-  if (code === 'auth/network-request-failed') return 'Financial OS can’t connect right now. Check your connection and try again.';
-  if (code === 'auth/unauthorized-domain') return 'Sign-in isn’t set up for this web address yet.';
-  return 'Sign-in couldn’t be completed. Try again.';
+  if (code === 'auth/network-request-failed') return "Financial OS can't connect right now. Check your connection and try again.";
+  if (code === 'auth/unauthorized-domain') return "Sign-in isn't set up for this web address yet.";
+  return "Sign-in couldn't be completed. Try again.";
 }
 
 export function firebaseAuthService(settings: FirebaseSettings): AuthService {
@@ -169,12 +169,12 @@ export function firebaseAuthService(settings: FirebaseSettings): AuthService {
       try {
         await reauthenticateWithPopup(user, googleProvider());
       } catch (err) {
-        throw new Error(signInMessage(err) ?? 'Your account wasn’t deleted. Confirm with Google to delete it.');
+        throw new Error(signInMessage(err) ?? "Your account wasn't deleted. Confirm with Google to delete it.");
       }
       try {
         await firebaseBackend(db, user.uid).remove();
       } catch {
-        throw new Error('Your account wasn’t deleted because its data couldn’t be removed. Check your connection and try again.');
+        throw new Error("Your account wasn't deleted because its data couldn't be removed. Check your connection and try again.");
       }
       await deleteUser(user);
       rememberUser(null);

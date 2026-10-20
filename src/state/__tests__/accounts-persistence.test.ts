@@ -138,7 +138,7 @@ describe('device storage and backups', () => {
   });
 });
 
-describe('storage that can’t keep accounts yet', () => {
+describe("storage that can't keep accounts yet", () => {
   it('signed in with Firebase: saves leave accounts, assignments and transfers out, so the rules never refuse them', async () => {
     const server = new FakeServer();
     const adapter = new CloudAdapter(server, 'user-1', localStorage);
@@ -160,10 +160,10 @@ describe('storage that can’t keep accounts yet', () => {
     const fake = new FakeSupabase();
     const adapter = new SupabaseStorageAdapter(fake, () => 'save-1');
     await adapter.load();
-    expect(await adapter.save(plan(), 0)).toEqual({ ok: false, reason: 'error', message: 'This plan has accounts, transfers or reserve releases, which can’t be saved to this storage yet. Nothing was saved.' });
+    expect(await adapter.save(plan(), 0)).toEqual({ ok: false, reason: 'error', message: "This plan has accounts, transfers or reserve releases, which can't be saved to this storage yet. Nothing was saved." });
     expect(fake.calls.filter((c) => c.fn === 'save_plan')).toHaveLength(0);
     expect(hasAccountData(plan())).toBe(true);
-    expect(checkForMigration(plan()).filter((i) => i.level === 'error').map((i) => i.message)).toEqual(['Accounts, account assignments, transfers and reserve releases can’t be stored in Supabase yet.']);
+    expect(checkForMigration(plan()).filter((i) => i.level === 'error').map((i) => i.message)).toEqual(["Accounts, account assignments, transfers and reserve releases can't be stored in Supabase yet."]);
     // A plan without accounts saves as before.
     const { accounts: _a, transfers: _t, ...withoutList } = plan();
     const plain: AppData = { ...withoutList, sources: withoutList.sources.map(({ accountId: _x, ...s }) => s), records: withoutList.records.filter((r) => !r.release).map(({ accountId: _x, ...r }) => r) };

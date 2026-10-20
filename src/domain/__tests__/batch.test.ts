@@ -53,7 +53,7 @@ describe('marking several done as expected', () => {
   });
 
   it('refuses an item that is not due yet, and nothing changes', () => {
-    expectError(ops.recordAsExpected(data(), [CAR, PHONE], clock), /^Phone: This isn’t due yet\. Open it to record it early\./);
+    expectError(ops.recordAsExpected(data(), [CAR, PHONE], clock), /^Phone: This isn't due yet\. Open it to record it early\./);
     expect(ops.recordAsExpected(data(), [PHONE], clock).ok).toBe(false);
   });
 
@@ -81,9 +81,9 @@ describe('marking several done as expected', () => {
     });
   });
 
-  it('changes nothing if any selected item can’t be recorded', () => {
+  it("changes nothing if any selected item can't be recorded", () => {
     const d = unwrap(ops.cancelOccurrence(data(), GYM, '', clock));
-    expectError(ops.recordAsExpected(d, [CAR, GYM], clock), /^Gym: .*canceled/);
+    expectError(ops.recordAsExpected(d, [CAR, GYM], clock), /^Gym: .*skipped/);
     expect(d.records.map((r) => r.id)).toEqual([GYM]);
   });
 
@@ -110,6 +110,6 @@ describe('moving several to a new date', () => {
     ]);
     expect(findOccurrence(d, WATER, TODAY)).toMatchObject({ virtual: true });
     expectError(ops.rescheduleSelected(data(), [CAR], '2026-10-19', clock), /today or a later date/);
-    expectError(ops.rescheduleSelected(data(), [CAR, PHONE], '2026-10-29', clock), /^Phone: This isn’t due yet/);
+    expectError(ops.rescheduleSelected(data(), [CAR, PHONE], '2026-10-29', clock), /^Phone: This isn't due yet/);
   });
 });

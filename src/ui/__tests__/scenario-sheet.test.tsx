@@ -85,8 +85,8 @@ describe('opening and closing', () => {
   it('opens from the dashboard empty, and Done or Escape closes it', async () => {
     const { user } = await mount();
     const s = await open(user);
-    expect(s).toHaveTextContent('Try a few what-ifs together and compare them with your forecast. Nothing here changes your plan or is saved.');
-    expect(s).toHaveTextContent('No changes yet. Add one to see how it would affect your forecast.');
+    expect(s).toHaveTextContent('Try changes together and see how your forecast would look. Your plan stays as it is.');
+    expect(s).toHaveTextContent('Add a change to compare.');
     await user.click(within(s).getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     await open(user);
@@ -106,7 +106,7 @@ describe('opening and closing', () => {
       'Move an expected paymentOne upcoming payment on another date',
       'Change an expected amountOne upcoming payment at another amount',
       'Increase a liability paymentA higher payment from a date on',
-      'Build reservesAn amount set aside on a schedule',
+      'Build reservesAn amount saved on a schedule',
       'Explore variable incomeLow, expected and high amounts',
       'Cancel',
     ]);
@@ -114,13 +114,13 @@ describe('opening and closing', () => {
 });
 
 describe('one change', () => {
-  it('an unexpected expense: the comparison, the shortfall first, and what it assumes', async () => {
+  it('an unexpected expense: the comparison, the timing gap first, and what it assumes', async () => {
     const { user } = await mount();
     await open(user);
     await add(user, 'Unexpected expense', { Name: 'Car repair', Amount: '800', Date: '2026-11-10' });
     expect(changes()).toEqual(['Car repair: −$800.00 on Nov 10, 2026']);
     const c = comparison();
-    expect(within(c).getByRole('status')).toHaveTextContent('This scenario creates a $600.00 shortfall on Nov 10, back to $0 or more on Nov 20.');
+    expect(within(c).getByRole('status')).toHaveTextContent('This scenario creates a $600.00 timing gap on Nov 10, back to $0 or more on Nov 20.');
     expect(rows(within(c).getByRole('table'))).toEqual([
       ['Measure', 'Current forecast', 'With this scenario'],
       ['Cash flow', '+$1,600.00', '+$800.00'],
@@ -163,7 +163,7 @@ describe('one change', () => {
     await user.click(within(form).getByRole('button', { name: 'Add to scenario' }));
     expect(changes()).toEqual(['Car loan: $450.00 from Nov 28, 2026']);
     const c = comparison();
-    expect(within(c).getByRole('status')).toHaveTextContent('This scenario deepens a shortfall to $750.00 on Dec 1, back to $0 or more on Dec 4.');
+    expect(within(c).getByRole('status')).toHaveTextContent('This scenario deepens a timing gap to $750.00 on Dec 1, back to $0 or more on Dec 4.');
     expect(within(within(c).getByRole('region', { name: 'What this assumes' })).getByRole('listitem')).toHaveTextContent('Car loan: $300.00 → $450.00 each time from Nov 28, 2026Recurring · Dates in this period: Nov 28, Dec 28');
     expect(rows(within(c).getByRole('table'))[3]).toEqual(['Ending running total', '$1,600.00', '$1,300.00']);
   });
@@ -179,7 +179,7 @@ describe('one change', () => {
     );
   });
 
-  it('moving an existing payment, chosen from what’s already expected', async () => {
+  it("moving an existing payment, chosen from what's already expected", async () => {
     const { user } = await mount();
     await open(user);
     const form = await choose(user, 'Move an expected payment');
@@ -199,18 +199,18 @@ describe('one change', () => {
     await fill(user, form, { 'New amount': '1700' });
     await user.click(within(form).getByRole('button', { name: 'Add to scenario' }));
     expect(changes()).toEqual(['Rent on Dec 1, 2026: $1,700.00']);
-    expect(within(comparison()).getByRole('status')).toHaveTextContent('This scenario deepens a shortfall to $800.00 on Dec 1, back to $0 or more on Dec 4.');
+    expect(within(comparison()).getByRole('status')).toHaveTextContent('This scenario deepens a timing gap to $800.00 on Dec 1, back to $0 or more on Dec 4.');
   });
 });
 
 describe('several changes', () => {
-  it('a better ending with an earlier shortfall, then editing and removing changes', async () => {
+  it('a better ending with an earlier timing gap, then editing and removing changes', async () => {
     const { user } = await mount();
     await open(user);
     await add(user, 'Additional income', { Name: 'Tax refund', Amount: '2000', Date: '2027-01-10' });
     await add(user, 'Unexpected expense', { Name: 'Dentist', Amount: '900', Date: '2026-11-10' });
     expect(changes()).toEqual(['Tax refund: +$2,000.00 on Jan 10, 2027', 'Dentist: −$900.00 on Nov 10, 2026']);
-    expect(within(comparison()).getByRole('status')).toHaveTextContent('Your projected ending total improves by $1,100.00, but this scenario creates a $700.00 shortfall on Nov 10, back to $0 or more on Nov 20.');
+    expect(within(comparison()).getByRole('status')).toHaveTextContent('Your ending running total improves by $1,100.00, but this scenario creates a $700.00 timing gap on Nov 10, back to $0 or more on Nov 20.');
 
     // Edit: the dentist costs $100. Nov 10 stays at $100; Dec 1 goes to −$700.
     await user.click(within(sheet()).getByRole('button', { name: 'Edit Dentist: −$900.00 on Nov 10, 2026' }));
@@ -219,7 +219,7 @@ describe('several changes', () => {
     await fill(user, form, { Amount: '100' });
     await user.click(within(form).getByRole('button', { name: 'Save change' }));
     expect(changes()).toEqual(['Tax refund: +$2,000.00 on Jan 10, 2027', 'Dentist: −$100.00 on Nov 10, 2026']);
-    expect(within(comparison()).getByRole('status')).toHaveTextContent('Your projected ending total improves by $1,900.00, but this scenario deepens a shortfall to $700.00 on Dec 1, back to $0 or more on Dec 4.');
+    expect(within(comparison()).getByRole('status')).toHaveTextContent('Your ending running total improves by $1,900.00, but this scenario deepens a timing gap to $700.00 on Dec 1, back to $0 or more on Dec 4.');
 
     await user.click(within(sheet()).getByRole('button', { name: 'Remove Dentist: −$100.00 on Nov 10, 2026' }));
     expect(changes()).toEqual(['Tax refund: +$2,000.00 on Jan 10, 2027']);
@@ -260,9 +260,9 @@ describe('problems and limits', () => {
     await add(user, 'Move an expected payment', { Payment: 'rent@2026-11-01', 'New date': '2026-11-03' });
     await add(user, 'Change an expected amount', { Payment: 'rent@2026-11-01', 'New amount': '1200' });
     const items = within(within(sheet()).getByRole('region', { name: 'Your changes' })).getAllByRole('listitem');
-    expect(items[0]).not.toHaveTextContent('Needs attention');
-    expect(items[1]).toHaveTextContent('Needs attention: Change each transaction only once in a scenario.');
-    expect(within(sheet()).getByRole('alert')).toHaveTextContent('One change needs attention before the scenario can be compared.');
+    expect(items[0]).not.toHaveTextContent('Change each item only once');
+    expect(items[1]).toHaveTextContent('Change each item only once in a scenario.');
+    expect(within(sheet()).getByRole('alert')).toHaveTextContent('Fix 2 changes to see the comparison.');
     expect(within(sheet()).queryByRole('region', { name: 'Scenario comparison' })).toBeNull();
   });
 
@@ -270,7 +270,7 @@ describe('problems and limits', () => {
     const { user } = await mount();
     await open(user);
     await add(user, 'Explore variable income', { Name: 'Tips', Low: '80', Expected: '60', High: '120', 'How often': 'weekly', 'First date': '2026-10-24' });
-    expect(within(within(sheet()).getByRole('region', { name: 'Your changes' })).getByRole('listitem')).toHaveTextContent('Needs attention: The low case can’t be more than expected, and expected can’t be more than high.');
+    expect(within(within(sheet()).getByRole('region', { name: 'Your changes' })).getByRole('listitem')).toHaveTextContent("The low case can't be more than expected, and expected can't be more than high.");
   });
 
   it('missing amounts are caught in the form', async () => {
@@ -282,12 +282,12 @@ describe('problems and limits', () => {
     expect(within(sheet()).getByRole('form', { name: 'Unexpected expense' })).toBeInTheDocument();
   });
 
-  it('moving the next payday: running totals aren’t compared, and it says why', async () => {
+  it("moving the next payday: running totals aren't compared, and it says why", async () => {
     const { user } = await mount();
     await open(user);
     await add(user, 'Move an expected payment', { Payment: 'pay@2026-10-23', 'New date': '2026-10-26' });
     const c = comparison();
-    expect(c).toHaveTextContent('This scenario moves your next payday from Oct 23, 2026 to Oct 26, 2026, so the running totals start on different days and can’t be compared directly.');
+    expect(c).toHaveTextContent("This scenario moves your next payday from Oct 23, 2026 to Oct 26, 2026, so the running totals start on different days and can't be compared directly.");
     expect(rows(within(c).getByRole('table'))).toEqual([
       ['Measure', 'Current forecast', 'With this scenario'],
       ['Cash flow', '+$1,600.00', '+$1,600.00'],
@@ -321,7 +321,7 @@ describe('the plan stays as it is', () => {
     expect(JSON.stringify({ ...localStorage })).not.toMatch(/Car repair|scenario/i);
     // Reopening starts fresh.
     await open(user);
-    expect(sheet()).toHaveTextContent('No changes yet.');
+    expect(sheet()).toHaveTextContent('Add a change to compare.');
   });
 });
 

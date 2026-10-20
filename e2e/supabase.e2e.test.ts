@@ -43,10 +43,10 @@ const LEGACY = process.env.E2E_LEGACY_BASE!;
 const AUTH_KEY = 'financial-os:supabase-dev-auth';
 const files = mkdtempSync(join(tmpdir(), 'fo-e2e-'));
 
-const OFFLINE = 'Couldn’t reach the server, so this change isn’t confirmed yet. Check your connection and try again.';
-const SIGNED_OUT = 'You’ve been signed out, so this change isn’t saved. Sign in again, then try again.';
-const CONFLICT = 'Your data was changed somewhere else, such as another device. Reload to see the latest version.';
-const SAVED_BUT_NEWER = 'Your change was saved, but your data has changed somewhere else since. Reload to see the latest version.';
+const OFFLINE = "Couldn't reach the server, so this change isn't confirmed yet. Check your connection and try again.";
+const SIGNED_OUT = "You've been signed out, so this change isn't saved. Sign in again, then try again.";
+const CONFLICT = 'Your data was changed on another device. Reload to see the latest.';
+const SAVED_BUT_NEWER = 'Your change was saved, but your data has changed on another device since. Reload to see the latest.';
 
 let browser: Any;
 beforeAll(async () => {
@@ -331,7 +331,7 @@ describe('the development copy on local Supabase', () => {
     await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByRole('heading', { name: 'What subscriptions renew?' }).waitFor();
     await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('heading', { name: 'What do you pay toward debts?' }).waitFor();
+    await page.getByRole('heading', { name: 'Do you make loan or card payments?' }).waitFor();
     await page.getByRole('button', { name: 'Add a payment' }).click();
     sheet = page.getByRole('dialog', { name: 'Add a payment' });
     await sheet.getByLabel('What is this payment for?').fill('Car loan');
@@ -341,7 +341,7 @@ describe('the development copy on local Supabase', () => {
     await sheet.getByRole('button', { name: 'Save' }).click();
     await page.getByText('Loan · Monthly on the 20th').waitFor();
     await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('heading', { name: 'What do you set aside?' }).waitFor();
+    await page.getByRole('heading', { name: 'What do you save?' }).waitFor();
     await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByRole('button', { name: 'See my forecast' }).click();
     await page.getByRole('heading', { name: /^Home/ }).waitFor();
@@ -361,7 +361,7 @@ describe('the development copy on local Supabase', () => {
     await loaded(page);
     await page.getByRole('region', { name: 'Needs attention' }).locator('.entry').first().click();
     let occ = page.getByRole('dialog', { name: 'Paycheck' });
-    await occ.getByRole('button', { name: 'Mark received', exact: true }).click();
+    await occ.getByRole('button', { name: 'Record received', exact: true }).click();
     await occ.getByLabel('Amount received').fill('1750');
     await occ.getByLabel('Date received').fill('2026-10-16');
     await occ.getByRole('button', { name: 'Save as received' }).click();
@@ -375,14 +375,14 @@ describe('the development copy on local Supabase', () => {
     await card(page, 'Paycheck').getByRole('button', { name: 'See dates' }).click();
     await card(page, 'Paycheck').getByRole('button', { name: /^Oct 16, 2026/ }).click();
     occ = page.getByRole('dialog', { name: 'Paycheck' });
-    await occ.getByRole('button', { name: 'Undo: not received yet' }).click();
+    await occ.getByRole('button', { name: 'Undo received' }).click();
     await saves.idle();
     const undone = recordOf((await stored(page))!, 'Paycheck', '2026-10-15');
     expect(undone?.status ?? 'none').not.toBe('completed');
     await page.keyboard.press('Escape');
     await card(page, 'Paycheck').getByRole('button', { name: /^Oct 15, 2026/ }).click();
     occ = page.getByRole('dialog', { name: 'Paycheck' });
-    await occ.getByRole('button', { name: 'Mark received', exact: true }).click();
+    await occ.getByRole('button', { name: 'Record received', exact: true }).click();
     await occ.getByLabel('Amount received').fill('1750');
     await occ.getByLabel('Date received').fill('2026-10-16');
     await occ.getByRole('button', { name: 'Save as received' }).click();
@@ -394,7 +394,7 @@ describe('the development copy on local Supabase', () => {
     await card(page, 'Paycheck').getByRole('button', { name: 'Edit' }).click();
     sheet = page.getByRole('dialog', { name: 'Edit Paycheck' });
     await sheet.getByLabel('Amount you expect to receive').fill('1,900');
-    await sheet.getByLabel('Changes start with the payment on').fill('2026-10-29');
+    await sheet.getByLabel('Starting with the payment on').fill('2026-10-29');
     await sheet.getByRole('button', { name: 'Save' }).click();
     await sheet.waitFor({ state: 'detached' });
     d = await savedAndReloaded(page, saves);
@@ -408,7 +408,7 @@ describe('the development copy on local Supabase', () => {
     await card(page, 'Rent').getByRole('button', { name: 'See dates' }).click();
     await card(page, 'Rent').getByRole('button', { name: /^Nov 1, 2026/ }).click();
     occ = page.getByRole('dialog', { name: 'Rent' });
-    await occ.getByRole('button', { name: 'Change just this one' }).click();
+    await occ.getByRole('button', { name: 'Change date or amount' }).click();
     await occ.getByLabel('Expected date').fill('2026-11-03');
     await occ.getByRole('button', { name: 'Save' }).click();
     d = await savedAndReloaded(page, saves);
@@ -436,7 +436,7 @@ describe('the development copy on local Supabase', () => {
     await page.goto(`${DEV}#/settings`);
     await page.getByRole('button', { name: 'Start over' }).click();
     await page.getByRole('dialog', { name: 'Start over?' }).getByRole('button', { name: 'Erase and start over' }).click();
-    await page.getByText('Your data was erased. Set up again whenever you’re ready.').waitFor();
+    await page.getByText("Your data was erased. Set up again whenever you're ready.").waitFor();
     await saves.idle();
     const erased = await stored(page);
     expect(erased).toEqual({ schemaVersion: 2, revision: erased!.revision, onboardingComplete: false, sources: [], records: [] });
@@ -480,7 +480,7 @@ describe('accounts in the development copy', () => {
     await form.getByLabel('Password').fill(password);
     await form.getByRole('button', { name: 'Create account' }).click();
     await page.getByRole('heading', { name: 'Check your email' }).waitFor();
-    expect(await page.getByRole('status').innerText()).toContain(`If ${email} can be used for a new account, we’ve sent a link to it.`);
+    expect(await page.getByRole('status').innerText()).toContain(`If ${email} can be used for a new account, we've sent a link to it.`);
     // Signing in before confirming: told to confirm, with a way to resend.
     await page.getByRole('button', { name: 'Back to sign in' }).click();
     await signInForm(page).getByLabel('Email').fill(email);
@@ -511,7 +511,7 @@ describe('accounts in the development copy', () => {
       await signInForm(page).getByLabel('Password').fill(password!);
       await signInForm(page).getByRole('button', { name: 'Sign in' }).click();
       await signInForm(page).getByRole('alert').waitFor();
-      expect(await signInForm(page).getByRole('alert').innerText()).toBe('That email and password don’t match an account. Check them and try again.');
+      expect(await signInForm(page).getByRole('alert').innerText()).toBe("That email and password don't match an account. Check them and try again.");
     }
     expect(await page.locator('.app main#main.sign-in').count()).toBe(1);
     await page.context().close();
@@ -541,7 +541,7 @@ describe('accounts in the development copy', () => {
     await other.page.context().close();
   });
 
-  it.skipIf(!HAS_MAIL)('password recovery: the emailed link opens “Choose a new password”; the new one works and the old one doesn’t', async () => {
+  it.skipIf(!HAS_MAIL)("password recovery: the emailed link opens \"Choose a new password\"; the new one works and the old one doesn't", async () => {
     const account = await newAccount();
     const { page } = await open(DEV, at, { signIn: false });
     await page.getByRole('button', { name: 'Forgot your password?' }).click();
@@ -562,7 +562,7 @@ describe('accounts in the development copy', () => {
     await signInForm(page).getByLabel('Email').fill(account.email);
     await signInForm(page).getByLabel('Password').fill(account.password);
     await signInForm(page).getByRole('button', { name: 'Sign in' }).click();
-    expect(await signInForm(page).getByRole('alert').innerText()).toBe('That email and password don’t match an account. Check them and try again.');
+    expect(await signInForm(page).getByRole('alert').innerText()).toBe("That email and password don't match an account. Check them and try again.");
     await signIn(page, account.email, fresh);
     await page.context().close();
   });
@@ -583,7 +583,7 @@ describe('accounts in the development copy', () => {
     await page.context().close();
   });
 
-  it('an expired session that can’t be refreshed: reopening shows sign-in, and no plan', async () => {
+  it("an expired session that can't be refreshed: reopening shows sign-in, and no plan", async () => {
     const { page, account } = await open(DEV, at);
     await seed(page, contested());
     // Signed out everywhere (its refresh tokens revoked), and the access token has since expired.
@@ -606,7 +606,7 @@ describe('accounts in the development copy', () => {
     await payPhone(page);
     const guard = page.getByRole('dialog', { name: 'Sign in again to save' });
     await guard.waitFor();
-    expect(await guard.innerText()).toContain('Your session ended, so your latest changes aren’t saved yet. They’re still here.');
+    expect(await guard.innerText()).toContain("Your session ended, so your latest changes aren't saved yet. They're still here.");
     expect(await guard.innerText()).toContain(account.email);
     expect(saves.log.at(-1)).toEqual(['update', base, 401]);
     // Wrong password: still here, still unsaved.
@@ -639,7 +639,7 @@ describe('accounts in the development copy', () => {
     await page.context().close();
   });
 
-  it('signing out keeps the plan on the server, and warns first when a change isn’t saved', async () => {
+  it("signing out keeps the plan on the server, and warns first when a change isn't saved", async () => {
     const { page, account, saves } = await open(DEV, at);
     await seed(page, contested());
     // An unsaved change (the save never arrives).
@@ -649,7 +649,7 @@ describe('accounts in the development copy', () => {
     await page.goto(`${DEV}#/settings`);
     await page.getByRole('button', { name: 'Sign out' }).click();
     const dialog = page.getByRole('dialog', { name: 'Sign out?' });
-    expect(await dialog.innerText()).toContain('Some of your changes aren’t saved yet.');
+    expect(await dialog.innerText()).toContain("Some of your changes aren't saved yet.");
     expect(await dialog.getByRole('button', { name: 'Download a backup' }).count()).toBe(1);
     expect(await dialog.getByRole('button', { name: 'Sign out anyway' }).count()).toBe(1);
     // Save it from here instead.
@@ -667,7 +667,7 @@ describe('accounts in the development copy', () => {
     await page.context().close();
   });
 
-  it('switching accounts on one device never shows the previous account’s plan', async () => {
+  it("switching accounts on one device never shows the previous account's plan", async () => {
     const a = await newAccount();
     const b = await newAccount();
     const { page } = await open(DEV, at, { as: a });
@@ -693,7 +693,7 @@ describe('accounts in the development copy', () => {
     await page.goto(`${DEV}#/settings`);
     await page.getByRole('button', { name: 'Start over' }).click();
     await page.getByRole('dialog', { name: 'Start over?' }).getByRole('button', { name: 'Erase and start over' }).click();
-    await page.getByText('Your data was erased. Set up again whenever you’re ready.').waitFor();
+    await page.getByText("Your data was erased. Set up again whenever you're ready.").waitFor();
     await signOutUi(page);
     await signIn(page, account.email, account.password);
     await page.getByRole('heading', { name: 'See your cash flow ahead of time' }).waitFor();
@@ -720,7 +720,7 @@ describe('accounts in the development copy', () => {
     await dialog.getByLabel('Enter your password to confirm').fill('not-the-password');
     await confirm.click();
     await dialog.getByRole('alert').waitFor();
-    expect(await dialog.getByRole('alert').innerText()).toBe('That password isn’t right. Nothing was deleted.');
+    expect(await dialog.getByRole('alert').innerText()).toBe("That password isn't right. Nothing was deleted.");
     expect((await stored(page))!.sources).toHaveLength(8);
     // The right one.
     await dialog.getByLabel('Enter your password to confirm').fill(account.password);
@@ -735,7 +735,7 @@ describe('accounts in the development copy', () => {
     await signInForm(page).getByLabel('Email').fill(account.email);
     await signInForm(page).getByLabel('Password').fill(account.password);
     await signInForm(page).getByRole('button', { name: 'Sign in' }).click();
-    expect(await signInForm(page).getByRole('alert').innerText()).toBe('That email and password don’t match an account. Check them and try again.');
+    expect(await signInForm(page).getByRole('alert').innerText()).toBe("That email and password don't match an account. Check them and try again.");
     // Another account is untouched.
     expect(await stored(other.page)).toEqual(otherPlan);
     await page.context().close();
@@ -767,7 +767,7 @@ describe('accounts in the development copy', () => {
     await page.context().close();
   });
 
-  it('deleting when the request never reached the server: not shown as deleted, nothing deleted, and it isn’t retried by itself', async () => {
+  it("deleting when the request never reached the server: not shown as deleted, nothing deleted, and it isn't retried by itself", async () => {
     const { page, account } = await open(DEV, at);
     await seed(page, contested());
     let attempts = 0;
@@ -781,7 +781,7 @@ describe('accounts in the development copy', () => {
     await dialog.getByLabel('Enter your password to confirm').fill(account.password);
     await dialog.getByRole('button', { name: 'Delete account permanently' }).click();
     await dialog.getByRole('alert').waitFor();
-    expect(await dialog.getByRole('alert').innerText()).toBe('Your account wasn’t deleted: the server didn’t answer. Try again.');
+    expect(await dialog.getByRole('alert').innerText()).toBe("Your account wasn't deleted: the server didn't answer. Try again.");
     expect(attempts).toBe(1);
     expect(phoneRecord(await stored(page))).toBeUndefined();
     expect((await stored(page))!.sources).toHaveLength(3);
@@ -790,12 +790,12 @@ describe('accounts in the development copy', () => {
     await page.route('**/rest/v1/rpc/delete_account', (route: Any) => route.fulfill({ status: 503, body: '{}' }), { times: 1 });
     await dialog.getByLabel('Enter your password to confirm').fill(account.password);
     await dialog.getByRole('button', { name: 'Delete account permanently' }).click();
-    await expect.poll(async () => dialog.getByRole('alert').innerText()).toBe('Your account wasn’t deleted: the server didn’t answer. Try again.');
+    await expect.poll(async () => dialog.getByRole('alert').innerText()).toBe("Your account wasn't deleted: the server didn't answer. Try again.");
     expect((await stored(page))!.sources).toHaveLength(3);
     await page.context().close();
   });
 
-  it('deleting is refused while a change isn’t saved', async () => {
+  it("deleting is refused while a change isn't saved", async () => {
     const { page } = await open(DEV, at);
     await seed(page, contested());
     await page.route('**/rest/v1/rpc/save_plan', (route: Any) => route.abort('failed'));
@@ -804,7 +804,7 @@ describe('accounts in the development copy', () => {
     await page.goto(`${DEV}#/settings`);
     await page.getByRole('button', { name: 'Delete account' }).click();
     const dialog = page.getByRole('dialog', { name: 'Delete your account?' });
-    expect(await dialog.innerText()).toContain('Some of your changes aren’t saved yet.');
+    expect(await dialog.innerText()).toContain("Some of your changes aren't saved yet.");
     expect(await dialog.getByLabel('Enter your password to confirm').count()).toBe(0);
     expect(await dialog.getByRole('button', { name: 'Delete account permanently' }).isDisabled()).toBe(true);
     await page.context().close();
@@ -952,7 +952,7 @@ describe('two tabs on one device', () => {
     // Tab A: B's app, with A's change set aside and locked.
     const panel = recoveryPanel(a.page);
     await panel.waitFor();
-    expect(await panel.innerText()).toContain(`Changes made as ${a.account.email} weren’t saved`);
+    expect(await panel.innerText()).toContain(`Changes made as ${a.account.email} weren't saved`);
     expect(await panel.getByRole('button', { name: /^Save them/ }).count()).toBe(0);
     expect(await panel.getByRole('button', { name: 'Download them' }).count()).toBe(0);
     await a.page.unroute('**/rest/v1/rpc/save_plan');
@@ -963,8 +963,8 @@ describe('two tabs on one device', () => {
     await panel.getByRole('alert').waitFor();
     expect(await panel.getByRole('button', { name: /^Save them/ }).count()).toBe(0);
     await unlock(a.page, a.account);
-    await panel.getByRole('button', { name: `Save them to ${a.account.email}’s account` }).click();
-    await a.page.getByText(`Saved to ${a.account.email}’s account.`).waitFor();
+    await panel.getByRole('button', { name: `Save them to ${a.account.email}'s account` }).click();
+    await a.page.getByText(`Saved to ${a.account.email}'s account.`).waitFor();
     expect(phoneRecord(await planOf(a.account))!.actualAmountCents).toBe(15000);
     expect(await planOf(b)).toEqual(bBefore);
     // This tab stayed signed in as B throughout.
@@ -987,12 +987,12 @@ describe('two tabs on one device', () => {
     const file = readBackup(readFileSync(await download.path(), 'utf8'));
     expect(phoneRecord(file.data)!.actualAmountCents).toBe(15000);
     // Downloading isn't saving: the panel still says so.
-    expect(await recoveryPanel(a.page).innerText()).toContain('weren’t saved');
+    expect(await recoveryPanel(a.page).innerText()).toContain("weren't saved");
     expect(phoneRecord(await planOf(a.account))).toBeUndefined();
     await a.page.context().close();
   });
 
-  it('a save in flight when another account signs in: it lands in its own account, and the set-aside copy recognizes it’s already saved', async () => {
+  it("a save in flight when another account signs in: it lands in its own account, and the set-aside copy recognizes it's already saved", async () => {
     const a = await open(DEV, at);
     await seed(a.page, contested());
     const b = await newAccount();
@@ -1009,12 +1009,12 @@ describe('two tabs on one device', () => {
     expect(phoneRecord(await planOf(a.account))!.actualAmountCents).toBe(15000);
     expect(await planOf(b)).toEqual(bBefore);
     await unlock(a.page, a.account);
-    await recoveryPanel(a.page).getByRole('button', { name: `Save them to ${a.account.email}’s account` }).click();
-    await a.page.getByText(`These changes are already saved in ${a.account.email}’s account.`).waitFor();
+    await recoveryPanel(a.page).getByRole('button', { name: `Save them to ${a.account.email}'s account` }).click();
+    await a.page.getByText(`These changes are already saved in ${a.account.email}'s account.`).waitFor();
     await a.page.context().close();
   });
 
-  it('the previous account’s changes are never saved into the new account, even when a save was queued as the account changed', async () => {
+  it("the previous account's changes are never saved into the new account, even when a save was queued as the account changed", async () => {
     const a = await open(DEV, at);
     await seed(a.page, contested());
     // B's plan is empty, at the revision A's next save will be based on: the case where a misdirected save would be accepted.
@@ -1040,8 +1040,8 @@ describe('two tabs on one device', () => {
     expect(a.saves.log).toEqual([['update', 1, 200]]);
     await unlock(a.page, a.account);
     // A's plan moved on since those edits began (its first change landed), so they aren't written over it; they can be downloaded.
-    await recoveryPanel(a.page).getByRole('button', { name: `Save them to ${a.account.email}’s account` }).click();
-    await a.page.getByText(`${a.account.email}’s plan changed since these edits, so they weren’t saved over it. Download them to compare.`).waitFor();
+    await recoveryPanel(a.page).getByRole('button', { name: `Save them to ${a.account.email}'s account` }).click();
+    await a.page.getByText(`${a.account.email}'s plan changed since these edits, so they weren't saved over it. Download them to compare.`).waitFor();
     const [download] = await Promise.all([a.page.waitForEvent('download'), recoveryPanel(a.page).getByRole('button', { name: 'Download them' }).click()]);
     const kept = readBackup(readFileSync(await download.path(), 'utf8')).data;
     expect([phoneRecord(kept)!.actualAmountCents, rentVersions(kept)]).toEqual([15000, rentVersions(contested()) + 1]);
@@ -1065,14 +1065,14 @@ describe('two tabs on one device', () => {
     expect(error).toBeNull();
     const newer = await planOf(a.account);
     await unlock(a.page, a.account);
-    await recoveryPanel(a.page).getByRole('button', { name: `Save them to ${a.account.email}’s account` }).click();
-    await a.page.getByText(`${a.account.email}’s plan changed since these edits, so they weren’t saved over it. Download them to compare.`).waitFor();
+    await recoveryPanel(a.page).getByRole('button', { name: `Save them to ${a.account.email}'s account` }).click();
+    await a.page.getByText(`${a.account.email}'s plan changed since these edits, so they weren't saved over it. Download them to compare.`).waitFor();
     expect(await planOf(a.account)).toEqual(newer);
     expect(await recoveryPanel(a.page).getByRole('button', { name: 'Download them' }).count()).toBe(1);
     await a.page.context().close();
   });
 
-  it('the set-aside change can’t be dismissed by accident, and leaving the page warns', async () => {
+  it("the set-aside change can't be dismissed by accident, and leaving the page warns", async () => {
     const a = await open(DEV, at);
     await seed(a.page, contested());
     const b = await newAccount();
@@ -1086,7 +1086,7 @@ describe('two tabs on one device', () => {
     expect(await panel.getByRole('button', { name: /close/i }).count()).toBe(0);
     await panel.getByRole('button', { name: 'Discard them' }).click();
     await panel.getByRole('button', { name: 'Keep them' }).click();
-    expect(await panel.innerText()).toContain('weren’t saved');
+    expect(await panel.innerText()).toContain("weren't saved");
     const dialog = new Promise<Any>((resolve) => a.page.once('dialog', resolve));
     await a.page.close({ runBeforeUnload: true });
     const prompt = await dialog;
@@ -1100,7 +1100,7 @@ describe('two tabs on one device', () => {
     await a.page.context().close();
   });
 
-  it('signing out and back in after all this: each account’s confirmed plan is intact', async () => {
+  it("signing out and back in after all this: each account's confirmed plan is intact", async () => {
     const a = await open(DEV, at);
     await seed(a.page, contested());
     await payPhone(a.page);
@@ -1168,7 +1168,7 @@ describe('two tabs: requests, recovery and pending restores', () => {
     await a.page.context().close();
   });
 
-  it('checking the password for a set-aside change leaves the browser’s session alone, keeps nothing in storage, and shows no financial details before', async () => {
+  it("checking the password for a set-aside change leaves the browser's session alone, keeps nothing in storage, and shows no financial details before", async () => {
     const a = await open(DEV, at);
     await seed(a.page, { ...contested(), sources: contested().sources.map((x) => (x.id === 'phone' ? { ...x, description: 'Alpha phone' } : x)) });
     const b = await newAccount();
@@ -1238,12 +1238,12 @@ describe('two tabs: requests, recovery and pending restores', () => {
     await panel.waitFor();
     hold.release();
     await a.saves.idle();
-    expect(await panel.innerText()).toContain(`A restore of a backup for ${a.account.email} was waiting for the server’s answer when another account signed in on this device. It may or may not have been applied.`);
+    expect(await panel.innerText()).toContain(`A restore of a backup for ${a.account.email} was waiting for the server's answer when another account signed in on this device. It may or may not have been applied.`);
     expect(await a.page.getByText('Backup restored.').count()).toBe(0);
     expect(a.saves.log).toEqual([['replace', 1, 200]]);
     await unlock(a.page, a.account);
-    await panel.getByRole('button', { name: `Check and finish the restore in ${a.account.email}’s account` }).click();
-    await a.page.getByText(`The restore was applied to ${a.account.email}’s account.`).waitFor();
+    await panel.getByRole('button', { name: `Check and finish the restore in ${a.account.email}'s account` }).click();
+    await a.page.getByText(`The restore was applied to ${a.account.email}'s account.`).waitFor();
     expect(plan_(await planOf(a.account))).toEqual(plan_(canonicalize(household.data)));
     expect(await planOf(b)).toEqual(bBefore);
     await a.page.context().close();
@@ -1268,14 +1268,14 @@ describe('two tabs: requests, recovery and pending restores', () => {
     expect(await planOf(a.account)).toEqual(aBefore);
     expect(phoneRecord(await planOf(b))).toBeUndefined();
     await unlock(a.page, a.account);
-    await recoveryPanel(a.page).getByRole('button', { name: `Check and finish the restore in ${a.account.email}’s account` }).click();
-    await a.page.getByText(`Restored in ${a.account.email}’s account.`).waitFor();
+    await recoveryPanel(a.page).getByRole('button', { name: `Check and finish the restore in ${a.account.email}'s account` }).click();
+    await a.page.getByText(`Restored in ${a.account.email}'s account.`).waitFor();
     expect(plan_(await planOf(a.account))).toEqual(plan_(canonicalize(household.data)));
     expect((await planOf(b)).sources).toEqual([]);
     await a.page.context().close();
   });
 
-  it('starting over waiting for the server when another account signs in: applied for its own account and confirmed; another account’s plan untouched', async () => {
+  it("starting over waiting for the server when another account signs in: applied for its own account and confirmed; another account's plan untouched", async () => {
     const a = await open(DEV, at);
     await seed(a.page, contested());
     const b = await newAccount();
@@ -1292,11 +1292,11 @@ describe('two tabs: requests, recovery and pending restores', () => {
     await panel.waitFor();
     hold.release();
     await a.saves.idle();
-    expect(await panel.innerText()).toContain(`Starting over (erasing the plan) for ${a.account.email} was waiting for the server’s answer`);
+    expect(await panel.innerText()).toContain(`Starting over (erasing the plan) for ${a.account.email} was waiting for the server's answer`);
     expect(await panel.getByRole('button', { name: /^Download/ }).count()).toBe(0);
     await unlock(a.page, a.account);
-    await panel.getByRole('button', { name: `Check and finish starting over in ${a.account.email}’s account` }).click();
-    await a.page.getByText(`${a.account.email}’s plan was erased: starting over was applied.`).waitFor();
+    await panel.getByRole('button', { name: `Check and finish starting over in ${a.account.email}'s account` }).click();
+    await a.page.getByText(`${a.account.email}'s plan was erased: starting over was applied.`).waitFor();
     expect(await planOf(a.account)).toMatchObject({ onboardingComplete: false, sources: [], records: [] });
     expect(await planOf(b)).toEqual(bBefore);
     await a.page.context().close();
@@ -1314,9 +1314,9 @@ describe('two tabs: requests, recovery and pending restores', () => {
     await switchTo(tab2.page, b);
     await recoveryPanel(a.page).waitFor();
     await unlock(a.page, a.account);
-    await recoveryPanel(a.page).getByRole('button', { name: `Check and finish the restore in ${a.account.email}’s account` }).click();
+    await recoveryPanel(a.page).getByRole('button', { name: `Check and finish the restore in ${a.account.email}'s account` }).click();
     await recoveryPanel(a.page).getByRole('alert').waitFor();
-    expect(await recoveryPanel(a.page).getByRole('alert').innerText()).toMatch(/^That wasn’t saved: /);
+    expect(await recoveryPanel(a.page).getByRole('alert').innerText()).toMatch(/^That wasn't saved: /);
     expect(await planOf(a.account)).toEqual(aBefore);
     await a.page.context().close();
   });
@@ -1328,7 +1328,7 @@ describe('two tabs: requests, recovery and pending restores', () => {
     await loseNextReply(a.page);
     const dialog = await restore(a.page, household.path);
     await dialog.getByRole('alert').waitFor();
-    expect(await dialog.getByRole('alert').innerText()).toBe('The restore hasn’t been confirmed. Couldn’t reach the server, so this change isn’t confirmed yet. Check your connection and try again.');
+    expect(await dialog.getByRole('alert').innerText()).toBe("Couldn't restore your backup. Couldn't reach the server, so this change isn't confirmed yet. Check your connection and try again.");
     expect(plan_(await planOf(a.account))).toEqual(plan_(canonicalize(household.data)));
     await dialog.getByRole('button', { name: 'Try again' }).click();
     await a.page.getByText('Backup restored.').waitFor();
@@ -1357,7 +1357,7 @@ describe('two tabs: requests, recovery and pending restores', () => {
     await dialog.getByLabel('Enter your password to confirm').fill(account.password);
     await dialog.getByRole('button', { name: 'Delete account permanently' }).click();
     await signInForm(page).waitFor();
-    await page.getByText('We couldn’t confirm whether your account was deleted, so you’ve been signed out. Sign in again to check: if it was deleted, the sign-in won’t find it.').waitFor();
+    await page.getByText("We couldn't confirm whether your account was deleted, so you've been signed out. Sign in again to check: if it was deleted, the sign-in won't find it.").waitFor();
     expect(await appText(page)).not.toContain('Phone');
     await page.unroute('**/auth/v1/user');
     // It wasn't (the request never arrived): signing in finds the account and its plan.
@@ -1395,7 +1395,7 @@ async function payPhone(page: Any, dollars = '150') {
   await page.goto(`${DEV}#/home`);
   await page.getByRole('region', { name: 'Needs attention' }).locator('.entry').first().click();
   const occ = page.getByRole('dialog', { name: 'Phone' });
-  await occ.getByRole('button', { name: 'Mark paid', exact: true }).click();
+  await occ.getByRole('button', { name: 'Record paid', exact: true }).click();
   await occ.getByLabel('Amount paid').fill(dollars);
   await occ.getByLabel('Date paid').fill('2026-10-16');
   await occ.getByRole('button', { name: 'Save as paid' }).click();
@@ -1406,7 +1406,7 @@ async function changeRent(page: Any, amount: string) {
   await card(page, 'Rent').getByRole('button', { name: 'Edit' }).click();
   const sheet = page.getByRole('dialog', { name: 'Edit Rent' });
   await sheet.getByLabel('Amount you expect to pay').fill(amount);
-  await sheet.getByLabel('Changes start with the payment on').fill('2026-12-01');
+  await sheet.getByLabel('Starting with the payment on').fill('2026-12-01');
   await sheet.getByRole('button', { name: 'Save' }).click();
   await sheet.waitFor({ state: 'detached' });
 }
@@ -1466,7 +1466,7 @@ describe('two devices signed in to one account, and saves that go wrong', () => 
     await loseNextReply(a.page);
     await payPhone(a.page);
     await statusBar(a.page).waitFor();
-    expect(await statusBar(a.page).innerText()).toMatch(new RegExp(`^Your latest change hasn’t been saved\\. ${OFFLINE.replace(/\./g, '\\.')}\\s+Try again$`));
+    expect(await statusBar(a.page).innerText()).toMatch(new RegExp(`^Your latest change hasn't been saved\\. ${OFFLINE.replace(/\./g, '\\.')}\\s+Try again$`));
     expect((await stored(a.page))!.revision).toBe(base + 1);
     // Leaving now asks first.
     const dialog = new Promise<Any>((resolve) => a.page.once('dialog', resolve));
@@ -1523,7 +1523,7 @@ describe('two devices signed in to one account, and saves that go wrong', () => 
     await b.page.context().close();
   });
 
-  it('the API refuses the session’s token: the change stays on screen, marked not saved, and saves once the token is accepted', async () => {
+  it("the API refuses the session's token: the change stays on screen, marked not saved, and saves once the token is accepted", async () => {
     const a = await open(DEV, at);
     await seed(a.page, contested());
     const base = (await stored(a.page))!.revision;
@@ -1551,7 +1551,7 @@ describe('two devices signed in to one account, and saves that go wrong', () => 
     expect(checkForMigration(bad).filter((i) => i.level === 'error').length).toBeGreaterThan(0);
     const dialog = await restore(a.page, backupFile('refused.json', bad));
     await dialog.getByRole('alert').waitFor();
-    expect(await dialog.getByRole('alert').innerText()).toMatch(/^The restore hasn’t been confirmed\. This change couldn’t be saved/);
+    expect(await dialog.getByRole('alert').innerText()).toMatch(/^Couldn't restore your backup\. This change couldn't be saved/);
     expect(await a.page.getByText('Backup restored.').count()).toBe(0);
     expect(await stored(a.page)).toEqual(before);
     await dialog.getByRole('button', { name: 'Cancel' }).click();

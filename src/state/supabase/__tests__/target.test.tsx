@@ -17,17 +17,17 @@ describe('the hosted test project, in the browser build', () => {
   });
 
   it('refuses everything else, with no fallback address', () => {
-    expect(ok(undefined, undefined, '')).toBe('Set VITE_SUPABASE_PROJECT_REF to the hosted test project’s 20-letter ref.');
-    expect(ok(undefined, undefined, 'short')).toBe('Set VITE_SUPABASE_PROJECT_REF to the hosted test project’s 20-letter ref.');
-    expect(ok(undefined, undefined, REF, [])).toBe(`Project ${REF} isn’t an approved test project (supabase/hosted-test/projects.json).`);
-    expect(ok(undefined, undefined, REF, [OTHER])).toBe(`Project ${REF} isn’t an approved test project (supabase/hosted-test/projects.json).`);
+    expect(ok(undefined, undefined, '')).toBe("Set VITE_SUPABASE_PROJECT_REF to the hosted test project's 20-letter ref.");
+    expect(ok(undefined, undefined, 'short')).toBe("Set VITE_SUPABASE_PROJECT_REF to the hosted test project's 20-letter ref.");
+    expect(ok(undefined, undefined, REF, [])).toBe(`Project ${REF} isn't an approved test project (supabase/hosted-test/projects.json).`);
+    expect(ok(undefined, undefined, REF, [OTHER])).toBe(`Project ${REF} isn't an approved test project (supabase/hosted-test/projects.json).`);
     for (const url of [undefined, '', `http://${REF}.supabase.co`, `https://${OTHER}.supabase.co`, `https://${REF}.supabase.co.evil.test`, `https://${REF}.supabase.co:8443`, `https://${REF}.supabase.co/rest`, 'http://127.0.0.1:54321']) {
       expect([url, hostedTestConfigProblem(url, 'sb_publishable_abc', REF, [REF])]).toEqual([url, `VITE_SUPABASE_URL must be exactly https://${REF}.supabase.co.`]);
     }
     expect(ok(undefined, 'sb_secret_abc')).toBe('VITE_SUPABASE_ANON_KEY is a secret key. Use the anon or publishable key.');
     expect(ok(undefined, jwt({ role: 'service_role', ref: REF }))).toBe('VITE_SUPABASE_ANON_KEY is a service_role key. Use the anon or publishable key.');
     expect(ok(undefined, jwt({ role: 'anon', ref: OTHER }))).toBe(`VITE_SUPABASE_ANON_KEY belongs to project ${OTHER}, not ${REF}.`);
-    expect(hostedTestConfigProblem(`https://${REF}.supabase.co`, undefined, REF, [REF])).toBe('Set VITE_SUPABASE_ANON_KEY to the project’s anon or publishable key.');
+    expect(hostedTestConfigProblem(`https://${REF}.supabase.co`, undefined, REF, [REF])).toBe("Set VITE_SUPABASE_ANON_KEY to the project's anon or publishable key.");
   });
 
   it('the local development check is unchanged: this machine only', () => {
@@ -45,7 +45,7 @@ describe('the hosted test project, in the browser build', () => {
   });
 });
 
-describe('the test runners’ target', () => {
+describe("the test runners' target", () => {
   const hostedEnv = (over: Record<string, string | undefined> = {}) => ({
     SUPABASE_TEST_TARGET: 'hosted',
     SUPABASE_TEST_PROJECT_REF: REF,
@@ -70,8 +70,8 @@ describe('the test runners’ target', () => {
     // Email confirmation stays on: a hosted run must be able to read confirmation emails.
     expect(error(hostedEnv({ SUPABASE_TEST_OUTBOX_SECRET: undefined }))).toBe('Email confirmation stays on, so a hosted run needs to read confirmation emails: set SUPABASE_TEST_OUTBOX_SECRET (supabase/hosted-test/test-outbox.sql) or SUPABASE_TEST_MAIL_URL.');
     expect(checkTarget(hostedEnv({ SUPABASE_TEST_OUTBOX_SECRET: undefined, SUPABASE_TEST_MAIL_URL: 'https://mail.example.test' }), [REF]).ok).toBe(true);
-    expect(error(hostedEnv(), [])).toBe(`Project ${REF} isn’t in supabase/hosted-test/projects.json. Only approved test projects can be used.`);
-    expect(error(hostedEnv({ SUPABASE_TEST_PROJECT_REF: undefined }))).toBe('Set SUPABASE_TEST_PROJECT_REF to the hosted test project’s 20-letter ref.');
+    expect(error(hostedEnv(), [])).toBe(`Project ${REF} isn't in supabase/hosted-test/projects.json. Only approved test projects can be used.`);
+    expect(error(hostedEnv({ SUPABASE_TEST_PROJECT_REF: undefined }))).toBe("Set SUPABASE_TEST_PROJECT_REF to the hosted test project's 20-letter ref.");
     expect(error(hostedEnv({ SUPABASE_TEST_URL: `https://${OTHER}.supabase.co` }))).toBe(`SUPABASE_TEST_URL must be exactly https://${REF}.supabase.co for project ${REF}.`);
     expect(error(hostedEnv({ SUPABASE_TEST_URL: 'http://127.0.0.1:54321' }))).toBe(`SUPABASE_TEST_URL must be exactly https://${REF}.supabase.co for project ${REF}.`);
     expect(error(hostedEnv({ SUPABASE_TEST_ALLOW_DESTRUCTIVE: undefined }))).toBe(`These tests create and delete accounts. Set SUPABASE_TEST_ALLOW_DESTRUCTIVE=${REF} to confirm ${REF} is a disposable test project.`);
@@ -88,7 +88,7 @@ describe('the hosted-test build at runtime', () => {
     vi.resetModules();
   });
 
-  it('refuses to start, and never renders the app, for a project that isn’t approved', async () => {
+  it("refuses to start, and never renders the app, for a project that isn't approved", async () => {
     vi.stubEnv('MODE', 'supabase-hosted-test');
     vi.stubEnv('VITE_SUPABASE_PROJECT_REF', REF);
     vi.stubEnv('VITE_SUPABASE_URL', `https://${REF}.supabase.co`);
@@ -97,7 +97,7 @@ describe('the hosted-test build at runtime', () => {
     const { SupabaseDevelopment } = await import('../dev');
     const app = vi.fn(() => <p>app</p>);
     render(<SupabaseDevelopment>{app}</SupabaseDevelopment>);
-    expect(screen.getByRole('alert')).toHaveTextContent(`Development storage couldn’t start. Project ${REF} isn’t an approved test project (supabase/hosted-test/projects.json).`);
+    expect(screen.getByRole('alert')).toHaveTextContent(`Development storage couldn't start. Project ${REF} isn't an approved test project (supabase/hosted-test/projects.json).`);
     expect(app).not.toHaveBeenCalled();
   });
 });

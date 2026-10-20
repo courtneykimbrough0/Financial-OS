@@ -56,7 +56,7 @@ export function GapsSheet({
       <div className="stack">
         <p className="gap-intro">
           <Icon icon={TriangleAlert} size={18} />
-          <span>On these dates, scheduled money out runs ahead of money in, so the running total drops below $0. Each one shows what leads to its lowest point and what brings it back.</span>
+          <span>Your payments get ahead of your income on these dates. Here's what causes each gap and what ends it.</span>
         </p>
         <ul className="gap-list">
           {gaps.map((g, i) => (
@@ -77,7 +77,7 @@ export function GapsSheet({
           ))}
         </ul>
         <p className="hint">
-          {note ? `${note} ` : ''}The running total shows timing, separate from your bank balance.
+          {note ?? ''}
         </p>
       </div>
     </Modal>
@@ -117,7 +117,7 @@ function GapDetail({ gap, horizonEnd, onWhatIf }: { gap: GapExplanation; horizon
           </p>
         </>
       ) : (
-        <p className="muted">The running total doesn’t return to $0 or more in the forecast, which runs through {formatMedium(horizonEnd)}.</p>
+        <p className="muted">It stays below $0 through {formatMedium(horizonEnd)}.</p>
       )}
     </div>
   );

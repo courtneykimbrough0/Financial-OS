@@ -174,7 +174,7 @@ describe('restoring a backup', () => {
     fake.failNext('check-violation');
     await user.click(within(restoreDialog()).getByRole('button', { name: 'Replace with backup' }));
     expect(await within(restoreDialog()).findByRole('alert')).toHaveTextContent(
-      'The restore hasn’t been confirmed. This change couldn’t be saved because the data didn’t pass a safety check. Nothing was changed.',
+      "Couldn't restore your backup. This change couldn't be saved because the data didn't pass a safety check. Nothing was changed.",
     );
     expect(names(store.data)).toEqual(['Paycheck', 'Rent']);
     expect(screen.queryByText('Backup restored.')).toBeNull();
@@ -192,7 +192,7 @@ describe('restoring a backup', () => {
     await upload(user, b.text);
     fake.failNext('network-after');
     await user.click(within(restoreDialog()).getByRole('button', { name: 'Replace with backup' }));
-    expect(await within(restoreDialog()).findByRole('alert')).toHaveTextContent('The restore hasn’t been confirmed. Couldn’t reach the server');
+    expect(await within(restoreDialog()).findByRole('alert')).toHaveTextContent("Couldn't restore your backup. Couldn't reach the server");
     // It reached the database, but the screen keeps the confirmed plan until it's confirmed.
     expect(fake.workspace!.revision).toBe(6);
     expect(names(store.data)).toEqual(['Paycheck', 'Rent']);
@@ -211,8 +211,8 @@ describe('restoring a backup', () => {
     fake.externalSave({ ...fake.workspace!.plan });
     await upload(user, backup().text);
     await user.click(within(restoreDialog()).getByRole('button', { name: 'Replace with backup' }));
-    const message = 'Your data was changed somewhere else, such as another device. Reload to see the latest version.';
-    expect(await within(restoreDialog()).findByRole('alert')).toHaveTextContent(`The restore hasn’t been confirmed. ${message}`);
+    const message = 'Your data was changed on another device. Reload to see the latest.';
+    expect(await within(restoreDialog()).findByRole('alert')).toHaveTextContent(`Couldn't restore your backup. ${message}`);
     expect(within(restoreDialog()).queryByRole('button', { name: 'Try again' })).toBeNull();
     expect(fake.workspace!.plan.sources.map((s) => s.description)).toEqual(['Paycheck', 'Rent']);
     await user.click(within(restoreDialog()).getByRole('button', { name: 'Cancel' }));
@@ -230,7 +230,7 @@ describe('restoring a backup', () => {
     await upload(user, backup().text);
     await user.click(within(restoreDialog()).getByRole('button', { name: 'Replace with backup' }));
     expect(await within(restoreDialog()).findByRole('alert')).toHaveTextContent(
-      'The restore hasn’t been confirmed. Your latest change hasn’t been saved yet. Wait for it to save, or use Try again, then do this again.',
+      "Couldn't restore your backup. Saving your last change… Try this again in a moment.",
     );
     expect(saves(fake).map(([mode]) => mode)).toEqual(['update']);
   });
@@ -246,7 +246,7 @@ describe('starting over', () => {
     expect(names(store.data)).toEqual(['Paycheck', 'Rent']);
     fake.hold = false;
     act(() => fake.release());
-    expect(await screen.findByText('Your data was erased. Set up again whenever you’re ready.')).toBeInTheDocument();
+    expect(await screen.findByText("Your data was erased. Set up again whenever you're ready.")).toBeInTheDocument();
     expect(saves(fake)).toEqual([['reset', 5, 'save-1']]);
     expect(store.data).toEqual({ schemaVersion: 2, revision: 6, onboardingComplete: false, sources: [], records: [] });
     expect(fake.workspace!.plan.sources).toEqual([]);
@@ -266,7 +266,7 @@ describe('starting over', () => {
     fake.externalSave(fake.workspace!.plan);
     await user.click(screen.getByRole('button', { name: 'Start over' }));
     await user.click(within(startOverDialog()).getByRole('button', { name: 'Erase and start over' }));
-    expect(await within(startOverDialog()).findByRole('alert')).toHaveTextContent('Erasing hasn’t been confirmed. Your data was changed somewhere else');
+    expect(await within(startOverDialog()).findByRole('alert')).toHaveTextContent("Couldn't erase your data. Your data was changed on another device");
     expect(fake.workspace!.plan.sources).toHaveLength(2);
     expect(names(store.data)).toEqual(['Paycheck', 'Rent']);
     expect(screen.queryByText(/Your data was erased/)).toBeNull();
@@ -277,11 +277,11 @@ describe('starting over', () => {
     await user.click(screen.getByRole('button', { name: 'Start over' }));
     fake.failNext('network-before');
     await user.click(within(startOverDialog()).getByRole('button', { name: 'Erase and start over' }));
-    expect(await within(startOverDialog()).findByRole('alert')).toHaveTextContent('Erasing hasn’t been confirmed. Couldn’t reach the server');
+    expect(await within(startOverDialog()).findByRole('alert')).toHaveTextContent("Couldn't erase your data. Couldn't reach the server");
     expect(fake.workspace!.revision).toBe(5);
     expect(names(store.data)).toEqual(['Paycheck', 'Rent']);
     await user.click(within(startOverDialog()).getByRole('button', { name: 'Try again' }));
-    await screen.findByText('Your data was erased. Set up again whenever you’re ready.');
+    await screen.findByText("Your data was erased. Set up again whenever you're ready.");
     expect(saves(fake)).toEqual([
       ['reset', 5, 'save-1'],
       ['reset', 5, 'save-1'],

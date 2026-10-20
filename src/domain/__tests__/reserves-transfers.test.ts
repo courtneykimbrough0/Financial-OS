@@ -82,7 +82,7 @@ describe('transfers between accounts', () => {
     ]);
   });
 
-  it('allows every route between two of the person’s accounts, including corrections back', () => {
+  it("allows every route between two of the person's accounts, including corrections back", () => {
     const routes: [string, string][] = [
       ['income', 'reserves'], // income → distribution
       ['income', 'bills'], // income → payment
@@ -151,7 +151,7 @@ describe('transfers between accounts', () => {
     expect(ops.deleteTransfer(d, 't')).toEqual({ ok: false, error: 'That transfer no longer exists.' });
   });
 
-  it('lists transfers in date order, and an account’s transfers newest first', () => {
+  it("lists transfers in date order, and an account's transfers newest first", () => {
     let d = accounts();
     d = unwrap(ops.addTransfer(d, { fromAccountId: 'income', toAccountId: 'reserves', amountCents: 300, date: '2026-10-09' }, 'recorded', clock, 'b'));
     d = unwrap(ops.addTransfer(d, { fromAccountId: 'routing', toAccountId: 'bills', amountCents: 200, date: '2026-10-02' }, 'recorded', clock, 'a'));

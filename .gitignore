@@ -14,3 +14,4 @@ dist-hosted-test
 bun.lock
 firebase-debug.log
 firestore-debug.log
+.vitest/

@@ -141,7 +141,7 @@ describe('moving income', () => {
     expect(gapList(p.newGaps)).toEqual([['2026-10-30', '2026-11-01', -500, '2026-11-02']]);
   });
 
-  it('moving the next payday changes the starting point, so the totals aren’t compared', () => {
+  it("moving the next payday changes the starting point, so the totals aren't compared", () => {
     const d = source(paid(), TODAY, 'bill', 'Rent', 1200, '2026-10-20', { type: 'monthly' }, 'rent');
     for (const change of [
       { kind: 'move', occurrenceId: 'pay@2026-10-15', date: '2026-10-16' },
@@ -164,14 +164,14 @@ describe('what a preview refuses', () => {
     const d = withRepair();
     expect(previewChange(d, { kind: 'move', occurrenceId: 'one-repair', date: '2026-10-10' }, clock)).toEqual({ ok: false, error: 'Choose today or a later date.' });
     expect(previewChange(d, { kind: 'amount', occurrenceId: 'one-repair', amountCents: 0 }, clock)).toEqual({ ok: false, error: 'Amount must be greater than $0.' });
-    expect(previewChange(d, { kind: 'skip', occurrenceId: 'nope' }, clock)).toEqual({ ok: false, error: 'That transaction could not be found.' });
+    expect(previewChange(d, { kind: 'skip', occurrenceId: 'nope' }, clock)).toEqual({ ok: false, error: 'That item could not be found.' });
   });
 
-  it('can’t change a payment that is already recorded', () => {
+  it("can't change a payment that is already recorded", () => {
     const d = unwrap(ops.recordActual(withRepair(), 'one-repair', { amountCents: usd(1300), date: TODAY }, clock));
-    expect(previewChange(d, { kind: 'move', occurrenceId: 'one-repair', date: '2026-10-30' }, clock)).toEqual({ ok: false, error: 'Only outstanding transactions can be changed.' });
-    expect(previewChange(d, { kind: 'amount', occurrenceId: 'one-repair', amountCents: usd(1) }, clock)).toEqual({ ok: false, error: 'Only outstanding transactions can be changed.' });
-    expect(previewChange(d, { kind: 'skip', occurrenceId: 'one-repair' }, clock)).toEqual({ ok: false, error: 'This transaction was already recorded. Undo the recorded outcome first.' });
+    expect(previewChange(d, { kind: 'move', occurrenceId: 'one-repair', date: '2026-10-30' }, clock)).toEqual({ ok: false, error: 'Only expected items can be changed.' });
+    expect(previewChange(d, { kind: 'amount', occurrenceId: 'one-repair', amountCents: usd(1) }, clock)).toEqual({ ok: false, error: 'Only expected items can be changed.' });
+    expect(previewChange(d, { kind: 'skip', occurrenceId: 'one-repair' }, clock)).toEqual({ ok: false, error: 'This item was already recorded. Undo the recorded outcome first.' });
   });
 });
 
@@ -250,9 +250,9 @@ describe('applying a previewed change', () => {
     });
   });
 
-  it('refuses a preview that can’t be compared, and a recorded payment', () => {
+  it("refuses a preview that can't be compared, and a recorded payment", () => {
     const d = rent();
-    expect(applyPreviewedChange(d, d, { kind: 'move', occurrenceId: 'pay@2026-10-15', date: '2026-10-16' }, clock)).toMatchObject({ ok: false, error: /can’t be compared/ });
+    expect(applyPreviewedChange(d, d, { kind: 'move', occurrenceId: 'pay@2026-10-15', date: '2026-10-16' }, clock)).toMatchObject({ ok: false, error: /can't be compared/ });
     const paidRent = unwrap(ops.recordActual(d, 'rent@2026-10-20', { amountCents: usd(1200), date: TODAY }, clock));
     expect(applyPreviewedChange(paidRent, paidRent, { kind: 'amount', occurrenceId: 'rent@2026-10-20', amountCents: usd(1) }, clock)).toMatchObject({ ok: false });
   });

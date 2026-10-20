@@ -27,7 +27,7 @@ function withPlan(plan = richPlan()) {
 }
 
 describe('deleting an account', () => {
-  it('after a recent password sign-in: removes the account and every row of its plan, and nothing of anyone else’s', () => {
+  it("after a recent password sign-in: removes the account and every row of its plan, and nothing of anyone else's", () => {
     const a = withPlan();
     const b = withPlan(smallPlan());
     const bBefore = load(b.u);
@@ -55,7 +55,7 @@ describe('deleting an account', () => {
     expect(rowsIn(a.ws)).toEqual(before);
   });
 
-  it('only ever deletes the caller: another person’s session id doesn’t help, and there is no way to name an account', () => {
+  it("only ever deletes the caller: another person's session id doesn't help, and there is no way to name an account", () => {
     const a = withPlan();
     const b = withPlan(smallPlan());
     const bRows = rowsIn(b.ws);
@@ -69,11 +69,11 @@ describe('deleting an account', () => {
     expect(count(`select count(*) from auth.users where id in ('${a.u}', '${b.u}')`)).toBe(2);
   });
 
-  it('a signed-out caller can’t run it', () => {
+  it("a signed-out caller can't run it", () => {
     expect(sql('anon', 'select public.delete_account();').code).toBe('42501');
   });
 
-  it('a token issued before the deletion reaches nothing afterwards, and can’t make a new plan', () => {
+  it("a token issued before the deletion reaches nothing afterwards, and can't make a new plan", () => {
     const a = withPlan();
     session(a.u)('select public.delete_account();');
     const stale = { user: a.u };

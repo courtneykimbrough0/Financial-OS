@@ -108,8 +108,8 @@ export function SignedOutScreen({ client, notice }: { client: SupabaseClient; no
         <div className="stack">
           <p role="status">
             {mode === 'check-email'
-              ? `If ${email} can be used for a new account, we’ve sent a link to it. Open it in this browser to finish creating your account. If you already have an account, sign in instead.`
-              : `If there’s an account for ${email}, we’ve sent a link to choose a new password. Open it in this browser.`}
+              ? `If ${email} can be used for a new account, we've sent a link to it. Open it in this browser to finish creating your account. If you already have an account, sign in instead.`
+              : `If there's an account for ${email}, we've sent a link to choose a new password. Open it in this browser.`}
           </p>
           <button type="button" className="button secondary full" onClick={() => go('sign-in')}>
             Back to sign in
@@ -121,8 +121,8 @@ export function SignedOutScreen({ client, notice }: { client: SupabaseClient; no
 
   const copy = {
     'sign-in': { title: 'Sign in to Financial OS', intro: 'Your forecast is saved to your account and ready on any device where you sign in.', action: 'Sign in', busy: 'Signing in…' },
-    'sign-up': { title: 'Create your account', intro: 'Just an email and a password. You’ll set up your forecast next.', action: 'Create account', busy: 'Creating your account…' },
-    forgot: { title: 'Reset your password', intro: 'Enter your account’s email and we’ll send a link to choose a new password.', action: 'Send the link', busy: 'Sending…' },
+    'sign-up': { title: 'Create your account', intro: "Just an email and a password. You'll set up your forecast next.", action: 'Create account', busy: 'Creating your account…' },
+    forgot: { title: 'Reset your password', intro: "Enter your account's email and we'll send a link to choose a new password.", action: 'Send the link', busy: 'Sending…' },
   }[mode];
 
   return (

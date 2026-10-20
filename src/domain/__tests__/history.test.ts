@@ -141,7 +141,7 @@ describe('undoing a payment or cancellation', () => {
 
   it('cannot undo twice', () => {
     const undone = unwrap(ops.restoreOccurrence(pay(baseline(), id(RENT, '2026-11-01'), 1000, TODAY), id(RENT, '2026-11-01'), clockAt(TODAY)));
-    expectError(ops.restoreOccurrence(undone, id(RENT, '2026-11-01'), clockAt(TODAY)), /already outstanding/);
+    expectError(ops.restoreOccurrence(undone, id(RENT, '2026-11-01'), clockAt(TODAY)), /already expected/);
   });
 });
 

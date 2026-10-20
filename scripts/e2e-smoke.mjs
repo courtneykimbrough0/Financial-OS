@@ -70,7 +70,7 @@ try {
   step('onboarding: fix a mistake by tapping the item');
   await page.getByRole('button', { name: /^Paycheck/ }).click();
   sheet = page.getByRole('dialog', { name: 'Edit Paycheck' });
-  assert.equal(await sheet.getByText('Changes start with the payment on').count(), 0);
+  assert.equal(await sheet.getByText('Starting with the payment on').count(), 0);
   await sheet.getByLabel('Amount you expect to receive').fill('1800');
   await sheet.getByLabel('Next payment date').fill('2026-10-15');
   await sheet.getByRole('button', { name: 'Save' }).click();
@@ -121,7 +121,7 @@ try {
   await page.getByRole('heading', { name: 'What subscriptions renew?' }).waitFor();
   assert.equal(await page.getByText('Phone').count(), 0);
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('heading', { name: 'What do you pay toward debts?' }).waitFor();
+  await page.getByRole('heading', { name: 'Do you make loan or card payments?' }).waitFor();
   await page.getByRole('button', { name: 'Add a payment' }).click();
   sheet = page.getByRole('dialog', { name: 'Add a payment' });
   await sheet.getByLabel('What is this payment for?').fill('Car loan');
@@ -138,7 +138,7 @@ try {
   assert.match(await page.locator('.left-to-spend').innerText(), /\$1,390\.00/);
   await page.getByText('Loan · Monthly on the 20th').waitFor();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('heading', { name: 'What do you set aside?' }).waitFor();
+  await page.getByRole('heading', { name: 'What do you save?' }).waitFor();
   await page.getByRole('button', { name: 'Continue' }).click();
 
   step('onboarding: review with first pay period breakdown');
@@ -215,7 +215,7 @@ try {
   await attention.locator('.entry').first().click();
   const dialog = page.getByRole('dialog', { name: 'Paycheck' });
   await dialog.waitFor();
-  await dialog.getByRole('button', { name: 'Mark received', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Record received', exact: true }).click();
   const amount = dialog.getByLabel('Amount received');
   assert.equal(await amount.inputValue(), '1800.00');
   assert.equal(await dialog.getByLabel('Date received').inputValue(), '2026-10-15');
@@ -344,8 +344,8 @@ try {
   assert.equal(await page.getByRole('region', { name: 'Coming up' }).getByRole('checkbox').count(), 0);
   await due.getByRole('button', { name: 'Select all' }).click();
   await shot('08b-home-selected');
-  await due.getByRole('button', { name: 'Mark 2 items done' }).click();
-  await page.getByText('Marked 2 items done as expected.').waitFor();
+  await due.getByRole('button', { name: 'Record 2 items as expected' }).click();
+  await page.getByText('Recorded 2 items as expected.').waitFor();
   assert.equal(await page.getByRole('region', { name: 'Needs attention' }).count(), 0);
   assert.equal(await page.getByRole('button', { name: /Undo/ }).count(), 0);
   await page.clock.setFixedTime(new Date(2026, 9, 16, 9, 0));
@@ -359,15 +359,15 @@ try {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Explore with sample data' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Show sample data' }).click();
-  await page.getByText('You’re exploring sample data.').waitFor();
+  await page.getByRole('note').getByText('Sample data.').waitFor();
   // Unpaid bill: stays visible as overdue.
   assert.match(await page.getByRole('region', { name: 'Needs attention' }).innerText(), /Phone/);
   await page.getByRole('button', { name: 'Full forecast and calendar' }).click();
   // Negative tally before a later payday (look ahead with a custom range).
   await page.getByRole('tab', { name: 'Custom', exact: true }).click();
   await page.getByLabel('End date').fill('2026-11-30');
-  await page.getByText('Timing gap ahead').waitFor();
-  assert.match(await page.locator('.callout-danger').innerText(), /Nov 5 – 9, by up to \$600\.00/);
+  await page.locator('.callout-danger').waitFor();
+  assert.match(await page.locator('.callout-danger').innerText(), /Short \$600\.00 · Nov 5 – 9/);
   await shot('11-sample-data');
   // The warning opens an explanation from the same forecast: what leads to the low point and what ends it.
   await page.locator('.callout-danger').click();
@@ -400,7 +400,7 @@ try {
   await whatIf.getByRole('button', { name: 'Apply change', exact: true }).click();
   await page.getByText('Moved Car repair to Nov 10, 2026.').waitFor();
   assert.equal(await page.getByRole('dialog').count(), 0);
-  assert.equal(await page.getByText('Timing gap ahead').count(), 0);
+  assert.equal(await page.locator('.callout-danger').count(), 0);
   // Late paycheck: actual recorded, next one still scheduled.
   await page.getByRole('navigation', { name: 'Main' }).last().getByRole('link', { name: 'Plan' }).click();
   await page.getByRole('button', { name: 'See dates' }).click();
@@ -409,7 +409,7 @@ try {
   assert.match(sampleDates, /Oct 27, 2026[\s\S]*Expected/);
   await page.getByRole('button', { name: 'Leave sample data' }).click();
   await page.getByRole('heading', { name: /^Home/ }).waitFor();
-  assert.equal(await page.getByText('You’re exploring sample data.').count(), 0);
+  assert.equal(await page.getByRole('note').count(), 0);
   await page.goto(`${BASE}#/plan/income`);
   assert.match(await page.locator('.source-card').innerText(), /Paycheck[\s\S]*Next: Oct 29, 2026/);
 
@@ -495,7 +495,7 @@ try {
   assert.deepEqual(savedAfter.sources.find((s) => s.id === 'elec').versions.map((v) => [v.startDate, v.amountCents]), [['2026-04-03', 18000], ['2026-11-03', 21500]]);
   assert.deepEqual(savedAfter.records.filter((r) => r.sourceId === 'elec').map((r) => [r.expectedAmountCents, r.actualAmountCents]), household.records.filter((r) => r.sourceId === 'elec').map((r) => [r.expectedAmountCents, r.actualAmountCents]));
 
-  step('scenario: combine changes, see a hidden shortfall, edit, remove, and leave the plan untouched');
+  step('scenario: combine changes, see a hidden timing gap, edit, remove, and leave the plan untouched');
   // The plan from scenarios.test.ts: paid $1,000 every other Friday from Oct 23, rent $1,500 from Nov 1,
   // car loan $300 on the 28th. The clock still reads Fri Oct 16.
   const planPath = `${SHOTS}scenario-plan.json`;
@@ -535,7 +535,7 @@ try {
     await f.getByLabel('Date').fill('2026-11-10');
   });
   const scenarioResult = scenario.getByRole('region', { name: 'Scenario comparison' });
-  assert.match(await scenarioResult.getByRole('status').innerText(), /Your projected ending total improves by \$1,100\.00, but this scenario creates a \$700\.00 shortfall on Nov 10, back to \$0 or more on Nov 20\./);
+  assert.match(await scenarioResult.getByRole('status').innerText(), /Your ending running total improves by \$1,100\.00, but this scenario creates a \$700\.00 timing gap on Nov 10, back to \$0 or more on Nov 20\./);
   assert.match(await scenarioResult.getByRole('table').innerText(), /Cash flow\s+\+\$1,600\.00\s+\+\$2,700\.00[\s\S]*Lowest running total\s+−\$800\.00 on Nov 1\s+−\$1,500\.00 on Dec 1[\s\S]*Ending running total\s+\$1,600\.00\s+\$2,700\.00/);
   assert.match(await scenarioResult.innerText(), /Includes \$2,000\.00 of hypothetical income\. Without it, cash flow would be \+\$700\.00\./);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
@@ -546,7 +546,7 @@ try {
   await scenario.getByRole('button', { name: 'Edit Dentist: −$900.00 on Nov 10, 2026' }).click();
   await scenario.getByRole('form', { name: 'Unexpected expense' }).getByLabel('Amount').fill('100');
   await scenario.getByRole('button', { name: 'Save change' }).click();
-  assert.match(await scenarioResult.getByRole('status').innerText(), /improves by \$1,900\.00, but this scenario deepens a shortfall to \$700\.00 on Dec 1/);
+  assert.match(await scenarioResult.getByRole('status').innerText(), /improves by \$1,900\.00, but this scenario deepens a timing gap to \$700\.00 on Dec 1/);
   await scenario.getByRole('button', { name: 'Remove Dentist: −$100.00 on Nov 10, 2026' }).click();
   assert.equal(await scenarioResult.getByRole('status').count(), 0);
   // Variable income: three hypothetical cases side by side, on top of the $2,000 refund still in the scenario.
@@ -567,7 +567,7 @@ try {
   assert.equal(await page.getByRole('dialog').count(), 0);
   assert.equal(await page.evaluate(() => localStorage.getItem('financial-os:data')), planBefore);
   await page.getByRole('button', { name: 'Explore a scenario' }).click();
-  assert.match(await scenario.innerText(), /No changes yet\./);
+  assert.match(await scenario.innerText(), /Add a change to compare\./);
   await page.keyboard.press('Escape');
 
   step('start over: back up first, erase, quick setup to the review, then recover from the backup');
@@ -575,7 +575,7 @@ try {
   const dataBeforeReset = JSON.parse(await page.evaluate(() => localStorage.getItem('financial-os:data')));
   await page.getByRole('button', { name: 'Start over' }).click();
   const startOver = page.getByRole('dialog', { name: 'Start over?' });
-  assert.match(await startOver.innerText(), /This erases all 3 items you’ve entered, with everything recorded for them, and takes you back to setup\./);
+  assert.match(await startOver.innerText(), /This erases all 3 items you've entered, with everything recorded for them, and takes you back to setup\./);
   const [resetDownload] = await Promise.all([page.waitForEvent('download'), startOver.getByRole('button', { name: 'Download a backup of your data' }).click()]);
   const resetBackupPath = `${SHOTS}before-start-over.json`;
   await resetDownload.saveAs(resetBackupPath);
@@ -708,7 +708,7 @@ try {
     await p2.getByRole('heading', { name: /^Home/ }).waitFor();
     await p2.getByRole('button', { name: 'Full forecast and calendar' }).click();
     await p2.getByRole('heading', { name: 'Your cash flow' }).waitFor();
-    assert.match(await p2.locator('.forecast .hero').innerText(), /Lowest running total\s*−\$600\.00 · Oct 22[\s\S]*Timing gap ahead/);
+    assert.match(await p2.locator('.forecast .hero').innerText(), /Lowest running total\s*−\$600\.00 · Oct 22[\s\S]*Short \$600\.00/);
     await fresh.close();
   }
 

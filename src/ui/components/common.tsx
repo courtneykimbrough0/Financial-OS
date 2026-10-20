@@ -22,7 +22,7 @@ export const KIND_ICON: Record<TransactionKind, LucideIcon> = {
   varied: ShoppingBag,
 };
 
-/** Round leading avatar for a transaction, colored and shaped by kind. */
+/** Round leading avatar for an item, colored and shaped by kind. */
 export function KindAvatar({ kind, size = 'md' }: { kind: TransactionKind; size?: 'sm' | 'md' }) {
   return (
     <span className={`avatar avatar-${kind} avatar-${size}`} aria-hidden="true">
@@ -159,7 +159,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
 const STATUS_LABEL: Record<OccurrenceStatus, string> = {
   scheduled: 'Expected',
   overdue: 'Overdue',
-  completed: 'Done',
+  completed: 'Recorded',
   canceled: 'Canceled',
 };
 const STATUS_ICON: Record<OccurrenceStatus, LucideIcon> = {

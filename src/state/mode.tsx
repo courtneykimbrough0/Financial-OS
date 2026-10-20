@@ -8,7 +8,7 @@ export type DataMode = 'real' | 'sample';
 const MODE_KEY = 'financial-os:mode';
 
 /** Shown when this device won't store the sample data (storage full, or blocked as in some private windows). */
-export const SAMPLE_UNAVAILABLE = 'Sample data couldn’t be set up on this device. Check that this browser can store site data and has space, then try again.';
+export const SAMPLE_UNAVAILABLE = "Sample data couldn't be set up on this device. Check that this browser can store site data and has space, then try again.";
 
 export type SampleResult = { ok: true } | { ok: false; message: string };
 

@@ -111,7 +111,7 @@ describe('recorded, canceled, moved and overdue income', () => {
     expect(tallyOn(f, TODAY)).toBe(usd(250));
   });
 
-  it('income received before today is history and doesn’t start the running total', () => {
+  it("income received before today is history and doesn't start the running total", () => {
     const d = unwrap(ops.recordActual(withSide(), 'side@2026-10-12', { amountCents: usd(200), date: '2026-10-10' }, clockAt('2026-10-10')));
     const f = buildForecast(d, TODAY);
     // The next side-job payment (Oct 19) is after the paycheck, so the paycheck starts it.
@@ -127,14 +127,14 @@ describe('recorded, canceled, moved and overdue income', () => {
     expect(moved.forecastStart).toBe('2026-10-14');
   });
 
-  it('a late payment from any source hasn’t arrived yet, so it still starts the running total', () => {
+  it("a late payment from any source hasn't arrived yet, so it still starts the running total", () => {
     // Today is Oct 13 and the side job's Oct 12 payment hasn't been recorded.
     const f = buildForecast(withSide(), '2026-10-13');
     expect(f.forecastStart).toBe('2026-10-12');
     expect(tallyOn(f, '2026-10-12')).toBe(usd(200));
   });
 
-  it('income that is turned off, or only one-time, doesn’t start the running total', () => {
+  it("income that is turned off, or only one-time, doesn't start the running total", () => {
     const off = buildForecast(unwrap(ops.deactivateSource(withSide(), 'side', clock)), TODAY);
     expect(off.forecastStart).toBe('2026-10-15');
     let d = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1800, '2026-10-15', { type: 'biweekly' }, 'pay');
@@ -152,7 +152,7 @@ describe('recorded, canceled, moved and overdue income', () => {
   });
 });
 
-describe('what doesn’t move the start', () => {
+describe("what doesn't move the start", () => {
   it('hypothetical income in a scenario counts in the running total but never starts it', () => {
     const d = twoPaychecks('late-first');
     const r = evaluateScenario(d, [{ kind: 'hypothetical-income', description: 'Possible gig', amountCents: usd(100), schedule: { startDate: '2026-10-12', rule: { type: 'weekly' } } }], clock);

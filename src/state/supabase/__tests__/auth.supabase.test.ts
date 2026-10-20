@@ -74,7 +74,7 @@ describe('creating an account and signing in', () => {
 });
 
 describe('password recovery', () => {
-  it.skipIf(!HAS_MAIL)('the recovery email’s link signs in to set a new password; the old one stops working, the plan is kept', async () => {
+  it.skipIf(!HAS_MAIL)("the recovery email's link signs in to set a new password; the old one stops working, the plan is kept", async () => {
     const sb = client();
     const { email, password } = await confirmedAccount(sb);
     await store(sb, smallPlan());
@@ -216,7 +216,7 @@ describe('who can delete an account (audit)', () => {
     expect((await client().auth.signInWithPassword({ email, password })).error).toBeNull();
   });
 
-  it.skipIf(!ANONYMOUS_ON)('a temporary (anonymous) identity has no password sign-in, so it can’t delete', async () => {
+  it.skipIf(!ANONYMOUS_ON)("a temporary (anonymous) identity has no password sign-in, so it can't delete", async () => {
     const anon = client();
     await anon.auth.signInAnonymously();
     await store(anon, smallPlan());
@@ -225,7 +225,7 @@ describe('who can delete an account (audit)', () => {
     expect((await new SupabaseStorageAdapter(anon).load()).sources).toHaveLength(2);
   });
 
-  it('after deletion, a token issued before it can’t read, write, create a workspace, or delete anything', async () => {
+  it("after deletion, a token issued before it can't read, write, create a workspace, or delete anything", async () => {
     const sb = client();
     const { email, password } = await confirmedAccount(sb);
     await store(sb, richPlan());
@@ -251,8 +251,8 @@ describe('who can delete an account (audit)', () => {
   });
 });
 
-describe('with the app’s request guard bypassed, the server still keeps each account to its own workspace', () => {
-  it('raw requests with A’s token can’t read, write or link into B’s workspace; a save naming B lands in A’s own', async () => {
+describe("with the app's request guard bypassed, the server still keeps each account to its own workspace", () => {
+  it("raw requests with A's token can't read, write or link into B's workspace; a save naming B lands in A's own", async () => {
     const a = client();
     const b = client();
     const aAccount = await confirmedAccount(a);
@@ -282,7 +282,7 @@ describe('with the app’s request guard bypassed, the server still keeps each a
   });
 });
 
-describe('a hosted test project’s settings', () => {
+describe("a hosted test project's settings", () => {
   it.skipIf(TARGET !== 'hosted')('anonymous sign-ins are off', async () => {
     const r = await client().auth.signInAnonymously();
     expect([r.error?.code, r.data.session]).toEqual(['anonymous_provider_disabled', null]);

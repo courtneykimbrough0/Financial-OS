@@ -54,11 +54,11 @@ const SCREEN_COPY: Record<
   },
   reserve: {
     title: 'Strategic Reserves',
-    intro: 'Money you set aside on purpose and keep. It lowers what’s available to spend, and it stays yours.',
+    intro: "Money you save on purpose and keep. It lowers what's available to spend, and it stays yours.",
     recurringHeading: 'Recurring reserves',
     addRecurring: 'Add reserve',
-    empty: 'Add amounts you set aside regularly, like an emergency fund.',
-    oneTime: { heading: 'One-time reserves', empty: 'Set aside a single amount, or use some of your reserves. It counts once.' },
+    empty: 'Add amounts you save regularly, like an emergency fund.',
+    oneTime: { heading: 'One-time reserves', empty: 'Save a single amount, or use some of your reserves. It counts once.' },
   },
   varied: {
     title: 'Varied spending',
@@ -167,7 +167,7 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
             'No upcoming dates'
           )
         ) : (
-          `Turned off ${source.endDate ? `on ${formatMedium(source.endDate)}` : ''}. Not included in future forecasts.`
+          `Off since ${source.endDate ? formatMedium(source.endDate) : 'today'}.`
         )}
       </p>
       {upcomingChange && (
@@ -179,7 +179,7 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
       {overdueCount > 0 && (
         <p className="callout callout-warn small">
           <Icon icon={AlertCircle} size={16} /> 
-          {overdueCount} overdue {overdueCount === 1 ? 'payment needs' : 'payments need'} an update.
+          {overdueCount === 1 ? 'Overdue · Update' : `${overdueCount} overdue · Update`}
         </p>
       )}
       <div className="card-actions">
@@ -201,7 +201,7 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
       </div>
       {expanded && (
         <div className="source-occurrences">
-          <p className="hint">Last 60 days and next 90 days. Tap one to record or change it.</p>
+          <p className="hint">Recent and upcoming dates. Tap one to record or change it.</p>
           {occurrences.length === 0 ? (
             <p className="muted">No dates in this window.</p>
           ) : (
@@ -218,7 +218,7 @@ function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdi
       {confirmOff && (
         <Modal title={`Turn off ${source.description}?`} onClose={() => setConfirmOff(false)}>
           <div className="stack">
-            <p>It will stop appearing in your forecast from today. Everything you’ve already recorded stays, and any overdue payments stay visible until you update them.</p>
+            <p>It leaves your forecast from today. Payments you've recorded stay.</p>
             <div className="form-actions">
               <button type="button" className="button secondary" onClick={() => setConfirmOff(false)} data-autofocus>
                 Keep it on

@@ -116,12 +116,12 @@ describe('restoring a backup', () => {
     const before = store.data;
     const stored = saved();
     for (const [text, message] of [
-      ['not json', 'This file isn’t a Financial OS backup.'],
-      [JSON.stringify({ hello: 'world' }), 'This file isn’t a Financial OS backup.'],
-      [JSON.stringify({ format: 'financial-os-backup', data: { schemaVersion: 2, sources: [{ id: 1 }], records: [] } }), 'This backup is damaged or from a newer version of the app, so it can’t be restored.'],
+      ['not json', "This file isn't a Financial OS backup."],
+      [JSON.stringify({ hello: 'world' }), "This file isn't a Financial OS backup."],
+      [JSON.stringify({ format: 'financial-os-backup', data: { schemaVersion: 2, sources: [{ id: 1 }], records: [] } }), "This backup is damaged or from a newer version of the app, so it can't be restored."],
     ] as const) {
       await upload(user, text);
-      const dialog = screen.getByRole('dialog', { name: 'Couldn’t restore' });
+      const dialog = screen.getByRole('dialog', { name: "Couldn't restore" });
       expect(dialog).toHaveTextContent(message);
       expect(screen.queryByRole('dialog', { name: 'Restore this backup?' })).toBeNull();
       await user.click(within(dialog).getByRole('button', { name: 'OK' }));
@@ -137,7 +137,7 @@ describe('starting over', () => {
     const before = store.data;
     await user.click(screen.getByRole('button', { name: 'Start over' }));
     const dialog = screen.getByRole('dialog', { name: 'Start over?' });
-    expect(dialog).toHaveTextContent('This erases all 3 items you’ve entered, with everything recorded for them, and takes you back to setup.');
+    expect(dialog).toHaveTextContent("This erases all 3 items you've entered, with everything recorded for them, and takes you back to setup.");
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
     await user.keyboard('{Enter}');
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -151,7 +151,7 @@ describe('starting over', () => {
     const dialog = screen.getByRole('dialog', { name: 'Start over?' });
     await user.click(within(dialog).getByRole('button', { name: 'Download a backup of your data' }));
     await user.click(within(dialog).getByRole('button', { name: 'Erase and start over' }));
-    expect(await screen.findByText('Your data was erased. Set up again whenever you’re ready.')).toBeInTheDocument();
+    expect(await screen.findByText("Your data was erased. Set up again whenever you're ready.")).toBeInTheDocument();
     expect(window.location.hash).toBe('#/onboarding');
     expect(store.data).toMatchObject({ onboardingComplete: false, sources: [], records: [] });
 

@@ -75,7 +75,7 @@ export type PreviewResult = { ok: true; preview: ChangePreview } | { ok: false; 
 export function applyProposedChange(data: AppData, change: ProposedChange, clock: ops.Clock, note = ''): ops.Result {
   if (change.kind === 'skip') return ops.cancelOccurrence(data, change.occurrenceId, note, clock);
   const o = findOccurrence(data, change.occurrenceId, clock.today);
-  if (!o) return { ok: false, error: 'That transaction could not be found.' };
+  if (!o) return { ok: false, error: 'That item could not be found.' };
   return change.kind === 'move'
     ? ops.rescheduleOccurrence(data, change.occurrenceId, { date: change.date, amountCents: o.scheduledAmountCents }, clock)
     : ops.rescheduleOccurrence(data, change.occurrenceId, { date: o.scheduledDate, amountCents: change.amountCents }, clock);
@@ -136,7 +136,7 @@ export function previewChange(data: AppData, change: ProposedChange, clock: ops.
   const base = { change, window, current, proposed, anchorChanged };
 
   if (!before.forecastStart || !after.forecastStart) {
-    return { ok: true, preview: { ...base, comparable: false, reason: 'no-forecast', limitation: 'There is no upcoming income to start a running total from, so the two forecasts can’t be compared.', lowestChangeCents: null, target: null, newGaps: [], worsenedGaps: [] } };
+    return { ok: true, preview: { ...base, comparable: false, reason: 'no-forecast', limitation: "There is no upcoming income to start a running total from, so the two forecasts can't be compared.", lowestChangeCents: null, target: null, newGaps: [], worsenedGaps: [] } };
   }
   if (anchorChanged) {
     return {
@@ -145,7 +145,7 @@ export function previewChange(data: AppData, change: ProposedChange, clock: ops.
         ...base,
         comparable: false,
         reason: 'anchor-changed',
-        limitation: `This change moves the next payday from ${before.forecastStart} to ${after.forecastStart}, so the running totals start from different days and can’t be compared directly.`,
+        limitation: `This change moves the next payday from ${before.forecastStart} to ${after.forecastStart}, so the running totals start from different days and can't be compared directly.`,
         lowestChangeCents: null,
         target: null,
         newGaps: [],
@@ -165,7 +165,7 @@ export function previewChange(data: AppData, change: ProposedChange, clock: ops.
         ...base,
         comparable: false,
         reason: 'before-payday',
-        limitation: `The new date is before the next payday (${after.forecastStart}), when the running total starts, so the payment would simply drop out of it. The forecast can’t show whether money on hand covers it.`,
+        limitation: `The new date is before the next payday (${after.forecastStart}), when the running total starts, so the payment would simply drop out of it. The forecast can't show whether money on hand covers it.`,
         lowestChangeCents: null,
         target: null,
         newGaps: [],
@@ -229,6 +229,6 @@ export function applyPreviewedChange(data: AppData, previewedOn: AppData, change
   if (!sameFinancialData(data, previewedOn)) return { ok: false, error: 'Your forecast changed after this preview. Check the updated preview before applying.' };
   const preview = previewChange(data, change, clock);
   if (!preview.ok) return preview;
-  if (!preview.preview.comparable) return { ok: false, error: 'This preview can’t be compared with your forecast, so it can’t be applied from here.' };
+  if (!preview.preview.comparable) return { ok: false, error: "This preview can't be compared with your forecast, so it can't be applied from here." };
   return applyProposedChange(data, change, clock, change.kind === 'skip' ? SKIP_NOTE : '');
 }

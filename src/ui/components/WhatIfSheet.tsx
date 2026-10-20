@@ -43,7 +43,7 @@ export function WhatIfSheet({ occurrenceId, through, onBack, onDone }: { occurre
   if (!o || o.status !== 'scheduled') {
     return (
       <Modal title="What if…" onClose={onBack}>
-        <p>This transaction has already been recorded or changed, so it can’t be previewed here.</p>
+        <p>This has already been recorded or changed and can't be previewed.</p>
       </Modal>
     );
   }
@@ -80,7 +80,7 @@ export function WhatIfSheet({ occurrenceId, through, onBack, onDone }: { occurre
             {confirming.change.kind === 'skip' && <p className="callout callout-info">{skipNote(o, data)}</p>}
             <p className="hint">
               {o.sourceId ? `Only this one on ${formatMedium(o.scheduledDate)} changes; later ones keep their schedule. ` : ''}
-              This updates your Financial OS forecast. It doesn’t change any payment arrangement outside the app.
+              This changes your forecast only.
             </p>
             <div className="form-actions">
               <button type="button" className="button secondary" onClick={() => setConfirming(null)} data-autofocus>
@@ -147,13 +147,13 @@ export function WhatIfSheet({ occurrenceId, through, onBack, onDone }: { occurre
 
 /** What skipping means for this kind of item: only the forecast changes. */
 function skipNote(o: Occurrence, data: AppData): string {
-  if (o.kind === 'income') return 'Shows your forecast without this income. It doesn’t change what you’re owed.';
+  if (o.kind === 'income') return 'Shows your forecast without this income.';
   if (o.kind === 'liability') {
     const type = data.sources.find((s) => s.id === o.sourceId)?.liabilityType;
-    const what = type ? LIABILITY_TYPE_LABEL[type].toLowerCase() : 'debt';
-    return `Shows your forecast without this payment. Your ${what} and the payment you owe don’t change; Financial OS just leaves this one out.`;
+    const what = type ? LIABILITY_TYPE_LABEL[type].toLowerCase() : 'balance';
+    return `This only changes your forecast. Your ${what} and its payments stay the same.`;
   }
-  return 'Shows your forecast without this payment. It doesn’t cancel, waive, or pay it.';
+  return 'This only changes your forecast.';
 }
 
 function describeChange(name: string, change: ProposedChange, from: DateStr, done: boolean): string {
@@ -168,10 +168,10 @@ function PreviewResult({ p }: { p: ChangePreview }) {
   if (!p.comparable) {
     const text =
       p.reason === 'anchor-changed'
-        ? `This changes your next payday from ${formatMedium(p.current.forecastStart!)} to ${formatMedium(p.proposed.forecastStart!)}. The running total starts the day before payday, so the two forecasts would start on different days and can’t be compared directly.`
+        ? 'This moves your first payday, so cash flow is compared instead of running totals.'
         : p.reason === 'before-payday'
-          ? `The new date is before your next payday (${formatMedium(p.current.forecastStart!)}), when the running total starts, so the payment would just drop out of it. The forecast can’t show whether money on hand covers it.`
-          : 'There’s no upcoming payday to start a running total from, so this can’t be compared.';
+          ? `The new date is before your next payday (${formatMedium(p.current.forecastStart!)}), so it falls outside the running total.`
+          : "There's no upcoming payday to start a running total from.";
     return <p className="callout callout-info">{text}</p>;
   }
   const cur = p.current.lowest;

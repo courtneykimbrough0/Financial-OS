@@ -247,7 +247,7 @@ describe('what a suggestion shows', () => {
     const preview = within(sheet).getByRole('region', { name: 'Forecast preview' });
     expect(within(preview).getByRole('list', { name: 'Payments that change' })).toHaveTextContent('Nov 3, 2026 · before your next payday, outside the running total$180.00 → $240.00');
     expect(within(within(preview).getByRole('list', { name: 'Payments that change' })).getAllByRole('listitem')).toHaveLength(1);
-    expect(preview).toHaveTextContent('There’s no upcoming payday to start a running total from, so only the payment amounts are shown.');
+    expect(preview).toHaveTextContent("There's no upcoming payday to start a running total from.");
     expect(preview).not.toHaveTextContent('later payments');
 
     await user.click(within(sheet).getByRole('button', { name: 'Approve…' }));
@@ -294,7 +294,7 @@ describe('approving, dismissing, and not now', () => {
     expect(store.data.sources).toEqual(d.sources);
     const confirm = within(sheet).getByRole('group', { name: 'Approve this change?' });
     expect(confirm).toHaveTextContent('Change the Electricity estimate from $180.00 to $215.00, starting with the Nov 3, 2026 payment.');
-    expect(confirm).toHaveTextContent('Earlier payments, what you’ve recorded, and what was originally expected stay as they are.');
+    expect(confirm).toHaveTextContent("Earlier payments and what you've recorded stay as they are. This changes your forecast only.");
     await user.click(within(confirm).getByRole('button', { name: 'Approve change' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(await screen.findByText('Electricity is now expected at $215.00 from Nov 3, 2026.')).toBeInTheDocument();
@@ -339,7 +339,8 @@ describe('approving, dismissing, and not now', () => {
     const { adapter, user } = await mount(d);
     const before = buildForecast(d, TODAY);
     const sheet = await openSheet(user, 'Electricity');
-    expect(sheet).toHaveTextContent('Dismiss keeps $180.00 and doesn’t suggest this again until your payments change. Not now closes this; the suggestion stays here for later.');
+    expect(within(sheet).getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
+    expect(within(sheet).getByRole('button', { name: 'Not now' })).toBeInTheDocument();
     await user.click(within(sheet).getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(await screen.findByText('Suggestion dismissed. Electricity stays at $180.00.')).toBeInTheDocument();
