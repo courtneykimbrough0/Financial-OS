@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildForecast, entriesInRange, firstPeriod, periodKpis, tallyOn, timingGapsAhead } from '../forecast';
+import { buildForecast, entriesInRange, periodKpis, tallyOn, timingGapsAhead } from '../forecast';
 import * as ops from '../operations';
 import { evaluateScenario } from '../scenarios';
 import type { AppData } from '../types';
@@ -159,14 +159,5 @@ describe("what doesn't move the start", () => {
     if (!r.ok) throw new Error(r.error);
     expect(r.result.comparable).toBe(true);
     expect(r.result.period.runningTotalFrom).toBe('2026-10-19');
-  });
-});
-
-describe('the first period setup describes', () => {
-  it('runs from the earliest income to the end of the first pay period', () => {
-    expect(firstPeriod(buildForecast(twoPaychecks('late-first'), TODAY))).toEqual(['2026-10-19', '2026-11-01']);
-    const single = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1800, '2026-10-15', { type: 'biweekly' }, 'pay');
-    expect(firstPeriod(buildForecast(single, TODAY))).toEqual(['2026-10-15', '2026-10-28']);
-    expect(firstPeriod(buildForecast(ops.emptyData(), TODAY))).toBeNull();
   });
 });

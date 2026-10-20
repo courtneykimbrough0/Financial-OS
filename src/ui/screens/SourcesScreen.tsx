@@ -1,6 +1,6 @@
-import { AlertCircle, ChevronRight, CircleCheck, CircleOff, Plus } from 'lucide-react';
+import { ChevronRight, CircleOff, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { addDays, formatMedium, type DateStr } from '../../domain/dates';
+import { addDays, formatMedium, formatShort, type DateStr } from '../../domain/dates';
 import { formatMoney } from '../../domain/money';
 import { resolveOccurrences } from '../../domain/occurrences';
 import * as ops from '../../domain/operations';
@@ -113,137 +113,178 @@ function OccurrenceRow({ o, onOpen }: { o: Occurrence; onOpen: (id: string) => v
   );
 }
 
-function SourceCard({ source, onEdit, onOpen }: { source: RecurringSource; onEdit: () => void; onOpen: (id: string) => void }) {
-  const { data, today, run } = useStore();
-  const toast = useToast();
-  const [expanded, setExpanded] = useState(false);
-  const [confirmOff, setConfirmOff] = useState(false);
-  const [reactivating, setReactivating] = useState(false);
+/** Where an item stands: overdue first, then its next date, or when it was turned off. */
+function itemStatus(data: AppData, source: RecurringSource, today: DateStr): { text: string; overdue: boolean } {
+  const overdue = sourceHistory(data, source, today, today)
+    .filter((o) => o.displayStatus === 'overdue')
+    .map((o) => o.scheduledDate)
+    .sort()[0];
+  if (overdue) return { text: `Overdue since ${formatShort(overdue)}`, overdue: true };
+  if (!source.active) return { text: source.endDate ? `Off since ${formatShort(source.endDate)}` : 'Off', overdue: false };
+  const next = nextScheduledDate(source, today);
+  return { text: next ? `Next ${formatShort(next)}` : 'No upcoming dates', overdue: false };
+}
+
+/** One recurring item: a single row that opens its sheet. Only "Off" is marked; active is the normal state. */
+function SourceRow({ source, onOpen }: { source: RecurringSource; onOpen: () => void }) {
+  const { data, today } = useStore();
   const [reviewingEstimate, setReviewingEstimate] = useState(false);
   const suggestion = useEstimateSuggestion(source);
   const current = source.versions[source.versions.length - 1]!;
-  const occurrences = useMemo(() => sourceOccurrences(data, source, today), [data, source, today]);
-  const overdueCount = useMemo(
-    () => sourceHistory(data, source, today, today).filter((o) => o.displayStatus === 'overdue').length,
-    [data, source, today],
-  );
-  const next = source.active ? nextScheduledDate(source, today) : null;
-  const pending = source.versions.filter((v) => v.startDate > today);
-  const upcomingChange = pending.length > 0 && source.versions.length > 1 ? pending[0] : null;
-
+  const status = itemStatus(data, source, today);
   return (
     <li className={`card source-card${source.active ? '' : ' inactive'}`}>
-      <div className="source-top">
+      <button type="button" className="entry source-row" onClick={onOpen} aria-haspopup="dialog">
         <KindAvatar kind={source.kind} />
-        <div className="source-name">
-          <h3>{source.description}</h3>
-          <p className="muted">
+        <span className="entry-main">
+          <span className="entry-title">{source.description}</span>
+          <span className="entry-sub">
             {liabilityPrefix(source)}
-            {describeRule(current.rule, current.startDate)}
-          </p>
+            {describeRule(current.rule, current.startDate)} · <span className={status.overdue ? 'overdue-text' : undefined}>{status.text}</span>
+          </span>
           <TagList tags={source.tags} />
           <AccountLabel accountId={source.accountId} />
-        </div>
-        <div className="source-amount">
+        </span>
+        <span className="entry-side">
           <FlowAmount kind={source.kind} cents={current.amountCents} />
-          {source.active ? (
-            <span className="badge badge-active">
-              <Icon icon={CircleCheck} size={13} /> On
-            </span>
-          ) : (
+          {!source.active && (
             <span className="badge badge-canceled">
               <Icon icon={CircleOff} size={13} /> Off
             </span>
           )}
-        </div>
-      </div>
-      <p>
-        {source.active ? (
-          next ? (
-            <>
-              Next: <strong>{formatMedium(next)}</strong>
-            </>
-          ) : (
-            'No upcoming dates'
-          )
-        ) : (
-          `Off since ${source.endDate ? formatMedium(source.endDate) : 'today'}.`
-        )}
-      </p>
-      {upcomingChange && (
-        <p className="hint">
-          Scheduled change: {formatMoney(upcomingChange.amountCents)}, {describeRule(upcomingChange.rule, upcomingChange.startDate).toLowerCase()}, starting {formatMedium(upcomingChange.startDate)}.
-        </p>
-      )}
+        </span>
+        <Icon icon={ChevronRight} size={18} className="chevron" />
+      </button>
       {suggestion && <EstimateCallout suggestion={suggestion} onOpen={() => setReviewingEstimate(true)} />}
-      {overdueCount > 0 && (
-        <p className="callout callout-warn small">
-          <Icon icon={AlertCircle} size={16} /> 
-          {overdueCount === 1 ? 'Overdue · Update' : `${overdueCount} overdue · Update`}
-        </p>
-      )}
-      <div className="card-actions">
-        {occurrences.length > 0 && (
-          <button type="button" className="button small secondary" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-            {expanded ? 'Hide dates' : 'See dates'}
-          </button>
-        )}
-        <button type="button" className="button small secondary" onClick={onEdit}>
-          Edit
-        </button>
-        {source.active ? (
-          <button type="button" className="button small secondary" onClick={() => setConfirmOff(true)}>
-            Turn off
-          </button>
-        ) : (
-          <button type="button" className="button small secondary" onClick={() => setReactivating(true)}>
-            Turn on
-          </button>
-        )}
-      </div>
-      {expanded && occurrences.length > 0 && (
-        <div className="source-occurrences">
-          <p className="hint">Recent and upcoming dates. Tap one to record or change it.</p>
-          <ul className="entry-list">
-            {occurrences.map((o) => (
-              <li key={o.id}>
-                <OccurrenceRow o={o} onOpen={onOpen} />
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {confirmOff && (
-        <Modal title={`Turn off ${source.description}?`} onClose={() => setConfirmOff(false)}>
-          <div className="stack">
-            <p>It leaves your forecast from today. Payments you've recorded stay.</p>
-            <div className="form-actions">
-              <button type="button" className="button secondary" onClick={() => setConfirmOff(false)} data-autofocus>
-                Keep it on
-              </button>
-              <button
-                type="button"
-                className="button danger"
-                onClick={() => {
-                  const r = run((d, c) => ops.deactivateSource(d, source.id, c));
-                  setConfirmOff(false);
-                  if (r.ok) toast(`${source.description} turned off.`);
-                  else toast(r.error, 'error');
-                }}
-              >
-                Turn off
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
       {reviewingEstimate && <EstimateSheet sourceId={source.id} onClose={() => setReviewingEstimate(false)} />}
-      {reactivating && (
-        <Modal title={`Turn on ${source.description}`} onClose={() => setReactivating(false)}>
-          <ReactivateForm source={source} onDone={() => setReactivating(false)} />
-        </Modal>
-      )}
     </li>
+  );
+}
+
+/**
+ * An item's sheet: its schedule, recent and upcoming dates, and what can be
+ * done with it. One dialog at a time: confirmations replace the sheet and
+ * return to it.
+ */
+function ItemSheet({ source, onClose, onOpenDate, onEdit }: { source: RecurringSource; onClose: () => void; onOpenDate: (id: string) => void; onEdit: () => void }) {
+  const { data, today, run } = useStore();
+  const toast = useToast();
+  const [mode, setMode] = useState<'view' | 'turn-off' | 'turn-on' | 'delete'>('view');
+  const current = source.versions[source.versions.length - 1]!;
+  const occurrences = useMemo(() => sourceOccurrences(data, source, today), [data, source, today]);
+  const pending = source.versions.filter((v) => v.startDate > today);
+  const upcomingChange = pending.length > 0 && source.versions.length > 1 ? pending[0] : null;
+  const deletable = !data.records.some((r) => r.sourceId === source.id);
+  const status = itemStatus(data, source, today);
+  const name = source.description;
+
+  if (mode === 'turn-off')
+    return (
+      <Modal title={`Turn off ${name}?`} onClose={() => setMode('view')}>
+        <div className="stack">
+          <p>It leaves your forecast from today. Payments you've recorded stay.</p>
+          <div className="form-actions">
+            <button type="button" className="button secondary" onClick={() => setMode('view')} data-autofocus>
+              Keep it on
+            </button>
+            <button
+              type="button"
+              className="button danger"
+              onClick={() => {
+                const r = run((d, c) => ops.deactivateSource(d, source.id, c));
+                setMode('view');
+                if (r.ok) toast(`${name} turned off.`);
+                else toast(r.error, 'error');
+              }}
+            >
+              Turn off
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
+  if (mode === 'turn-on')
+    return (
+      <Modal title={`Turn on ${name}`} onClose={() => setMode('view')}>
+        <ReactivateForm source={source} onDone={() => setMode('view')} />
+      </Modal>
+    );
+  if (mode === 'delete')
+    return (
+      <Modal title={`Delete ${name}?`} onClose={() => setMode('view')}>
+        <div className="stack">
+          <p>It leaves your plan and your forecast.</p>
+          <div className="form-actions">
+            <button type="button" className="button secondary" onClick={() => setMode('view')} data-autofocus>
+              Keep it
+            </button>
+            <button
+              type="button"
+              className="button danger"
+              onClick={() => {
+                const r = run((d) => ops.deleteSource(d, source.id));
+                if (r.ok) {
+                  toast(`Deleted ${name}.`);
+                  onClose();
+                } else {
+                  toast(r.error, 'error');
+                  setMode('view');
+                }
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </Modal>
+    );
+
+  return (
+    <Modal title={name} onClose={onClose}>
+      <div className="stack">
+        <p>
+          <FlowAmount kind={source.kind} cents={current.amountCents} /> · {liabilityPrefix(source)}
+          {describeRule(current.rule, current.startDate)}
+        </p>
+        <p className={status.overdue ? 'overdue-text' : 'muted'}>{status.text}</p>
+        {upcomingChange && (
+          <p className="hint">
+            Scheduled change: {formatMoney(upcomingChange.amountCents)}, {describeRule(upcomingChange.rule, upcomingChange.startDate).toLowerCase()}, starting {formatMedium(upcomingChange.startDate)}.
+          </p>
+        )}
+        {occurrences.length > 0 && (
+          <section className="stack-sm" aria-labelledby="item-dates">
+            <SectionLabel id="item-dates">Recent and upcoming dates</SectionLabel>
+            <ul className="entry-list">
+              {occurrences.map((o) => (
+                <li key={o.id}>
+                  <OccurrenceRow o={o} onOpen={onOpenDate} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        <div className="card-actions">
+          <button type="button" className="button small secondary" onClick={onEdit}>
+            Edit
+          </button>
+          {source.active ? (
+            <button type="button" className="button small secondary" onClick={() => setMode('turn-off')}>
+              Turn off
+            </button>
+          ) : (
+            <button type="button" className="button small secondary" onClick={() => setMode('turn-on')}>
+              Turn on
+            </button>
+          )}
+          {deletable && (
+            <button type="button" className="button small danger-link" onClick={() => setMode('delete')}>
+              Delete
+            </button>
+          )}
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -254,7 +295,10 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
   const recurring = isRecurringKind(kind);
   const [adding, setAdding] = useState<'recurring' | 'one-time' | null>(null);
   const [editing, setEditing] = useState<RecurringSource | null>(null);
-  const [sheetId, setSheetId] = useState<string | null>(null);
+  // A date opened from an item's sheet returns to that sheet when closed.
+  const [sheet, setSheet] = useState<{ kind: 'item'; id: string } | { kind: 'occurrence'; id: string; back: string | null } | null>(null);
+  const openOccurrence = (id: string) => setSheet({ kind: 'occurrence', id, back: null });
+  const itemSource = sheet?.kind === 'item' ? data.sources.find((s) => s.id === sheet.id) : undefined;
 
   const sources = data.sources.filter((s) => s.kind === kind).sort((a, b) => Number(b.active) - Number(a.active) || a.description.localeCompare(b.description));
   const oneTimes = data.records
@@ -303,7 +347,7 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
           ) : (
             <ul className="card-list">
               {sources.map((s) => (
-                <SourceCard key={s.id} source={s} onEdit={() => setEditing(s)} onOpen={setSheetId} />
+                <SourceRow key={s.id} source={s} onOpen={() => setSheet({ kind: 'item', id: s.id })} />
               ))}
             </ul>
           )}
@@ -325,7 +369,7 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
                   <ul className="entry-list card">
                     {upcomingOneTimes.map((o) => (
                       <li key={o.id}>
-                        <OccurrenceRow o={o} onOpen={setSheetId} />
+                        <OccurrenceRow o={o} onOpen={openOccurrence} />
                       </li>
                     ))}
                   </ul>
@@ -337,7 +381,7 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
                   <ul className="entry-list card">
                     {pastOneTimes.map((o) => (
                       <li key={o.id}>
-                        <OccurrenceRow o={o} onOpen={setSheetId} />
+                        <OccurrenceRow o={o} onOpen={openOccurrence} />
                       </li>
                     ))}
                   </ul>
@@ -363,7 +407,20 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
           <SourceForm kind={editing.kind} source={editing} onDone={() => setEditing(null)} />
         </Modal>
       )}
-      {sheetId && <OccurrenceSheet occurrenceId={sheetId} onClose={() => setSheetId(null)} />}
+      {itemSource && (
+        <ItemSheet
+          source={itemSource}
+          onClose={() => setSheet(null)}
+          onOpenDate={(id) => setSheet({ kind: 'occurrence', id, back: itemSource.id })}
+          onEdit={() => {
+            setSheet(null);
+            setEditing(itemSource);
+          }}
+        />
+      )}
+      {sheet?.kind === 'occurrence' && (
+        <OccurrenceSheet occurrenceId={sheet.id} onClose={() => setSheet(sheet.back ? { kind: 'item', id: sheet.back } : null)} />
+      )}
     </div>
   );
 }

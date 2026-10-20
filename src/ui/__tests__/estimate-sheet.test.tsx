@@ -67,7 +67,7 @@ async function mount(data: AppData, kind: RecurringKind = 'bill') {
   return { adapter, user: userEvent.setup() };
 }
 
-const card = (name: string) => screen.getByRole('heading', { name, level: 3 }).closest('li')!;
+const card = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}`) }).closest('li')!;
 const reviewButton = (name: string) => screen.queryByRole('button', { name: `Review the suggestion for ${name}` });
 
 async function openSheet(user: ReturnType<typeof userEvent.setup>, name: string) {
@@ -306,7 +306,8 @@ describe('approving, dismissing, and not now', () => {
     expect(store.data.records).toEqual(d.records);
     expect(store.data.sources.filter((s) => s.id !== 'elec')).toEqual(d.sources.filter((s) => s.id !== 'elec'));
     expect(reviewButton('Electricity')).toBeNull();
-    expect(card('Electricity')).toHaveTextContent('Scheduled change: $215.00, monthly on the 3rd, starting Nov 3, 2026.');
+    await user.click(within(card('Electricity')).getByRole('button', { name: /^Electricity/ }));
+    expect(screen.getByRole('dialog', { name: 'Electricity' })).toHaveTextContent('Scheduled change: $215.00, monthly on the 3rd, starting Nov 3, 2026.');
     await waitFor(async () => expect((await adapter.load()).sources.find((s) => s.id === 'elec')!.versions).toHaveLength(2));
   });
 

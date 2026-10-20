@@ -194,7 +194,12 @@ const nav = async (page: Any, name: string) => {
   await main.getByRole('link', { name: 'Plan' }).click();
   await page.getByRole('navigation', { name: 'Plan' }).getByRole('link', { name }).click();
 };
-const card = (page: Any, name: string) => page.locator('.source-card', { has: page.getByRole('heading', { name }) });
+const card = (page: Any, name: string) => page.locator('.source-card', { has: page.getByRole('button', { name: new RegExp(`^${name}`) }) });
+/** Opens a Plan item's sheet (its dates, Edit, Turn off) by tapping its row. */
+const openItem = async (page: Any, name: string) => {
+  await card(page, name).getByRole('button', { name: new RegExp(`^${name}`) }).click();
+  return page.getByRole('dialog', { name });
+};
 const recordOf = (d: AppData, sourceDescription: string, expectedDate: string) => {
   const s = d.sources.find((x) => x.description === sourceDescription)!;
   return d.records.find((r) => r.id === `${s.id}@${expectedDate}`);
@@ -300,11 +305,10 @@ describe('the development copy on local Supabase', () => {
     const { page, saves } = await open(DEV, new Date(2026, 9, 11, 9, 0));
 
     // 1. An empty workspace.
-    await page.getByRole('heading', { name: 'See your cash flow ahead of time' }).waitFor();
+    await page.getByRole('heading', { name: 'When do you get paid?' }).waitFor();
     expect(await stored(page)).toEqual({ schemaVersion: 2, revision: 0, onboardingComplete: false, sources: [], records: [] });
 
     // 2–6. Minimum setup: income, a bill, a one-time expense, a liability payment.
-    await page.getByRole('button', { name: 'Get started' }).click();
     await page.getByRole('button', { name: 'Add income' }).click();
     let sheet = page.getByRole('dialog', { name: 'Add income' });
     await sheet.getByLabel('What is this income?').fill('Paycheck');
@@ -314,9 +318,9 @@ describe('the development copy on local Supabase', () => {
     await sheet.getByRole('button', { name: 'Save' }).click();
     await page.getByText('Every 2 weeks · next Oct 15, 2026').waitFor();
     await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('heading', { name: 'What bills do you pay?' }).waitFor();
-    await page.getByRole('button', { name: 'Add a bill' }).click();
-    sheet = page.getByRole('dialog', { name: 'Add a bill' });
+    await page.getByRole('heading', { name: 'What do you pay regularly?' }).waitFor();
+    await page.getByRole('button', { name: 'Add a payment' }).click();
+    sheet = page.getByRole('dialog', { name: 'Add a payment' });
     await sheet.getByLabel('What is this bill?').fill('Rent');
     await sheet.getByLabel('Amount you expect to pay').fill('1,200');
     await sheet.getByLabel('Next due date').fill('2026-11-01');
@@ -328,22 +332,18 @@ describe('the development copy on local Supabase', () => {
     await sheet.getByLabel('Expected date').fill('2026-10-26');
     await sheet.getByRole('button', { name: 'Add spending' }).click();
     await page.getByText('One time · Oct 26, 2026').waitFor();
-    await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('heading', { name: 'What subscriptions renew?' }).waitFor();
-    await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('heading', { name: 'Do you make loan or card payments?' }).waitFor();
-    await page.getByRole('button', { name: 'Add a payment' }).click();
+    await page.getByRole('button', { name: 'Add another payment' }).click();
     sheet = page.getByRole('dialog', { name: 'Add a payment' });
+    await sheet.getByRole('radio', { name: 'Loan or card payment' }).check();
     await sheet.getByLabel('What is this payment for?').fill('Car loan');
     await sheet.getByLabel('Payment amount').fill('350');
     await sheet.getByLabel('Next payment due date').fill('2026-10-20');
-    await sheet.getByRole('radio', { name: 'Loan' }).check();
+    await sheet.getByRole('radio', { name: 'Loan', exact: true }).check();
     await sheet.getByRole('button', { name: 'Save' }).click();
     await page.getByText('Loan · Monthly on the 20th').waitFor();
     await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('heading', { name: 'What do you save?' }).waitFor();
-    await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('button', { name: 'See my forecast' }).click();
+    await page.getByRole('heading', { name: 'Check everything over' }).waitFor();
+    await page.getByRole('button', { name: 'Looks right' }).click();
     await page.getByRole('heading', { name: /^Home/ }).waitFor();
     let d = await savedAndReloaded(page, saves);
     expect(d.onboardingComplete).toBe(true);
@@ -372,15 +372,15 @@ describe('the development copy on local Supabase', () => {
 
     // 10. Undo it (not received yet), then record it again.
     await nav(page, 'Income');
-    await card(page, 'Paycheck').getByRole('button', { name: 'See dates' }).click();
-    await card(page, 'Paycheck').getByRole('button', { name: /^Oct 16, 2026/ }).click();
+    await (await openItem(page, 'Paycheck')).getByRole('button', { name: /^Oct 16, 2026/ }).click();
     occ = page.getByRole('dialog', { name: 'Paycheck' });
     await occ.getByRole('button', { name: 'Undo received' }).click();
     await saves.idle();
     const undone = recordOf((await stored(page))!, 'Paycheck', '2026-10-15');
     expect(undone?.status ?? 'none').not.toBe('completed');
+    // Closing the date returns to the item's sheet.
     await page.keyboard.press('Escape');
-    await card(page, 'Paycheck').getByRole('button', { name: /^Oct 15, 2026/ }).click();
+    await page.getByRole('dialog', { name: 'Paycheck' }).getByRole('button', { name: /^Oct 15, 2026/ }).click();
     occ = page.getByRole('dialog', { name: 'Paycheck' });
     await occ.getByRole('button', { name: 'Record received', exact: true }).click();
     await occ.getByLabel('Amount received').fill('1750');
@@ -391,7 +391,7 @@ describe('the development copy on local Supabase', () => {
 
     // 8. Change a recurring amount: a raise from the Oct 29 paycheck (it has a recorded payment, so earlier ones keep theirs).
     await nav(page, 'Income');
-    await card(page, 'Paycheck').getByRole('button', { name: 'Edit' }).click();
+    await (await openItem(page, 'Paycheck')).getByRole('button', { name: 'Edit' }).click();
     sheet = page.getByRole('dialog', { name: 'Edit Paycheck' });
     await sheet.getByLabel('Amount you expect to receive').fill('1,900');
     await sheet.getByLabel('Starting with the payment on').fill('2026-10-29');
@@ -405,8 +405,7 @@ describe('the development copy on local Supabase', () => {
 
     // 9. Move the Nov 1 rent to Nov 3.
     await nav(page, 'Expenses');
-    await card(page, 'Rent').getByRole('button', { name: 'See dates' }).click();
-    await card(page, 'Rent').getByRole('button', { name: /^Nov 1, 2026/ }).click();
+    await (await openItem(page, 'Rent')).getByRole('button', { name: /^Nov 1, 2026/ }).click();
     occ = page.getByRole('dialog', { name: 'Rent' });
     await occ.getByRole('button', { name: 'Change date or amount' }).click();
     await occ.getByLabel('Expected date').fill('2026-11-03');
@@ -496,7 +495,7 @@ describe('accounts in the development copy', () => {
     expect(subjectIs(mail, 'Confirm your email address')).toBe(true);
     await page.goto(mail.link);
     await loaded(page);
-    await page.getByRole('heading', { name: 'See your cash flow ahead of time' }).waitFor();
+    await page.getByRole('heading', { name: 'When do you get paid?' }).waitFor();
     expect(new globalThis.URL(page.url()).search).toBe('');
     expect(await page.getByText(`Signed in as ${email}.`).count()).toBe(1);
     expect(await stored(page)).toEqual({ schemaVersion: 2, revision: 0, onboardingComplete: false, sources: [], records: [] });
@@ -696,7 +695,7 @@ describe('accounts in the development copy', () => {
     await page.getByText("Your data was erased. Set up again whenever you're ready.").waitFor();
     await signOutUi(page);
     await signIn(page, account.email, account.password);
-    await page.getByRole('heading', { name: 'See your cash flow ahead of time' }).waitFor();
+    await page.getByRole('heading', { name: 'When do you get paid?' }).waitFor();
     expect(await stored(page)).toMatchObject({ onboardingComplete: false, sources: [], records: [] });
     await page.context().close();
   });
@@ -928,7 +927,7 @@ describe('two tabs on one device', () => {
     await a.page.getByRole('region', { name: 'Needs attention' }).waitFor();
     await loaded(a.page);
     await a.page.goto(`${DEV}#/plan/expenses`);
-    await a.page.getByRole('heading', { name: 'Phone' }).waitFor();
+    await a.page.getByRole('button', { name: /^Phone/ }).waitFor();
     expect(await appText(a.page)).not.toContain('Alpha phone');
     expect(await recoveryPanel(a.page).count()).toBe(0);
     // Tab A leaving A's ended session never signs out B, who is signed in now.
@@ -1403,7 +1402,7 @@ async function payPhone(page: Any, dollars = '150') {
 
 async function changeRent(page: Any, amount: string) {
   await nav(page, 'Expenses');
-  await card(page, 'Rent').getByRole('button', { name: 'Edit' }).click();
+  await (await openItem(page, 'Rent')).getByRole('button', { name: 'Edit' }).click();
   const sheet = page.getByRole('dialog', { name: 'Edit Rent' });
   await sheet.getByLabel('Amount you expect to pay').fill(amount);
   await sheet.getByLabel('Starting with the payment on').fill('2026-12-01');

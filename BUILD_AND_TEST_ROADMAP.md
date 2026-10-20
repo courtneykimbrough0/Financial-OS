@@ -70,8 +70,9 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | C2, navigation | **Complete** (Home, Forecast, Activity, Plan) | Phases C2, H3, C3 |
 | C3, Activity view | **Complete** | Phase C3 |
 | B1, wording | **Complete** | Phase B1 |
-| C4, conditional visibility | **Complete** (in review) | Phase C4 |
-| C5 Plan screens, C6 one "See what happens if…", D redesign | **Planned** | Phases |
+| C4, conditional visibility | **Complete**, merged as `ae331a1` | Phase C4 |
+| C5, Plan screens and setup | **Complete** (in review) | Phase C5 |
+| C6 one "See what happens if…", D redesign | **Planned** | Phases |
 | E, income expansion | **Planned**, needs separate approval and decision D8 | Phase E |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
 | AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
@@ -260,15 +261,19 @@ A1 → A2 → R1 → R2 → C1 → C2 → C3 → B1 → C4 → C5 → C6 → D �
 - **Excluded:** forecast figures; the Earnings section (E).
 - **What was built:** `activityView` in `src/domain/activity.ts` (pure function producing a `PeriodPlan`-compatible summary from completed forecast entries), `Activity` screen in `src/ui/screens/Activity.tsx` (month navigation, summary KPIs, `PeriodBreakdown` with recorded labels, `TagBreakdown`, kind filter chips, item list with variance sub-line, occurrence sheet on tap), route `#/activity` in the nav between Forecast and Plan. No domain or calculation changes to existing code; `PeriodBreakdown` gained a `recorded` prop to swap labels.
 
-**C4. Conditional visibility** (PRODUCT_EXPERIENCE.md §5) on the screens that remain. **Complete (October 2026; in review).** Complexity: **low–medium**.
+**C4. Conditional visibility** (PRODUCT_EXPERIENCE.md §5) on the screens that remain. **Complete (October 2026; PR #14, merged as `ae331a1`).** Complexity: **low–medium**.
 - **Dependencies:** C2.
 - **What was built:** `src/ui/visibility.ts` (pure rules over fields the engine already computed: active day, active week, folding quiet days, empty plan, classifications with activity). Forecast: a day with nothing scheduled and a running total at or above $0 is a plain calendar cell; a week with no active day shows "Nothing scheduled" with no expand control; week rows show only non-zero amounts; an open week folds runs of quiet days into one text line ("Oct 18 – 19 · nothing scheduled"), keeping today and every day below $0; no "—" running totals (the running total is left out before it starts, with "Your running total starts Oct 16, your next payday." above the first day that has one, completing PRODUCT-AUDIT §4 item 9); the lowest running total shows only when it goes below $0, otherwise "You stay above $0 through …"; with no recurring income, only the setup card. The breakdown is one line when nothing moved. Activity: "By kind" shows when two or more classifications have activity (decision S1). Plan: an empty section is one line beside its Add button; a recurring kind's one-time list appears once it has items, with "Add one-time" beside the recurring Add until then; "See dates" only when an item has dates. Setup review: kinds with nothing added collapse into "Not added: subscriptions, Strategic Reserves." with a link to add each. No calculation changed.
 - **Tests:** `visibility` (21: the pure rules including "negative but empty", calendar cells, week rows, folding, the running total's start line, the summary line, the empty breakdown, the no-income card, S1 and S2, Plan sections, "See dates", and nothing saved); updated `onboarding` (review) and the browser smoke test (summary line and folded days).
 - **Not changed:** Home (its sections were already conditional in H2 and H4); S2 (Paid $0.00 stays in the Activity summary) and S7 (all four Plan tabs stay).
 
-**C5. Plan screens and setup** (rows plus a detail sheet, one-time items inside each kind; setup in three steps). Complexity: **medium**.
+**C5. Plan screens and setup** (rows plus a detail sheet, one-time items inside each kind; setup in three steps). **Complete (October 2026; in review).** Complexity: **medium**.
 - **Dependencies:** R1, C2.
-- **Tests:** the minimum setup (one income) reaches a forecast; component and e2e tests.
+- **What was built:**
+  - **Plan** (PRODUCT_EXPERIENCE.md §3.4): each recurring item is one tappable row (name, schedule, status, amount). Only "Off" is marked. The status shows where the item really stands: "Overdue since Oct 5" before "Next Nov 1" (audit finding H5), then "No upcoming dates" or "Off since …". The row opens the item's sheet with its recent and upcoming dates (formerly "See dates"), any scheduled change, Edit, Turn off or Turn on, and Delete only when nothing has been recorded (`deleteSource` already refuses otherwise). A date opened from the sheet returns to it. The estimate suggestion stays on the row. One-time items stay inside their kind (C4). The four Plan tabs stay (decision S7).
+  - **Setup** (§7.9): three steps instead of seven. (1) "When do you get paid?": income, with sample data, restore and the signed-in line on the same screen. (2) "What do you pay regularly?": one list for bills, subscriptions and liability payments, added through one "Add a payment" sheet with a kind picker; varied spending and optional Strategic Reserves ("Set money aside on a schedule (optional).") on the same step. (3) The review, ending in "Looks right" or "Change something". The first look (the cash-flow banner on each step, the review's lowest running total and its breakdown) covers a rolling next four weeks from today, read from the one forecast (product-owner decision, C5 review); recorded payments in the window count at what actually happened. It appears once there is income. `firstPeriod`, the setup-only pay-period helper, is removed, so nothing in setup depends on a pay period. No calculation or stored data changed.
+- **Tests:** `onboarding` (the three steps, the first screen's links and the income prompt, the kind picker, "Change something"), `setup-timing-gaps` (the four-week first look with one income, several incomes, a payment already recorded, and no income), `plan-rows` (7: status text, Off only, the sheet's dates and actions, Delete only without history, return from a date, turning off), updated `accounts`, `update-banner`, `estimate-sheet`, `money-accounts`, `navigation` and `visibility`; the browser smoke test and the Supabase browser suite walk the new setup and reach items through their sheets.
+- **Not changed from today:** the review's per-kind sections and "Not added" line (C4) stay. "+ Add" in the top bar (§3.1) is not part of C5.
 
 **C6. One "See what happens if…"** (merge What if… and scenarios; Q5). Complexity: **medium–high**.
 - **Dependencies:** C2.

@@ -1,12 +1,12 @@
 import { AlertCircle, Banknote, CalendarClock, ChevronRight, Info, Plus } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { diffDays, formatMedium, formatShort } from '../../domain/dates';
-import { buildForecast, dailyTimeline, entriesInRange, explainTimingGaps, firstPeriod, lowestPoint } from '../../domain/forecast';
+import { addDays, diffDays, formatMedium, formatShort, type DateStr } from '../../domain/dates';
+import { buildForecast, dailyTimeline, entriesInRange, explainTimingGaps, lowestPoint } from '../../domain/forecast';
 import { formatMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { periodPlan } from '../../domain/plan';
 import { describeRule } from '../../domain/recurrence';
-import { liabilityPrefix, type OccurrenceRecord, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
+import { liabilityPrefix, type AppData, type OccurrenceRecord, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useAccount } from '../../state/account';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
@@ -27,41 +27,28 @@ interface StepDef {
 }
 
 const STEPS: StepDef[] = [
-  { name: 'Welcome', kinds: [], title: 'See your cash flow ahead of time', body: 'Find out whether your income will cover your bills, and spot tight days before they happen.' },
   {
     name: 'Income',
     kinds: ['income'],
-    title: 'When does money come in?',
+    title: 'When do you get paid?',
     body: 'Add your regular income, like a paycheck or benefits. Your forecast starts from your next payday.',
   },
   {
-    name: 'Bills',
-    kinds: ['bill'],
-    title: 'What bills do you pay?',
-    body: 'Rent, utilities, phone, insurance, and other regular bills. Add one-time spending here too, like a car repair.',
-  },
-  {
-    name: 'Subscriptions',
-    kinds: ['subscription'],
-    title: 'What subscriptions renew?',
-    body: 'Streaming services, apps, and memberships that charge you on a schedule. Optional: you can add them later.',
-  },
-  {
-    name: 'Liabilities',
-    kinds: ['liability'],
-    title: 'Do you make loan or card payments?',
-    body: 'Regular payments on a card, loan, or line of credit. Skip this if you have none.',
-  },
-  {
-    name: 'Reserves',
-    kinds: ['reserve'],
-    title: 'What do you save?',
-    body: "Strategic Reserves: money you save on a schedule and keep. Cash flow shows what's available after it. Optional: you can add it later.",
+    name: 'Payments',
+    kinds: ['bill', 'subscription', 'liability', 'reserve'],
+    title: 'What do you pay regularly?',
+    body: 'Bills, subscriptions, and loan or card payments. Add one-time spending here too, like a car repair.',
   },
   { name: 'Review', kinds: [], title: 'Check everything over', body: 'Tap anything to change it before you start.' },
 ];
 const REVIEW = STEPS.length - 1;
-const STEP_OF: Record<RecurringKind, number> = { income: 1, bill: 2, subscription: 3, liability: 4, reserve: 5 };
+const STEP_OF: Record<RecurringKind, number> = { income: 0, bill: 1, subscription: 1, liability: 1, reserve: 1 };
+const PAYMENT_KINDS: { kind: PaymentKind; label: string }[] = [
+  { kind: 'bill', label: 'Bill' },
+  { kind: 'subscription', label: 'Subscription' },
+  { kind: 'liability', label: 'Loan or card payment' },
+];
+type PaymentKind = 'bill' | 'subscription' | 'liability';
 
 const KIND_SECTION: Record<RecurringKind, { label: string; add: string; addAnother: string; empty: string }> = {
   income: { label: 'Income', add: 'Add income', addAnother: 'Add another income', empty: 'No income added yet' },
@@ -71,10 +58,20 @@ const KIND_SECTION: Record<RecurringKind, { label: string; add: string; addAnoth
   reserve: { label: 'Strategic Reserves', add: 'Add a reserve', addAnother: 'Add another reserve', empty: 'No reserves added yet' },
 };
 
+/** Setup's first look: the next four weeks from today, read from the one forecast. Nothing until there's income to start it. */
+const FIRST_LOOK_DAYS = 28;
+function firstLook(data: AppData, today: DateStr) {
+  const forecast = buildForecast(data, today);
+  const end = addDays(today, FIRST_LOOK_DAYS - 1);
+  if (forecast.issue) return { forecast, end, plan: null, low: null };
+  return { forecast, end, plan: periodPlan(forecast, today, end), low: lowestPoint(dailyTimeline(forecast, today, end)) };
+}
+
 /** Sheet state shared by the setup steps: add a new item, or edit one already added. */
 type OneTimeKind = 'income' | 'varied';
 type SetupSheet =
   | { mode: 'add'; kind: RecurringKind }
+  | { mode: 'add-payment' }
   | { mode: 'edit'; source: RecurringSource }
   | { mode: 'add-once'; kind: OneTimeKind }
   | { mode: 'once'; record: OccurrenceRecord };
@@ -136,6 +133,7 @@ function SetupSheetView({ sheet, onClose }: { sheet: SetupSheet; onClose: () => 
       </Modal>
     );
   }
+  if (sheet.mode === 'add-payment') return <AddPaymentSheet onClose={onClose} />;
   if (sheet.mode === 'add-once') {
     return (
       <Modal title={sheet.kind === 'income' ? 'Add one-time income' : 'Add varied spending'} onClose={onClose}>
@@ -185,6 +183,75 @@ function SetupSheetView({ sheet, onClose }: { sheet: SetupSheet; onClose: () => 
         Remove {s.description}
       </button>
     </Modal>
+  );
+}
+
+/** One sheet for every regular payment: pick what kind it is, then fill in that kind's form. */
+function AddPaymentSheet({ onClose }: { onClose: () => void }) {
+  const [kind, setKind] = useState<PaymentKind>('bill');
+  return (
+    <Modal title="Add a payment" onClose={onClose}>
+      <div className="stack">
+        <fieldset className="choice-field">
+          <legend>What kind of payment?</legend>
+          <div className="choice-pills">
+            {PAYMENT_KINDS.map((k) => (
+              <label key={k.kind} className={`choice-pill${kind === k.kind ? ' selected' : ''}`}>
+                <input type="radio" name="payment-kind" value={k.kind} checked={kind === k.kind} onChange={() => setKind(k.kind)} />
+                {k.label}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <SourceForm key={kind} kind={kind} onDone={onClose} submitLabel="Save" />
+      </div>
+    </Modal>
+  );
+}
+
+/** Bills, subscriptions and liability payments in one list, with one Add; Strategic Reserves offered after, as optional. */
+function PaymentsStep({ onSheet }: { onSheet: (s: SetupSheet) => void }) {
+  const { data } = useStore();
+  const payments = data.sources.filter((s) => s.kind === 'bill' || s.kind === 'subscription' || s.kind === 'liability');
+  const reserves = data.sources.filter((s) => s.kind === 'reserve');
+  return (
+    <div className="stack-lg">
+      <div className="stack">
+        {payments.length > 0 && (
+          <ul className="entry-list card list-card">
+            {payments.map((s) => (
+              <SourceRow key={s.id} s={s} onOpen={() => onSheet({ mode: 'edit', source: s })} />
+            ))}
+          </ul>
+        )}
+        <button type="button" className={`button ${payments.length ? 'secondary full' : 'primary'}`} onClick={() => onSheet({ mode: 'add-payment' })} aria-haspopup="dialog">
+          <Icon icon={Plus} size={18} /> {payments.length ? 'Add another payment' : 'Add a payment'}
+        </button>
+      </div>
+      <OneTimeSection income={false} onSheet={onSheet} />
+      <section className="stack-sm" aria-labelledby="setup-reserves">
+        <SectionLabel
+          id="setup-reserves"
+          action={
+            <button type="button" className="button small link" onClick={() => onSheet({ mode: 'add', kind: 'reserve' })} aria-haspopup="dialog">
+              <Icon icon={Plus} size={16} /> Add a reserve
+            </button>
+          }
+        >
+          Strategic Reserves
+        </SectionLabel>
+        {reserves.length === 0 ? (
+          <p className="muted">Set money aside on a schedule (optional).</p>
+        ) : (
+          <ul className="entry-list card list-card">
+            {reserves.map((s) => (
+              <SourceRow key={s.id} s={s} onOpen={() => onSheet({ mode: 'edit', source: s })} />
+            ))}
+          </ul>
+        )}
+      </section>
+      <p className="hint center">Tap an item to change or remove it.</p>
+    </div>
   );
 }
 
@@ -253,7 +320,7 @@ function KindStep({ kind, onSheet }: { kind: RecurringKind; onSheet: (s: SetupSh
   return (
     <div className="stack-lg">
       <KindSection kind={kind} onSheet={onSheet} />
-      {(kind === 'income' || kind === 'bill') && <OneTimeSection income={kind === 'income'} onSheet={onSheet} />}
+      {kind === 'income' && <OneTimeSection income onSheet={onSheet} />}
       <p className="hint center">Tap an item to change or remove it.</p>
     </div>
   );
@@ -262,11 +329,7 @@ function KindStep({ kind, onSheet }: { kind: RecurringKind; onSheet: (s: SetupSh
 function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; goTo: (step: number) => void; today: string }) {
   const { data } = useStore();
   const [about, setAbout] = useState(false);
-  const forecast = buildForecast(data, today);
-  // From the first income of any kind, so earlier income and payments are in it.
-  const period = firstPeriod(forecast);
-  const plan = period ? periodPlan(forecast, period[0], period[1]) : null;
-  const low = period ? lowestPoint(dailyTimeline(forecast, period[0], period[1])) : null;
+  const { forecast, end, plan, low } = firstLook(data, today);
   const payday = forecast.forecastStart;
   const days = payday ? diffDays(today, payday) : 0;
   // Payments due before the running total starts: in cash flow, not in the running total.
@@ -318,11 +381,11 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
               <span className="hero-when">{days > 1 ? `in ${days} days` : days === 1 ? 'tomorrow' : 'today'}</span>
             </p>
           </div>
-          {period && low && (
+          {low && (
             <div className="hero-footer">
               <Icon icon={low.tallyCents < 0 ? AlertCircle : Banknote} size={22} className={low.tallyCents < 0 ? 'flag-neg' : 'hero-footer-icon'} />
               <span>
-                Lowest running total before {formatShort(period[1])}: <strong className={low.tallyCents < 0 ? 'negative-text' : ''}>{formatMoney(low.tallyCents)}</strong>
+                Lowest running total through {formatShort(end)}: <strong className={low.tallyCents < 0 ? 'negative-text' : ''}>{formatMoney(low.tallyCents)}</strong>
                 <span className="muted"> · {formatShort(low.date)}</span>
               </span>
             </div>
@@ -341,7 +404,7 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
 
       {payday && <TimingGapsBanner gaps={explainTimingGaps(forecast)} from={payday} horizonEnd={forecast.horizonEnd} />}
 
-      {plan && <PeriodBreakdown plan={plan} title="First pay period" />}
+      {plan && <PeriodBreakdown plan={plan} title="Next 4 weeks" />}
       {plan && <TagBreakdown plan={plan} />}
 
       {filled.map(({ label, kinds, items, once }) => {
@@ -413,16 +476,15 @@ export function Onboarding() {
   const [sheet, setSheet] = useState<SetupSheet | null>(null);
   const [sampleError, setSampleError] = useState<string | null>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const moved = useRef(false);
   const hasIncome = data.sources.some((s) => s.kind === 'income' && s.active);
-  const plan = useMemo(() => {
-    const forecast = buildForecast(data, today);
-    const period = firstPeriod(forecast);
-    return period ? periodPlan(forecast, period[0], period[1]) : null;
-  }, [data, today]);
+  const plan = useMemo(() => firstLook(data, today).plan, [data, today]);
   const def = STEPS[step]!;
 
   useEffect(() => {
-    if (step > 0) headingRef.current?.focus();
+    // Not on first arrival: only when the person moves between steps.
+    if (moved.current) headingRef.current?.focus();
+    moved.current = true;
   }, [step]);
 
   useEffect(() => {
@@ -461,7 +523,7 @@ export function Onboarding() {
         </p>
       </div>
 
-      {step > 0 && <CashFlowBanner plan={plan} />}
+      {plan && <CashFlowBanner plan={plan} />}
 
       <header className="onboarding-header">
         <h1 ref={headingRef} tabIndex={-1}>
@@ -471,33 +533,28 @@ export function Onboarding() {
       </header>
 
       {step === 0 && (
-        <div className="stack">
-          <ul className="card list-card checklist">
-            <li>Add when you expect to get paid</li>
-            <li>Add your main bills and loan payments. Subscriptions and reserves can wait</li>
-            <li>See your cash flow ahead and your running total day by day</li>
-            <li>Record what actually happens, and the forecast updates</li>
-          </ul>
-          <p className="hint center">
-            Start with your income — that's enough for a forecast. Your data stays {account ? 'in your account' : 'on this device'}.
-          </p>
-          <button
-            type="button"
-            className="button link full"
-            onClick={() => {
-              void enterSample().then((r) => (r.ok ? navigate('home') : setSampleError(r.message)));
-            }}
-          >
-            Explore with sample data
-          </button>
-          <FormError message={sampleError} />
-          <div className="center">
-            <RestoreBackupButton label="Restore a backup" />
+        <>
+          <KindStep kind="income" onSheet={setSheet} />
+          <div className="stack-sm center">
+            <p className="hint">Your income is enough for a first forecast. Your data stays {account ? 'in your account' : 'on this device'}.</p>
+            <button
+              type="button"
+              className="button link"
+              onClick={() => {
+                void enterSample().then((r) => (r.ok ? navigate('home') : setSampleError(r.message)));
+              }}
+            >
+              Explore with sample data
+            </button>
+            <FormError message={sampleError} />
+            <div>
+              <RestoreBackupButton label="Restore a backup" />
+            </div>
+            {slot ? <slot.Line /> : <SignedInLine />}
           </div>
-          {slot ? <slot.Line /> : <SignedInLine />}
-        </div>
+        </>
       )}
-      {def.kinds.length > 0 && <KindStep key={step} kind={def.kinds[0]!} onSheet={setSheet} />}
+      {step === 1 && <PaymentsStep onSheet={setSheet} />}
       {step === REVIEW && <Review onSheet={setSheet} goTo={setStep} today={today} />}
 
       {needIncome && (
@@ -509,21 +566,16 @@ export function Onboarding() {
       <div className="form-actions sticky-actions">
         {step > 0 && (
           <button type="button" className="button secondary" onClick={() => setStep(step - 1)}>
-            Back
-          </button>
-        )}
-        {step > STEP_OF.income && step < REVIEW && hasIncome && (
-          <button type="button" className="button link" onClick={() => setStep(REVIEW)}>
-            Skip to review
+            {step === REVIEW ? 'Change something' : 'Back'}
           </button>
         )}
         {step < REVIEW ? (
           <button type="button" className="button primary" onClick={next}>
-            {step === 0 ? 'Get started' : needIncome ? 'Continue without income' : 'Continue'}
+            {needIncome ? 'Continue without income' : 'Continue'}
           </button>
         ) : (
           <button type="button" className="button primary" onClick={finish}>
-            See my forecast
+            Looks right
           </button>
         )}
       </div>
