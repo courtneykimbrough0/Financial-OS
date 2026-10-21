@@ -3,13 +3,14 @@ import { ChevronRight } from 'lucide-react';
 import { addMonthsClamped, endOfMonth, formatMonthYear, formatRange, formatShort, startOfMonth, type DateStr } from '../../domain/dates';
 import { buildForecast } from '../../domain/forecast';
 import { formatMoney, formatSignedMoney } from '../../domain/money';
+import type { PeriodPlan } from '../../domain/plan';
 import { activityView, type ActivityItem } from '../../domain/activity';
 import { KINDS, KIND_LABEL, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
-import { FlowAmount, Icon, KindAvatar, KindTag, ListGroup, SectionLabel, StatusBadge } from '../components/common';
+import { EmptyLine, FlowAmount, Icon, KindAvatar, KindTag, ListGroup, SectionLabel, StatusBadge } from '../components/common';
 import { PeriodNav } from '../components/entries';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
-import { PeriodBreakdown, TagBreakdown } from '../components/plan';
+import { BreakdownRows, TagBreakdown } from '../components/plan';
 import { kindsWithActivity } from '../visibility';
 
 type Sheet = { kind: 'occurrence'; id: string };
@@ -53,8 +54,7 @@ export function Activity() {
         <EmptyMonth start={start} end={end} hasAnyRecords={data.records.some((r) => r.status === 'completed')} />
       ) : (
         <>
-          <RecordedSummary receivedCents={view.summary.incomeCents} paidCents={view.summary.outflowCents} cashFlowCents={view.summary.cashFlowCents} />
-          {kindsWithActivity(view.summary) > 1 && <PeriodBreakdown plan={view.summary} title="By kind" showRange={false} recorded />}
+          <RecordedSummary summary={view.summary} />
           <TagBreakdown plan={view.summary} />
 
           <section className="stack-sm" aria-labelledby="activity-list-heading">
@@ -71,7 +71,7 @@ export function Activity() {
               Recorded
             </SectionLabel>
             {view.items.length === 0 && kindFilter ? (
-              <p className="muted center">No {KIND_LABEL[kindFilter].toLowerCase()} items recorded this month.</p>
+              <EmptyLine>No {KIND_LABEL[kindFilter].toLowerCase()} items recorded this month.</EmptyLine>
             ) : (
               <ListGroup>
                 {view.items.map((item) => (
@@ -90,23 +90,21 @@ export function Activity() {
   );
 }
 
-function RecordedSummary({ receivedCents, paidCents, cashFlowCents }: { receivedCents: number; paidCents: number; cashFlowCents: number }) {
+/**
+ * The month's one summary: recorded cash flow, then what was received, paid
+ * and moved to or from reserves. Received and Paid show even at $0.00
+ * (decision S2). The per-classification rows show only when
+ * more than one classification has activity (decision S1), since otherwise
+ * they repeat the total above them.
+ */
+function RecordedSummary({ summary }: { summary: PeriodPlan }) {
   return (
     <section className="card activity-summary" aria-label="Month summary">
-      <dl className="activity-kpis">
-        <div className="activity-kpi">
-          <dt>Received</dt>
-          <dd className="amount-in">{formatSignedMoney(receivedCents)}</dd>
-        </div>
-        <div className="activity-kpi">
-          <dt>Paid</dt>
-          <dd className="amount-out">{paidCents ? `−${formatMoney(paidCents)}` : formatMoney(0)}</dd>
-        </div>
-        <div className="activity-kpi">
-          <dt>Cash flow</dt>
-          <dd className={cashFlowCents < 0 ? 'negative-text' : ''}>{formatSignedMoney(cashFlowCents)}</dd>
-        </div>
-      </dl>
+      <p className="hero-label">
+        Cash flow <span className="badge">Recorded</span>
+      </p>
+      <p className={`hero-value${summary.cashFlowCents < 0 ? ' negative' : ''}`}>{formatSignedMoney(summary.cashFlowCents)}</p>
+      <BreakdownRows plan={summary} recorded total={false} byKind={kindsWithActivity(summary) > 1} />
     </section>
   );
 }
@@ -161,5 +159,5 @@ function ActivityRow({ item, onOpen }: { item: ActivityItem; onOpen: (id: string
 }
 
 function EmptyMonth({ start, end, hasAnyRecords }: { start: DateStr; end: DateStr; hasAnyRecords: boolean }) {
-  return <p className="muted center">{hasAnyRecords ? `Nothing recorded from ${formatRange(start, end)}.` : 'Payments you record show up here.'}</p>;
+  return <EmptyLine>{hasAnyRecords ? `Nothing recorded from ${formatRange(start, end)}.` : 'Payments you record show up here.'}</EmptyLine>;
 }

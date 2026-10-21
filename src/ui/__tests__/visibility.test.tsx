@@ -211,14 +211,16 @@ describe('Forecast: the summary', () => {
   });
 });
 
-describe('Activity: By kind (decision S1)', () => {
+describe('Activity: By kind (decision S1), inside the one summary since D4', () => {
   it('is hidden when only one classification has activity, since the summary already says it all', async () => {
     let d = steady();
     d = unwrap(ops.recordActual(d, 'pay@2026-10-16', { amountCents: 180000, date: '2026-10-16' }, clock('2026-10-16')));
     vi.setSystemTime(new Date(2026, 9, 17, 9, 0));
     await open('#/activity', d);
-    await screen.findByRole('region', { name: 'Month summary' });
+    const summary = await screen.findByRole('region', { name: 'Month summary' });
     expect(screen.queryByRole('region', { name: 'By kind' })).toBeNull();
+    expect(summary.querySelector('.breakdown-row.sub')).toBeNull();
+    expect(summary).not.toHaveTextContent(/reserves/);
   });
 
   it('appears once two classifications have activity; Paid $0.00 stays in the summary (decision S2)', async () => {
@@ -229,7 +231,7 @@ describe('Activity: By kind (decision S1)', () => {
     await open('#/activity', d);
     const summary = await screen.findByRole('region', { name: 'Month summary' });
     expect(summary).toHaveTextContent('Paid$0.00');
-    expect(screen.getByRole('region', { name: 'By kind' })).toHaveTextContent(/Received\+\$1,800\.00.*Saved in reserves/);
+    expect(summary).toHaveTextContent(/Received\+\$1,800\.00.*Saved in reserves−\$100\.00/);
   });
 });
 

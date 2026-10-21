@@ -296,7 +296,7 @@ try {
   await planNav.getByRole('link', { name: 'Expenses' }).click();
   await page.getByRole('tab', { name: 'Bills', selected: true }).waitFor();
   assert.deepEqual(await page.getByRole('tablist', { name: 'Expense type' }).getByRole('tab').allInnerTexts(), ['Bills', 'Subscriptions', 'Varied']);
-  assert.match(await page.locator('.card-list').innerText(), /Rent[\s\S]*Housing/);
+  assert.match(await page.locator('.source-list').innerText(), /Rent[\s\S]*Housing/);
   await planNav.getByRole('link', { name: 'Reserves' }).click();
   await page.getByRole('heading', { name: 'Strategic Reserves', level: 1 }).waitFor();
   await page.goto(`${BASE}#/dashboard`);

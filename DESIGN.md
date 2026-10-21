@@ -2,7 +2,7 @@
 
 Financial OS uses a dark-first, card-based visual language. It is calm and legible, with large numbers and one consistent set of controls. Every token lives at the top of `src/styles.css`, and the shared React pieces live in `src/ui/components/common.tsx`.
 
-This file describes the visual system **as built**. The redesign direction is [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 7, built in roadmap Phase D one checkpoint at a time. **D1 (shared foundation) is built:** the type scale, one meaning per color (money out is neutral with a "−"; indigo is the accent only), sentence-case section labels, a smaller card radius, and the `ListGroup` and `EmptyLine` components. **D2 (Home) and D3 (Forecast) are built** (see the layout pattern below). Other screens and desktop layouts follow in later checkpoints.
+This file describes the visual system **as built**. The redesign direction is [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 7, built in roadmap Phase D one checkpoint at a time. **D1 (shared foundation) is built:** the type scale, one meaning per color (money out is neutral with a "−"; indigo is the accent only), sentence-case section labels, a smaller card radius, and the `ListGroup` and `EmptyLine` components. **D2 (Home), D3 (Forecast) and D4 (Plan and Activity) are built** (see the layout pattern below). Setup, sheets and desktop layouts follow in later checkpoints.
 
 The product's terms are fixed (Cash flow, Running total, Projected income, Projected expenses, Money in, Money out, Overdue, and so on). This system governs only how things look.
 
@@ -86,7 +86,7 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
 - **Kind avatars:** income (banknote, green), bill (receipt, slate), subscription (repeat, blue), liability (card, violet), Strategic Reserves (piggy bank, teal), varied spending (bag, plum).
 - **Timing-gap banner:** a red-outlined card with a warning triangle ("2 timing gaps ahead · Next 90 days"), shown only when the tally goes below $0. It opens a sheet listing each gap's dates, length, and lowest amount. Its wording describes the gap and gives no advice.
 - **Choice pills:** a required single choice (e.g. liability type: Card, Loan, Line of credit) shown as equal-width pills backed by native radio buttons. The selected pill is light, and all pills get a red outline if nothing is chosen on save.
-- **Navigation:** three tabs: Home, Forecast and Plan; Settings behind the gear. Plan has a row of section pills (Income, Expenses, Liabilities, Reserves) that fits a phone width without scrolling; Expenses keeps its Bills, Subscriptions and Varied tabs.
+- **Navigation:** three tabs: Home, Forecast and Plan; Settings behind the gear. Plan has a row of section pills (Income, Expenses, Liabilities, Reserves) that fits a phone width without scrolling (below 375 px the four share the width equally); Expenses keeps its Bills, Subscriptions and Varied tabs.
 - **Pill tabs:** two options inside a raised pill track, used within cards. The active option is light.
 - **Totals strip / sheet stats:** three centered label-over-value columns, with values aligned on one baseline.
 - **Callouts:** soft-tinted rounded blocks (info, warn, danger, ok) that always lead with an icon or a bold phrase.
@@ -98,6 +98,8 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
 
 Home and the Forecast screen show only summaries. Detail opens in a bottom sheet:
 
+- **Plan** (since D4): each section's recurring items are rows in one `ListGroup`; an item that is off keeps its row, with an "Off" badge.
+- **Activity** (since D4): one summary card leads with recorded cash flow, then Received, Paid, a row per classification (only when more than one has activity) and reserves; the recorded items are one `ListGroup`. Empty months and filters are `EmptyLine`s.
 - **Home** (the opening screen) carries what needs attention (see README, Home); the forecast screen no longer has an overdue banner. Since D2:
   - One progress card leads: the recorded cash flow so far this month (or the projected month, labeled, when nothing is recorded), one comparison line, then short label-and-amount rows for the projected month, last month and the difference. Red only for figures below $0; up and down in words with an arrow.
   - Needs attention, Coming up and Happened this week are each one `ListGroup`. Coming up puts each day as a small label inside its group instead of a card per day. Overdue payments say so in amber. An empty week is an `EmptyLine`.
