@@ -10,7 +10,7 @@ import { liabilityPrefix, type AppData, type OccurrenceRecord, type RecurringKin
 import { useAccount } from '../../state/account';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
-import { FlowAmount, FormError, Icon, KindAvatar, Modal, SectionLabel, TagList, useToast } from '../components/common';
+import { EmptyLine, FlowAmount, FormError, Icon, KindAvatar, Modal, SectionLabel, TagList, useToast } from '../components/common';
 import { KIND_COPY, OneTimeForm, SourceForm } from '../components/forms';
 import { TimingGapsBanner } from '../components/gaps';
 import { CashFlowBanner, PeriodBreakdown, TagBreakdown } from '../components/plan';
@@ -250,12 +250,12 @@ function PaymentsStep({ onSheet }: { onSheet: (s: SetupSheet) => void }) {
           </ul>
         )}
       </section>
-      <p className="hint center">Tap an item to change or remove it.</p>
+      {payments.length + reserves.length + oneTimes(data.records, 'varied').length > 0 && <p className="hint center">Tap an item to change or remove it.</p>}
     </div>
   );
 }
 
-/** Items of one kind: a list card plus an add button, or an empty card with the add button. */
+/** Items of one kind: a list card plus an add button, or one line with the add button. */
 function KindSection({ kind, onSheet }: { kind: RecurringKind; onSheet: (s: SetupSheet) => void }) {
   const { data } = useStore();
   const items = data.sources.filter((s) => s.kind === kind);
@@ -267,13 +267,7 @@ function KindSection({ kind, onSheet }: { kind: RecurringKind; onSheet: (s: Setu
   );
 
   return items.length === 0 ? (
-    <div className="empty-state">
-      <span className="empty-icon">
-        <KindAvatar kind={kind} />
-      </span>
-      <p className="empty-title">{copy.empty}</p>
-      {addButton(true)}
-    </div>
+    <EmptyLine action={addButton(true)}>{copy.empty}</EmptyLine>
   ) : (
     <div className="stack">
       <ul className="entry-list card list-card">
@@ -304,7 +298,7 @@ function OneTimeSection({ income, onSheet }: { income: boolean; onSheet: (s: Set
         {label}
       </SectionLabel>
       {items.length === 0 ? (
-        <p className="card review-empty muted">{income ? 'Like a tax refund or a bonus. Optional.' : 'Like a car repair or a medical bill. Optional.'}</p>
+        <EmptyLine>{income ? 'Like a tax refund or a bonus. Optional.' : 'Like a car repair or a medical bill. Optional.'}</EmptyLine>
       ) : (
         <ul className="entry-list card list-card">
           {items.map((r) => (
@@ -317,11 +311,13 @@ function OneTimeSection({ income, onSheet }: { income: boolean; onSheet: (s: Set
 }
 
 function KindStep({ kind, onSheet }: { kind: RecurringKind; onSheet: (s: SetupSheet) => void }) {
+  const { data } = useStore();
+  const anything = data.sources.some((s) => s.kind === kind) || (kind === 'income' && oneTimes(data.records, 'income').length > 0);
   return (
     <div className="stack-lg">
       <KindSection kind={kind} onSheet={onSheet} />
       {kind === 'income' && <OneTimeSection income onSheet={onSheet} />}
-      <p className="hint center">Tap an item to change or remove it.</p>
+      {anything && <p className="hint center">Tap an item to change or remove it.</p>}
     </div>
   );
 }
@@ -404,7 +400,8 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
 
       {payday && <TimingGapsBanner gaps={explainTimingGaps(forecast)} from={payday} horizonEnd={forecast.horizonEnd} />}
 
-      {plan && <PeriodBreakdown plan={plan} title="Next 4 weeks" />}
+      {/* The cash-flow banner above already gives the four weeks' range and cash flow. */}
+      {plan && <PeriodBreakdown plan={plan} title="Next 4 weeks" showRange={false} total={false} />}
       {plan && <TagBreakdown plan={plan} />}
 
       {filled.map(({ label, kinds, items, once }) => {
@@ -563,22 +560,27 @@ export function Onboarding() {
         </p>
       )}
 
-      <div className="form-actions sticky-actions">
-        {step > 0 && (
-          <button type="button" className="button secondary" onClick={() => setStep(step - 1)}>
-            {step === REVIEW ? 'Change something' : 'Back'}
-          </button>
-        )}
-        {step < REVIEW ? (
-          <button type="button" className="button primary" onClick={next}>
-            {needIncome ? 'Continue without income' : 'Continue'}
-          </button>
-        ) : (
+      {step === REVIEW ? (
+        <div className="form-actions sticky-actions review-actions">
           <button type="button" className="button primary" onClick={finish}>
             Looks right
           </button>
-        )}
-      </div>
+          <button type="button" className="button secondary" onClick={() => setStep(step - 1)}>
+            Change something
+          </button>
+        </div>
+      ) : (
+        <div className="form-actions sticky-actions">
+          {step > 0 && (
+            <button type="button" className="button secondary" onClick={() => setStep(step - 1)}>
+              Back
+            </button>
+          )}
+          <button type="button" className="button primary" onClick={next}>
+            {needIncome ? 'Continue without income' : 'Continue'}
+          </button>
+        </div>
+      )}
 
       {sheet && <SetupSheetView sheet={sheet} onClose={() => setSheet(null)} />}
     </div>

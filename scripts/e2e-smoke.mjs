@@ -148,14 +148,15 @@ try {
   // No timing gaps in this setup, so no warning appears.
   assert.equal(await page.locator('.gap-banner').count(), 0);
   const breakdown = await page.locator('section[aria-labelledby="breakdown-period"]').innerText();
-  assert.match(breakdown, /Next 4 weeks[\s\S]*Oct 11 – Nov 7/i);
+  // The banner gives the four weeks' range and cash flow; the breakdown lists what makes it up, once.
+  assert.match(await page.locator('.left-to-spend').innerText(), /Next 4 weeks · Oct 11 – Nov 7[\s\S]*\+\$1,990\.00/);
+  assert.doesNotMatch(breakdown, /Oct 11 – Nov 7|Cash flow/);
   assert.match(breakdown, /Income\s+\+\$3,600\.00/);
   assert.match(breakdown, /Spending\s+−\$1,610\.00/);
   assert.match(breakdown, /Bills\s+\$1,260\.00/);
   assert.match(breakdown, /Liability payments\s+\$350\.00/);
   // Classifications with nothing in the period are left out.
   assert.doesNotMatch(breakdown, /reserves|Subscriptions/);
-  assert.match(breakdown, /Cash flow\s+\+\$1,990\.00/);
   const mainText = await page.locator('main').innerText();
   assert.match(mainText, /INCOME[\s\S]*Paycheck[\s\S]*BILLS[\s\S]*Phone[\s\S]*Rent[\s\S]*LIABILITY PAYMENTS[\s\S]*Car loan/i);
   await shot('03-review');

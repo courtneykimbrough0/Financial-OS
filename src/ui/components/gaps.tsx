@@ -58,6 +58,7 @@ export function GapsSheet({
           <Icon icon={TriangleAlert} size={18} />
           <span>Your payments get ahead of your income on these dates. Here's what causes each gap and what ends it.</span>
         </p>
+        {onWhatIf && <p className="hint">Tap an expected payment to see what happens if it changes.</p>}
         <ul className="gap-list">
           {gaps.map((g, i) => (
             <li key={g.start}>
@@ -127,23 +128,33 @@ function EntryLines({ entries, onWhatIf }: { entries: ForecastEntry[]; onWhatIf?
   if (entries.length === 0) return <p className="hint">Nothing scheduled.</p>;
   return (
     <ul className="gap-entries">
-      {entries.map((e) => (
-        <li key={e.occurrence.id}>
-          <span className="gap-entry-date">{formatShort(e.date)}</span>
-          <span className="gap-entry-name">{e.occurrence.description}</span>
-          <FlowAmount kind={e.occurrence.kind} cents={e.amountCents} release={e.occurrence.release} />
-          {onWhatIf && e.occurrence.status === 'scheduled' && (
-            <button
-              type="button"
-              className="button small link gap-whatif"
-              onClick={() => onWhatIf(e.occurrence.id)}
-              aria-label={`See what happens if ${e.occurrence.description} on ${formatShort(e.date)} changes`}
-            >
-              See what happens if…
-            </button>
-          )}
-        </li>
-      ))}
+      {entries.map((e) => {
+        const line = (
+          <>
+            <span className="gap-entry-date">{formatShort(e.date)}</span>
+            <span className="gap-entry-name">{e.occurrence.description}</span>
+            <FlowAmount kind={e.occurrence.kind} cents={e.amountCents} release={e.occurrence.release} />
+          </>
+        );
+        // An expected payment is one tappable row (one target, not a link under every line) that opens "See what happens if…".
+        return (
+          <li key={e.occurrence.id}>
+            {onWhatIf && e.occurrence.status === 'scheduled' ? (
+              <button
+                type="button"
+                className="gap-entry gap-whatif"
+                onClick={() => onWhatIf(e.occurrence.id)}
+                aria-label={`See what happens if ${e.occurrence.description} on ${formatShort(e.date)} changes`}
+              >
+                {line}
+                <Icon icon={ChevronRight} size={16} className="chevron" />
+              </button>
+            ) : (
+              line
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

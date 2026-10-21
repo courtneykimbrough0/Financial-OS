@@ -67,7 +67,8 @@ describe('timing gaps at the end of setup', () => {
     // Oct 11 – Nov 7: paychecks Oct 15 and 29, rent Nov 1. $1,800 × 2 − $1,200.
     expect(document.querySelector('.left-to-spend')).toHaveTextContent('Cash flowNext 4 weeks · Oct 11 – Nov 7+$2,400.00');
     const breakdown = screen.getByRole('region', { name: 'Next 4 weeks' });
-    expect(breakdown).toHaveTextContent(/Oct 11 – Nov 7Income\+\$3,600\.00Spending−\$1,200\.00/);
+    // The banner above gives the range and the cash flow; the breakdown lists what makes it up.
+    expect(breakdown).toHaveTextContent(/^Next 4 weeksIncome\+\$3,600\.00Spending−\$1,200\.00Bills\$1,200\.00$/);
     expect(screen.getByText(/Lowest running total through Nov 7:/).closest('span')).toHaveTextContent('Lowest running total through Nov 7: $1,800.00 · Oct 15');
     expect(screen.queryByText(/First pay period/)).toBeNull();
   });

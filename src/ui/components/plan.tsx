@@ -69,7 +69,7 @@ export function BreakdownRows({ plan, recorded = false, total = true, hideZero =
  * period. Reserves are their own line: money set aside, never spending.
  * Classifications with nothing in the period are left out.
  */
-export function PeriodBreakdown({ plan, title, showRange = true, recorded = false }: { plan: PeriodPlan; title: string; showRange?: boolean; recorded?: boolean }) {
+export function PeriodBreakdown({ plan, title, showRange = true, recorded = false, total = true }: { plan: PeriodPlan; title: string; showRange?: boolean; recorded?: boolean; total?: boolean }) {
   if (planIsEmpty(plan))
     return (
       <section className="stack-sm" aria-labelledby="breakdown-period">
@@ -82,7 +82,7 @@ export function PeriodBreakdown({ plan, title, showRange = true, recorded = fals
       <SectionLabel id="breakdown-period">{title}</SectionLabel>
       <div className="card">
         {showRange && <p className="hint">{formatRange(plan.start, plan.end)}</p>}
-        <BreakdownRows plan={plan} recorded={recorded} />
+        <BreakdownRows plan={plan} recorded={recorded} total={total} />
       </div>
     </section>
   );

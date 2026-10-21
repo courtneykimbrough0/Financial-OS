@@ -265,7 +265,7 @@ function ItemSheet({ source, onClose, onOpenDate, onEdit }: { source: RecurringS
           </section>
         )}
         <div className="card-actions">
-          <button type="button" className="button small secondary" onClick={onEdit}>
+          <button type="button" className="button small primary" onClick={onEdit}>
             Edit
           </button>
           {source.active ? (
