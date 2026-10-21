@@ -2,7 +2,7 @@
 
 Financial OS uses a dark-first, card-based visual language. It is calm and legible, with large numbers and one consistent set of controls. Every token lives at the top of `src/styles.css`, and the shared React pieces live in `src/ui/components/common.tsx`.
 
-This file describes the visual system **as built**. The redesign direction is [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 7, built in roadmap Phase D one checkpoint at a time. **D1 (shared foundation) is built:** the type scale, one meaning per color (money out is neutral with a "−"; indigo is the accent only), sentence-case section labels, a smaller card radius, and the `ListGroup` and `EmptyLine` components. **D2 (Home), D3 (Forecast) and D4 (Plan and Activity) are built** (see the layout pattern below). Setup, sheets and desktop layouts follow in later checkpoints.
+This file describes the visual system **as built**. The redesign direction is [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 7, built in roadmap Phase D one checkpoint at a time. **D1 (shared foundation) is built:** the type scale, one meaning per color (money out is neutral with a "−"; indigo is the accent only), sentence-case section labels, a smaller card radius, and the `ListGroup` and `EmptyLine` components. **D2 (Home), D3 (Forecast), D4 (Plan and Activity) and D5 (setup and sheets) are built** (see the layout pattern below). Desktop layouts follow in a later checkpoint.
 
 The product's terms are fixed (Cash flow, Running total, Projected income, Projected expenses, Money in, Money out, Overdue, and so on). This system governs only how things look.
 
@@ -110,6 +110,8 @@ Home and the Forecast screen show only summaries. Detail opens in a bottom sheet
 - **Sheets:**
   - A day shows money in, money out and running total, then that day's transactions.
   - A transaction opened from a day sheet returns to that sheet when closed.
+
+- **Sheets (since D5):** one primary action each (Record on a payment, Edit on an item, Add a change or Apply change in "See what happens if…"), with secondary actions below and closing as a quiet link. In a timing gap, each expected payment is one tappable row that opens "See what happens if…". A payment's status sits with its kind under the amount.
 
 The guided setup follows the same pattern:
 
