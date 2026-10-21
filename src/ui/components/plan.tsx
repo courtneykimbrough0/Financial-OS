@@ -43,10 +43,11 @@ const OUTFLOW_ROWS: [Exclude<TransactionKind, 'income' | 'reserve'>, string][] =
  * The rows of a period's breakdown: income, spending with one indented row per
  * classification that has something in the period, Strategic Reserves (money
  * set aside, never spending) and, unless the caller shows it already, cash flow.
- * `hideZero` leaves out income or spending when nothing is in it.
+ * `hideZero` leaves out income or spending when nothing is in it; `byKind`
+ * false leaves out the per-classification rows.
  */
-export function BreakdownRows({ plan, recorded = false, total = true, hideZero = false }: { plan: PeriodPlan; recorded?: boolean; total?: boolean; hideZero?: boolean }) {
-  const rows = OUTFLOW_ROWS.filter(([kind]) => plan.byKind[kind] > 0);
+export function BreakdownRows({ plan, recorded = false, total = true, hideZero = false, byKind = true }: { plan: PeriodPlan; recorded?: boolean; total?: boolean; hideZero?: boolean; byKind?: boolean }) {
+  const rows = byKind ? OUTFLOW_ROWS.filter(([kind]) => plan.byKind[kind] > 0) : [];
   const incomeLabel = recorded ? 'Received' : 'Income';
   const spendingLabel = recorded ? 'Paid' : 'Spending';
   const reserveLabel = (positive: boolean) => recorded ? (positive ? 'Saved in reserves' : 'Used from reserves') : positive ? 'Set aside in reserves' : 'Used from reserves';

@@ -75,12 +75,14 @@ describe('Activity screen', () => {
     expect(screen.getByText('Savings')).toBeInTheDocument();
   });
 
-  it('shows the by-kind breakdown with recorded labels', async () => {
+  it('shows the by-kind breakdown with recorded labels, inside the one summary', async () => {
     await open('#/activity', recorded());
     await screen.findByRole('heading', { level: 1, name: 'Activity' });
-    const breakdown = screen.getByRole('region', { name: 'By kind' });
-    expect(within(breakdown).getByText('Received')).toBeInTheDocument();
-    expect(within(breakdown).getByText('Paid')).toBeInTheDocument();
+    const summary = screen.getByRole('region', { name: 'Month summary' });
+    expect(within(summary).getByText('Received', { selector: 'dt' })).toBeInTheDocument();
+    expect(within(summary).getByText('Paid', { selector: 'dt' })).toBeInTheDocument();
+    expect(within(summary).getByText('Bills', { selector: 'dt' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'By kind' })).toBeNull();
   });
 
   it('shows kind filter chips and filters the list by kind', async () => {

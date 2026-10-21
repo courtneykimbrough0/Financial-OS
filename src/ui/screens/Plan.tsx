@@ -15,7 +15,7 @@ const SECTIONS: { id: PlanSection; label: string }[] = [
  */
 export function Plan({ section }: { section: PlanSection }) {
   return (
-    <div className="stack-lg">
+    <div className="plan stack-lg">
       <nav className="segmented plan-nav" aria-label="Plan">
         {SECTIONS.map((s) => (
           <a key={s.id} href={`#/plan/${s.id}`} className={s.id === section ? 'active' : ''} aria-current={s.id === section ? 'page' : undefined}>

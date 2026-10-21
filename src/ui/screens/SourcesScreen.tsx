@@ -133,7 +133,7 @@ function SourceRow({ source, onOpen }: { source: RecurringSource; onOpen: () => 
   const current = source.versions[source.versions.length - 1]!;
   const status = itemStatus(data, source, today);
   return (
-    <li className={`card source-card${source.active ? '' : ' inactive'}`}>
+    <li className={`source-card${source.active ? '' : ' inactive'}`}>
       <button type="button" className="entry source-row" onClick={onOpen} aria-haspopup="dialog">
         <KindAvatar kind={source.kind} />
         <span className="entry-main">
@@ -345,11 +345,11 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
           {sources.length === 0 ? (
             showIntro ? null : <EmptyLine>{copy.empty}</EmptyLine>
           ) : (
-            <ul className="card-list">
+            <ListGroup className="source-list">
               {sources.map((s) => (
                 <SourceRow key={s.id} source={s} onOpen={() => setSheet({ kind: 'item', id: s.id })} />
               ))}
-            </ul>
+            </ListGroup>
           )}
         </section>
       )}
