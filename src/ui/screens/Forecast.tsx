@@ -504,7 +504,7 @@ function Calendar({
 function CalendarKey() {
   const items: [ReactNode, string][] = [
     [<span className="chip chip-in chip-expected legend-chip">+$1.8k</span>, 'Money in (green)'],
-    [<span className="chip chip-out chip-expected legend-chip">−$350</span>, 'Money out: bills, subscriptions, liabilities and spending (indigo)'],
+    [<span className="chip chip-out chip-expected legend-chip">−$350</span>, 'Money out: bills, subscriptions, liabilities and spending (gray, with a −)'],
     [<span className="chip chip-reserve chip-expected legend-chip">−$100</span>, 'Saved in Strategic Reserves (teal)'],
     [<span className="chip chip-out chip-done legend-chip">−$350</span>, 'Filled: received or paid'],
     [<span className="chip chip-out chip-expected legend-chip">−$350</span>, 'Outlined chip: still expected'],

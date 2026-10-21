@@ -6,7 +6,7 @@ import { formatMoney, formatSignedMoney } from '../../domain/money';
 import { activityView, type ActivityItem } from '../../domain/activity';
 import { KINDS, KIND_LABEL, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
-import { FlowAmount, Icon, KindAvatar, KindTag, SectionLabel, StatusBadge } from '../components/common';
+import { FlowAmount, Icon, KindAvatar, KindTag, ListGroup, SectionLabel, StatusBadge } from '../components/common';
 import { PeriodNav } from '../components/entries';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 import { PeriodBreakdown, TagBreakdown } from '../components/plan';
@@ -73,13 +73,13 @@ export function Activity() {
             {view.items.length === 0 && kindFilter ? (
               <p className="muted center">No {KIND_LABEL[kindFilter].toLowerCase()} items recorded this month.</p>
             ) : (
-              <ul className="entry-list card">
+              <ListGroup>
                 {view.items.map((item) => (
                   <li key={item.entry.occurrence.id}>
                     <ActivityRow item={item} onOpen={(id) => setSheet({ kind: 'occurrence', id })} />
                   </li>
                 ))}
-              </ul>
+              </ListGroup>
             )}
           </section>
         </>
