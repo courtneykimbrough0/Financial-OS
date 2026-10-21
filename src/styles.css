@@ -2374,29 +2374,78 @@ li.negative .tl-tally {
 .pick-actions > .button {
   flex: 1 1 140px;
 }
+/* The primary action takes its own full-width line, so its label stays on one line. */
+.pick-actions > .button.primary {
+  flex-basis: 100%;
+}
 .pick-actions > .hint {
   flex-basis: 100%;
   margin: 0;
 }
 
+/* Home progress (D2): one leading figure, then short labeled rows. A
+   change up or down is said in words with an arrow; red stays for below $0. */
+.progress-card > * + * {
+  margin-top: var(--space-2);
+}
 .progress-change {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   font-weight: 600;
 }
-.progress-change.up {
-  color: var(--color-in);
-}
-.progress-change.down {
-  color: var(--color-neg);
-}
-.progress-projected {
+.progress-facts {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
   font-size: var(--text-small);
 }
-.progress-projected:not(:first-child) {
+.progress-facts > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px var(--space-3);
+}
+.progress-facts dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+}
+.progress-facts dt .badge {
+  padding: 0;
+  color: var(--color-text);
+}
+.progress-facts dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.progress-facts dd.progress-change {
+  gap: 6px;
+}
+
+/* Home lists (D2): a day's items under a small date label, all on one surface. */
+.list-group-day > .subhead {
+  padding-top: var(--space-3);
+}
+.list-group-day > .entry-list > li:first-child > .entry {
   padding-top: var(--space-2);
-  border-top: 1px solid var(--color-border);
+}
+/* The checkbox column sits in the group's padding, so rows keep their width. */
+.home .pick-check {
+  margin-left: calc(-1 * var(--space-3));
+  margin-right: calc(-1 * var(--space-1));
+}
+/* Small phones: the kind avatar is decorative (each row names its kind or
+   status in words), so it gives way to the item's name. */
+@media (max-width: 374px) {
+  .home .entry > .avatar {
+    display: none;
+  }
 }
 .avatar-gap {
   background: var(--color-warn-soft);
