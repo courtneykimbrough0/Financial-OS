@@ -2,7 +2,7 @@
 
 Financial OS uses a dark-first, card-based visual language. It is calm and legible, with large numbers and one consistent set of controls. Every token lives at the top of `src/styles.css`, and the shared React pieces live in `src/ui/components/common.tsx`.
 
-This file describes the visual system **as built**. The redesign direction is [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 7, built in roadmap Phase D one checkpoint at a time. **D1 (shared foundation) is built:** the type scale, one meaning per color (money out is neutral with a "−"; indigo is the accent only), sentence-case section labels, a smaller card radius, and the `ListGroup` and `EmptyLine` components. Screen-by-screen changes (fewer cards per screen, one hero, one primary action) and desktop layouts follow in later checkpoints.
+This file describes the visual system **as built**. The redesign direction is [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 7, built in roadmap Phase D one checkpoint at a time. **D1 (shared foundation) is built:** the type scale, one meaning per color (money out is neutral with a "−"; indigo is the accent only), sentence-case section labels, a smaller card radius, and the `ListGroup` and `EmptyLine` components. **D2 (Home) is built** (see the layout pattern below). Other screens and desktop layouts follow in later checkpoints.
 
 The product's terms are fixed (Cash flow, Running total, Projected income, Projected expenses, Money in, Money out, Overdue, and so on). This system governs only how things look.
 
@@ -98,7 +98,10 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
 
 Home and the Forecast screen show only summaries. Detail opens in a bottom sheet:
 
-- **Home** (the opening screen) carries what needs attention (see README, Home); the forecast screen no longer has an overdue banner.
+- **Home** (the opening screen) carries what needs attention (see README, Home); the forecast screen no longer has an overdue banner. Since D2:
+  - One progress card leads: the recorded cash flow so far this month (or the projected month, labeled, when nothing is recorded), one comparison line, then short label-and-amount rows for the projected month, last month and the difference. Red only for figures below $0; up and down in words with an arrow.
+  - Needs attention, Coming up and Happened this week are each one `ListGroup`. Coming up puts each day as a small label inside its group instead of a card per day. Overdue payments say so in amber. An empty week is an `EmptyLine`.
+  - Below 375 px the kind avatar is hidden on Home rows so item names keep their width.
 - **Hero card:** cash flow for the period (large, signed; red with a trend-down icon when negative) with money in and out beneath it, then the lowest running total, a one-line timing-gap or all-clear callout, and the next expected payday. The (i) button explains cash flow and the running total.
 - **Calendar card:** the grid, then a "Calendar key" link that opens the key.
 - **Breakdown card:** income, expenses with one indented row per category that has something in the period, and cash flow.
