@@ -169,16 +169,17 @@ try {
   await shot('04a-home');
   await page.getByRole('button', { name: 'Full forecast and calendar' }).click();
 
-  step('forecast: cash flow leads, with a breakdown by category');
+  step('forecast: cash flow leads, with its breakdown by category in the same card');
   await page.getByRole('heading', { name: 'Your cash flow' }).waitFor();
   const heroText = await page.locator('.hero').innerText();
-  assert.match(heroText, /^Cash flow\s+\+\$3,190\.00\s+\+\$3,600\.00 in · −\$410\.00 out/);
+  assert.match(heroText, /^Cash flow\s+\+\$3,190\.00\s+Income\s+\+\$3,600\.00\s+Spending\s+−\$410\.00/);
   // Above $0 all month: one line says so, and the lowest running total isn't repeated.
   assert.match(heroText, /You stay above \$0 through Oct 31/);
   assert.doesNotMatch(heroText, /Lowest running total/);
-  const monthBreakdown = await page.locator('section[aria-labelledby="breakdown-period"]').innerText();
-  assert.match(monthBreakdown, /Bills\s+\$60\.00[\s\S]*Liability payments\s+\$350\.00[\s\S]*Cash flow\s+\+\$3,190\.00/);
-  assert.doesNotMatch(monthBreakdown, /Subscriptions|reserves/);
+  assert.match(heroText, /Bills\s+\$60\.00[\s\S]*Liability payments\s+\$350\.00/);
+  assert.doesNotMatch(heroText, /Subscriptions|reserves/);
+  // One summary: no second breakdown card repeating income, spending and cash flow.
+  assert.equal(await page.locator('section[aria-labelledby="breakdown-period"]').count(), 0);
   await shot('04-dashboard-month');
 
   step('forecast: no separate Week tab (Home has the week); a custom range covers one week, and quiet days fold into one line');
@@ -188,7 +189,7 @@ try {
   await page.getByLabel('Start date').fill('2026-10-18');
   await page.getByLabel('End date').fill('2026-10-24');
   assert.match(await page.locator('.hero').innerText(), /^Cash flow\s+−\$350\.00/);
-  const weekBreakdown = await page.locator('section[aria-labelledby="breakdown-period"]').innerText();
+  const weekBreakdown = await page.locator('.hero').innerText();
   assert.match(weekBreakdown, /Liability payments\s+\$350\.00/);
   assert.doesNotMatch(weekBreakdown, /Bills/);
   await page.getByRole('button', { name: /^Oct 18 – 24/ }).click();
@@ -380,7 +381,7 @@ try {
   await page.getByRole('tab', { name: 'Custom', exact: true }).click();
   await page.getByLabel('End date').fill('2026-11-30');
   await page.locator('.callout-danger').waitFor();
-  assert.match(await page.locator('.callout-danger').innerText(), /Short \$600\.00 · Nov 5 – 9/);
+  assert.match(await page.locator('.callout-danger').innerText(), /Short \$600\.00\s+Timing gap · Nov 5 – 9/);
   await shot('11-sample-data');
   // The warning opens an explanation from the same forecast: what leads to the low point and what ends it.
   await page.locator('.callout-danger').click();
