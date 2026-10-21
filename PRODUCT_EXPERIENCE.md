@@ -165,7 +165,7 @@ The row loses its three equal buttons and its "On" badge. Only "Off" is marked, 
 
 **Next date shows the item's true status.** When an occurrence is overdue, the row says "Overdue since Oct 5", not "Next: Nov 5". Today the same bill appears on three different dates (audit finding H5).
 
-**As built (Implemented, C5).** Rows and the item sheet are as described, inside the four Plan tabs (decision S7: Income, Expenses with Bills, Subscriptions and Varied, Liabilities, Reserves) rather than six sections. The sheet also shows any scheduled change. Delete appears only when the item has no recorded history. The estimate suggestion stays on the row.
+**As built (Implemented, C5).** Rows and the item sheet are as described, inside the four Plan tabs (decision S7: Income, Expenses with Bills, Subscriptions and Varied, Liabilities, Reserves) rather than six sections. The sheet also shows any scheduled change. Delete appears only when the item has no recorded history. The estimate suggestion stays on the row. **Visual refinement (Implemented, D4):** a section's rows sit in one list group instead of a card each, and Plan's pills fit a 320 px phone.
 
 ### 3.5 Settings
 
@@ -194,7 +194,7 @@ Corrections are ordinary edits, with no undo history (AGENTS.md section A2).
 
 ## 4. Recorded activity: the Activity view (Implemented, C3)
 
-**Today.** The Activity tab shows all recorded (completed) entries for the selected month, sorted newest first, with a summary (Received, Paid, Cash flow), a by-kind breakdown using recorded labels (Received/Paid/Saved), a by-tag breakdown, kind filter chips, and expected-vs-actual variance for each item. Month navigation uses the same `PeriodNav` as Forecast. The domain layer (`activityView` in `src/domain/activity.ts`) produces a `PeriodPlan`-compatible summary so `PeriodBreakdown` and `TagBreakdown` render it directly.
+**Today.** The Activity tab shows all recorded (completed) entries for the selected month, sorted newest first, with a summary (Received, Paid, Cash flow), a by-kind breakdown using recorded labels (Received/Paid/Saved), a by-tag breakdown, kind filter chips, and expected-vs-actual variance for each item. Month navigation uses the same `PeriodNav` as Forecast. The domain layer (`activityView` in `src/domain/activity.ts`) produces a `PeriodPlan`-compatible summary so `BreakdownRows` and `TagBreakdown` render it directly. **Visual refinement (Implemented, D4):** the summary and the by-kind breakdown are one card, recorded cash flow first (decisions S1 and S2 unchanged).
 
 ### 4.1 First release: existing data only
 

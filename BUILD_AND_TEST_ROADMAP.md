@@ -75,8 +75,9 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | C6, one "See what happens if…" | **Complete**, merged as `0f4d33f` | Phase C6 |
 | D1, shared visual foundation | **Complete**, merged as `27cda0b` | Phase D |
 | D2, Home | **Complete**, merged as `89f25be` | Phase D |
-| D3, Forecast | **Complete** (in review) | Phase D |
-| D4 onward: screens, then desktop | **Planned** | Phase D |
+| D3, Forecast | **Complete**, merged as `81bdf00` | Phase D |
+| D4, Plan and Activity | **Complete** (in review) | Phase D |
+| D5 onward: setup and sheets, then desktop | **Planned** | Phase D |
 | E, income expansion | **Planned**, needs separate approval and decision D8 | Phase E |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
 | AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
@@ -307,13 +308,19 @@ PRODUCT_EXPERIENCE.md §7: tokens and components first, then screen by screen, t
   - **Coming up:** one `ListGroup` for the week, each day a small label inside it (was one card per day). **Happened this week:** one `ListGroup`. An empty week is an `EmptyLine`.
   - **Small phones (≤ 374 px):** the decorative kind avatar gives way to the item name, and the checkbox column sits in the group's padding; at 320 px names no longer break mid-word and badges no longer overlap amounts.
   - Tests: `home-d2` (8): hand-computed progress figures below $0 and their difference, projected-only lead equal to the Forecast month, list-group structure, amber only for overdue payments, empty line, 44px checkbox targets, the small-phone rule. The smoke test finds the progress card by its region name.
-- **D3. Forecast (complete, October 2026; in review).** Forecast only, on the D1 foundation and D2 patterns; no domain, classification or stored-data change. Activity's and setup's breakdowns are unchanged (they share the new `BreakdownRows`).
+- **D3. Forecast (complete, October 2026; merged as `81bdf00`).** Forecast only, on the D1 foundation and D2 patterns; no domain, classification or stored-data change. Activity's and setup's breakdowns are unchanged (they share the new `BreakdownRows`).
   - **One summary:** the breakdown (income, spending with a row per classification, reserves) moved into the cash-flow card under the figure, replacing the "in · out" line and the separate Breakdown card that repeated income, spending and cash flow. Rows with nothing in them are left out; a period with nothing in it says so in one line.
   - **Below $0:** the lowest running total is a labeled row in red; the gap callout reads "Short $X" over "Timing gap · dates" and still opens the explanation. When the running total starts after the period, the payday line says "Your running total starts then." instead of an empty lowest-total row.
   - **Week by week** is one `ListGroup`. A week's Net shows only when more than one kind of money moved (it repeated the single amount). An open week lists only the amounts each day has (no "—" placeholders); reserves get their own labeled cell.
   - **Small phones (≤ 374 px):** calendar chips drop the "$" and tighten so amounts fit their day (each day's label still reads the full amount); the custom range's date fields stack instead of overflowing the page (a pre-existing defect).
   - Tests: `forecast-d3` (10): hand-computed summary figures that add up to the cash flow, no repeated breakdown, zero rows hidden, the running-total-starts line, red lowest point and gap that opens its explanation, red weeks and days below $0, one list group with Net only when it adds something, no dashes in open weeks, chip markup and narrow rule, recorded vs expected chips, custom range layout. Updated: two `visibility` tests and the smoke test read the breakdown from the summary card.
-- **Next (proposed):** D4, Plan and Activity: list groups for Plan rows and Activity's summary and By kind, consistent empty lines, and the same small-phone row checks; then setup and sheets; then desktop (≥ 1024 px left rail, side-panel sheets).
+- **D4. Plan and Activity (complete, October 2026; in review).** On the D1 foundation and the D2/D3 patterns; no domain, classification or stored-data change. Setup, sheets and desktop are unchanged.
+  - **Activity summary:** one card leads with recorded cash flow ("Recorded" badge), then its breakdown (Received, Paid, a row per classification, reserves) from the shared `BreakdownRows`. It replaces the three-figure strip and the separate By kind card, which repeated the same three figures; the strip also overflowed a 320 px screen. Decision S1 holds inside the card: per-classification rows show only when more than one classification has activity. Decision S2 holds: Received and Paid show even at $0.00.
+  - **Activity empty states** (a month with nothing recorded, a filter with no items) are `EmptyLine`s.
+  - **Plan:** each section's recurring items are rows in one `ListGroup` (was one card per item). Rows keep their schedule, next date or "Overdue since" in amber, tags, account and estimate suggestion; an item that is off stays in the list with its "Off" badge and a secondary-color name.
+  - **Small phones (≤ 374 px):** Activity and Plan rows hide the decorative avatar as Home's do, so names no longer break mid-word; Plan's four section pills share the width so all four fit without scrolling (DESIGN.md's rule, which failed at 320 px); a section's Add buttons go under its heading instead of stacking at the right.
+  - Tests: `plan-activity-d4` (7): hand-computed recorded figures that add up to the cash flow, no repeated summary, empty month line, recorded badges in one list group, Plan rows in one list group with overdue in amber, an Off item still listed and opening, the small-phone rules. Updated: the Activity by-kind test and the S1/S2 tests read the one summary; the D2 small-phone CSS test allows the shared selector; the smoke test finds Plan rows by `.source-list`.
+- **Next (proposed):** D5, setup and sheets: the three setup steps and the bottom sheets (item, occurrence, day, gaps, "See what happens if…") on the same foundation, one primary action per sheet, and the same 320 px checks; then desktop (≥ 1024 px left rail, side-panel sheets).
 
 #### E. Income expansion (possible new functionality; separate approval)
 
