@@ -1198,6 +1198,22 @@ fieldset.inline-fields .field label {
   border-color: var(--color-reserve);
   color: var(--color-reserve);
 }
+/* Small phones: a day is about 40px wide, so chips drop the "$" (the day's
+   label reads each amount in full) and tighten, and never spill past the day. */
+@media (max-width: 374px) {
+  .cal-day {
+    padding: 6px 2px 4px;
+  }
+  .cal-chips .chip {
+    padding: 1px 2px;
+    border-width: 1px;
+    font-size: 0.625rem;
+    letter-spacing: -0.02em;
+  }
+  .cal-chips .chip-cur {
+    display: none;
+  }
+}
 @media (min-width: 520px) {
   .cal-day {
     min-height: 104px;
@@ -1316,8 +1332,8 @@ fieldset.inline-fields .field label {
 }
 .timeline > li.negative {
   background: var(--color-neg-soft);
-  margin: 0 calc(-1 * var(--space-5));
-  padding: 0 var(--space-5);
+  margin: 0 calc(-1 * var(--space-4));
+  padding: 0 var(--space-4);
 }
 .timeline-row {
   display: grid;
@@ -2310,15 +2326,6 @@ li.negative .tl-tally {
 
 /* ---------- Dashboard: cash flow hero and week rows ---------- */
 
-.hero-stat {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 4px 12px;
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
-}
 .week-tally {
   display: inline-flex;
   align-items: center;
@@ -2820,4 +2827,52 @@ button.callout.gap-line:focus-visible {
 .overdue-text {
   color: var(--color-warn);
   font-weight: 600;
+}
+
+/* Forecast summary (D3): the breakdown sits in the hero, under cash flow. */
+.hero-body > .breakdown {
+  margin-top: var(--space-3);
+}
+.hero-body > .breakdown.hero-low {
+  margin-top: 0;
+  border-top: 1px solid var(--color-border);
+}
+.gap-when {
+  display: block;
+  font-size: var(--text-caption);
+  color: var(--color-text);
+}
+.hero-footer-sub {
+  display: block;
+  font-size: var(--text-small);
+  font-weight: 400;
+  color: var(--color-text-secondary);
+}
+.tl-none {
+  grid-column: 1 / -1;
+}
+/* The label keeps its line; on a narrow card the amount moves under it. */
+.hero-low .breakdown-row {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+.hero-low dt {
+  flex-shrink: 0;
+}
+/* Week by week is a list group; its older reset must not take the group's padding. */
+.list-group.week-list {
+  padding: var(--space-1) var(--space-4);
+}
+/* Custom range: date fields shrink with the page, and stack on small phones. */
+.custom-range {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.custom-range input {
+  min-width: 0;
+  width: 100%;
+}
+@media (max-width: 374px) {
+  .custom-range {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

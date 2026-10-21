@@ -34,18 +34,18 @@ import {
   type NegativeStretch,
   type WeekSummary,
 } from '../../domain/forecast';
-import { formatCompact, formatMoney, formatMoneyIn, formatMoneyOut, formatSignedMoney } from '../../domain/money';
+import { formatCompact, formatMoney, formatMoneyIn, formatMoneyOut, formatSignedMoney, type Cents } from '../../domain/money';
 import { periodPlan, type PeriodPlan } from '../../domain/plan';
 import { useStore } from '../../state/store';
-import { Icon, Modal, SectionLabel } from '../components/common';
+import { Icon, ListGroup, Modal, SectionLabel } from '../components/common';
 import { EntryButton, PeriodNav, shortDay } from '../components/entries';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 import { ScenarioSheet } from '../components/ScenarioSheet';
 import { GapsSheet } from '../components/gaps';
-import { PeriodBreakdown, TagBreakdown } from '../components/plan';
+import { BreakdownRows, TagBreakdown } from '../components/plan';
 import { DayTransfers } from '../components/money-accounts';
 import { consumeForecastDate, navigate, parseForecastDate } from '../router';
-import { agendaItems, dayIsActive, isNegative, weekIsActive } from '../visibility';
+import { agendaItems, dayIsActive, isNegative, planIsEmpty, weekIsActive } from '../visibility';
 
 /** Forecast views. The week has its own place on Home; here each period lists its weeks, and a week opens its days. */
 type View = 'month' | 'custom';
@@ -267,7 +267,6 @@ function PeriodBody({
         </div>
       </div>
 
-      <PeriodBreakdown plan={plan} title="Breakdown" showRange={false} />
       <TagBreakdown plan={plan} />
 
       <WeekList forecast={forecast} start={start} end={end} today={today} lowDate={low?.date ?? null} onDay={onDay} />
@@ -290,8 +289,11 @@ function PeriodGapsSheet({ forecast, range, onClose }: { forecast: Forecast; ran
 }
 
 /**
- * The headline card: cash flow (income minus expenses) for the period in view,
- * then the lowest running total, any timing gap, and the next expected payday.
+ * The one summary for the period in view: cash flow (income minus spending
+ * and money set aside), with its breakdown beneath it instead of in a second
+ * card. Then, when the running total goes below $0, the lowest point and the
+ * timing gap; otherwise one line saying it stays above $0. The next expected
+ * payday closes the card.
  */
 function CashFlowHero({
   forecast,
@@ -330,34 +332,27 @@ function CashFlowHero({
           {negative && <Icon icon={TrendingDown} size={28} />}
           {formatSignedMoney(plan.cashFlowCents)}
         </p>
-        <p className="hero-sub">
-          <span className="amount-in">{formatMoneyIn(plan.incomeCents)}</span> in · <span className="amount-out">{formatMoneyOut(plan.outflowCents)}</span> out
-          {plan.reservesCents !== 0 && (
-            <>
-              {' · '}
-              <span className="amount-reserve">{formatMoney(Math.abs(plan.reservesCents))}</span> {plan.reservesCents > 0 ? 'saved' : 'from reserves'}
-            </>
-          )}
-        </p>
-        {payday && (!low || low.tallyCents < 0) && (
-          <div className="hero-stat">
-            <span className="muted">Lowest running total</span>
-            {low ? (
-              <span className="negative-text">
-                <strong>{formatMoney(low.tallyCents)}</strong>
+        {planIsEmpty(plan) ? <p className="hint">Nothing scheduled in this period.</p> : <BreakdownRows plan={plan} total={false} hideZero />}
+        {low && low.tallyCents < 0 && (
+          <dl className="breakdown hero-low">
+            <div className="breakdown-row">
+              <dt>Lowest running total</dt>
+              <dd className="negative-text">
+                {formatMoney(low.tallyCents)}
                 <span className="muted"> · {formatShort(low.date)}</span>
-              </span>
-            ) : (
-              <span className="muted">Starts {formatShort(payday)}</span>
-            )}
-          </div>
+              </dd>
+            </div>
+          </dl>
         )}
         {worst && (
           <button type="button" className="callout callout-danger gap-line" onClick={() => setShowGaps(true)} aria-haspopup="dialog">
             <Icon icon={TrendingDown} size={16} />
             <span>
-              <strong>Short {formatMoney(-worst.lowestCents)}</strong> · {formatRange(worst.start, worst.end)}
-              {negatives.length > 1 && ` (+${negatives.length - 1} more)`}
+              <strong>Short {formatMoney(-worst.lowestCents)}</strong>
+              <span className="gap-when">
+                Timing gap · {formatRange(worst.start, worst.end)}
+                {negatives.length > 1 && ` (+${negatives.length - 1} more)`}
+              </span>
             </span>
             <Icon icon={ChevronRight} size={16} />
           </button>
@@ -382,6 +377,7 @@ function CashFlowHero({
                   ? 'Next paycheck is today'
                   : `Your ${formatShort(payday)} paycheck is overdue`}
             <span className="muted"> · {formatShort(payday)}</span>
+            {!low && <span className="hero-footer-sub">Your running total starts then.</span>}
           </span>
         </div>
       )}
@@ -404,6 +400,17 @@ function dayAriaLabel(row: DayRow | undefined, date: DateStr, isLow: boolean): s
   if (row.tallyCents !== null) bits.push(`running total ${formatMoney(row.tallyCents)}${row.tallyCents < 0 ? ', below zero' : ''}`);
   if (isLow) bits.push('lowest point');
   return bits.join(', ');
+}
+
+/** A chip's amount. The "$" gives way on small phones so the amount fits its day; the day's label reads it in full. */
+function ChipAmount({ sign, cents }: { sign: '+' | '−'; cents: Cents }) {
+  return (
+    <span>
+      {sign}
+      <span className="chip-cur">$</span>
+      {formatCompact(cents).slice(1)}
+    </span>
+  );
 }
 
 /** Chip style for one direction of money on a day: filled when every item is recorded, outlined while any is expected. */
@@ -486,9 +493,9 @@ function Calendar({
                       {date === lowDate && <span className="flag-low">Low</span>}
                     </span>
                     <span className="cal-chips" aria-hidden="true">
-                      {row && row.outCents > 0 && <span className={`chip chip-out chip-${chipState(row.entries, 'out')}`}>−{formatCompact(row.outCents)}</span>}
-                      {row && row.reservedCents !== 0 && <span className={`chip chip-reserve chip-${chipState(row.entries, 'reserve')}`}>{row.reservedCents > 0 ? '−' : '+'}{formatCompact(Math.abs(row.reservedCents))}</span>}
-                      {row && row.inCents > 0 && <span className={`chip chip-in chip-${chipState(row.entries, 'in')}`}>+{formatCompact(row.inCents)}</span>}
+                      {row && row.outCents > 0 && <span className={`chip chip-out chip-${chipState(row.entries, 'out')}`}><ChipAmount sign="−" cents={row.outCents} /></span>}
+                      {row && row.reservedCents !== 0 && <span className={`chip chip-reserve chip-${chipState(row.entries, 'reserve')}`}><ChipAmount sign={row.reservedCents > 0 ? '−' : '+'} cents={Math.abs(row.reservedCents)} /></span>}
+                      {row && row.inCents > 0 && <span className={`chip chip-in chip-${chipState(row.entries, 'in')}`}><ChipAmount sign="+" cents={row.inCents} /></span>}
                     </span>
                   </button>
                 </td>
@@ -532,7 +539,8 @@ function CalendarKey() {
 /** Week by week. Each week opens in place to show its days, with the running total at the end of each day. */
 function WeekNums({ w }: { w: WeekSummary }) {
   const negative = w.endTallyCents !== null && w.endTallyCents < 0;
-  const moved = w.incomeCents !== 0 || w.outflowCents !== 0 || w.reservesCents !== 0;
+  // Net repeats the amount when only one kind of money moved, so it shows only when it adds something.
+  const moves = [w.incomeCents, w.outflowCents, w.reservesCents].filter((c) => c !== 0).length;
   return (
     <span className="week-nums">
       {w.incomeCents !== 0 && (
@@ -553,7 +561,7 @@ function WeekNums({ w }: { w: WeekSummary }) {
           <span className="amount amount-reserve">{formatSignedMoney(-w.reservesCents)}</span>
         </span>
       )}
-      {moved && <span className={w.netCents < 0 ? 'week-net negative' : 'week-net'}>Net {formatSignedMoney(w.netCents)}</span>}
+      {moves > 1 && <span className={w.netCents < 0 ? 'week-net negative' : 'week-net'}>Net {formatSignedMoney(w.netCents)}</span>}
       {w.endTallyCents !== null && (
         <span className={negative ? 'week-tally negative' : 'week-tally'}>
           {negative && <Icon icon={TrendingDown} size={14} />}
@@ -570,42 +578,43 @@ function WeekList({ forecast, start, end, today, lowDate, onDay }: { forecast: F
   return (
     <section aria-labelledby="weeks-heading" className="stack-sm">
       <SectionLabel id="weeks-heading">Week by week</SectionLabel>
-      <div className="card list-card">
-        <ul className="week-list">
-          {weeks.map((w) => {
-            if (!weekIsActive(w))
-              return (
-                <li key={w.start}>
-                  <div className="week-row quiet">
-                    <span className="week-label">{formatRange(w.start, w.end)}</span>
-                    <span className="week-nums">
-                      <span className="muted">Nothing scheduled</span>
-                      {w.endTallyCents !== null && <span className="week-tally">Running total {formatMoney(w.endTallyCents)}</span>}
-                    </span>
-                  </div>
-                </li>
-              );
-            const expanded = open === w.start;
+      <ListGroup className="week-list">
+        {weeks.map((w) => {
+          if (!weekIsActive(w))
             return (
-              <li key={w.start} className={expanded ? 'open' : ''}>
-                <button type="button" className="week-row" aria-expanded={expanded} aria-controls={`week-${w.start}`} onClick={() => setOpen(expanded ? null : w.start)}>
+              <li key={w.start}>
+                <div className="week-row quiet">
                   <span className="week-label">{formatRange(w.start, w.end)}</span>
-                  <WeekNums w={w} />
-                  <Icon icon={expanded ? ChevronUp : ChevronDown} size={18} className="chevron" />
-                </button>
-                {expanded && (
-                  <div id={`week-${w.start}`} className="week-days">
-                    <Timeline rows={w.days} today={today} lowDate={lowDate} onSelect={onDay} forecastStart={forecast.forecastStart} />
-                  </div>
-                )}
+                  <span className="week-nums">
+                    <span className="muted">Nothing scheduled</span>
+                    {w.endTallyCents !== null && <span className="week-tally">Running total {formatMoney(w.endTallyCents)}</span>}
+                  </span>
+                </div>
               </li>
             );
-          })}
-        </ul>
-      </div>
+          const expanded = open === w.start;
+          return (
+            <li key={w.start} className={expanded ? 'open' : ''}>
+              <button type="button" className="week-row" aria-expanded={expanded} aria-controls={`week-${w.start}`} onClick={() => setOpen(expanded ? null : w.start)}>
+                <span className="week-label">{formatRange(w.start, w.end)}</span>
+                <WeekNums w={w} />
+                <Icon icon={expanded ? ChevronUp : ChevronDown} size={18} className="chevron" />
+              </button>
+              {expanded && (
+                <div id={`week-${w.start}`} className="week-days">
+                  <Timeline rows={w.days} today={today} lowDate={lowDate} onSelect={onDay} forecastStart={forecast.forecastStart} />
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ListGroup>
     </section>
   );
 }
+
+/** How many kinds of money moved on a day: in, out, and to or from reserves. */
+const moves = (r: DayRow) => [r.inCents, r.outCents, r.reservedCents].filter((c) => c !== 0).length;
 
 function Timeline({
   rows,
@@ -645,24 +654,31 @@ function Timeline({
                     {shortDay(r.date)}
                     {r.date === lowDate && <span className="badge badge-low">Lowest</span>}
                   </span>
-                  <span className="tl-cell">
-                    <span className="tl-label">In</span>
-                    <span className="amount amount-in">{r.inCents ? `+${formatMoney(r.inCents)}` : '—'}</span>
-                  </span>
-                  <span className="tl-cell">
-                    <span className="tl-label">Out</span>
-                    <span className="amount amount-out">{r.outCents ? `−${formatMoney(r.outCents)}` : '—'}</span>
-                    {r.reservedCents !== 0 && (
-                      <span className="amount amount-reserve">
-                        {formatSignedMoney(-r.reservedCents)}
-                        <span className="sr-only">{r.reservedCents > 0 ? ' saved in reserves' : ' from reserves'}</span>
-                      </span>
-                    )}
-                  </span>
-                  <span className="tl-cell">
-                    <span className="tl-label">Net</span>
-                    <span>{formatSignedMoney(r.netCents)}</span>
-                  </span>
+                  {r.inCents !== 0 && (
+                    <span className="tl-cell">
+                      <span className="tl-label">In</span>
+                      <span className="amount amount-in">+{formatMoney(r.inCents)}</span>
+                    </span>
+                  )}
+                  {r.outCents !== 0 && (
+                    <span className="tl-cell">
+                      <span className="tl-label">Out</span>
+                      <span className="amount amount-out">−{formatMoney(r.outCents)}</span>
+                    </span>
+                  )}
+                  {r.reservedCents !== 0 && (
+                    <span className="tl-cell">
+                      <span className="tl-label">{r.reservedCents > 0 ? 'Saved' : 'From reserves'}</span>
+                      <span className="amount amount-reserve">{formatSignedMoney(-r.reservedCents)}</span>
+                    </span>
+                  )}
+                  {moves(r) > 1 && (
+                    <span className="tl-cell">
+                      <span className="tl-label">Net</span>
+                      <span>{formatSignedMoney(r.netCents)}</span>
+                    </span>
+                  )}
+                  {moves(r) === 0 && r.tallyCents === null && <span className="tl-cell tl-none muted">Nothing scheduled</span>}
                   {r.tallyCents !== null && (
                     <span className="tl-cell tl-tally">
                       <span className="tl-label">Running total</span>

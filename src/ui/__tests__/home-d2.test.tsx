@@ -173,7 +173,6 @@ describe('D2 lists: related rows on one surface', () => {
   });
 
   it('on small phones the decorative avatar gives way to the item name', () => {
-    const narrow = css.slice(css.indexOf('@media (max-width: 374px)'));
-    expect(narrow.slice(0, narrow.indexOf('}\n}'))).toContain('.home .entry > .avatar');
+    expect(css).toMatch(/@media \(max-width: 374px\) \{\s*\.home \.entry > \.avatar \{\s*display: none;/);
   });
 });

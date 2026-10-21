@@ -40,15 +40,35 @@ const OUTFLOW_ROWS: [Exclude<TransactionKind, 'income' | 'reserve'>, string][] =
 ];
 
 /**
+ * The rows of a period's breakdown: income, spending with one indented row per
+ * classification that has something in the period, Strategic Reserves (money
+ * set aside, never spending) and, unless the caller shows it already, cash flow.
+ * `hideZero` leaves out income or spending when nothing is in it.
+ */
+export function BreakdownRows({ plan, recorded = false, total = true, hideZero = false }: { plan: PeriodPlan; recorded?: boolean; total?: boolean; hideZero?: boolean }) {
+  const rows = OUTFLOW_ROWS.filter(([kind]) => plan.byKind[kind] > 0);
+  const incomeLabel = recorded ? 'Received' : 'Income';
+  const spendingLabel = recorded ? 'Paid' : 'Spending';
+  const reserveLabel = (positive: boolean) => recorded ? (positive ? 'Saved in reserves' : 'Used from reserves') : positive ? 'Set aside in reserves' : 'Used from reserves';
+  return (
+    <dl className="breakdown">
+      {(!hideZero || plan.incomeCents !== 0) && <Row label={incomeLabel} value={formatSignedMoney(plan.incomeCents)} tone="in" />}
+      {(!hideZero || plan.outflowCents !== 0) && <Row label={spendingLabel} value={plan.outflowCents ? `−${formatMoney(plan.outflowCents)}` : formatMoney(0)} tone="out" />}
+      {rows.map(([kind, label]) => (
+        <Row key={kind} label={label} value={formatMoney(plan.byKind[kind])} level={1} />
+      ))}
+      {plan.reservesCents !== 0 && <Row label={reserveLabel(plan.reservesCents > 0)} value={formatSignedMoney(-plan.reservesCents)} tone="reserve" />}
+      {total && <Row label="Cash flow" value={formatSignedMoney(plan.cashFlowCents)} tone={plan.cashFlowCents < 0 ? 'neg' : undefined} strong />}
+    </dl>
+  );
+}
+
+/**
  * Income, spending by classification, Strategic Reserves, and cash flow for a
  * period. Reserves are their own line: money set aside, never spending.
  * Classifications with nothing in the period are left out.
  */
 export function PeriodBreakdown({ plan, title, showRange = true, recorded = false }: { plan: PeriodPlan; title: string; showRange?: boolean; recorded?: boolean }) {
-  const rows = OUTFLOW_ROWS.filter(([kind]) => plan.byKind[kind] > 0);
-  const incomeLabel = recorded ? 'Received' : 'Income';
-  const spendingLabel = recorded ? 'Paid' : 'Spending';
-  const reserveLabel = (positive: boolean) => recorded ? (positive ? 'Saved in reserves' : 'Used from reserves') : positive ? 'Set aside in reserves' : 'Used from reserves';
   if (planIsEmpty(plan))
     return (
       <section className="stack-sm" aria-labelledby="breakdown-period">
@@ -61,15 +81,7 @@ export function PeriodBreakdown({ plan, title, showRange = true, recorded = fals
       <SectionLabel id="breakdown-period">{title}</SectionLabel>
       <div className="card">
         {showRange && <p className="hint">{formatRange(plan.start, plan.end)}</p>}
-        <dl className="breakdown">
-          <Row label={incomeLabel} value={formatSignedMoney(plan.incomeCents)} tone="in" />
-          <Row label={spendingLabel} value={plan.outflowCents ? `−${formatMoney(plan.outflowCents)}` : formatMoney(0)} tone="out" />
-          {rows.map(([kind, label]) => (
-            <Row key={kind} label={label} value={formatMoney(plan.byKind[kind])} level={1} />
-          ))}
-          {plan.reservesCents !== 0 && <Row label={reserveLabel(plan.reservesCents > 0)} value={formatSignedMoney(-plan.reservesCents)} tone="reserve" />}
-          <Row label="Cash flow" value={formatSignedMoney(plan.cashFlowCents)} tone={plan.cashFlowCents < 0 ? 'neg' : undefined} strong />
-        </dl>
+        <BreakdownRows plan={plan} recorded={recorded} />
       </div>
     </section>
   );

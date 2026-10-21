@@ -215,9 +215,9 @@ export function FlowAmount({ kind, cents, strike, release }: { kind: Transaction
 }
 
 /** Related rows on one surface, separated by hairlines. Each child is one row. */
-export function ListGroup({ label, children }: { label?: string; children: ReactNode }) {
+export function ListGroup({ label, className, children }: { label?: string; className?: string; children: ReactNode }) {
   return (
-    <ul className="list-group" aria-label={label}>
+    <ul className={className ? `list-group ${className}` : 'list-group'} aria-label={label}>
       {children}
     </ul>
   );

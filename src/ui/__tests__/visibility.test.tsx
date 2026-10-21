@@ -146,7 +146,7 @@ describe('Forecast: week by week', () => {
     const days = document.querySelector('.week-days .timeline')!;
     expect([...days.children].map((li) => li.textContent)).toEqual([
       'Oct 11 – 12 · nothing scheduled',
-      'Tue, Oct 13In—Out—Net$0.00',
+      'Tue, Oct 13Nothing scheduled',
       'Oct 14 – 15 · nothing scheduled',
       'Your running total starts Oct 16, your next payday.',
       expect.stringMatching(/^Fri, Oct 16.*Running total\$1,800\.00$/),
@@ -183,7 +183,7 @@ describe('Forecast: the summary', () => {
     expect(hero).not.toHaveTextContent('You stay above $0');
   });
 
-  it('a range with nothing in it shows one line instead of a $0.00 breakdown', async () => {
+  it('a range with nothing in it shows one line in the summary instead of a $0.00 breakdown', async () => {
     const user = await open('#/forecast', steady());
     const views = await screen.findByRole('tablist', { name: 'Forecast view' });
     await user.click(within(views).getByRole('tab', { name: 'Custom' }));
@@ -193,9 +193,10 @@ describe('Forecast: the summary', () => {
     await user.type(startDate, '2026-10-14');
     await user.clear(endDate);
     await user.type(endDate, '2026-10-15');
-    const breakdown = screen.getByRole('region', { name: 'Breakdown' });
-    expect(breakdown).toHaveTextContent('BreakdownNothing scheduled in this period.');
-    expect(within(breakdown).queryByText('Cash flow')).toBeNull();
+    const hero = screen.getByText('Cash flow', { selector: '.hero-label' }).closest('section')!;
+    expect(hero).toHaveTextContent('Nothing scheduled in this period.');
+    expect(hero.querySelector('.breakdown')).toBeNull();
+    expect(hero).not.toHaveTextContent(/Income|Spending/);
   });
 
   it('with no recurring income, only the setup card shows: no $0.00 summary, calendar or breakdown', async () => {
