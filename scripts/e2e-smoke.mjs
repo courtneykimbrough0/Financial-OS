@@ -230,7 +230,7 @@ try {
 
   step('home: what was recorded appears under Happened this week, and weeks move without changing what is overdue');
   assert.match(await page.getByRole('region', { name: 'Happened this week' }).innerText(), /Paycheck[\s\S]*Expected \$1,800\.00 on Oct 15[\s\S]*\+\$1,650\.00/);
-  assert.match(await page.locator('.progress').innerText(), /Cash flow so far in October\s*Recorded[\s\S]*\+\$1,650\.00/i);
+  assert.match(await page.getByRole('region', { name: /Cash flow so far in October/ }).innerText(), /Cash flow so far in October\s*Recorded[\s\S]*\+\$1,650\.00/i);
   await shot('07b-home-recorded');
   await page.getByRole('button', { name: 'Next week' }).click();
   await page.getByRole('heading', { name: 'Oct 18 – 24', level: 2 }).waitFor();

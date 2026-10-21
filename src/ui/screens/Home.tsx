@@ -6,7 +6,7 @@ import { formatMoney, formatSignedMoney } from '../../domain/money';
 import { homeView, type CashFlowComparison, type HomeGap, type HomeItem, type HomeOccurrence, type HomeProgress, type HomeView } from '../../domain/home';
 import * as ops from '../../domain/operations';
 import { useStore } from '../../state/store';
-import { Field, FlowAmount, FormError, Icon, KindAvatar, Modal, SectionLabel, useToast } from '../components/common';
+import { EmptyLine, Field, FlowAmount, FormError, Icon, KindAvatar, ListGroup, Modal, SectionLabel, useToast } from '../components/common';
 import { EntryButton, PeriodNav, shortDay } from '../components/entries';
 import { GapsSheet } from '../components/gaps';
 import { AccountLabel, TransferForm, TransferRow, useAccountsAvailable } from '../components/money-accounts';
@@ -64,7 +64,7 @@ export function Home() {
         />
         <ComingUp view={view} onOpen={open} />
         <Happened view={view} onOpen={open} />
-        {view.comingUp.length === 0 && view.happened.length === 0 && <p className="muted center">Nothing scheduled or recorded this week.</p>}
+        {view.comingUp.length === 0 && view.happened.length === 0 && <EmptyLine>Nothing scheduled or recorded this week.</EmptyLine>}
       </section>
 
       <p className="center">
@@ -91,9 +91,11 @@ function Direction({ c }: { c: CashFlowComparison }) {
 const change = (c: CashFlowComparison) => (c.direction === 'unchanged' ? 'No change' : `${c.direction === 'up' ? 'Up' : 'Down'} ${formatMoney(Math.abs(c.differenceCents))}`);
 
 /**
- * Cash flow this month against last month. The recorded comparison (same days
- * of each month) leads; the projected month is a second, labeled line. The
- * direction is the sign of the difference, with no threshold.
+ * Cash flow this month against last month. One figure leads: what was
+ * recorded so far (same days of each month), or the projected month when
+ * nothing is recorded yet. The other figures follow as short labeled rows,
+ * each saying whether it is projected or recorded. The direction is the sign
+ * of the difference, with no threshold.
  */
 function Progress({ progress }: { progress: HomeProgress }) {
   const { monthToDate: m, projectedVsLastMonth: p, thisMonth } = progress;
@@ -102,36 +104,49 @@ function Progress({ progress }: { progress: HomeProgress }) {
   if (!hasRecorded && !hasProjected) return null;
   const month = monthName(m.current.start);
   const last = monthName(m.previous.start);
+  const lead = hasRecorded ? m.current.netCents : p.current.netCents;
   return (
-    <section className="card progress stack-sm" aria-labelledby="progress-heading">
-      {hasRecorded && (
-        <>
-          <p className="hero-label" id="progress-heading">
-            Cash flow so far in {month} <span className="badge">Recorded</span>
-          </p>
-          <p className={`hero-value${m.current.netCents < 0 ? ' negative' : ''}`}>{formatSignedMoney(m.current.netCents)}</p>
-          {m.previous.count > 0 ? (
-            <p className={`progress-change ${m.direction}`}>
-              <Direction c={m} />
-              <span>
-                {change(m)} from {formatRange(m.previous.start, m.previous.end)} <span className="muted">({formatSignedMoney(m.previous.netCents)} recorded)</span>
-              </span>
-            </p>
-          ) : (
-            <p className="muted">Nothing was recorded on {formatRange(m.previous.start, m.previous.end)} to compare.</p>
-          )}
-        </>
-      )}
-      {hasProjected && (
-        <p className="progress-projected" id={hasRecorded ? undefined : 'progress-heading'}>
-          <span className="badge">Projected</span> {month} ends at <strong>{formatSignedMoney(p.current.netCents)}</strong>
-          {p.previous.count > 0 && (
-            <span className="muted">
-              {' '}
-              · {last} recorded {formatSignedMoney(p.previous.netCents)} ({change(p).toLowerCase()})
+    <section className="card progress-card" aria-labelledby="progress-heading">
+      <p className="hero-label" id="progress-heading">
+        {hasRecorded ? `Cash flow so far in ${month}` : `Cash flow for ${month}`} <span className="badge">{hasRecorded ? 'Recorded' : 'Projected'}</span>
+      </p>
+      <p className={`hero-value${lead < 0 ? ' negative' : ''}`}>{formatSignedMoney(lead)}</p>
+      {hasRecorded &&
+        (m.previous.count > 0 ? (
+          <p className="progress-change">
+            <Direction c={m} />
+            <span>
+              {change(m)} from {formatRange(m.previous.start, m.previous.end)} <span className="muted">({formatSignedMoney(m.previous.netCents)} recorded)</span>
             </span>
+          </p>
+        ) : (
+          <p className="hint">Nothing was recorded on {formatRange(m.previous.start, m.previous.end)} to compare.</p>
+        ))}
+      {hasProjected && (hasRecorded || p.previous.count > 0) && (
+        <dl className="progress-facts">
+          {hasRecorded && (
+            <div>
+              <dt>
+                <span className="badge">Projected</span> {month} ends at
+              </dt>
+              <dd className={p.current.netCents < 0 ? 'negative-text' : undefined}>{formatSignedMoney(p.current.netCents)}</dd>
+            </div>
           )}
-        </p>
+          {p.previous.count > 0 && (
+            <>
+              <div>
+                <dt>{last} recorded</dt>
+                <dd className={p.previous.netCents < 0 ? 'negative-text' : undefined}>{formatSignedMoney(p.previous.netCents)}</dd>
+              </div>
+              <div>
+                <dt>Difference</dt>
+                <dd className="progress-change">
+                  <Direction c={p} /> {change(p)}
+                </dd>
+              </div>
+            </>
+          )}
+        </dl>
       )}
     </section>
   );
@@ -203,7 +218,7 @@ function Attention({ view, onOpen }: { view: HomeView; onOpen: (i: HomeItem) => 
       >
         Needs attention
       </SectionLabel>
-      <ul className="entry-list card">
+      <ListGroup>
         {view.attention.map((i) => (
           <li key={i.id}>
             {i.type === 'occurrence' ? (
@@ -215,7 +230,7 @@ function Attention({ view, onOpen }: { view: HomeView; onOpen: (i: HomeItem) => 
                   <KindAvatar kind={i.entry.occurrence.kind} />
                   <span className="entry-main">
                     <span className="entry-title">{i.entry.occurrence.description}</span>
-                    <span className="entry-sub">{dueText(i, today)}</span>
+                    <span className={`entry-sub${i.overdue && i.entry.signedCents < 0 ? ' overdue-text' : ''}`}>{dueText(i, today)}</span>
                     <AccountLabel accountId={i.accountId ?? undefined} />
                   </span>
                   <span className="entry-side">
@@ -229,7 +244,7 @@ function Attention({ view, onOpen }: { view: HomeView; onOpen: (i: HomeItem) => 
             )}
           </li>
         ))}
-      </ul>
+      </ListGroup>
       {selected.length > 0 && !moving && (
         <div className="pick-actions">
           <button type="button" className="button primary" onClick={markDone}>
@@ -301,18 +316,20 @@ function ComingUp({ view, onOpen }: { view: HomeView; onOpen: (i: HomeItem) => v
       <SectionLabel id="coming-heading" action={view.week.current ? <span className="hint">through {shortDay(view.week.comingUpThrough)}</span> : undefined}>
         Coming up
       </SectionLabel>
-      {days.map((d) => (
-        <div key={d.date} className="stack-sm">
-          <h3 className="subhead">{shortDay(d.date)}</h3>
-          <ul className="entry-list card">
-            {d.list.map((i) => (
-              <li key={i.id}>
-                <ItemRow item={i} onOpen={onOpen} />
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
+      <ListGroup>
+        {days.map((d) => (
+          <li key={d.date} className="list-group-day">
+            <h3 className="subhead">{shortDay(d.date)}</h3>
+            <ul className="entry-list">
+              {d.list.map((i) => (
+                <li key={i.id}>
+                  <ItemRow item={i} onOpen={onOpen} />
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ListGroup>
     </section>
   );
 }
@@ -322,13 +339,13 @@ function Happened({ view, onOpen }: { view: HomeView; onOpen: (i: HomeItem) => v
   return (
     <section className="stack-sm" aria-labelledby="happened-heading">
       <SectionLabel id="happened-heading">Happened this week</SectionLabel>
-      <ul className="entry-list card">
+      <ListGroup>
         {view.happened.map((i) => (
           <li key={i.id}>
             <ItemRow item={i} onOpen={onOpen} />
           </li>
         ))}
-      </ul>
+      </ListGroup>
     </section>
   );
 }
