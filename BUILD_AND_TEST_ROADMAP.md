@@ -74,8 +74,9 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | C5, Plan screens and setup | **Complete**, merged as `957d79a` | Phase C5 |
 | C6, one "See what happens if…" | **Complete**, merged as `0f4d33f` | Phase C6 |
 | D1, shared visual foundation | **Complete**, merged as `27cda0b` | Phase D |
-| D2, Home | **Complete** (in review) | Phase D |
-| D3 onward: screens, then desktop | **Planned** | Phase D |
+| D2, Home | **Complete**, merged as `89f25be` | Phase D |
+| D3, Forecast | **Complete** (in review) | Phase D |
+| D4 onward: screens, then desktop | **Planned** | Phase D |
 | E, income expansion | **Planned**, needs separate approval and decision D8 | Phase E |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
 | AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
@@ -300,13 +301,19 @@ PRODUCT_EXPERIENCE.md §7: tokens and components first, then screen by screen, t
 - **Dependencies:** C1–C6 (all complete).
 - **Excluded:** calculation changes; the light theme.
 - **D1. Shared visual foundation (complete, October 2026; merged as `27cda0b`).** Tokens: the §7.1 type scale (display 36/700, section 15/600, `--text-section`), a 18px card radius, and §7.2 color roles: money out is neutral text with its "−" (`--color-out` = primary text), its chips and the bill avatar a neutral slate (`--color-out-line`, `--color-out-fill`), so indigo is the interactive accent and focus only. Section labels and subheads are sentence case. `StatusBadge` marks done money in (Received) green and other done states (Paid, Set aside) neutral. New shared components `ListGroup` (one surface, hairline dividers) and `EmptyLine` (one line, at most one action) replace the unused `EmptyState`; adopted in Plan's one-time lists and empty lines and in Activity's recorded list. The calendar key says money out is gray with a "−". Every new color pair checked against WCAG AA (text 4.5:1, outlines and icons 3:1). No screen restructured, no navigation or calculation change.
-- **D2. Home (complete, October 2026; in review).** Home only, on the D1 foundation; no domain, classification or stored-data change.
+- **D2. Home (complete, October 2026; merged as `89f25be`).** Home only, on the D1 foundation; no domain, classification or stored-data change.
   - **Progress:** one leading figure: recorded cash flow so far this month, or, with nothing recorded, the projected month labeled Projected. The comparison with the same days of last month stays one line under it. The projected month, last month's recorded total and their difference follow as short label-and-amount rows (they were one wrapping sentence). Below-$0 figures are red; up and down are said in words with an arrow, no longer red or green (§7.2: red means below $0).
   - **Needs attention:** one `ListGroup`; a payment past its date says "Overdue since …" in amber; money not yet in stays neutral ("Expected … — not recorded"). With items selected, the primary action takes its own full-width line above "Move to a date".
   - **Coming up:** one `ListGroup` for the week, each day a small label inside it (was one card per day). **Happened this week:** one `ListGroup`. An empty week is an `EmptyLine`.
   - **Small phones (≤ 374 px):** the decorative kind avatar gives way to the item name, and the checkbox column sits in the group's padding; at 320 px names no longer break mid-word and badges no longer overlap amounts.
   - Tests: `home-d2` (8): hand-computed progress figures below $0 and their difference, projected-only lead equal to the Forecast month, list-group structure, amber only for overdue payments, empty line, 44px checkbox targets, the small-phone rule. The smoke test finds the progress card by its region name.
-- **Next (proposed):** D3, Forecast: one hero, week-by-week and timing gaps as list groups, at most one hint line, and calendar amount chips that are cut off at 320 px; then Plan and Activity; then setup and sheets; then desktop (≥ 1024 px left rail, side-panel sheets).
+- **D3. Forecast (complete, October 2026; in review).** Forecast only, on the D1 foundation and D2 patterns; no domain, classification or stored-data change. Activity's and setup's breakdowns are unchanged (they share the new `BreakdownRows`).
+  - **One summary:** the breakdown (income, spending with a row per classification, reserves) moved into the cash-flow card under the figure, replacing the "in · out" line and the separate Breakdown card that repeated income, spending and cash flow. Rows with nothing in them are left out; a period with nothing in it says so in one line.
+  - **Below $0:** the lowest running total is a labeled row in red; the gap callout reads "Short $X" over "Timing gap · dates" and still opens the explanation. When the running total starts after the period, the payday line says "Your running total starts then." instead of an empty lowest-total row.
+  - **Week by week** is one `ListGroup`. A week's Net shows only when more than one kind of money moved (it repeated the single amount). An open week lists only the amounts each day has (no "—" placeholders); reserves get their own labeled cell.
+  - **Small phones (≤ 374 px):** calendar chips drop the "$" and tighten so amounts fit their day (each day's label still reads the full amount); the custom range's date fields stack instead of overflowing the page (a pre-existing defect).
+  - Tests: `forecast-d3` (10): hand-computed summary figures that add up to the cash flow, no repeated breakdown, zero rows hidden, the running-total-starts line, red lowest point and gap that opens its explanation, red weeks and days below $0, one list group with Net only when it adds something, no dashes in open weeks, chip markup and narrow rule, recorded vs expected chips, custom range layout. Updated: two `visibility` tests and the smoke test read the breakdown from the summary card.
+- **Next (proposed):** D4, Plan and Activity: list groups for Plan rows and Activity's summary and By kind, consistent empty lines, and the same small-phone row checks; then setup and sheets; then desktop (≥ 1024 px left rail, side-panel sheets).
 
 #### E. Income expansion (possible new functionality; separate approval)
 

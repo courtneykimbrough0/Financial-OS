@@ -2,7 +2,7 @@
 
 Financial OS uses a dark-first, card-based visual language. It is calm and legible, with large numbers and one consistent set of controls. Every token lives at the top of `src/styles.css`, and the shared React pieces live in `src/ui/components/common.tsx`.
 
-This file describes the visual system **as built**. The redesign direction is [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 7, built in roadmap Phase D one checkpoint at a time. **D1 (shared foundation) is built:** the type scale, one meaning per color (money out is neutral with a "−"; indigo is the accent only), sentence-case section labels, a smaller card radius, and the `ListGroup` and `EmptyLine` components. **D2 (Home) is built** (see the layout pattern below). Other screens and desktop layouts follow in later checkpoints.
+This file describes the visual system **as built**. The redesign direction is [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 7, built in roadmap Phase D one checkpoint at a time. **D1 (shared foundation) is built:** the type scale, one meaning per color (money out is neutral with a "−"; indigo is the accent only), sentence-case section labels, a smaller card radius, and the `ListGroup` and `EmptyLine` components. **D2 (Home) and D3 (Forecast) are built** (see the layout pattern below). Other screens and desktop layouts follow in later checkpoints.
 
 The product's terms are fixed (Cash flow, Running total, Projected income, Projected expenses, Money in, Money out, Overdue, and so on). This system governs only how things look.
 
@@ -102,10 +102,9 @@ Home and the Forecast screen show only summaries. Detail opens in a bottom sheet
   - One progress card leads: the recorded cash flow so far this month (or the projected month, labeled, when nothing is recorded), one comparison line, then short label-and-amount rows for the projected month, last month and the difference. Red only for figures below $0; up and down in words with an arrow.
   - Needs attention, Coming up and Happened this week are each one `ListGroup`. Coming up puts each day as a small label inside its group instead of a card per day. Overdue payments say so in amber. An empty week is an `EmptyLine`.
   - Below 375 px the kind avatar is hidden on Home rows so item names keep their width.
-- **Hero card:** cash flow for the period (large, signed; red with a trend-down icon when negative) with money in and out beneath it, then the lowest running total, a one-line timing-gap or all-clear callout, and the next expected payday. The (i) button explains cash flow and the running total.
+- **Hero card (since D3, the one summary):** cash flow for the period (large, signed; red with a trend-down icon when negative), then its breakdown: income, spending with one indented row per classification that has something in the period, and reserves (rows with nothing in them are left out). Below $0: the lowest running total as a red row and a "Short $X / Timing gap · dates" callout that opens the explanation; otherwise one all-clear line. The footer gives the next expected payday, and says the running total starts then when it starts after the period. The (i) button explains cash flow and the running total.
 - **Calendar card:** the grid, then a "Calendar key" link that opens the key.
-- **Breakdown card:** income, expenses with one indented row per category that has something in the period, and cash flow.
-- **Week by week:** one row per week with money in, money out, net, and the running total at the week's end. A row opens in place (chevron down/up, `aria-expanded`) to list that week's days. The week view lists its days directly.
+- **Week by week:** one `ListGroup`, one row per week with money in, money out, reserves, net (only when more than one of those moved) and the running total at the week's end. An open week lists only the amounts each day has. A row opens in place (chevron down/up, `aria-expanded`) to list that week's days. The week view lists its days directly.
 - **Sheets:**
   - A day shows money in, money out and running total, then that day's transactions.
   - A transaction opened from a day sheet returns to that sheet when closed.

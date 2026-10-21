@@ -149,6 +149,8 @@ The original proposal:
 
   It gives cash flow for the range and the lowest running total when below $0.
 
+**Visual refinement (Implemented, D3):** one summary card with the breakdown under cash flow (no second breakdown card), the lowest running total and timing gap in red inside it, week by week as one list group without repeated amounts, and calendar chips and custom dates that fit a 320 px phone (DESIGN.md).
+
 ### 3.4 Plan
 
 One screen with six sections: Income, Bills, Subscriptions, Liabilities, Strategic Reserves, Varied spending. Use a segmented control on phones and a single page with headings on desktop.
