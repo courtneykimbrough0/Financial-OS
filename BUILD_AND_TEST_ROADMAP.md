@@ -85,7 +85,7 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | E4, gig work and payouts | **Complete**, merged as `d8910c6` | Phase E |
 | E5, earnings history and views | **Complete**, merged as `a50ac4d` | Phase E |
 | E6, income integration and verification | **Complete**, merged as `70f4248`; **Phase E is complete** | Phase E |
-| F0, production readiness and infrastructure plan | **Complete** (documentation; in review) | Phase F |
+| F0, production readiness and infrastructure plan | **Complete** (documentation; revised for no users; in review) | Phase F |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
 | AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
 | AC6 payoff support, recurring planned transfers | **Deferred** (need specifications or decisions) | Phase AC, conflicts |
@@ -466,80 +466,73 @@ Specification: PRODUCT_EXPERIENCE.md section 11. Each phase is separately author
 6. **Planned transfers with minimal effort.** Each planned transfer is entered once today. A repeating plan ("each payday, move $X to Reserves") needs rules for how it's generated, edited and recorded; not built until those are decided.
 7. **Opening balance on the same day.** An opening balance is the balance at the end of its day, so a transfer recorded on that same day is treated as already included. Clear in the form's wording; revisit if it confuses people.
 
-#### F. Infrastructure resumption (planned in F0, October 2026)
+#### F. Infrastructure resumption (planned in F0, revised October 22, 2026)
 
-Phase F carries out Step 10 (10b–10e) on the architecture decided in AGENTS.md section C1: Supabase for data and sign-in, Vercel for hosting, online-first, Firebase and Cloud Run retired. Each checkpoint is separately authorized. Nothing in F0 deployed, purchased or changed any configuration.
+Phase F carries out Step 10 (10b–10e) on the architecture decided in AGENTS.md section C1: Supabase for data and sign-in, Vercel for hosting, online-first, Firebase and Cloud Run retired. Each checkpoint is separately authorized. No hosted deployment and no spending happen until separately authorized.
+
+**Product-owner clarification (October 22, 2026): Financial OS has no real users and no production financial data.** Every existing record, in Firebase, Supabase or on a device, is development or sample data. So, for the rest of the roadmap:
+- No historical data migrations, data-preservation layers or backward-compatibility mechanisms for development records. Existing Firebase and Supabase test data may be discarded or reset.
+- The simplest correct production-ready schema and architecture come first. Schema migrations stay, for reproducible deployment.
+- One production stack: no parallel Firebase and Supabase period for a user transition that doesn't exist.
+- Security, row-level security, ownership checks, financial correctness and automated tests are kept in full.
 
 **F0. Production readiness and infrastructure plan (complete, October 2026; documentation only).**
 
 *Verified current architecture (repository, `main` at `70f4248`):*
-- **Production today:** a static Vite PWA served on Cloud Run by `server.mjs` (`Dockerfile`; deployed by hand or by AI Studio, region us-east5; no deployment in CI). The server adds caching rules, two security headers (`nosniff`, `strict-origin-when-cross-origin`; no content security policy) and forwards Firebase's sign-in pages (`/__/auth/*`) through the app's own address. Data: device storage, or with accounts on, Google sign-in (Firebase Auth) and one Firestore document per person (`financialData/{uid}`, named database, revision checked in a transaction and in `firestore.rules`), with an offline on-device copy and pending changes (`cloud.ts`). `firebase.json` also allows Firebase Hosting, unused.
-- **Signed-in (Firebase) accounts can't hold** possible income, income detail (types, shifts, sessions, clients, jobs) or accounts and transfers: three flags in `src/state/features.ts` are false and such plans are refused. Everything built in Phase E and AC1–AC5 works only with device storage today.
-- **Supabase:** eight migrations (`supabase/migrations`), nine tables (workspaces, sources, schedule versions, pauses, occurrence records, save receipts, work entries, clients, freelance jobs), row-level security on all, no direct table writes, four functions (`create_workspace`, `load_plan`, `save_plan`, `delete_account`) with fixed search paths. Online-first adapter (`adapter.ts`), email-and-password accounts with confirmation, recovery, sessions, sign-out and account deletion (`session.tsx`, `src/ui/supabase/`). Verified on PostgreSQL 16 (`test:db`, 72), and in CI on a local Supabase stack (`test:supabase`, `e2e:supabase`). Supabase is compiled in only for the `supabase-dev` and `supabase-hosted-test` build modes: **no production build can use it yet**.
-- **Not in Supabase (AC-S):** accounts, item and record `account_id`, opening balances, transfers and reserve releases. The adapter refuses a plan with any of them, so moving to Supabase without AC-S would remove a built feature for signed-in users.
-- **Hosted test tooling is out of date:** docs/SUPABASE-HOSTED.md lists three migrations (there are eight) and `supabase/hosted-test/verify.sql` checks row-level security and write grants on six tables, not the three income tables. Both must be corrected before any hosted project is set up.
-- **Sign-in differs:** production uses Google sign-in; the Supabase build uses email and password. Which methods production offers is a product decision.
-
-*Principles for Phase F:*
-- Current records are sample data: **no Firestore data migration.** People who want their plan keep it with Download backup and Restore, which already works into Supabase (a `replace` save) and across storage.
-- Two production stacks only for a short, fixed rollback window, then Firebase and Cloud Run are removed.
-- Financial correctness and access control are verified against a real hosted Supabase project before any production switch.
+- **Hosting today:** a static Vite PWA served on Cloud Run by `server.mjs` (`Dockerfile`; deployed by hand or by AI Studio, region us-east5; no deployment in CI). The server adds caching rules, two security headers (`nosniff`, `strict-origin-when-cross-origin`; no content security policy) and forwards Firebase's sign-in pages (`/__/auth/*`) through the app's own address. Data: device storage, or with accounts on, Google sign-in (Firebase Auth) and one Firestore document per person, with an offline device copy (`cloud.ts`).
+- **Firebase accounts can't hold** possible income, income detail or accounts and transfers (three flags in `src/state/features.ts`). Everything built in Phase E and AC1–AC5 works only with device storage today.
+- **Supabase:** eight migrations, nine tables with row-level security and no direct writes, four functions with fixed search paths; an online-first adapter; email-and-password accounts (confirmation, recovery, sessions, sign-out, account deletion). Tested on PostgreSQL 16 (`test:db`) and in CI on a local stack (`test:supabase`, `e2e:supabase`). Compiled only into the `supabase-dev` and `supabase-hosted-test` builds: **no production build uses it yet**.
+- **Gaps:** accounts, transfers, opening balances and reserve releases aren't stored in Supabase (AC-S, refused by the adapter); the hosted-test guide lists three of the eight migrations and `verify.sql` skips the three income tables; production sign-in is Google, the Supabase build email and password.
 
 *Checkpoints (in order; each its own pull request and authorization):*
 
 | Checkpoint | Scope | Depends on | Needs the product owner |
 | --- | --- | --- | --- |
-| **F1. AC-S: accounts, transfers and reserves in Supabase** | `accounts` and `transfers` tables (ownership, row-level security), `account_id` on sources and one-time records, opening balances, the `release` flag; `load_plan` / `save_plan`; remove the adapter's refusal; `verify.sql` and docs/SUPABASE-HOSTED.md brought up to every migration and table. Tests: `test:db`, `test:supabase`, `e2e:supabase`, equivalence with accounts | — (repository only, no hosted service) | Authorization only |
-| **F2. Production Supabase build** | A production build mode that uses Supabase, configured by environment (URL and publishable key), never a service key; Firebase left out of that build; anonymous identities off; the "Account" wording conflict (AC conflict 3) settled; a `vercel.json` (app routes to `index.html`, the caching rules and security headers `server.mjs` sets today, plus a content security policy); legacy builds unchanged | F1 | Sign-in methods (decision 4) and wording (decision 6) |
-| **F3. Hosted test project** | The product owner creates a Free Supabase test project and SMTP sender (docs/SUPABASE-HOSTED.md, corrected in F1); migrations applied; `verify.sql`; the hosted suites run against it unchanged | F1 (F2 for the browser suites) | Creates the project, SMTP sender and approves its ref; no payment |
-| **F4. Vercel preview** | A Vercel project serving the F2 build against the F3 test project; installability; on a real iPhone and Android phone: sign up, confirm, reopen, change, see it saved; offline shows unsaved, never saved | F2, F3 | Creates the Vercel account or project (Hobby is free for non-commercial use) |
-| **F5. Production cutover** | A production Supabase project (separate from the test one), migrations verified, production auth settings (confirmation on, anonymous off, redirect URLs, rate limits, SMTP); production Vercel deployment; testers told to download a backup first; Cloud Run and Firebase left running, untouched, as the rollback | F4 | Plans and spending (decisions 1–2), domain (decision 3), cutover date and notice |
-| **F6. Retire legacy** | After the rollback window: remove `cloud.ts` (offline sync, 10c), `firebase.ts`, Firestore rules, emulator tests and CI job, `server.mjs`, `Dockerfile`, the three Firebase flags and Firebase-only documentation; the product owner deletes the Cloud Run services and the Firebase project | F5 plus the window | Ends the window; deletes the Firebase project and Cloud Run services; CI goes from five checks to four |
+| **F1. AC-S: accounts, transfers and Strategic Reserves in Supabase** | `accounts` and `transfers` tables (ownership, row-level security), `account_id` on items and records, opening balances, the `release` flag; `load_plan` / `save_plan`; the adapter's refusal removed; accounts and "Use reserves" offered in the Supabase build; `verify.sql` and the hosted-test guide brought up to every migration and table | — (repository only) | Authorization only |
+| **F2. Production Supabase build** | A production build that uses Supabase, configured by environment (URL and publishable key, never a service key), with Firebase left out; anonymous identities off; the "Account" wording settled; `vercel.json` (app routes to `index.html`, today's caching and security headers, plus a content security policy). Optional, since no hosted database exists yet: consolidate the migrations into one baseline | F1 | Sign-in methods (decision 4), wording (decision 5) |
+| **F3. Hosted test project** | A Free Supabase project and SMTP sender created by the product owner; migrations applied; `verify.sql`; the hosted suites run unchanged | F1 (F2 for browser suites) | Creates the project and sender; no payment |
+| **F4. Vercel preview** | The F2 build on Vercel against the test project; installability; real iPhone and Android: sign up, confirm, reopen, change, see it saved; offline shows unsaved | F2, F3 | Creates the Vercel project |
+| **F5. Production launch** | A production Supabase project (migrations verified; confirmation on, anonymous off, redirect URLs, rate limits, SMTP) and the production Vercel deployment; launched empty | F4 | Plans and spending (decisions 1–2), domain (3), region (6), launch date |
+| **F6. Retire legacy** | Directly after F5 is verified, with no parallel period: remove `cloud.ts` (offline sync, 10c), `firebase.ts`, Firestore rules, emulator tests and CI job, `server.mjs`, `Dockerfile`, the three Firebase flags and Firebase-only docs and wording; the product owner deletes the Firebase project and Cloud Run services | F5 | Deleting the Firebase project and Cloud Run services; CI goes from five checks to four |
 
 AC5 (remaining) and AC6 stay outside Phase F.
 
 *Security and data-integrity risks to manage:*
 - Row-level security or grants missing on a new table (F1 updates `verify.sql`; hosted runs execute it).
-- A privileged key in the browser: only the publishable key ever goes into a build; no service-role key exists anywhere in the repository and none is needed (account deletion runs in the database).
-- Auth settings that differ between local and hosted: email confirmation, anonymous sign-ins off, redirect allowlist, rate limits, SMTP (checked in F3 and again in F5).
+- A privileged key in a build: only the publishable key is ever used; the code refuses a secret or service-role key, and none is needed (account deletion runs in the database).
+- Auth settings differing between local and hosted (confirmation, anonymous sign-ins off, redirect allowlist, rate limits, SMTP): checked in F3 and again in F5.
 - No content security policy today (added in F2).
-- The origin changes from the Cloud Run address to Vercel's: installed PWAs and device-stored data don't follow. Testers download a backup before the switch; a custom domain (decision 3) avoids a second move later.
-- Two stacks drifting: Firebase stays frozen after F5 (no new features), and the window is short.
-- Backups: the Free plan has no usable backup history; production relies on Pro daily backups plus the app's own backup files.
-- Data integrity is already tested in depth (revision checks, save receipts, removal limits, equivalence); E6's known stale-link limitation doesn't apply to a fresh production project.
+- Backups: the Free plan has no usable backups; production uses Pro daily backups once real data exists.
+- Data integrity is tested in depth (revision checks, save receipts, removal limits, equivalence, ordinary-save lifecycles).
 
 *Operating costs (USD per month; verify on the providers' pricing pages before deciding):*
 
 | Stage | Supabase | Vercel | Email (SMTP) | Total |
 | --- | --- | --- | --- | --- |
-| F3–F4 testing | Free: $0 (500 MB database, 50,000 monthly active users, 5 GB egress; pauses when idle; no usable backups) | Hobby: $0 (personal, non-commercial use) | Provider free tier: $0 (assumption) | **$0** |
-| Production, small | Pro: $25, including $10 of compute that covers one Micro instance; daily backups kept 7 days | Pro: $20 per deploying seat (includes $20 of usage), required for commercial use; Hobby $0 if non-commercial | $0–$20 (assumption, by volume) | **about $45–$65** (or $25–$45 on Vercel Hobby) |
-| Optional | Point-in-time recovery: from $100 (not recommended at launch) | — | — | — |
-| Legacy, until F6 | Cloud Run and Firestore: likely within free tiers at current use (assumption; billing isn't visible from the repository) | | | |
+| F3–F4 testing | Free: $0 (500 MB database, 50,000 monthly active users; pauses when idle; no usable backups) | Hobby: $0 (non-commercial use) | Provider free tier: $0 (assumption) | **$0** |
+| Production, small | Pro: $25, including $10 of compute (one Micro instance); daily backups kept 7 days | Pro: $20 per deploying seat for commercial use; Hobby $0 if non-commercial | $0–$20 (assumption) | **about $45–$65** (or $25–$45 on Vercel Hobby) |
+| Optional | Point-in-time recovery: from $100 (not needed at launch) | — | — | — |
 
-Supabase's built-in email sender allows only a few messages an hour (sources say 2–4) and is unsuitable for sign-up and recovery mail: a custom SMTP provider is required from F3.
+Supabase's built-in email sender allows only a few messages an hour: a custom SMTP provider is needed from F3. Cloud Run and Firestore cost stops at F6.
 
-*Cutover and rollback:*
-- Before F5: nothing in production changes; rollback is not needed.
-- At F5: production moves by switching the address people use (or DNS for a custom domain) to Vercel; Cloud Run and Firebase stay deployed and unchanged. Rollback: point people back to the Cloud Run address. Plans made on Supabase move back by backup file (Firebase refuses Phase E and account data, which device storage on the old address keeps).
-- Supabase restore: Pro daily backups (7 days), and per-person backup files restored with `replace`.
-- After F6, rollback is redeploying an earlier Vercel build and restoring Supabase from backup; the Firebase stack no longer exists.
+*Launch and rollback:*
+- Production launches empty; no data moves from Firebase, Supabase test projects or devices. Testers start fresh (a backup file still restores if someone wants one, through the existing Restore; nothing is built for it).
+- Rollback before real data exists: redeploy the previous Vercel build; if the schema is wrong, reset the production project and apply the corrected migrations.
+- Once real people use it: forward-only migrations, Vercel's previous deployments, and Pro daily backups.
 
 *Decisions for the product owner (everything else is an engineering choice made within the checkpoint):*
-1. Supabase plan for production (Free is unsuitable: pausing and no backups; Pro $25) and when spending starts.
-2. Vercel plan (Hobby only if the app stays non-commercial; Pro $20 per seat otherwise).
-3. Domain: the Vercel default address or a custom domain (recommended before inviting testers, so the PWA's address never changes again).
-4. Sign-in methods at launch: email and password (built and tested) only, or Google sign-in as well (new work in Supabase Auth).
-5. No data migration: confirm that Firestore's sample data is discarded and testers use backup files.
-6. "Account" wording: sign-in account versus money accounts (AC conflict 3).
-7. Rollback window length (recommended: two weeks after F5) and the deletion of the Firebase project and Cloud Run services.
-8. Hosting region for Supabase (near users; a project's region can't change later).
-9. SMTP provider and sending address.
-10. AC-S before cutover (recommended) rather than launching Supabase without accounts and transfers.
+1. Supabase plan for production and when spending starts (Free pauses and has no backups; Pro $25).
+2. Vercel plan (Hobby only if non-commercial; Pro $20 per seat otherwise).
+3. Domain: the Vercel default address or a custom domain (recommended before inviting testers, so the app's address never changes).
+4. Sign-in methods at launch: email and password (built and tested), or Google sign-in as well (new work).
+5. "Account" wording: sign-in account versus money accounts (AC conflict 3).
+6. Supabase region (fixed for the life of a project).
+7. SMTP provider and sending address.
+8. When to delete the Firebase project and Cloud Run services (recommended: as part of F6, right after F5 is verified).
 
-*Engineering choices (no authorization needed beyond the checkpoint):* build-mode and environment variable names, `vercel.json` contents, headers and content security policy, applying migrations by CLI or SQL editor, test order, and how the Firebase code is removed in F6.
+*Engineering choices (no separate authorization):* build-mode and environment names, `vercel.json` and headers, consolidating migrations before the first hosted project, applying migrations by CLI or SQL editor, test order, and how Firebase code is removed.
 
-**Recommended next checkpoint: F1 (AC-S).** It needs no hosted service, account or spending, closes the one feature gap that would make Supabase lose data people can enter today, and corrects the hosted tooling that F3 depends on.
+**Recommended next checkpoint: F1 (AC-S).**
 
 Fields ignored by R1–R2 can be dropped from the schema at the cutover.
 
