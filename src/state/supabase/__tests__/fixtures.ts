@@ -147,3 +147,15 @@ export function withShifts(plan: AppData): AppData {
   d = unwrap(ops.logShift(d, { sourceId: 'side', date: '2026-10-14', minutes: 330, wageCents: 1600, cashTipsCents: usd(42.5), cardTipsCents: usd(31) }, clock, 'shift-1'));
   return unwrap(ops.logShift(d, { sourceId: 'side', date: '2026-10-15', minutes: 240, wageCents: 1600 }, clock, 'shift-2'));
 }
+
+/**
+ * `plan` with freelance work (E3): a client, a done job paid on Oct 15, a
+ * planned job with a possible payment, and a done job with no payment date.
+ */
+export function withJobs(plan: AppData): AppData {
+  let d = unwrap(ops.addClient(plan, 'Acme', clock, 'client-acme'));
+  d = unwrap(ops.addJob(d, { description: 'Logo design', clientId: 'client-acme', amountCents: usd(800), status: 'done', expectedDate: '2026-10-20' }, clock, 'job-logo'));
+  d = unwrap(ops.recordJobPayment(d, 'job-logo', { amountCents: usd(780), date: '2026-10-15' }, clock));
+  d = unwrap(ops.addJob(d, { description: 'Website copy', clientId: 'client-acme', amountCents: usd(1200), status: 'planned', expectedDate: '2026-11-15', certainty: 'possible' }, clock, 'job-copy'));
+  return unwrap(ops.addJob(d, { description: 'Brochure', amountCents: usd(300), status: 'done' }, clock, 'job-brochure'));
+}

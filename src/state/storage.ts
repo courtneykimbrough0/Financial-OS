@@ -5,8 +5,8 @@
  * document; `migrate` is where future schema upgrades go.
  */
 import { isValidDateStr } from '../domain/dates';
-import { emptyData, MAX_ACCOUNT_NAME, MAX_ACCOUNTS, MAX_BALANCE_CENTS, MAX_SHIFTS } from '../domain/operations';
-import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type TransactionKind, type Transfer, type WorkEntry } from '../domain/types';
+import { emptyData, MAX_ACCOUNT_NAME, MAX_ACCOUNTS, MAX_BALANCE_CENTS, MAX_CLIENT_NAME, MAX_CLIENTS, MAX_JOBS, MAX_SHIFTS } from '../domain/operations';
+import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type TransactionKind, type Transfer, type WorkEntry, type Client, type FreelanceJob } from '../domain/types';
 
 export type SaveResult =
   | { ok: true; revision: number }
@@ -212,6 +212,63 @@ function readWorkEntries(w: unknown, sources: RecurringSource[], records: Occurr
   return out;
 }
 
+/** Saved clients: a unique id and a name, up to the limit. Anything else is dropped; its jobs keep going without a client. */
+function readClients(c: unknown): Client[] {
+  if (!Array.isArray(c)) return [];
+  const out: Client[] = [];
+  const ids = new Set<string>();
+  for (const x of c) {
+    if (out.length >= MAX_CLIENTS || !x || typeof x !== 'object') continue;
+    const v = x as Partial<Client>;
+    if (typeof v.id !== 'string' || v.id === '' || ids.has(v.id) || typeof v.name !== 'string' || v.name.trim() === '') continue;
+    ids.add(v.id);
+    const now = typeof v.createdAt === 'string' ? v.createdAt : new Date(0).toISOString();
+    out.push({ id: v.id, name: v.name.trim().slice(0, MAX_CLIENT_NAME), createdAt: now, updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : now });
+  }
+  return out;
+}
+
+/**
+ * Saved freelance jobs. A job is kept with a description, an amount above $0
+ * and a known work status. Its client and payment links are kept only when
+ * they still point at a client and at a one-time income record no other job
+ * or shift uses. A dropped payment link never moves money: the record stays
+ * and keeps counting as it did.
+ */
+function readJobs(j: unknown, clients: Client[], records: OccurrenceRecord[], workEntries: WorkEntry[]): FreelanceJob[] {
+  if (!Array.isArray(j)) return [];
+  const clientIds = new Set(clients.map((c) => c.id));
+  const byId = new Map(records.map((r) => [r.id, r]));
+  const used = new Set(workEntries.map((e) => e.cashTipsRecordId).filter((x): x is string => !!x));
+  const out: FreelanceJob[] = [];
+  const ids = new Set<string>();
+  for (const x of j) {
+    if (out.length >= MAX_JOBS || !x || typeof x !== 'object') continue;
+    const v = x as Partial<FreelanceJob>;
+    const valid =
+      typeof v.id === 'string' && v.id !== '' && !ids.has(v.id) &&
+      typeof v.description === 'string' && v.description.trim() !== '' &&
+      isCents(v.amountCents) && (v.status === 'planned' || v.status === 'done');
+    if (!valid) continue;
+    ids.add(v.id!);
+    const record = typeof v.paymentRecordId === 'string' ? byId.get(v.paymentRecordId) : undefined;
+    const keepPayment = record !== undefined && record.sourceId === null && record.kind === 'income' && !used.has(record.id);
+    if (keepPayment) used.add(record.id);
+    const now = typeof v.createdAt === 'string' ? v.createdAt : new Date(0).toISOString();
+    out.push({
+      id: v.id!,
+      ...(typeof v.clientId === 'string' && clientIds.has(v.clientId) ? { clientId: v.clientId } : {}),
+      description: v.description!.trim().slice(0, 80),
+      amountCents: v.amountCents!,
+      status: v.status!,
+      ...(keepPayment ? { paymentRecordId: record.id } : {}),
+      createdAt: now,
+      updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : now,
+    });
+  }
+  return out;
+}
+
 /** An item's account, kept only when that account exists and suits the item's kind. */
 function keptAccount(accounts: Account[], kind: TransactionKind, accountId: unknown): { accountId?: string } {
   const account = typeof accountId === 'string' ? accounts.find((a) => a.id === accountId) : undefined;
@@ -261,7 +318,14 @@ export function migrate(raw: unknown): AppData {
     ...(transfers.length > 0 ? { transfers } : {}),
   };
   const workEntries = readWorkEntries(doc.workEntries, data.sources, data.records);
-  return workEntries.length > 0 ? { ...data, workEntries } : data;
+  const clients = readClients(doc.clients);
+  const jobs = readJobs(doc.jobs, clients, data.records, workEntries);
+  return {
+    ...data,
+    ...(workEntries.length > 0 ? { workEntries } : {}),
+    ...(clients.length > 0 ? { clients } : {}),
+    ...(jobs.length > 0 ? { jobs } : {}),
+  };
 }
 
 const CONFLICT_MESSAGE = 'Your data was changed in another window. Reload to see the latest.';

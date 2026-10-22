@@ -6,14 +6,14 @@
  *
  * Every financially meaningful field round-trips exactly: identities,
  * original predictions, current expectations, actuals, schedules, pauses,
- * estimate dismissals, income certainty, income type and wage, shifts and
- * onboarding. Three things come back in canonical form (see `canonicalize`):
+ * estimate dismissals, income certainty, income type and wage, shifts,
+ * freelance clients and jobs, and onboarding. Three things come back in canonical form (see `canonicalize`):
  * timestamps as ISO-8601 UTC with milliseconds, schedule versions in start
  * order, and pauses in date order. Sample data is never stored.
  */
 import { isValidDateStr, type DateStr } from '../../domain/dates';
 import { validateRule } from '../../domain/recurrence';
-import { ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OccurrenceRecord, type RecurrenceRule, type RecurringKind, type IncomeType, type RecurringSource, type ScheduleVersion, type StoredStatus, type TransactionKind, type WorkEntry } from '../../domain/types';
+import { ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OccurrenceRecord, type RecurrenceRule, type RecurringKind, type Client, type FreelanceJob, type IncomeType, type JobStatus, type RecurringSource, type ScheduleVersion, type StoredStatus, type TransactionKind, type WorkEntry } from '../../domain/types';
 
 export interface SourceRow {
   id: string;
@@ -92,6 +92,26 @@ export interface WorkEntryRow {
   updated_at: string;
 }
 
+export interface ClientRow {
+  id: string;
+  position: number;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JobRow {
+  id: string;
+  position: number;
+  client_id: string | null;
+  description: string;
+  amount_cents: number;
+  status: JobStatus;
+  payment_record_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** The body of a save_plan request. */
 export interface PlanRows {
   onboarding_complete: boolean;
@@ -100,6 +120,8 @@ export interface PlanRows {
   pauses: PauseRow[];
   records: RecordRow[];
   work_entries: WorkEntryRow[];
+  clients: ClientRow[];
+  jobs: JobRow[];
 }
 
 /** What load_plan returns. */
@@ -208,6 +230,18 @@ export function toRows(data: AppData): PlanRows {
     pauses,
     records,
     work_entries,
+    clients: (data.clients ?? []).map((c, i) => ({ id: c.id, position: i, name: c.name, created_at: c.createdAt, updated_at: c.updatedAt })),
+    jobs: (data.jobs ?? []).map((j, i) => ({
+      id: j.id,
+      position: i,
+      client_id: j.clientId ?? null,
+      description: j.description,
+      amount_cents: j.amountCents,
+      status: j.status,
+      payment_record_id: j.paymentRecordId ?? null,
+      created_at: j.createdAt,
+      updated_at: j.updatedAt,
+    })),
   };
 }
 
@@ -285,6 +319,19 @@ export function fromRows(plan: LoadedPlan): AppData {
         updatedAt: e.updated_at,
       };
     });
+  const clients: Client[] = [...(plan.clients ?? [])].sort((a, b) => a.position - b.position).map((c) => ({ id: c.id, name: c.name, createdAt: c.created_at, updatedAt: c.updated_at }));
+  const jobs: FreelanceJob[] = [...(plan.jobs ?? [])]
+    .sort((a, b) => a.position - b.position)
+    .map((j) => ({
+      id: j.id,
+      ...(j.client_id ? { clientId: j.client_id } : {}),
+      description: j.description,
+      amountCents: Number(j.amount_cents),
+      status: j.status,
+      ...(j.payment_record_id ? { paymentRecordId: j.payment_record_id } : {}),
+      createdAt: j.created_at,
+      updatedAt: j.updated_at,
+    }));
   return {
     schemaVersion: 2,
     revision: Number(plan.revision),
@@ -292,6 +339,8 @@ export function fromRows(plan: LoadedPlan): AppData {
     sources,
     records,
     ...(workEntries.length ? { workEntries } : {}),
+    ...(clients.length ? { clients } : {}),
+    ...(jobs.length ? { jobs } : {}),
   };
 }
 
@@ -320,6 +369,8 @@ export function canonicalize(data: AppData): AppData {
     })),
     records: data.records.map((r) => ({ ...r, completedAt: ts(r.completedAt), canceledAt: ts(r.canceledAt), createdAt: canonicalTimestamp(r.createdAt), updatedAt: canonicalTimestamp(r.updatedAt) })),
     ...(data.workEntries ? { workEntries: data.workEntries.map((e) => ({ ...e, createdAt: canonicalTimestamp(e.createdAt), updatedAt: canonicalTimestamp(e.updatedAt) })) } : {}),
+    ...(data.clients ? { clients: data.clients.map((c) => ({ ...c, createdAt: canonicalTimestamp(c.createdAt), updatedAt: canonicalTimestamp(c.updatedAt) })) } : {}),
+    ...(data.jobs ? { jobs: data.jobs.map((j) => ({ ...j, createdAt: canonicalTimestamp(j.createdAt), updatedAt: canonicalTimestamp(j.updatedAt) })) } : {}),
   };
 }
 
@@ -419,10 +470,40 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
     if (!isTimestamp(e.createdAt) || !isTimestamp(e.updatedAt)) error(`${where}: a created or updated time isn't a valid time.`);
   });
 
+  const clientIds = new Set<string>();
+  (data.clients ?? []).forEach((c, i) => {
+    const where = `Client ${i + 1} (${c.id})`;
+    if (clientIds.has(c.id)) error(`${where}: the id is used twice.`);
+    clientIds.add(c.id);
+    if (c.name.trim() === '' || c.name.length > 60) error(`${where}: the name is empty or longer than 60 characters.`);
+    if (!isTimestamp(c.createdAt) || !isTimestamp(c.updatedAt)) error(`${where}: a created or updated time isn't a valid time.`);
+  });
+  const jobIds = new Set<string>();
+  const tipRecords = new Set((data.workEntries ?? []).map((e) => e.cashTipsRecordId));
+  const payments = new Set<string>();
+  (data.jobs ?? []).forEach((j, i) => {
+    const where = `Job ${i + 1} (${j.id})`;
+    if (jobIds.has(j.id)) error(`${where}: the id is used twice.`);
+    jobIds.add(j.id);
+    if (!text(j.description)) error(`${where}: the description is empty or longer than 200 characters.`);
+    if (!isCents(j.amountCents)) error(`${where}: the amount must be above $0 and at most $100,000,000.`);
+    if (j.status !== 'planned' && j.status !== 'done') error(`${where}: unknown work status.`);
+    if (j.clientId !== undefined && !clientIds.has(j.clientId)) error(`${where}: its client no longer exists.`);
+    if (j.paymentRecordId !== undefined) {
+      const r = recordById.get(j.paymentRecordId);
+      if (!r || r.sourceId !== null || r.kind !== 'income') error(`${where}: its payment isn't a one-time income record.`);
+      if (payments.has(j.paymentRecordId) || tipRecords.has(j.paymentRecordId)) error(`${where}: its payment belongs to another job or shift.`);
+      payments.add(j.paymentRecordId);
+    }
+    if (!isTimestamp(j.createdAt) || !isTimestamp(j.updatedAt)) error(`${where}: a created or updated time isn't a valid time.`);
+  });
+
   const all = [
     ...data.sources.flatMap((s) => [s.createdAt, s.updatedAt]),
     ...data.records.flatMap((r) => [r.createdAt, r.updatedAt, r.completedAt, r.canceledAt]),
     ...(data.workEntries ?? []).flatMap((e) => [e.createdAt, e.updatedAt]),
+    ...(data.clients ?? []).flatMap((c) => [c.createdAt, c.updatedAt]),
+    ...(data.jobs ?? []).flatMap((j) => [j.createdAt, j.updatedAt]),
   ];
   if (all.some((t) => t !== null && isTimestamp(t) && canonicalTimestamp(t) !== t)) normalized('Some times will be stored as ISO-8601 UTC with milliseconds.');
   if (data.isSample) error('Sample data is never stored in an account.');

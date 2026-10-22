@@ -49,7 +49,7 @@ export const OFFLINE_MESSAGE = "Financial OS can't reach your account right now.
 export const ACCESS_MESSAGE =
   "Your account didn't accept this change. Your change is kept on this device. Sign out and back in, and if this keeps happening, the app's account setup needs attention.";
 const CONFLICT_MESSAGE = 'Your data was changed on another device or window. Reload to see the latest.';
-export const INCOME_DETAIL_NOT_STORED = "This plan has hourly or tipped income details or shifts, which your account can't save yet. Nothing was saved.";
+export const INCOME_DETAIL_NOT_STORED = "This plan has hourly or tipped income, shifts, or freelance clients or jobs, which your account can't save yet. Nothing was saved.";
 export const POSSIBLE_INCOME_NOT_STORED = "This plan has possible income, which your account can't save yet. Nothing was saved. Mark that income expected, or remove it, to save.";
 
 export class CloudAdapter implements StorageAdapter {
@@ -133,7 +133,7 @@ export class CloudAdapter implements StorageAdapter {
   async save(data: AppData, baseRevision: number): Promise<SaveResult> {
     // Refused before anything is written: leaving the mark out would turn possible income into counted income.
     if (!this.includeCertainty && hasPossibleIncome(data)) return { ok: false, reason: 'error', message: POSSIBLE_INCOME_NOT_STORED };
-    // The rules would refuse shifts, and leaving them out would lose them: refused here, before anything is written.
+    // The rules would refuse shifts, clients and jobs, and leaving them out would lose them: refused here, before anything is written.
     if (!this.includeIncomeDetail && hasIncomeDetail(data)) return { ok: false, reason: 'error', message: INCOME_DETAIL_NOT_STORED };
     const { isSample: _sample, ...rest } = data;
     const doc = withoutAccounts(rest, this.includeAccounts);

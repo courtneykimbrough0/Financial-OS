@@ -10,6 +10,7 @@ import { useStore } from '../../state/store';
 import { EmptyLine, FlowAmount, ListGroup, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
 import { KIND_COPY, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm, useIncomeDetailAvailable } from '../components/forms';
 import { ShiftSheet, ShiftsSection } from '../components/shifts';
+import { AddJobButton, FreelanceSection } from '../components/freelance';
 import { EstimateCallout, EstimateSheet, useEstimateSuggestion } from '../components/EstimateSheet';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 import { AccountLabel } from '../components/money-accounts';
@@ -303,6 +304,8 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
   const copy = SCREEN_COPY[kind];
   const recurring = isRecurringKind(kind);
   const [adding, setAdding] = useState<'recurring' | 'one-time' | null>(null);
+  const [addingJob, setAddingJob] = useState(false);
+  const jobsShown = useIncomeDetailAvailable() && kind === 'income';
   const [editing, setEditing] = useState<RecurringSource | null>(null);
   // A date opened from an item's sheet returns to that sheet when closed.
   const [sheet, setSheet] = useState<{ kind: 'item'; id: string } | { kind: 'occurrence'; id: string; back: string | null } | null>(null);
@@ -310,10 +313,11 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
   const itemSource = sheet?.kind === 'item' ? data.sources.find((s) => s.id === sheet.id) : undefined;
 
   const sources = data.sources.filter((s) => s.kind === kind).sort((a, b) => Number(b.active) - Number(a.active) || a.description.localeCompare(b.description));
-  // Cash tips logged with a shift are listed with the shift, not here (they still count wherever money received is shown).
-  const shiftTips = new Set((data.workEntries ?? []).map((e) => e.cashTipsRecordId));
+  // Cash tips logged with a shift, and a job's payment, are listed with the shift or the job, not here
+  // (they still count wherever money received is shown).
+  const linked = new Set([...(data.workEntries ?? []).map((e) => e.cashTipsRecordId), ...(data.jobs ?? []).map((j) => j.paymentRecordId)]);
   const oneTimes = data.records
-    .filter((r) => r.sourceId === null && r.kind === kind && !shiftTips.has(r.id))
+    .filter((r) => r.sourceId === null && r.kind === kind && !linked.has(r.id))
     .map((r) => ({ ...r, displayStatus: deriveStatus(r, today), virtual: false }))
     .sort((a, b) => (a.scheduledDate < b.scheduledDate ? 1 : -1));
   const upcomingOneTimes = oneTimes.filter((o) => o.status === 'scheduled').reverse();
@@ -348,6 +352,7 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
                   <Icon icon={Plus} size={16} /> {copy.addRecurring}
                 </button>
                 {copy.oneTime && !showOneTimeList && addOneTime}
+                {jobsShown && !data.jobs?.length && <AddJobButton onClick={() => setAddingJob(true)} />}
               </span>
             }
           >
@@ -402,6 +407,8 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
           )}
         </section>
       )}
+
+      {jobsShown && <FreelanceSection adding={addingJob} onAdding={setAddingJob} />}
 
       {adding === 'recurring' && isRecurringKind(kind) && (
         <Modal title={copy.addRecurring} onClose={() => setAdding(null)}>

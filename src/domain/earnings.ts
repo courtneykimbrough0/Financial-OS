@@ -10,10 +10,14 @@
  *   paycheck has covered. Cash tips are never in it: they were money in on the
  *   shift's date, as their own received income record.
  * - Effective hourly: earnings ÷ hours, over shifts that have hours.
+ *
+ * Freelance jobs (E3) are read the same way: done but unpaid work is earned,
+ * not received; only a job's payment record is ever counted.
  */
 import type { DateStr } from './dates';
 import type { Cents } from './money';
-import type { AppData, WorkEntry } from './types';
+import { deriveStatus } from './occurrences';
+import { isUncountedPossible, type AppData, type FreelanceJob, type JobStatus, type OccurrenceRecord, type WorkEntry } from './types';
 
 export interface ShiftEarnings {
   wagesCents: Cents;
@@ -90,4 +94,43 @@ export function formatHours(minutes: number): string {
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.round((minutes / 60) * 100) / 100;
   return `${hours} h`;
+}
+
+/** Where a freelance job's payment stands. */
+export type JobPaymentState = 'pending' | 'expected' | 'possible' | 'overdue' | 'received' | 'skipped';
+
+export interface JobView {
+  job: FreelanceJob;
+  /** Planned or done work, or paid once its payment is received. */
+  status: JobStatus | 'paid';
+  payment: JobPaymentState;
+  /** Received: the actual amount; with a payment record: its current expectation; otherwise the agreed amount. */
+  amountCents: Cents;
+  /** Received: the actual date; with a payment record: its current expected date; otherwise none. */
+  date: DateStr | null;
+  record?: OccurrenceRecord;
+}
+
+/**
+ * A job as it stands today: its work and its payment. "pending" is a job
+ * without an expected payment date, and "possible" one whose payment isn't
+ * dependable; neither counts. Only "received" is money in.
+ */
+export function jobView(data: AppData, job: FreelanceJob, today: DateStr): JobView {
+  const record = job.paymentRecordId ? data.records.find((r) => r.id === job.paymentRecordId) : undefined;
+  if (!record) return { job, status: job.status, payment: 'pending', amountCents: job.amountCents, date: null };
+  if (record.status === 'completed') return { job, status: 'paid', payment: 'received', amountCents: record.actualAmountCents!, date: record.actualDate, record };
+  const base = { job, status: job.status, amountCents: record.scheduledAmountCents, date: record.scheduledDate, record };
+  if (record.status === 'canceled') return { ...base, payment: 'skipped' };
+  if (isUncountedPossible(record)) return { ...base, payment: 'possible' };
+  return { ...base, payment: deriveStatus(record, today) === 'overdue' ? 'overdue' : 'expected' };
+}
+
+/**
+ * Done work not paid yet: earned, outside cash flow. A job whose payment was
+ * skipped isn't in it. Each job once, at its current amount.
+ */
+export function doneNotPaid(data: AppData, today: DateStr): { cents: Cents; jobs: JobView[] } {
+  const jobs = (data.jobs ?? []).map((j) => jobView(data, j, today)).filter((v) => v.status === 'done' && v.payment !== 'skipped');
+  return { cents: jobs.reduce((n, v) => n + v.amountCents, 0), jobs };
 }

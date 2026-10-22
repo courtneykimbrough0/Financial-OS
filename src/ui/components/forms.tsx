@@ -62,7 +62,7 @@ function PayKindPicker({ value, onChange }: { value: PayKind; onChange: (k: PayK
 }
 
 /** Expected or possible, for income. Possible income is listed but not counted. */
-function CertaintyPicker({ value, onChange }: { value: IncomeCertainty; onChange: (c: IncomeCertainty) => void }) {
+export function CertaintyPicker({ value, onChange }: { value: IncomeCertainty; onChange: (c: IncomeCertainty) => void }) {
   const id = useId();
   return (
     <fieldset className="choice-field">

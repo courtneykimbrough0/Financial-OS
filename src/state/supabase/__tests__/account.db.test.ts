@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { richPlan, smallPlan, withShifts } from './fixtures';
+import { richPlan, smallPlan, withJobs, withShifts } from './fixtures';
 import { count, load, newUser, save, sql, workspaceOf } from './pg';
 
 /** A signed-in session for `user`, as Supabase Auth issues it: its id, and when the password was last checked. */
@@ -15,7 +15,7 @@ function session(user: string, opts: { live?: boolean; passwordSecondsAgo?: numb
 
 /** Rows of every table in a workspace. */
 const rowsIn = (ws: string) =>
-  ['workspaces where id', 'sources where workspace_id', 'schedule_versions where workspace_id', 'source_pauses where workspace_id', 'occurrence_records where workspace_id', 'work_entries where workspace_id', 'save_receipts where workspace_id'].map((t) =>
+  ['workspaces where id', 'sources where workspace_id', 'schedule_versions where workspace_id', 'source_pauses where workspace_id', 'occurrence_records where workspace_id', 'work_entries where workspace_id', 'clients where workspace_id', 'freelance_jobs where workspace_id', 'save_receipts where workspace_id'].map((t) =>
     count(`select count(*) from public.${t} = '${ws}'`),
   );
 
@@ -28,13 +28,13 @@ function withPlan(plan = richPlan()) {
 
 describe('deleting an account', () => {
   it("after a recent password sign-in: removes the account and every row of its plan, and nothing of anyone else's", () => {
-    const a = withPlan(withShifts(richPlan()));
+    const a = withPlan(withJobs(withShifts(richPlan())));
     const b = withPlan(smallPlan());
     const bBefore = load(b.u);
     expect(rowsIn(a.ws).every((n) => n > 0)).toBe(true);
     const r = session(a.u)('select public.delete_account();');
     expect([r.ok, r.code]).toEqual([true, null]);
-    expect(rowsIn(a.ws)).toEqual([0, 0, 0, 0, 0, 0, 0]);
+    expect(rowsIn(a.ws)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0]);
     expect(count(`select count(*) from auth.users where id = '${a.u}'`)).toBe(0);
     expect(count(`select count(*) from auth.sessions where user_id = '${a.u}'`)).toBe(0);
     expect(load(b.u)).toEqual(bBefore);
@@ -80,7 +80,7 @@ describe('deleting an account', () => {
     expect(sql(stale, 'select public.load_plan() is null;').out).toBe('t');
     expect(sql(stale, `select public.save_plan(1, '${randomUUID()}', 'replace', '{}'::jsonb);`).code).toBe('PT404');
     expect(sql(stale, 'select public.create_workspace();').code).toBe('23503');
-    for (const t of ['workspaces', 'sources', 'schedule_versions', 'source_pauses', 'occurrence_records', 'work_entries']) expect(sql(stale, `select count(*) from public.${t};`).out).toBe('0');
+    for (const t of ['workspaces', 'sources', 'schedule_versions', 'source_pauses', 'occurrence_records', 'work_entries', 'clients', 'freelance_jobs']) expect(sql(stale, `select count(*) from public.${t};`).out).toBe('0');
     expect(count(`select count(*) from public.workspaces where owner_id = '${a.u}'`)).toBe(0);
   });
 });
