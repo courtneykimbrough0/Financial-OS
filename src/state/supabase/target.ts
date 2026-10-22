@@ -1,5 +1,5 @@
 /**
- * Which Supabase a Supabase build may use. Two build modes, both left out of
+ * Which Supabase a Supabase build may use. Three build modes, all left out of
  * every other build (see main.tsx):
  *
  * - `supabase-dev`: the local stack only (an address on this machine).
@@ -7,6 +7,8 @@
  *   (VITE_SUPABASE_PROJECT_REF) must be listed in
  *   supabase/hosted-test/projects.json, and VITE_SUPABASE_URL must be exactly
  *   https://<ref>.supabase.co. There is no default address and no fallback.
+ * - `supabase-production` (F2): the production project, named by
+ *   VITE_SUPABASE_URL (https, never this machine) and its publishable key.
  *
  * Either way only a public (anon or publishable) key: a service-role or
  * secret key must never reach a browser.
@@ -52,4 +54,17 @@ export function hostedTestConfigProblem(url: string | undefined, key: string | u
 /** The approved refs from projects.json (entries are refs, or objects with a `ref`). */
 export function approvedRefs(file: { projects?: unknown[] }): string[] {
   return (file.projects ?? []).map((p) => (typeof p === 'string' ? p : (p as { ref?: string } | null)?.ref ?? '')).filter((r) => REF.test(r));
+}
+
+/** Production: why this configuration can't be used, or null. Only an https address that isn't this machine, and only a public key. */
+export function productionConfigProblem(url: string | undefined, key: string | undefined): string | null {
+  let parsed: URL | null = null;
+  try {
+    parsed = new URL(url ?? '');
+  } catch {
+    // reported below
+  }
+  if (!parsed || parsed.protocol !== 'https:' || LOOPBACK.includes(parsed.hostname)) return "Set VITE_SUPABASE_URL to the production project's https address.";
+  const ref = /^([a-z]{20})\.supabase\.co$/.exec(parsed.hostname)?.[1] ?? null;
+  return keyProblem(key, ref);
 }

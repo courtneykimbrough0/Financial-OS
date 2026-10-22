@@ -22,20 +22,21 @@ const updateServiceWorker = registerSW({
 void navigator.storage?.persist?.().catch(() => undefined);
 
 /**
- * Accounts are on when Firebase settings are present, unless the build sets
- * VITE_ACCOUNTS=off (device storage only; used by the end-to-end test and for
- * working on the app without signing in).
+ * Supabase storage and accounts: the production build (`supabase-production`,
+ * F2), a local stack (`supabase-dev`) or an approved hosted test project
+ * (`supabase-hosted-test`). `MODE` is fixed at build time, so in every other
+ * build this is false and the Supabase code isn't included at all; in these
+ * builds the Firebase code isn't included at all.
  */
-const accountsOn = import.meta.env.VITE_ACCOUNTS !== 'off' && Boolean(firebaseSettings.projectId && firebaseSettings.apiKey);
+const SUPABASE = import.meta.env.MODE === 'supabase-production' || import.meta.env.MODE === 'supabase-dev' || import.meta.env.MODE === 'supabase-hosted-test';
+const SupabaseStorage = SUPABASE ? lazy(() => import('./state/supabase/dev').then((m) => ({ default: m.SupabaseStorage }))) : null;
 
 /**
- * Development only: Supabase storage on a local stack (the `supabase-dev`
- * mode) or on an approved hosted test project (the `supabase-hosted-test`
- * mode). `MODE` is fixed at build time, so in every other build this is null
- * and the Supabase code isn't included at all.
+ * Legacy Firebase accounts (default build): on when Firebase settings are
+ * present, unless the build sets VITE_ACCOUNTS=off (device storage only; used
+ * by the end-to-end test and for working on the app without signing in).
  */
-const SupabaseDevelopment =
-  import.meta.env.MODE === 'supabase-dev' || import.meta.env.MODE === 'supabase-hosted-test' ? lazy(() => import('./state/supabase/dev').then((m) => ({ default: m.SupabaseDevelopment }))) : null;
+const accountsOn = !SUPABASE && import.meta.env.VITE_ACCOUNTS !== 'off' && Boolean(firebaseSettings.projectId && firebaseSettings.apiKey);
 
 function AppWithData({ adapter }: { adapter?: StorageAdapter }) {
   const account = useAccount();
@@ -85,9 +86,9 @@ function WithAccounts() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {SupabaseDevelopment ? (
+    {SupabaseStorage ? (
       <Suspense fallback={null}>
-        <SupabaseDevelopment>{(adapter) => <AppWithData adapter={adapter} />}</SupabaseDevelopment>
+        <SupabaseStorage>{(adapter) => <AppWithData adapter={adapter} />}</SupabaseStorage>
       </Suspense>
     ) : accountsOn ? (
       <WithAccounts />

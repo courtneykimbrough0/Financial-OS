@@ -132,6 +132,7 @@ Preserve the existing architecture; don't rebuild it without a reason the produc
 | State and persistence | `src/state/` | `storage.ts` (`StorageAdapter`, validation, `migrate`), `store.tsx` (applies operations, background saving, conflicts), `cloud.ts` (account storage with an on-device copy; legacy), `firebase.ts` (Google sign-in and Firestore, loaded on demand; legacy), `account.tsx`, `backup.ts`, `mode.tsx` (sample vs real data) |
 | UI | `src/ui/` | `screens/`, `components/`, a hash router (`router.ts`). Navigation (roadmap H3): Home (`#/home`, the opening screen), Forecast (`#/forecast`) and Plan (`#/plan/income`, `expenses`, `liabilities`, `reserves`), with Settings behind the gear. Earlier addresses (`#/dashboard`, `#/income` and the other kinds) redirect in `router.ts` |
 | Hosting (legacy) | `server.mjs`, `Dockerfile` | Cloud Run serves the built app and forwards Firebase sign-in pages through its own address. To be replaced by Vercel |
+| Hosting (prepared, not deployed) | `vercel.json`, `npm run build:supabase` | The production Supabase build (Firebase left out) with routing, caching, security headers and a content security policy (roadmap F2) |
 | Data and sign-in (legacy) | Firebase | Google sign-in; Firestore document `financialData/{uid}` in the named database; rules in `firestore.rules`. To be replaced by Supabase |
 | Future storage (not connected) | `supabase/`, `src/state/supabase/` | PostgreSQL schema, access rules and `load_plan` / `save_plan`, with the app-to-rows mapping. See docs/SUPABASE.md |
 | Tests | Vitest + Testing Library (jsdom); Firestore emulator; Playwright | See section H |
@@ -263,6 +264,7 @@ Check `package.json` before running anything; scripts can change. Currently:
 | `npm run lint` | `tsc -b` plus a syntax check of `firestore.rules` | |
 | `npm run build` | Type-check and production build | |
 | `npm run e2e` | Builds a device-only copy and drives it in Chromium through `server.mjs` | Needs Playwright with Chromium |
+| `npm run e2e:production` | Builds the production Supabase copy (placeholder, non-secret settings) and the device copy, serves them with `vercel.json`'s rewrites and headers, and checks in Chromium: the sign-in screen, no blocked resource under the content security policy on any screen, no outside requests, the service worker, routing and caching | Needs Playwright with Chromium; no Vercel or Supabase account |
 | `npm run test:db` | Applies `supabase/migrations` to a throwaway local PostgreSQL and runs the database tests (`*.db.test.ts`) | Needs the PostgreSQL server binaries and `psql`. Plain PostgreSQL with a stand-in for Supabase's auth schema; see docs/SUPABASE.md |
 | `npm run test:supabase` | Runs the Supabase integration tests (`*.supabase.test.ts`) through Supabase's real Auth and API, accounts included | The local stack by default (`supabase start` from the repository, with its email-testing server) and `SUPABASE_TEST_ANON_KEY`. An approved hosted test project only with `SUPABASE_TEST_TARGET=hosted` and the guards in docs/SUPABASE-HOSTED.md. Refuses service-role keys |
 | `npm run e2e:supabase` | Builds the Supabase, default and device-storage copies and drives them in Chromium against Supabase (the local stack by default), accounts included | Same needs as `test:supabase`, plus Playwright with Chromium. See docs/SUPABASE.md |
@@ -272,7 +274,7 @@ For any coherent code change, run `npm test`, `npm run typecheck`, `npm run lint
 
 **CI** (`.github/workflows/ci.yml`) runs on every pull request and on every push to `main`, in five jobs:
 1. typecheck, lint, unit tests and build (`npm run typecheck`, `lint`, `test`, `build`);
-2. the browser smoke test (`npm run e2e`);
+2. the browser smoke test and the production build check (`npm run e2e`, `e2e:production`);
 3. the database tests on the runner's PostgreSQL (`npm run test:db`);
 4. the Firestore rules on the emulator (`npm run test:rules`);
 5. the Supabase integration and browser suites (`npm run test:supabase`, `e2e:supabase`) against a local stack started with the Supabase CLI (its public key only; never a hosted project).

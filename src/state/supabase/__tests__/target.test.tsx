@@ -94,9 +94,9 @@ describe('the hosted-test build at runtime', () => {
     vi.stubEnv('VITE_SUPABASE_URL', `https://${REF}.supabase.co`);
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'sb_publishable_abc');
     vi.resetModules();
-    const { SupabaseDevelopment } = await import('../dev');
+    const { SupabaseStorage } = await import('../dev');
     const app = vi.fn(() => <p>app</p>);
-    render(<SupabaseDevelopment>{app}</SupabaseDevelopment>);
+    render(<SupabaseStorage>{app}</SupabaseStorage>);
     expect(screen.getByRole('alert')).toHaveTextContent(`Development storage couldn't start. Project ${REF} isn't an approved test project (supabase/hosted-test/projects.json).`);
     expect(app).not.toHaveBeenCalled();
   });

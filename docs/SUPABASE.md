@@ -208,6 +208,16 @@ VITE_SUPABASE_ANON_KEY=<anon or publishable key from supabase status> npm run de
 
 The previous development build signed in with anonymous identities. Supabase supports converting one into a permanent account while keeping its id: `updateUser({ email })`, confirmed by a link, then `updateUser({ password })`. An anonymous session left in the browser opens its plan with "Keep this plan" in Settings: add an email, open the link, choose a password. The identity, and so the workspace and plan, stay the same, and the email and password then work on any device. Nothing is merged and no second workspace is made. A temporary identity that is signed out can't be reached again, so signing out of one warns and offers a backup; restoring that backup into an account is the fallback. This is a development path only, not an account-merging feature.
 
+### The production build (F2)
+
+`npm run build:supabase` builds the app in the `supabase-production` mode into `dist-supabase/`, the build `vercel.json` deploys. It uses the same storage, accounts and screens as the development build, and differs only in configuration:
+
+- **Settings at build time:** `VITE_SUPABASE_URL` (the project's https address; never this machine) and `VITE_SUPABASE_ANON_KEY` (its publishable or anon key). The app refuses to start with anything else, a secret or service-role key above all (`productionConfigProblem` in `target.ts`). Both are public by design: what protects the data is row-level security and the functions' owner checks. No privileged key exists in the repository or any build.
+- **Firebase is left out entirely** (no Firebase code, settings or project id in the output), and so is the development banner and the hosted-test allowlist.
+- **Sign-in:** email and password with confirmation (the same screens as development); the session is kept under its own key (`financial-os:supabase-auth`). New anonymous identities are never created; the hosted project must also have anonymous sign-ins turned off (F5).
+- **Settings screen:** the sign-in card is "Sign-in & Security"; "Accounts" means only financial accounts.
+- **Hosting:** `vercel.json` sends app routes to `index.html` (never a missing `/assets/` file), keeps hashed assets a year and re-checks the app shell, and sets a content security policy (own scripts and styles only, `https://*.supabase.co` for data, no framing) plus `nosniff`, a referrer policy, `X-Frame-Options`, HSTS and a permissions policy. `npm run e2e:production` checks all of it in Chromium without any account.
+
 ### Hosted test projects
 
 An approved, isolated hosted test project can be used deliberately: through an allowlist, an exact address, its own build mode (`npm run build:hosted-test`), an explicit test target, a destructive-test confirmation and an in-database marker. See [SUPABASE-HOSTED.md](SUPABASE-HOSTED.md) for the guards and the setup steps.

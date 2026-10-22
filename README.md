@@ -23,6 +23,7 @@ npm run test:supabase # Supabase integration tests through a local Supabase stac
 npm run e2e:supabase  # the app in Chromium on a local Supabase stack, plus checks that the default build never uses it
 npm run dev:supabase  # development only: the app on a local Supabase stack (supabase start), with email-and-password accounts
 npm run build:hosted-test # development only: the Supabase build for an approved hosted test project (docs/SUPABASE-HOSTED.md)
+npm run build:supabase    # the production Supabase build for Vercel (needs VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY; not deployed yet)
 npm start            # production server (server.mjs) for the built app; used on Cloud Run
 ```
 
