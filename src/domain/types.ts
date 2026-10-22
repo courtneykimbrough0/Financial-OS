@@ -204,6 +204,15 @@ export function workKindFor(type: IncomeType | undefined): WorkEntry['kind'] | n
 }
 
 /**
+ * Whether a recorded paycheck or payout can have paid a shift or session: one
+ * of the same income, received on or after the day the work was done. Work
+ * dated after the money arrived was never paid by it.
+ */
+export function canHavePaid(paycheck: Pick<OccurrenceRecord, 'sourceId' | 'status' | 'actualDate'>, work: Pick<WorkEntry, 'sourceId' | 'date'>): boolean {
+  return paycheck.sourceId === work.sourceId && paycheck.status === 'completed' && paycheck.actualDate !== null && work.date <= paycheck.actualDate;
+}
+
+/**
  * Work logged for an income: a shift (hourly or tipped income, E2) or a gig
  * session (gig income, E4). What was earned, never by itself money received.
  * Work entries never enter the forecast:

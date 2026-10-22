@@ -11,12 +11,14 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, describe, expect, it } from 'vitest';
 import { usd, unwrap } from '../../../domain/__tests__/helpers';
 import { addDays } from '../../../domain/dates';
+import { activityView, recordedEntries } from '../../../domain/activity';
+import { earningsHistory } from '../../../domain/earnings-history';
 import { buildForecast, explainTimingGaps } from '../../../domain/forecast';
 import * as ops from '../../../domain/operations';
 import type { AppData } from '../../../domain/types';
 import { SupabaseStorageAdapter } from '../adapter';
 import { canonicalize, toRows } from '../rows';
-import { clock, richPlan, smallPlan, TODAY } from './fixtures';
+import { clock, incomePlan, richPlan, smallPlan, TODAY } from './fixtures';
 import { confirmedAccount, deleteTestAccounts } from './local-auth';
 
 const URL = process.env.SUPABASE_TEST_URL!;
@@ -129,6 +131,24 @@ describe('through real Supabase Auth and API', () => {
       expect(b).toEqual(a);
       expect(explainTimingGaps(b)).toEqual(explainTimingGaps(a));
     }
+  });
+
+  it('every kind of income (E6) comes back exactly, with identical forecasts, Activity and earnings; an ordinary save keeps it', async () => {
+    const plan = incomePlan();
+    const { sb } = await withPlan(plan);
+    const back = await adapterFor(sb).load();
+    expect(back).toEqual({ ...canonicalize(plan), revision: 1 });
+    const views = (d: AppData) => {
+      const f = buildForecast(d, TODAY, { through: '2026-10-31' });
+      return { forecast: f, gaps: explainTimingGaps(f), activity: activityView(f, '2026-10-01', '2026-10-31'), earnings: earningsHistory(d, recordedEntries(f, '2026-10-01', '2026-10-31'), '2026-10-01', '2026-10-31', TODAY) };
+    };
+    expect(views(back)).toEqual(views(plan));
+    // An ordinary save that undoes the gig payout keeps every session, job and client.
+    const edited = unwrap(ops.restoreOccurrence(back, 'gig@2026-10-12', clock));
+    expect(await adapterFor(sb).save(edited, 1)).toEqual({ ok: true, revision: 2 });
+    const again = await adapterFor(sb).load();
+    expect(again).toEqual({ ...canonicalize(edited), revision: 2 });
+    expect([again.workEntries!.length, again.jobs!.length, again.clients!.length]).toEqual([plan.workEntries!.length, plan.jobs!.length, plan.clients!.length]);
   });
 
   it("two people: neither can read, write or reach the other's plan", async () => {

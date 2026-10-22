@@ -119,4 +119,19 @@ describe('Activity with earnings', () => {
     await user.click(screen.getByRole('button', { name: 'Previous month' }));
     expect(screen.queryByRole('heading', { name: 'Possible' })).toBeNull();
   });
+
+  it('a paycheck corrected to an earlier date no longer shows as paying later shifts, on the income or in Earnings', async () => {
+    // The Oct 16 paycheck paid the Oct 13 and Oct 14 shifts; it actually arrived Oct 13.
+    const d = unwrap(ops.correctActual(earningsPlan(), 'job@2026-10-16', { amountCents: usd(780), date: '2026-10-13' }, clock));
+    const user = await openApp('#/activity', unwrap(ops.completeOnboarding(d)));
+    await screen.findByRole('heading', { level: 1, name: 'Activity' });
+    // Not received yet: $100 waiting for payout + $150 done job + the Oct 14 shift's $76.25 wages and $30 card tips.
+    expect(row(earningsCard(), 'Not received yet')).toHaveTextContent('$356.25');
+    expect(row(earningsCard(), 'Received for work')).toHaveTextContent('$2,290.00');
+    await user.click(screen.getAllByRole('link', { name: 'Plan' })[0]!);
+    await user.click(await screen.findByRole('button', { name: /^Server/ }));
+    const sheet = within(screen.getByRole('dialog', { name: 'Server' })).getByRole('region', { name: 'Shifts' });
+    expect(within(sheet).getByRole('button', { name: /^Oct 14, 2026/ })).toHaveTextContent('Not paid yet');
+    expect(within(sheet).getByRole('button', { name: /^Oct 13, 2026/ })).toHaveTextContent('Paid in the Oct 13 paycheck');
+  });
 });

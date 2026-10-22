@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { clockAt, source, unwrap, usd } from '../../../domain/__tests__/helpers';
-import { buildForecast } from '../../../domain/forecast';
+import { activityView, recordedEntries } from '../../../domain/activity';
+import { earningsHistory } from '../../../domain/earnings-history';
+import { buildForecast, explainTimingGaps } from '../../../domain/forecast';
 import { variance } from '../../../domain/occurrences';
 import * as ops from '../../../domain/operations';
 import type { AppData } from '../../../domain/types';
-import { toRows } from '../rows';
-import { richPlan, TODAY, withJobs, withSessions, withShifts } from './fixtures';
+import { canonicalize, toRows } from '../rows';
+import { incomePlan, richPlan, TODAY, withJobs, withSessions, withShifts } from './fixtures';
 import { count, load, newUser, save, saveOk, savePlan, sql, workspaceOf } from './pg';
 
 const clock = clockAt(TODAY);
@@ -482,5 +484,90 @@ describe('gig work and payouts (E4)', () => {
     expect(replace({ sources: rows.sources.map((s) => (s.id === 'gig' ? { ...s, hourly_wage_cents: 1500 } : s)) }).code).toBe('23514');
     expect(replace({ sources: rows.sources.map((s) => (s.id === 'gig' ? { ...s, income_type: 'tipped' } : s)) }).code).toBe('PT422');
     expect(load(user)).toEqual(data);
+  });
+});
+
+describe('every kind of income through ordinary saves (E6)', () => {
+  const OCT = ['2026-10-01', '2026-10-31'] as const;
+  /** Everything the app shows from a plan: counted entries, timing gaps, the month's Activity and earnings. */
+  function outcomes(d: AppData) {
+    const f = buildForecast(d, TODAY, { through: OCT[1] });
+    const recorded = recordedEntries(f, ...OCT);
+    return {
+      counted: f.entries.filter((e) => e.counts).map((e) => [e.occurrence.id, e.date, e.signedCents]),
+      gaps: explainTimingGaps(f),
+      activity: activityView(f, ...OCT).summary,
+      earnings: earningsHistory(d, recorded, ...OCT, TODAY),
+    };
+  }
+  /** Every link from work and jobs to money still points at something that exists, and of the right kind. */
+  function linksHold(d: AppData) {
+    const record = (id: string) => d.records.find((r) => r.id === id);
+    for (const e of d.workEntries ?? []) {
+      if (e.cashTipsRecordId) expect(record(e.cashTipsRecordId)).toMatchObject({ sourceId: null, kind: 'income', status: 'completed', actualAmountCents: e.cashTipsCents });
+      if (e.paidByOccurrenceId) expect(record(e.paidByOccurrenceId)).toMatchObject({ sourceId: e.sourceId, status: 'completed' });
+    }
+    for (const j of d.jobs ?? []) {
+      if (j.paymentRecordId) expect(record(j.paymentRecordId)).toMatchObject({ sourceId: null, kind: 'income' });
+      if (j.clientId) expect(d.clients!.some((c) => c.id === j.clientId)).toBe(true);
+    }
+  }
+
+  it('each correction, undo, edit and delete is saved, read back exactly, and changes no figure on the way', () => {
+    // Checked after every step: no shift or session stays paid by a paycheck that arrived before it was worked.
+    const noLateLinks = (d: AppData) => {
+      for (const e of d.workEntries ?? []) if (e.paidByOccurrenceId) expect(e.date <= d.records.find((r) => r.id === e.paidByOccurrenceId)!.actualDate!).toBe(true);
+    };
+    const { user, data } = stored(incomePlan());
+    // The fixture as stored: shifts paid by the early side paycheck, one session paid and one waiting.
+    expect(data.workEntries!.map((e) => [e.id, e.paidByOccurrenceId ?? null])).toEqual([
+      ['shift-1', 'side@2026-10-17'],
+      ['shift-2', 'side@2026-10-17'],
+      ['session-1', 'gig@2026-10-12'],
+      ['session-2', null],
+    ]);
+    const payment = (d: AppData, job: string) => d.jobs!.find((j) => j.id === job)!.paymentRecordId!;
+    const steps: [string, (d: AppData) => ops.Result][] = [
+      ['correct the paycheck', (d) => ops.correctActual(d, 'side@2026-10-17', { amountCents: usd(220), date: '2026-10-16' }, clock)],
+      ['correct it to before the second shift', (d) => ops.correctActual(d, 'side@2026-10-17', { amountCents: usd(205), date: '2026-10-14' }, clock)],
+      ['undo the paycheck', (d) => ops.restoreOccurrence(d, 'side@2026-10-17', clock)],
+      ['record it again', (d) => ops.recordActual(d, 'side@2026-10-17', { amountCents: usd(212.4), date: '2026-10-16' }, clock)],
+      ['correct a shift’s cash tips', (d) => ops.editShift(d, 'shift-1', { date: '2026-10-14', minutes: 330, wageCents: 1600, cashTipsCents: usd(50), cardTipsCents: usd(31) }, clock)],
+      ['delete a shift', (d) => ops.deleteShift(d, 'shift-2')],
+      ['mark a paid session not paid', (d) => ops.setShiftPaid(d, 'session-1', null, clock)],
+      ['pay it by hand with the payout', (d) => ops.setShiftPaid(d, 'session-1', 'gig@2026-10-12', clock)],
+      ['change a session’s platform and cash', (d) => ops.editSession(d, 'session-2', { date: '2026-10-14', earningsCents: usd(70), cashTipsCents: usd(14), platform: 'Lyft' }, clock)],
+      ['undo the payout', (d) => ops.restoreOccurrence(d, 'gig@2026-10-12', clock)],
+      ['undo a job payment', (d) => ops.restoreOccurrence(d, payment(d, 'job-logo'), clock)],
+      ['record it at another amount and date', (d) => ops.recordJobPayment(d, 'job-logo', { amountCents: usd(800), date: '2026-10-16' }, clock)],
+      ['give a pending job a payment date', (d) => ops.editJob(d, 'job-brochure', { description: 'Brochure', amountCents: usd(300), status: 'done', expectedDate: '2026-10-28' }, clock)],
+      ['delete an unpaid job and its payment', (d) => ops.deleteJob(d, 'job-copy')],
+      ['remove the client', (d) => ops.deleteClient(d, 'client-acme', clock)],
+      ['mark possible income expected', (d) => ops.setIncomeCertainty(d, 'tutor', 'expected', clock)],
+      ['mark a possible one-time expected', (d) => ops.setIncomeCertainty(d, 'bonus', 'expected', clock)],
+    ];
+    let current = data;
+    for (const [name, step] of steps) {
+      const next = unwrap(step(current));
+      const back = saveOk(user, next);
+      expect([name, back]).toEqual([name, { ...canonicalize(next), revision: back.revision }]);
+      expect([name, outcomes(back)]).toEqual([name, outcomes(next)]);
+      linksHold(back);
+      noLateLinks(back);
+      if (name === 'correct it to before the second shift') expect(back.workEntries!.filter((e) => e.sourceId === 'side').map((e) => [e.id, e.paidByOccurrenceId ?? null])).toEqual([['shift-1', 'side@2026-10-17'], ['shift-2', null]]);
+      current = back;
+    }
+    // Where it ended: one shift (its new cash tips received), the paycheck paying it; both sessions waiting; Logo paid at $800.
+    expect(current.workEntries!.map((e) => [e.id, e.paidByOccurrenceId ?? null])).toEqual([
+      ['shift-1', 'side@2026-10-17'],
+      ['session-1', null],
+      ['session-2', null],
+    ]);
+    const end = outcomes(current).earnings;
+    expect(end.notReceived.map((n) => [n.source.id, n.cents, n.platforms])).toEqual([
+      ['gig', usd(165), [{ platform: 'DoorDash', cents: usd(95) }, { platform: 'Lyft', cents: usd(70) }]],
+    ]);
+    expect(end.jobs.paid.map((v) => [v.job.id, v.amountCents, v.date])).toEqual([['job-logo', usd(800), '2026-10-16']]);
+    expect(current.jobs!.every((j) => j.clientId === undefined)).toBe(true);
   });
 });

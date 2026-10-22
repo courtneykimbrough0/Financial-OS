@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays } from '../../../domain/dates';
+import { addDays, endOfMonth, startOfMonth } from '../../../domain/dates';
 import { estimateSuggestions } from '../../../domain/estimates';
 import { buildForecast, dailyTimeline, explainTimingGaps, lowestPoint } from '../../../domain/forecast';
 import { variance } from '../../../domain/occurrences';
@@ -7,6 +7,8 @@ import type { AppData } from '../../../domain/types';
 import { createBackup, readBackup } from '../../backup';
 import { canonicalize, checkForMigration, toRows } from '../rows';
 import { homeView } from '../../../domain/home';
+import { activityView, recordedEntries } from '../../../domain/activity';
+import { earningsHistory } from '../../../domain/earnings-history';
 import { allPlans, TODAY } from './fixtures';
 import { count, load, loadRows, newUser, save, workspaceOf } from './pg';
 
@@ -22,7 +24,15 @@ function outcomes(d: AppData, today: string) {
     suggestions: estimateSuggestions(d, today),
     home: homeView(d, today),
     variances: d.records.map((r) => [r.id, variance(r)]),
+    // Recorded activity and earnings for the month (E5).
+    ...monthViews(d, today),
   };
+}
+
+function monthViews(d: AppData, today: string) {
+  const [from, to] = [startOfMonth(today), endOfMonth(today)];
+  const f = buildForecast(d, today, { through: to });
+  return { activity: activityView(f, from, to), earnings: earningsHistory(d, recordedEntries(f, from, to), from, to, today) };
 }
 
 const DAYS = [0, 30, 90, 180, 365].map((n) => addDays(TODAY, n));
@@ -47,7 +57,10 @@ describe('a plan stored in PostgreSQL comes back the same', () => {
       count(`select count(*) from public.schedule_versions where workspace_id = '${ws}'`),
       count(`select count(*) from public.source_pauses where workspace_id = '${ws}'`),
       count(`select count(*) from public.occurrence_records where workspace_id = '${ws}'`),
-    ]).toEqual([rows.sources.length, rows.versions.length, rows.pauses.length, rows.records.length]);
+      count(`select count(*) from public.work_entries where workspace_id = '${ws}'`),
+      count(`select count(*) from public.clients where workspace_id = '${ws}'`),
+      count(`select count(*) from public.freelance_jobs where workspace_id = '${ws}'`),
+    ]).toEqual([rows.sources.length, rows.versions.length, rows.pauses.length, rows.records.length, rows.work_entries.length, rows.clients.length, rows.jobs.length]);
   });
 
   it('a backup made from the stored plan restores the same plan (export for rollback)', () => {

@@ -6,7 +6,7 @@
  */
 import { isValidDateStr } from '../domain/dates';
 import { emptyData, MAX_ACCOUNT_NAME, MAX_ACCOUNTS, MAX_BALANCE_CENTS, MAX_CLIENT_NAME, MAX_CLIENTS, MAX_JOBS, MAX_PLATFORM_NAME, MAX_SHIFTS } from '../domain/operations';
-import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, workKindFor, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type TransactionKind, type Transfer, type WorkEntry, type Client, type FreelanceJob } from '../domain/types';
+import { ACCOUNT_TYPES, canHavePaid, INCOME_TYPES, LIABILITY_TYPES, workKindFor, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type TransactionKind, type Transfer, type WorkEntry, type Client, type FreelanceJob } from '../domain/types';
 
 export type SaveResult =
   | { ok: true; revision: number }
@@ -197,7 +197,7 @@ function readWorkEntries(w: unknown, sources: RecurringSource[], records: Occurr
     const keepTips = v.cashTipsCents !== undefined && tips !== undefined && tips.sourceId === null && tips.kind === 'income' && !tipRecords.has(tips.id);
     if (keepTips) tipRecords.add(tips.id);
     const paid = v.paidByOccurrenceId !== undefined ? byId.get(v.paidByOccurrenceId) : undefined;
-    const keepPaid = paid !== undefined && paid.sourceId === v.sourceId && paid.status === 'completed';
+    const keepPaid = paid !== undefined && canHavePaid(paid, { sourceId: v.sourceId!, date: v.date! });
     const now = typeof v.createdAt === 'string' ? v.createdAt : new Date(0).toISOString();
     out.push({
       id: v.id!,
