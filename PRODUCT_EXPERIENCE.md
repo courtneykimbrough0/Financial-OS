@@ -465,7 +465,7 @@ Status always pairs color with a sign, icon or word (unchanged rule).
 | 600–1023 px | Bottom tabs; content max 640 px; lists may show two columns of figures |
 | ≥ 1024 px | Left navigation rail; content up to 1,120 px; the week view and Activity use two columns; sheets become side panels on the right instead of centered dialogs, so the content stays visible |
 
-Today the desktop layout is the phone column centered at 640 px.
+**As built (Implemented, D6):** from 1024 px the tabs are a left rail and sheets open as a right-hand panel; content stays one 760 px column centered beside the rail. The wider content and two-column week view and Activity are not built (a deviation recorded in the roadmap's D6 entry); tablets keep top pills and centered dialogs.
 
 ### 7.7 Accessibility (unchanged requirements, restated)
 
