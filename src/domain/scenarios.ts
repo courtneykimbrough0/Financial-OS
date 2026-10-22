@@ -18,7 +18,10 @@ import { expandSource, findOccurrence } from './occurrences';
 import * as ops from './operations';
 import { compareForecasts, gapChanges, SKIP_NOTE, type ProposedChange } from './preview';
 import { describeRule, startKeepsDates } from './recurrence';
-import { signFor, type AppData, type RecurrenceRule, type TransactionKind } from './types';
+import { isUncountedPossible, signFor, type AppData, type RecurrenceRule, type TransactionKind } from './types';
+
+/** Possible income isn't in any total, so a scenario that changes it would change nothing. */
+const POSSIBLE_NOT_COUNTED = (name: string) => `${name} is possible income, which isn't counted, so changing it here changes nothing. Mark it expected first.`;
 
 /** A recurring schedule for a hypothetical item. */
 export type ScenarioSchedule = { startDate: DateStr; rule: RecurrenceRule };
@@ -169,6 +172,7 @@ function applyChange(data: AppData, change: ScenarioChange, index: number, clock
       const o = findOccurrence(data, change.occurrenceId, clock.today);
       if (!o) return 'That item could not be found.';
       if (o.status !== 'scheduled') return `${o.description} on ${formatMedium(o.scheduledDate)} has already been recorded or skipped.`;
+      if (isUncountedPossible(o)) return POSSIBLE_NOT_COUNTED(o.description);
       const next = unwrap(ops.cancelOccurrence(data, o.id, SKIP_NOTE, clock));
       if (typeof next === 'string') return next;
       return {
@@ -181,6 +185,7 @@ function applyChange(data: AppData, change: ScenarioChange, index: number, clock
       const o = findOccurrence(data, change.occurrenceId, clock.today);
       if (!o) return 'That item could not be found.';
       if (o.status !== 'scheduled') return `${o.description} on ${formatMedium(o.scheduledDate)} has already been recorded or skipped.`;
+      if (isUncountedPossible(o)) return POSSIBLE_NOT_COUNTED(o.description);
       if (change.kind === 'occurrence-date') {
         const err = notPast(change.date);
         if (err) return err;
@@ -413,7 +418,7 @@ function baselineOnly(data: AppData, clock: ops.Clock, options: { through?: Date
 
 /** What a scenario can change without the person re-entering it: upcoming payments, and liability payments with their next dates. */
 export interface ScenarioOptions {
-  /** Outstanding occurrences from today through `end`, in forecast order. */
+  /** Outstanding occurrences from today through `end` that count (not possible income), in forecast order. */
   occurrences: { id: string; description: string; kind: TransactionKind; date: DateStr; amountCents: Cents }[];
   /** Active liability payments with no later change set, and the dates a new amount could start from. */
   liabilities: { sourceId: string; description: string; amountCents: Cents; dates: DateStr[] }[];
@@ -422,7 +427,7 @@ export interface ScenarioOptions {
 export function scenarioOptions(data: AppData, today: DateStr, end: DateStr = addDays(today, 90)): ScenarioOptions {
   const f = buildForecast(data, today);
   const occurrences = f.entries
-    .filter((e) => e.occurrence.status === 'scheduled' && e.occurrence.scheduledDate >= today && e.date <= end)
+    .filter((e) => e.counts && e.occurrence.status === 'scheduled' && e.occurrence.scheduledDate >= today && e.date <= end)
     .map((e) => ({ id: e.occurrence.id, description: e.occurrence.description, kind: e.occurrence.kind, date: e.occurrence.scheduledDate, amountCents: e.amountCents }));
   const liabilities = data.sources
     .filter((s) => s.kind === 'liability' && s.active && !s.versions.slice(1).some((v) => v.startDate > today))

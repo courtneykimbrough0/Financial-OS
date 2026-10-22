@@ -4,11 +4,48 @@ import { formatMedium, parts, type DateStr } from '../../domain/dates';
 import { centsToInput, formatMoney, parseMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { describeRule, nextOccurrenceOnOrAfter } from '../../domain/recurrence';
-import { LIABILITY_TYPE_LABEL, LIABILITY_TYPES, type LiabilityType, type RecurrenceRule, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
+import { LIABILITY_TYPE_LABEL, LIABILITY_TYPES, type IncomeCertainty, type LiabilityType, type RecurrenceRule, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { Field, FormError, Icon, MoneyInput, useToast } from './common';
 import { AccountSelect } from './money-accounts';
 import { useAccountSlot } from '../../state/slots';
+import { useAccount } from '../../state/account';
+import { INCOME_CERTAINTY_IN_SIGNED_IN_SAVES } from '../../state/features';
+
+/**
+ * Whether possible income can be kept by the storage in use: device storage
+ * and Supabase can; a Firebase account can't yet (see
+ * INCOME_CERTAINTY_IN_SIGNED_IN_SAVES), so the choice isn't offered there.
+ */
+export function useIncomeCertaintyAvailable(): boolean {
+  const account = useAccount();
+  const slot = useAccountSlot();
+  return !!slot || !account || INCOME_CERTAINTY_IN_SIGNED_IN_SAVES;
+}
+
+/** Expected or possible, for income. Possible income is listed but not counted. */
+function CertaintyPicker({ value, onChange }: { value: IncomeCertainty; onChange: (c: IncomeCertainty) => void }) {
+  const id = useId();
+  return (
+    <fieldset className="choice-field">
+      <legend>How sure is this income?</legend>
+      <div className="choice-pills">
+        {(
+          [
+            ['expected', 'Expected'],
+            ['possible', 'Possible'],
+          ] as const
+        ).map(([v, label]) => (
+          <label key={v} className={`choice-pill${value === v ? ' selected' : ''}`}>
+            <input type="radio" name={`${id}-certainty`} checked={value === v} onChange={() => onChange(v)} />
+            {label}
+          </label>
+        ))}
+      </div>
+      <p className="hint">{value === 'possible' ? "Shown, but not counted in cash flow or the running total until you mark it expected or record it." : 'Counts on its date.'}</p>
+    </fieldset>
+  );
+}
 
 export const KIND_COPY: Record<TransactionKind, { noun: string; nameLabel: string; placeholder: string; amountLabel: string; dateLabel: string }> = {
   income: {
@@ -274,6 +311,10 @@ export function SourceForm({
   const [tags, setTags] = useState<string[]>(source?.tags ?? []);
   const [liabilityType, setLiabilityType] = useState<LiabilityType | undefined>(source?.liabilityType);
   const [accountId, setAccountId] = useState<string | null>(source?.accountId ?? null);
+  const certaintyAvailable = useIncomeCertaintyAvailable() && kind === 'income';
+  const [certaintyChoice, setCertainty] = useState<IncomeCertainty>(source?.certainty ?? 'expected');
+  // Only sent where the storage keeps it; otherwise the item keeps what it has.
+  const certainty = certaintyAvailable ? certaintyChoice : undefined;
   const [amount, setAmount] = useState(current ? centsToInput(current.amountCents) : '');
   const [startDate, setStartDate] = useState<DateStr>(defaultStart);
   const [rule, setRule] = useState<RuleState>(() => ruleToState(current?.rule ?? { type: kind === 'income' ? 'biweekly' : 'monthly' }, defaultStart || null));
@@ -295,17 +336,19 @@ export function SourceForm({
 
     // The account choice is optional and changes nothing in the forecast; it's applied with the rest in one step.
     const withAccount = (step: ops.Result, id: string, clock: ops.Clock): ops.Result => (step.ok ? ops.assignAccount(step.data, id, accountId, clock) : step);
+    const withCertainty = (step: ops.Result, id: string, clock: ops.Clock): ops.Result =>
+      step.ok && certainty !== undefined && (step.data.sources.find((s) => s.id === id)?.certainty ?? 'expected') !== certainty ? ops.setIncomeCertainty(step.data, id, certainty, clock) : step;
 
     if (!source) {
       const id = ops.newId('src');
-      const result = run((d, clock) => withAccount(ops.addSource(d, { kind, description, tags, liabilityType, amountCents: cents!, startDate, rule: r }, clock, id), id, clock));
+      const result = run((d, clock) => withAccount(ops.addSource(d, { kind, description, tags, liabilityType, amountCents: cents!, startDate, rule: r, certainty }, clock, id), id, clock));
       if (!result.ok) return setError(result.error);
       toast(`Added ${description.trim()}.`);
       return onDone();
     }
 
     if (fresh) {
-      const result = run((d, clock) => withAccount(ops.redefineSource(d, source.id, { description, tags, liabilityType, amountCents: cents!, startDate, rule: r }, clock), source.id, clock));
+      const result = run((d, clock) => withAccount(ops.redefineSource(d, source.id, { description, tags, liabilityType, amountCents: cents!, startDate, rule: r, certainty }, clock), source.id, clock));
       if (!result.ok) return setError(result.error);
       toast(`Saved ${description.trim()}.`);
       return onDone();
@@ -315,7 +358,7 @@ export function SourceForm({
       source.active &&
       (cents !== current!.amountCents || startDate !== defaultStart || JSON.stringify(r) !== JSON.stringify(current!.rule));
     const result = run((d, clock) => {
-      const step = withAccount(ops.updateSourceDetails(d, source.id, { description, tags, liabilityType }, clock), source.id, clock);
+      const step = withCertainty(withAccount(ops.updateSourceDetails(d, source.id, { description, tags, liabilityType }, clock), source.id, clock), source.id, clock);
       if (!step.ok || !scheduleChanged) return step;
       return ops.changeSourceSchedule(step.data, source.id, { startDate, amountCents: cents!, rule: r }, clock);
     });
@@ -360,6 +403,7 @@ export function SourceForm({
       <RecurrenceFields value={rule} onChange={setRule} />
         </>
       )}
+      {certaintyAvailable && <CertaintyPicker value={certaintyChoice} onChange={setCertainty} />}
       <AccountSelect kind={kind} value={accountId} onChange={setAccountId} />
       <TagInput value={tags} onChange={setTags} />
       <FormError message={error} />
@@ -389,6 +433,8 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
   const [release, setRelease] = useState(false);
   // The Supabase development build can't store releases yet (it refuses the save), so it doesn't offer them.
   const canRelease = kind === 'reserve' && !useAccountSlot();
+  const certaintyAvailable = useIncomeCertaintyAvailable() && kind === 'income';
+  const [certainty, setCertainty] = useState<IncomeCertainty>('expected');
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -403,7 +449,7 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
     if (Object.keys(errs).length) return;
     const itemId = ops.newId('one');
     const result = run((d, clock) => {
-      const step = ops.addOneTime(d, { kind, description, tags, amountCents: cents!, date, release }, clock, itemId);
+      const step = ops.addOneTime(d, { kind, description, tags, amountCents: cents!, date, release, ...(certaintyAvailable ? { certainty } : {}) }, clock, itemId);
       return step.ok ? ops.assignAccount(step.data, itemId, accountId, clock) : step;
     });
     if (!result.ok) return setError(result.error);
@@ -439,6 +485,7 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
       <Field label="Expected date" error={fieldErrors.date}>
         {(p) => <input {...p} type="date" value={date} onChange={(e) => setDate(e.target.value)} />}
       </Field>
+      {certaintyAvailable && <CertaintyPicker value={certainty} onChange={setCertainty} />}
       <AccountSelect kind={kind} value={accountId} onChange={setAccountId} />
       <TagInput value={tags} onChange={setTags} />
       <FormError message={error} />

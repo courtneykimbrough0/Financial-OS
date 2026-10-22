@@ -301,3 +301,43 @@ describe('history is kept, legitimate corrections still work', () => {
     expect(save(user, { ...data, onboardingComplete: false }).message).toBe('Use Start over to go back to setup.');
   });
 });
+
+describe('income certainty (E1)', () => {
+  const marks = (d: AppData) => [...d.sources.map((s) => [s.id, s.certainty ?? null]), ...d.records.map((r) => [r.id, r.certainty ?? null])];
+  const counted = (d: AppData) => buildForecast(d, TODAY).entries.filter((e) => e.counts).map((e) => [e.occurrence.id, e.date, e.signedCents]);
+
+  it('stores possible income, reads it back exactly, and an ordinary save can mark it expected', () => {
+    const { user, data } = stored();
+    let d = unwrap(ops.addSource(data, { kind: 'income', description: 'Tips', amountCents: usd(200), startDate: '2026-10-17', rule: { type: 'weekly' }, certainty: 'possible' }, clock, 'tips'));
+    d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Invoice', amountCents: usd(500), date: '2026-10-28', certainty: 'possible' }, clock, 'one-inv'));
+    const back = saveOk(user, d);
+    expect(marks(back)).toEqual([['elec', null], ['pay', null], ['rent', null], ['tips', 'possible'], ['one-inv', 'possible']]);
+    expect(counted(back)).toEqual(counted(d));
+    expect(counted(back).some(([id]) => id === 'one-inv' || String(id).startsWith('tips@'))).toBe(false);
+    // Marking it expected is an ordinary change.
+    const expected = saveOk(user, unwrap(ops.setIncomeCertainty(back, 'one-inv', 'expected', clock)));
+    expect(expected.records.find((r) => r.id === 'one-inv')).not.toHaveProperty('certainty');
+    expect(count(`select count(*) from public.occurrence_records where workspace_id = '${workspaceOf(user)}' and certainty is not null`)).toBe(0);
+    expect(count(`select count(*) from public.sources where workspace_id = '${workspaceOf(user)}' and certainty is not null`)).toBe(1);
+  });
+
+  it('existing rows stay expected: a plan saved without certainty has none stored', () => {
+    const { user } = stored(richPlan());
+    const ws = workspaceOf(user);
+    expect(count(`select count(*) from public.sources where workspace_id = '${ws}' and certainty is not null`)).toBe(0);
+    expect(count(`select count(*) from public.occurrence_records where workspace_id = '${ws}' and certainty is not null`)).toBe(0);
+  });
+
+  it('the database refuses a certainty on anything but income, on a recurring occurrence, or with another value', () => {
+    const { user, data } = stored();
+    const d = unwrap(ops.addOneTime(data, { kind: 'income', description: 'Refund', amountCents: usd(40), date: '2026-10-28' }, clock, 'one-ref'));
+    const back = saveOk(user, unwrap(ops.recordActual(d, 'elec@2026-10-03', { amountCents: usd(180), date: '2026-10-03' }, clock)));
+    const rows = toRows(back);
+    const replace = (patch: Partial<typeof rows>) => savePlan(user, back.revision, { ...rows, ...patch } as never, { mode: 'replace' });
+    expect(replace({ sources: rows.sources.map((s) => (s.id === 'rent' ? { ...s, certainty: 'possible' as const } : s)) }).code).toBe('23514');
+    expect(replace({ records: rows.records.map((r) => (r.id === 'elec@2026-10-03' ? { ...r, certainty: 'possible' as const } : r)) }).code).toBe('23514');
+    expect(replace({ records: rows.records.map((r) => (r.id === 'one-ref' ? { ...r, certainty: 'maybe' as never } : r)) }).code).toBe('23514');
+    expect(replace({ sources: rows.sources.map((s) => (s.id === 'pay' ? { ...s, certainty: 'expected' as never } : s)) }).code).toBe('23514');
+    expect(load(user)).toEqual(back);
+  });
+});

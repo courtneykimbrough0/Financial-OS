@@ -52,7 +52,7 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | Audit recommendations (not yet approved) | docs/REDUCTION-AUDIT.md §3 and decisions §7 |
 | Deferred features | PRODUCT_EXPERIENCE.md §10; Step 8's deferred imports; Step 9 |
 
-### Current state (verified October 19, 2026; `main` at `abc57d6`)
+### Current state (verified October 22, 2026; `main` at `d5e8b61`)
 
 `main` is the default and integration branch (AGENTS.md section H). CI (`.github/workflows/ci.yml`, five jobs) passed on all merge commits below.
 
@@ -78,8 +78,9 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | D3, Forecast | **Complete**, merged as `81bdf00` | Phase D |
 | D4, Plan and Activity | **Complete**, merged as `e911b18` | Phase D |
 | D5, setup and sheets | **Complete**, merged as `ab843ce` | Phase D |
-| D6, desktop | **Complete** (in review); Phase D's last checkpoint | Phase D |
-| E, income expansion | **Planned**, needs separate approval and decision D8 | Phase E |
+| D6, desktop | **Complete**, merged as `d5e8b61`; Phase D is complete | Phase D |
+| E1, income foundation (income certainty) | **Complete** (in review) | Phase E |
+| E2–E6, income expansion | **Planned**; each checkpoint separately authorized | Phase E |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
 | AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
 | AC6 payoff support, recurring planned transfers | **Deferred** (need specifications or decisions) | Phase AC, conflicts |
@@ -328,24 +329,42 @@ PRODUCT_EXPERIENCE.md §7: tokens and components first, then screen by screen, t
   - **Timing gaps:** each expected payment is one tappable row (date, name, amount, chevron) that opens "See what happens if…", with one hint above the gaps instead of a link under every line; the group labels are sentence case.
   - **"See what happens if…":** with no changes yet, Add a change is the primary action; Done is a quiet close (the sheet's X does the same). Apply change and its confirmation are unchanged.
   - Tests: `setup-sheets-d5` (8): empty step line and primary Add, the tap hint after the first item, sample and restore present, review breakdown once with the primary action first and "Change something" going back, setup small-phone rule, overdue wording and status placement with every action present, recorded rows wrapping, item sheet actions, gap rows opening the scenario with one hint, scenario empty-state actions. Updated: a setup test reads the breakdown without the range, the D4 small-phone test allows setup rows, the smoke test reads the range and cash flow from the banner.
-- **D6. Desktop (complete, October 2026; in review).** From 1024 px; no domain, classification, stored-data, account or route change, and no second navigation or sheet component.
+- **D6. Desktop (complete, October 2026; merged as `d5e8b61`).** From 1024 px; no domain, classification, stored-data, account or route change, and no second navigation or sheet component.
   - **Navigation:** the existing tab bar (the same `NAV` list and links as the phone bottom bar) becomes a fixed left rail under the top bar, with icon and label rows and the current route highlighted; the top pills hide. Settings stays behind the gear in the top bar. The tab bar now comes before the content in the page, so keyboard focus reaches the rail before the screen (skip link, Settings, the four routes, then content). Tablets (760–1023 px) keep the top pills; phones keep the bottom bar, pixel for pixel (all 101 phone screenshots from D2–D5 at 320 and 390 px compared identical).
   - **Sheets:** the same `Modal` opens as a full-height panel from the right (480 px wide) instead of a centered dialog, sliding in only when reduced motion isn't requested. Focus trap, Escape, focus return, page scroll lock and scrolling inside a long panel were checked in the browser at 1024 and 1280 px; tablets keep the centered dialog.
-  - **Layout:** content stays the one 760 px reading column, centered in the space beside the rail. **Deviation from §7.6, for review:** the spec's wider content (up to 1,120 px) and two columns for the week view and Activity were not built; amounts and lists stay at a reading width rather than stretching, and a two-column Home or Activity would be a layout redesign of its own.
+  - **Layout:** content stays the one 760 px reading column, centered in the space beside the rail. **Product-owner decision (October 22, 2026):** the 760 px single-column desktop layout is retained. A two-column layout is built only when a usability need is demonstrated (PRODUCT_EXPERIENCE.md §7.6).
   - Tests: `desktop-d6` (6): one tab bar with the same routes, before the content; rail navigation marks the current route; the rail, hidden pills and centered column rules; no rail in setup; the panel rules with reduced motion; dialog semantics, focus and Escape. Browser checks in the D6 screenshot script (rail geometry, panel geometry, focus trap, scroll lock, panel scrolling, no horizontal overflow at 900, 1024, 1280 and 1440 px).
-- **Phase D is complete with D6.** Next by the roadmap order (A1 → … → D → decision D8 → E → F): decision D8 (how income detail is stored), then Phase E (income expansion), which needs separate approval; or, if the product owner prefers, a Phase D follow-up for the §7.6 two-column desktop layouts.
+- **Phase D is complete** (D1–D6, merged as `27cda0b`, `89f25be`, `81bdf00`, `e911b18`, `ab843ce` and `d5e8b61`; CI passed on each merge commit). D6's merge commit first failed one job before any test ran (the runner's port 54324 was already in use when the local Supabase stack started); the one re-run passed all five jobs. Decision D8 is settled as a feature flag (Phase E below).
 
-#### E. Income expansion (possible new functionality; separate approval)
+#### E. Income expansion (each checkpoint separately authorized)
 
-PRODUCT_EXPERIENCE.md §6:
-- income certainty and types;
-- tipped and hourly shifts;
-- freelance jobs;
-- gig payouts;
-- the Earnings section;
-- optional reminders.
+PRODUCT_EXPERIENCE.md §6. Planned October 22, 2026. The financial rules every checkpoint keeps:
+1. Income counts in cash flow when it's received, or when its receipt is expected on a date; never because it was earned.
+2. Possible income, without a dependable date, is shown where it helps but never in cash-flow totals or the running total.
+3. Each dollar is counted once.
+4. Several income sources need no primary one.
+5. Recorded amounts and dates are authoritative.
+6. Existing income records keep their meaning.
+7. A storage that can't keep something new refuses the save; it never silently loses it.
 
-Each step adds persisted data, so it needs decision D8 and the storage, backup, Supabase and migration work in AGENTS.md section C. Complexity: **medium–high** per step.
+**Decision D8, as built:** a feature flag per storage. Device storage, backups and Supabase keep the new income data; signed in with Firebase (legacy), it is off (`INCOME_CERTAINTY_IN_SIGNED_IN_SAVES`, `src/state/features.ts`): the choice is hidden and a plan with possible income is refused, never saved without it. Full availability comes with the Supabase cutover (Phase F). New work data (shifts, jobs, sessions) follows the same pattern.
+
+| Checkpoint | Scope | Depends on |
+| --- | --- | --- |
+| **E1. Income foundation** | Income certainty (expected or possible) and its financial treatment; persistence in every storage; the minimal interface to mark, see and resolve possible income | — |
+| E2. Hourly and tipped income | Optional `incomeType`; shifts (hours, wage, cash tips, card tips) as work entries; cash tips as one received income record each; wages and card tips "earned, not paid yet" until the paycheck is recorded (decision D9: the baseline paycheck stays as entered) | E1; introduces the work-entry collection, its `migrate`, backup, Supabase table and Firebase refusal |
+| E3. Freelance jobs and payments | Jobs (planned → done → paid); a job with a date and expected certainty is expected income; without a date it is possible (decision D10); recording the payment marks it paid | E1 (certainty), E2 (work entries) |
+| E4. Gig work and payouts | Sessions with earnings and cash received; platform earnings waiting for payout; a payout is the one income event, linked to the sessions it covers | E2 (work entries); E1 for possible payouts |
+| E5. Earnings history and supporting views (optional) | `earnings.ts` (hours, tips, effective hourly, earned versus paid); possible income in Activity's income list; Earnings reports | E2–E4 |
+| E6. Integration and testing across storage providers | Every income type through device storage, backups, Supabase (local stack and browser tests) and the Firebase refusal; migration checks; regression of every total | E1–E5 |
+
+Reminders (§6.7) stay deferred. Each checkpoint stops for review before the next.
+
+- **E1. Income foundation (complete, October 2026; in review).**
+  - **Domain:** an optional `certainty: 'possible'` on income items and one-time income (absent means expected, so every existing record keeps its meaning). A recurring occurrence follows its item; its record never carries the mark. `buildForecast` gives possible income not yet received `counts: false`, `signedCents: 0` and `possible: true`; it is never carried forward, never overdue and never starts the running total, and with only possible income there is no running total. Received possible income is an ordinary recorded entry, counted once at its recorded date and amount. `setIncomeCertainty` marks an item or a one-time income expected or possible without changing any amount, date or recorded outcome. A possible recurring item marked expected counts from today: its earlier dates that were never recorded are skipped (noted "Possible income, not received", each restorable) instead of becoming overdue income carried into the running total. Scenarios offer only counted items and refuse a change to possible income.
+  - **Persistence:** `migrate` keeps the mark only on income items and one-time income (device storage and backups). Supabase: migration `20261022000001_income_certainty.sql` adds a `certainty` column to `sources` and `occurrence_records`, with checks (only `'possible'`, only income, never on a recurring occurrence), and redefines `load_plan` and `save_plan` only to carry it; `rows.ts` maps it and `checkForMigration` names a mark the database would refuse. Firebase: the flag above; `CloudAdapter.save` refuses before writing anything. The rules would accept the field (items aren't checked field by field), but an older copy of the app would count possible income, which is why it stays off.
+  - **Interface:** an Expected / Possible choice on the income and one-time income forms where the storage keeps it; a dashed "Possible" badge and a muted amount (not struck through) on rows; a "Possible" list on Home for the viewed week, apart from Coming up; on its sheet, an explanation, Record received, and Mark as expected (for a recurring item, the whole item); Mark as possible on an expected one-time income.
+  - Tests: `income-certainty` (16, domain), `certainty-persistence` (9: device, backup, Firebase refusal and flag, Supabase mapping and migration checks), `income-certainty-e1` (5, interface), and three PostgreSQL tests in `integrity.db.test.ts` (round trip and an ordinary update, existing rows unmarked, the constraints).
 
 #### AC. Accounts (where money is received, held and spent)
 

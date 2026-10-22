@@ -854,6 +854,11 @@ fieldset.inline-fields .field label {
   color: var(--color-text-secondary);
   background: var(--color-surface-raised);
 }
+/* Possible income: shown, not counted. A dashed outline, neutral like Expected, never the green of money in. */
+.badge-possible {
+  color: var(--color-text-secondary);
+  border: 1px dashed var(--color-border-strong);
+}
 .badge-main {
   color: var(--color-text);
   border-color: var(--color-border-strong);
@@ -883,7 +888,8 @@ fieldset.inline-fields .field label {
 .amount-reserve {
   color: var(--color-reserve);
 }
-.amount.strike {
+.amount.strike,
+.amount.possible {
   color: var(--color-text-secondary);
 }
 .chevron {

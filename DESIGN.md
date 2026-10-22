@@ -99,6 +99,7 @@ The typeface is Inter Variable, bundled locally so it works offline, with number
 Home and the Forecast screen show only summaries. Detail opens in a bottom sheet:
 
 - **Plan** (since D4): each section's recurring items are rows in one `ListGroup`; an item that is off keeps its row, with an "Off" badge.
+- **Possible income** (since E1): a dashed, neutral "Possible" badge and a muted amount, never struck through (nothing was canceled) and never the green of money in. Rows say "Not counted until expected or received". On Home it has its own "Possible" list, apart from Coming up; its sheet explains it isn't counted and offers Record received and Mark as expected. The Expected / Possible choice on income forms appears only where the storage keeps it.
 - **Activity** (since D4): one summary card leads with recorded cash flow, then Received, Paid, a row per classification (only when more than one has activity) and reserves; the recorded items are one `ListGroup`. Empty months and filters are `EmptyLine`s.
 - **Home** (the opening screen) carries what needs attention (see README, Home); the forecast screen no longer has an overdue banner. Since D2:
   - One progress card leads: the recorded cash flow so far this month (or the projected month, labeled, when nothing is recorded), one comparison line, then short label-and-amount rows for the projected month, last month and the difference. Red only for figures below $0; up and down in words with an arrow.

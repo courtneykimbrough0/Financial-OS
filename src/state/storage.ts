@@ -176,9 +176,11 @@ export function migrate(raw: unknown): AppData {
     revision,
     onboardingComplete: Boolean(doc.onboardingComplete),
     ...(doc.isSample ? { isSample: true } : {}),
-    sources: sources.map(({ liabilityType, mainPaycheck: _mp, estimateDismissal, accountId, ...s }: any) => ({
+    sources: sources.map(({ liabilityType, mainPaycheck: _mp, estimateDismissal, accountId, certainty, ...s }: any) => ({
       ...s,
       kind: s.kind,
+      // Only income can be possible; anything else, or no value, is expected (stored as no field).
+      ...(s.kind === 'income' && certainty === 'possible' ? { certainty: 'possible' as const } : {}),
       // Keep a liability type only when it is one of the three allowed values; the edit form asks for it otherwise.
       ...(s.kind === 'liability' && liabilityType && LIABILITY_TYPES.includes(liabilityType) ? { liabilityType } : {}),
       ...(readDismissal(estimateDismissal) ? { estimateDismissal: readDismissal(estimateDismissal) } : {}),
@@ -187,9 +189,11 @@ export function migrate(raw: unknown): AppData {
       pausedRanges: s.pausedRanges ?? [],
       endDate: s.endDate ?? null,
     })),
-    // Only one-time items and recorded occurrences carry an account; a release is kept only on a one-time reserve.
-    records: records.map(({ accountId, release, ...r }) => ({
+    // Only one-time items and recorded occurrences carry an account; a release is kept only on a one-time reserve,
+    // and a certainty only on one-time income (a recurring occurrence follows its item).
+    records: records.map(({ accountId, release, certainty, ...r }) => ({
       ...r,
+      ...(r.sourceId === null && r.kind === 'income' && certainty === 'possible' ? { certainty: 'possible' as const } : {}),
       tags: Array.isArray(r.tags) ? r.tags : [],
       ...(r.sourceId === null || r.status === 'completed' ? keptAccount(accounts, r.kind, accountId) : {}),
       ...(r.sourceId === null && r.kind === 'reserve' && release === true ? { release: true as const } : {}),
