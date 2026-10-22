@@ -177,9 +177,22 @@ export interface RecurringSource {
   estimateDismissal?: EstimateDismissal;
   /** Optional: the account this item is received in, paid from or held in (see `accountTypeFor`). Never read by the forecast. */
   accountId?: string;
+  /** Income only: `'possible'` when it may come but isn't dependable (see `IncomeCertainty`). Absent means expected. */
+  certainty?: 'possible';
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * How dependable an income is. Expected income (every income unless marked
+ * otherwise) counts on its date. Possible income may come but isn't
+ * dependable: it is listed, but never in cash flow, the running total or any
+ * total, and never starts the running total, until it is marked expected or
+ * recorded as received. A recorded actual always counts, once, at its
+ * recorded date and amount. Stored only as `'possible'`; absent means expected,
+ * so data from before this field keeps its meaning.
+ */
+export type IncomeCertainty = 'expected' | 'possible';
 
 /**
  * A dismissed estimate suggestion: the estimate it was compared with, the
@@ -220,6 +233,11 @@ export interface OccurrenceRecord {
   accountId?: string;
   /** One-time reserves only: money taken back out of reserves, which returns it to available cash flow. */
   release?: true;
+  /**
+   * Income only. Stored on one-time income; a recurring occurrence always
+   * follows its item's certainty, set when occurrences are resolved.
+   */
+  certainty?: 'possible';
   expectedDate: DateStr;
   expectedAmountCents: Cents;
   scheduledDate: DateStr;
@@ -287,7 +305,22 @@ export function recurringOccurrenceId(sourceId: string, expectedDate: DateStr): 
   return `${sourceId}@${expectedDate}`;
 }
 
-/** True when at least one active recurring income exists. */
+/** True when at least one active, expected recurring income exists (possible income can't start the running total). */
 export function hasActiveIncome(data: AppData): boolean {
-  return data.sources.some((s) => s.kind === 'income' && s.active);
+  return data.sources.some((s) => s.kind === 'income' && s.active && s.certainty !== 'possible');
+}
+
+/** The certainty of an income item or occurrence; everything else is expected. */
+export function certaintyOf(o: { kind: TransactionKind; certainty?: 'possible' }): IncomeCertainty {
+  return o.kind === 'income' && o.certainty === 'possible' ? 'possible' : 'expected';
+}
+
+/** True when any income item or one-time income is marked possible (received or not). */
+export function hasPossibleIncome(data: AppData): boolean {
+  return data.sources.some((s) => s.certainty === 'possible') || data.records.some((r) => r.certainty === 'possible');
+}
+
+/** True for possible income that hasn't been received: listed, never counted. */
+export function isUncountedPossible(o: { kind: TransactionKind; certainty?: 'possible'; status: StoredStatus }): boolean {
+  return certaintyOf(o) === 'possible' && o.status === 'scheduled';
 }

@@ -290,7 +290,7 @@ Visibility follows the data, through rules computed from forecast output. CSS ne
 
 **Implemented today:** recurring income (fixed amounts on a schedule), one-time income, and recorded actuals with amounts and dates that can differ from the expected ones. The main paycheck concept was removed in Phase R1. Everything else in this table is Missing.
 
-### 6.3 Expected, possible, received (Proposed domain addition)
+### 6.3 Expected, possible, received (Implemented in E1)
 
 - **Expected** (counts): what every income is today. Its amount and date are dependable enough to plan around. It moves the running total.
 - **Possible** (new; doesn't count): income that may come but isn't dependable, such as a freelance invoice with no confirmed date, or tips beyond the baseline.
@@ -300,6 +300,8 @@ Visibility follows the data, through rules computed from forecast output. CSS ne
 - **Received** (counts): a recorded actual. Unchanged from today.
 
 The data model gains an optional `certainty: 'expected' | 'possible'` on income sources and one-time income records, defaulting to `expected`. Existing data keeps meaning exactly what it means now.
+
+**As built (E1):** stored only as `certainty: 'possible'` (absent means expected). A recurring occurrence follows its item. Possible income appears on Home in a "Possible" list for the viewed week, in the Forecast and on Plan with a dashed "Possible" badge and a muted amount; its sheet offers Record received and Mark as expected (with its current date; Change date or amount sets another). A recurring item marked expected counts from today; its earlier unrecorded dates are skipped, each restorable, so they never become overdue income. Received possible income counts once, as recorded. Not built yet: the "Possible" group in Activity's income list (E5) and possible income as hypothetical income in scenarios; scenarios offer only counted items.
 
 ### 6.4 Tipped workers
 
@@ -356,13 +358,14 @@ The data model gains an optional `certainty: 'expected' | 'possible'` on income 
 - **Opt-in per income source; off by default.** Snoozing or skipping never piles up (the review-rhythm rule).
 - Push notifications need service-worker push and, on iPhone, an installed PWA. They come later and are never claimed as delivered without verified delivery (roadmap Step 5).
 
-### 6.8 Domain changes (Proposed)
+### 6.8 Domain changes (Proposed; item 1 implemented in E1)
 
 The existing engine is extended, not rebuilt.
 
 **1. Income certainty.** An optional `certainty` on income `RecurringSource` and `OccurrenceRecord` (default `expected`).
 - `buildForecast` gives possible income `counts: false`, with a new `possible: true` marker, so it's displayed but not totaled.
 - It is never an eligible forecast start (section 8).
+- **As built (E1):** also never carried forward and never overdue; only received possible income counts. `setIncomeCertainty` changes the mark and nothing else.
 
 **2. Income type.** An optional `incomeType` on income sources, for labels and for which optional tools appear. It has no effect on the math.
 
@@ -383,16 +386,18 @@ WorkEntry {
 
 **4. Aggregation.** The Activity view's pure helpers in `src/domain/`, plus `earnings.ts` for hours, tips, effective hourly, and earned versus paid.
 
-### 6.9 Persistence and database changes (Proposed)
+### 6.9 Persistence and database changes (Proposed; certainty implemented in E1)
 
 **What has to change.** New persisted fields (`certainty`, `incomeType`, `workEntries`) need:
 - `migrate` and validation in `storage.ts`, and backups;
 - Supabase columns and a new `work_entries` table, with ownership, row-level security, `load_plan` / `save_plan` mapping and database tests;
 - review of a check constraint: the schema requires `amount > 0`, so an optional $0 amount isn't stored that way.
 
-**The constraint.** Firestore rules can't be deployed while Firebase is legacy (AGENTS.md section C1). A signed-in Firebase account would have saves with new fields refused.
+**The constraint.** Firestore rules can't be deployed while Firebase is legacy (AGENTS.md section C1). A signed-in Firebase account would have saves with new top-level fields (such as `workEntries`) refused. New fields inside items (such as `certainty`) would be accepted, since items aren't checked field by field, but an older copy of the app would ignore them: it would count possible income.
 
 **So:** ship new income fields behind a flag, as `ACCOUNTS_IN_SIGNED_IN_SAVES` does for accounts today: available with device storage and Supabase, hidden for Firebase accounts. Alternatively, schedule income expansion after the Supabase cutover (decision D8).
+
+**As built (E1):** `INCOME_CERTAINTY_IN_SIGNED_IN_SAVES = false`. Unlike accounts, the mark can't simply be left out of a Firebase save (that would turn possible income into counted income), so a plan with possible income is refused there and nothing is saved. Supabase stores it in a `certainty` column (migration `20261022000001_income_certainty.sql`) with checks; `load_plan` and `save_plan` carry it.
 
 ---
 
@@ -465,7 +470,9 @@ Status always pairs color with a sign, icon or word (unchanged rule).
 | 600–1023 px | Bottom tabs; content max 640 px; lists may show two columns of figures |
 | ≥ 1024 px | Left navigation rail; content up to 1,120 px; the week view and Activity use two columns; sheets become side panels on the right instead of centered dialogs, so the content stays visible |
 
-**As built (Implemented, D6):** from 1024 px the tabs are a left rail and sheets open as a right-hand panel; content stays one 760 px column centered beside the rail. The wider content and two-column week view and Activity are not built (a deviation recorded in the roadmap's D6 entry); tablets keep top pills and centered dialogs.
+**As built (Implemented, D6):** from 1024 px the tabs are a left rail and sheets open as a right-hand panel; content stays one 760 px column centered beside the rail; tablets keep top pills and centered dialogs.
+
+**Decision (Confirmed, October 22, 2026):** the 760 px single-column desktop layout is retained. The wider content and two-column week view and Activity in the table above are built only if a usability need is demonstrated.
 
 ### 7.7 Accessibility (unchanged requirements, restated)
 
@@ -592,7 +599,7 @@ The structural decisions (Q1–Q7) are in [docs/REDUCTION-AUDIT.md](docs/REDUCTI
 | D5 | Tab names | **This week, Forecast, Activity, Plan** (follows Q1). |
 | D6 | Money-out color | **Neutral with a "−" sign**; indigo becomes the accent only. |
 | D7 | Light theme | Dark stays the default in the first redesign. Light theme (following the system setting) is a later, separate phase. |
-| D8 | Persisting new income data while Firebase is legacy | **A feature flag**: on for device storage and Supabase, off for Firebase accounts. Full availability at the Supabase cutover. |
+| D8 | Persisting new income data while Firebase is legacy | **Decided and built in E1: a feature flag**: on for device storage and Supabase, off for Firebase accounts (where a plan with possible income is refused, never stripped). Full availability at the Supabase cutover. |
 | D9 | Estimating a tipped paycheck from shifts | **Off by default.** The baseline paycheck stays as entered; estimates are suggestions to approve. |
 | D10 | Freelance payment without a date | **Possible, not counted**, until a date is set or it's received. |
 | D11 | "Cash available now" (the open item in the roadmap) | Keep deferred, but leave room in the week view's forecast line for an optional starting amount (REDUCTION-AUDIT Q6). |

@@ -36,7 +36,8 @@ auth.users 1─1 workspaces 1─* sources 1─* schedule_versions
   - `main_paycheck` is always `false` (column retained for schema compatibility; the concept was removed in Phase R1);
   - a liability type only on liability payments;
   - estimate dismissals are complete or absent;
-  - an item that's on has no end date.
+  - an item that's on has no end date;
+  - `certainty` is null (expected) or `'possible'`, only on income items and one-time income, never on a recurring occurrence, which follows its item (migration `20261022000001_income_certainty.sql`, which also redefines `load_plan` and `save_plan` to carry the column and changes nothing else in them).
 - **Kept, not checked:** records whose original date a later schedule no longer produces. The engine sets them aside and they count again if a schedule brings the date back. The database can't run the schedule, so it doesn't judge them.
 - **Not stored:** forecasts, timing gaps, suggestions, scenarios, sample data.
 
@@ -246,7 +247,7 @@ The script refuses any address other than this machine, and refuses a service-ro
 - deletion: cleanup, stale tokens, refusals, and only the caller deleted;
 - converting an anonymous identity, which keeps its id and plan. To run the database tests against the same stack's PostgreSQL: `PGHOST=127.0.0.1 PGPORT=54322 PGUSER=postgres PGPASSWORD=postgres npx vitest run --config vitest.db.config.ts`.
 
-Last run by hand (October 2026): Supabase CLI 2.121.0, Supabase Postgres 17.11.0.004, GoTrue 2.197.0, PostgREST 16.4, Mailpit 1.31.3; the migrations applied unchanged by `supabase start`. CI (`.github/workflows/ci.yml`, job "Supabase integration and browser tests") now runs `test:supabase` and `e2e:supabase` against a fresh local stack (Supabase CLI 2.121.0) on every pull request, with all four migrations.
+Last run by hand (October 2026): Supabase CLI 2.121.0, Supabase Postgres 17.11.0.004, GoTrue 2.197.0, PostgREST 16.4, Mailpit 1.31.3; the migrations applied unchanged by `supabase start`. CI (`.github/workflows/ci.yml`, job "Supabase integration and browser tests") now runs `test:supabase` and `e2e:supabase` against a fresh local stack (Supabase CLI 2.121.0) on every pull request, with all the migrations.
 
 ## Browser tests (`npm run e2e:supabase`)
 

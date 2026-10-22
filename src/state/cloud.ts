@@ -11,8 +11,8 @@
  * neither version is silently lost.
  */
 import { emptyData } from '../domain/operations';
-import type { AppData } from '../domain/types';
-import { ACCOUNTS_IN_SIGNED_IN_SAVES } from './features';
+import { hasPossibleIncome, type AppData } from '../domain/types';
+import { ACCOUNTS_IN_SIGNED_IN_SAVES, INCOME_CERTAINTY_IN_SIGNED_IN_SAVES } from './features';
 import { migrate, type SaveResult, type StorageAdapter } from './storage';
 
 /**
@@ -49,6 +49,7 @@ export const OFFLINE_MESSAGE = "Financial OS can't reach your account right now.
 export const ACCESS_MESSAGE =
   "Your account didn't accept this change. Your change is kept on this device. Sign out and back in, and if this keeps happening, the app's account setup needs attention.";
 const CONFLICT_MESSAGE = 'Your data was changed on another device or window. Reload to see the latest.';
+export const POSSIBLE_INCOME_NOT_STORED = "This plan has possible income, which your account can't save yet. Nothing was saved. Mark that income expected, or remove it, to save.";
 
 export class CloudAdapter implements StorageAdapter {
   private pendingAfterLoad = false;
@@ -59,6 +60,8 @@ export class CloudAdapter implements StorageAdapter {
     private readonly storage: Storage = window.localStorage,
     /** Whether saves include accounts and item assignments; see ACCOUNTS_IN_SIGNED_IN_SAVES. */
     private readonly includeAccounts: boolean = ACCOUNTS_IN_SIGNED_IN_SAVES,
+    /** Whether saves may include possible income; see INCOME_CERTAINTY_IN_SIGNED_IN_SAVES. */
+    private readonly includeCertainty: boolean = INCOME_CERTAINTY_IN_SIGNED_IN_SAVES,
   ) {}
 
   private readCopy(): DeviceCopy | null {
@@ -125,6 +128,8 @@ export class CloudAdapter implements StorageAdapter {
   }
 
   async save(data: AppData, baseRevision: number): Promise<SaveResult> {
+    // Refused before anything is written: leaving the mark out would turn possible income into counted income.
+    if (!this.includeCertainty && hasPossibleIncome(data)) return { ok: false, reason: 'error', message: POSSIBLE_INCOME_NOT_STORED };
     const { isSample: _sample, ...rest } = data;
     const doc = withoutAccounts(rest, this.includeAccounts);
     this.writeCopy({ data: { ...doc, revision: baseRevision }, pending: true });

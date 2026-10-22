@@ -12,12 +12,16 @@
  *   - outstanding (scheduled or overdue): latest scheduled date and amount.
  *     An overdue item dated before the forecast start is carried forward to
  *     the forecast start so the money that is still owed/expected stays in
- *     the tally.
+ *     the tally;
+ *   - possible income not yet received (see `IncomeCertainty`): shown on its
+ *     scheduled date, marked `possible`, never counted and never carried
+ *     forward. Once received it is an ordinary completed entry, counted once.
  *
  * Forecast anchor:
  *   The "next expected payday" is the earliest occurrence of any active
- *   recurring income that is still outstanding (including overdue: a late
- *   paycheck has not arrived yet) or that was received today. Which income
+ *   expected recurring income that is still outstanding (including overdue:
+ *   a late paycheck has not arrived yet) or that was received today.
+ *   Possible income never starts it. Which income
  *   was entered first, or marked as the main paycheck, doesn't matter, so
  *   earlier income from another source is never left out of the running
  *   total. One-time income doesn't start the running total (it still counts
@@ -37,7 +41,7 @@
 import { addDays, eachDay, endOfMonth, endOfWeek, maxDate, minDate, startOfMonth, type DateStr } from './dates';
 import type { Cents } from './money';
 import { resolveOccurrences } from './occurrences';
-import { hasActiveIncome, signFor, type AppData, type Occurrence } from './types';
+import { hasActiveIncome, isUncountedPossible, signFor, type AppData, type Occurrence } from './types';
 
 export interface ForecastEntry {
   occurrence: Occurrence;
@@ -47,8 +51,10 @@ export interface ForecastEntry {
   amountCents: Cents;
   /** Signed contribution to available cash: positive for income and reserve releases, negative for outflows and reserve allocations, 0 when not counted. */
   signedCents: Cents;
-  /** False for canceled occurrences (displayed but excluded from all totals). */
+  /** False for canceled occurrences and possible income not yet received (displayed but excluded from all totals). */
   counts: boolean;
+  /** True for possible income not yet received: listed, never counted (see `IncomeCertainty`). */
+  possible?: true;
   /** True when an overdue item was moved from its scheduled date to the forecast start. */
   carriedForward: boolean;
 }
@@ -97,7 +103,7 @@ function dataStart(data: AppData, today: DateStr): DateStr {
 export function nextExpectedPayday(occurrences: Occurrence[], today: DateStr, incomeSourceIds: ReadonlySet<string>): DateStr | null {
   let best: DateStr | null = null;
   for (const o of occurrences) {
-    if (o.kind !== 'income' || o.sourceId === null || !incomeSourceIds.has(o.sourceId) || o.status === 'canceled') continue;
+    if (o.kind !== 'income' || o.sourceId === null || !incomeSourceIds.has(o.sourceId) || o.status === 'canceled' || o.certainty === 'possible') continue;
     let candidate: DateStr | null = null;
     if (isOutstanding(o)) candidate = o.scheduledDate;
     else if (o.status === 'completed' && o.actualDate !== null && o.actualDate >= today) candidate = o.actualDate;
@@ -122,7 +128,9 @@ export function buildForecast(data: AppData, today: DateStr, options: ForecastOp
   const occurrences = resolveOccurrences(data, dataStart(data, today), horizonEnd, today);
 
   const incomeExists = hasActiveIncome(data);
-  const startSources = new Set(data.sources.filter((s) => s.kind === 'income' && s.active && !options.excludeFromStart?.(s.id)).map((s) => s.id));
+  const startSources = new Set(
+    data.sources.filter((s) => s.kind === 'income' && s.active && s.certainty !== 'possible' && !options.excludeFromStart?.(s.id)).map((s) => s.id),
+  );
   const payday = incomeExists ? nextExpectedPayday(occurrences, today, startSources) : null;
   const forecastStart = payday;
   const anchor = payday ? addDays(payday, -1) : null;
@@ -142,6 +150,9 @@ export function buildForecast(data: AppData, today: DateStr, options: ForecastOp
     }
     if (o.status === 'canceled') {
       return { occurrence: o, date: o.scheduledDate, amountCents: o.scheduledAmountCents, signedCents: 0, counts: false, carriedForward: false };
+    }
+    if (isUncountedPossible(o)) {
+      return { occurrence: o, date: o.scheduledDate, amountCents: o.scheduledAmountCents, signedCents: 0, counts: false, carriedForward: false, possible: true };
     }
     const carry = forecastStart !== null && o.displayStatus === 'overdue' && o.scheduledDate < forecastStart;
     return {
@@ -184,7 +195,7 @@ export interface DayRow extends MoneyTotals {
   entries: ForecastEntry[];
 }
 
-/** See `MoneyTotals`. Canceled entries are excluded. */
+/** See `MoneyTotals`. Entries that don't count (canceled, possible income not yet received) are excluded. */
 export function totals(entries: ForecastEntry[]): MoneyTotals {
   let inCents = 0;
   let outCents = 0;
@@ -249,7 +260,7 @@ function kpisOf(t: MoneyTotals): PeriodKpis {
   return { incomeCents: t.inCents, outflowCents: t.outCents, reservesCents: t.reservedCents, operatingCents: t.inCents - t.outCents, netCents: t.netCents };
 }
 
-/** `PeriodKpis` for any set of entries (for example only the recorded ones in a range). Canceled entries are excluded. */
+/** `PeriodKpis` for any set of entries (for example only the recorded ones in a range). Entries that don't count are excluded. */
 export function kpisOfEntries(entries: ForecastEntry[]): PeriodKpis {
   return kpisOf(totals(entries));
 }

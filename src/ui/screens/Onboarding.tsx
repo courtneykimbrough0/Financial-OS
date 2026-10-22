@@ -10,7 +10,7 @@ import { liabilityPrefix, type AppData, type OccurrenceRecord, type RecurringKin
 import { useAccount } from '../../state/account';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
-import { EmptyLine, FlowAmount, FormError, Icon, KindAvatar, Modal, SectionLabel, TagList, useToast } from '../components/common';
+import { EmptyLine, FlowAmount, FormError, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
 import { KIND_COPY, OneTimeForm, SourceForm } from '../components/forms';
 import { TimingGapsBanner } from '../components/gaps';
 import { CashFlowBanner, PeriodBreakdown, TagBreakdown } from '../components/plan';
@@ -88,10 +88,11 @@ function OneTimeRow({ r, onOpen }: { r: OccurrenceRecord; onOpen: () => void }) 
         <span className="entry-main">
           <span className="entry-title">{r.description}</span>
           <span className="entry-sub">One time · {formatMedium(r.scheduledDate)}</span>
+          {r.certainty === 'possible' && <StatusBadge status="scheduled" possible />}
           <TagList tags={r.tags} />
         </span>
         <span className="entry-side">
-          <FlowAmount kind={r.kind} cents={r.scheduledAmountCents} release={r.release} />
+          <FlowAmount kind={r.kind} cents={r.scheduledAmountCents} release={r.release} possible={r.certainty === 'possible'} />
           <Icon icon={ChevronRight} size={18} className="chevron" />
         </span>
       </button>
@@ -112,10 +113,11 @@ function SourceRow({ s, onOpen }: { s: RecurringSource; onOpen: () => void }) {
             {liabilityPrefix(s)}
             {describeRule(v.rule, v.startDate)} · next {formatMedium(v.startDate)}
           </span>
+          {s.certainty === 'possible' && <StatusBadge status="scheduled" possible />}
           <TagList tags={s.tags} />
         </span>
         <span className="entry-side">
-          <FlowAmount kind={s.kind} cents={v.amountCents} />
+          <FlowAmount kind={s.kind} cents={v.amountCents} possible={s.certainty === 'possible'} />
           <Icon icon={ChevronRight} size={18} className="chevron" />
         </span>
       </button>
