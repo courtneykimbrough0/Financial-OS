@@ -288,7 +288,7 @@ Visibility follows the data, through rules computed from forecast output. CSS ne
 | Gig | Baseline expected payouts, or nothing | Sessions: earnings, cash received, platform payouts |
 | One-time / irregular | Amount and date (exists today) | Mark as expected or possible |
 
-**Implemented today:** recurring income (fixed amounts on a schedule), one-time income, and recorded actuals with amounts and dates that can differ from the expected ones. The main paycheck concept was removed in Phase R1. Expected and possible income since E1; hourly and tipped income with shifts since E2. Freelance and gig detail are Missing.
+**Implemented today:** recurring income (fixed amounts on a schedule), one-time income, and recorded actuals with amounts and dates that can differ from the expected ones. The main paycheck concept was removed in Phase R1. Expected and possible income since E1; hourly and tipped income with shifts since E2; freelance clients and jobs since E3. Gig detail is Missing.
 
 ### 6.3 Expected, possible, received (Implemented in E1)
 
@@ -351,6 +351,13 @@ The data model gains an optional `certainty: 'expected' | 'possible'` on income 
 - **Getting paid.** Recording the payment marks the job Paid, on the actual date and amount. The original expectation is kept, as with every item today.
 - **Deferred:** partial payments (one job, several payments), invoices, overdue-payment chasing.
 
+**As built (E3):**
+- Jobs and clients live on Plan › Income ("Add job"; a Freelance jobs section once there are jobs, with a client filter for two or more clients, and a Clients sheet).
+- A job's payment is one ordinary one-time income record: with a date, expected (counts on that date, overdue if it passes) or possible (doesn't count); without a date, no record (pending, not counted).
+- Recording the payment, from the job or from the payment's own sheet or a batch, is the payment: the job is paid at the actual date and amount, with the original expectation kept.
+- "Done, not paid yet" shows done work not yet paid, outside cash flow; a skipped payment leaves it.
+- A paid job keeps its payment (it can't be deleted until the payment is undone).
+
 ### 6.6 Gig workers
 
 - **A session or day** has a date and earnings, with an optional platform and an optional amount of cash received immediately.
@@ -391,6 +398,7 @@ WorkEntry {
 
 - Work entries never enter `buildForecast` directly. Only their linked income records do, so the no-double-counting rule is structural.
 - Pure operations in `operations.ts`: `logWork`, `editWork`, `linkPayout`, `recordJobPayment`, each correctable by ordinary editing (no undo history).
+- **As built (E3), jobs:** a separate `jobs` collection (`FreelanceJob`) and `clients`, not `workEntries` rows: a job belongs to no income item. No `paid` status is stored (paid is its payment record being recorded); the money link is `paymentRecordId`.
 - **As built (E2), shifts only:** `kind: 'shift'`; no stored status (paid is `paidByOccurrenceId`); the tips link is `cashTipsRecordId`; hours are `minutes`. Operations: `logShift`, `editShift`, `deleteShift`, `setShiftPaid`, `setIncomeDetails`; `recordActual` pays shifts and `restoreOccurrence` unpays them.
 
 **4. Aggregation.** The Activity view's pure helpers in `src/domain/`, plus `earnings.ts` for hours, tips, effective hourly, and earned versus paid. **As built (E2):** `earnings.ts` has per-shift earnings, totals, effective hourly and earned not paid; reports wait for E5.
@@ -405,6 +413,8 @@ WorkEntry {
 **The constraint.** Firestore rules can't be deployed while Firebase is legacy (AGENTS.md section C1). A signed-in Firebase account would have saves with new top-level fields (such as `workEntries`) refused. New fields inside items (such as `certainty`) would be accepted, since items aren't checked field by field, but an older copy of the app would ignore them: it would count possible income.
 
 **So:** ship new income fields behind a flag, as `ACCOUNTS_IN_SIGNED_IN_SAVES` does for accounts today: available with device storage and Supabase, hidden for Firebase accounts. Alternatively, schedule income expansion after the Supabase cutover (decision D8).
+
+**As built (E3):** the same flag covers clients and jobs. Supabase: `clients` and `freelance_jobs` tables (migration `20261022000003_freelance_income.sql`).
 
 **As built (E2):** `INCOME_DETAIL_IN_SIGNED_IN_SAVES = false` for income type, wage and shifts, refused the same way. Supabase: `income_type` and `hourly_wage_cents` on `sources`, and a `work_entries` table (migration `20261022000002_hourly_and_tipped_income.sql`). No amount is stored as $0: an amount that isn't there is null.
 

@@ -326,6 +326,50 @@ export interface AppData {
   transfers?: Transfer[];
   /** Shifts logged for hourly and tipped income. Absent until the first one. Never read by the forecast. */
   workEntries?: WorkEntry[];
+  /** Freelance clients: optional names that group jobs. Absent until the first one. */
+  clients?: Client[];
+  /** Freelance jobs. Absent until the first one. Only a job's payment record is read by the forecast. */
+  jobs?: FreelanceJob[];
+}
+
+/** A freelance client: a name that groups jobs. Never read by the forecast. */
+export interface Client {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Work on a freelance job: planned, or done. Paid comes from its payment record (see `FreelanceJob`). */
+export type JobStatus = 'planned' | 'done';
+
+/**
+ * A freelance job (E3). The job is the work; its money is one ordinary
+ * one-time income record (`paymentRecordId`), so the forecast, certainty and
+ * recording are the app's own and each dollar is counted once:
+ *
+ * - With an expected payment date, the job has a payment record on that date
+ *   at its amount, expected (it counts) or possible (it doesn't; see
+ *   `IncomeCertainty`). Its date passing unpaid makes expected income overdue,
+ *   as for any income.
+ * - Without a date the job has no record: it's pending and counted nowhere
+ *   (decision D10).
+ * - Recording the payment records that record: the job is paid, on the actual
+ *   date at the actual amount, and the original expectation is kept.
+ *
+ * Finishing the work (`done`) is never money received: done but unpaid work is
+ * "earned, not paid yet", outside cash flow.
+ */
+export interface FreelanceJob {
+  id: string;
+  clientId?: string;
+  description: string;
+  /** The agreed amount. While a payment record exists it holds the current expectation and, once paid, the actual. */
+  amountCents: Cents;
+  status: JobStatus;
+  paymentRecordId?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const KIND_LABEL: Record<TransactionKind, string> = {
@@ -374,9 +418,14 @@ export function hasPossibleIncome(data: AppData): boolean {
   return data.sources.some((s) => s.certainty === 'possible') || data.records.some((r) => r.certainty === 'possible');
 }
 
-/** True when the plan has shift tracking: an income type, an hourly wage or a logged shift. */
+/** True when the plan has income detail: an income type, an hourly wage, a shift, a client or a freelance job. */
 export function hasIncomeDetail(data: AppData): boolean {
-  return (data.workEntries?.length ?? 0) > 0 || data.sources.some((s) => s.incomeType !== undefined || s.hourlyWageCents !== undefined);
+  return (
+    (data.workEntries?.length ?? 0) > 0 ||
+    (data.clients?.length ?? 0) > 0 ||
+    (data.jobs?.length ?? 0) > 0 ||
+    data.sources.some((s) => s.incomeType !== undefined || s.hourlyWageCents !== undefined)
+  );
 }
 
 /** True for possible income that hasn't been received: listed, never counted. */

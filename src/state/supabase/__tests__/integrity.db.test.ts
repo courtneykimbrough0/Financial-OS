@@ -6,7 +6,7 @@ import { variance } from '../../../domain/occurrences';
 import * as ops from '../../../domain/operations';
 import type { AppData } from '../../../domain/types';
 import { toRows } from '../rows';
-import { richPlan, TODAY, withShifts } from './fixtures';
+import { richPlan, TODAY, withJobs, withShifts } from './fixtures';
 import { count, load, newUser, save, saveOk, savePlan, sql, workspaceOf } from './pg';
 
 const clock = clockAt(TODAY);
@@ -390,6 +390,60 @@ describe('hourly and tipped income (E2)', () => {
     const { work_entries: _w, ...withoutShifts } = rows;
     void _w;
     expect(savePlan(user, data.revision, withoutShifts, { mode: 'replace' }).code).toBe('PT422');
+    expect(load(user)).toEqual(data);
+  });
+});
+
+describe('freelance income (E3)', () => {
+  const counted = (d: AppData) => buildForecast(d, TODAY).entries.filter((e) => e.counts).map((e) => [e.occurrence.id, e.date, e.signedCents]);
+
+  it('stores clients and jobs, reads them back exactly, and the forecast is unchanged by the round trip', () => {
+    const plan = withJobs(richPlan());
+    const { user, data } = stored(plan);
+    expect(data.clients!.map((c) => c.name)).toEqual(['Acme']);
+    expect(data.jobs).toEqual(plan.jobs!.map((j) => ({ ...j, createdAt: expect.any(String), updatedAt: expect.any(String) })));
+    expect(data.records.find((r) => r.id === data.jobs![0]!.paymentRecordId)).toMatchObject({ status: 'completed', actualAmountCents: usd(780), expectedAmountCents: usd(800) });
+    expect(counted(data)).toEqual(counted(plan));
+    const ws = workspaceOf(user);
+    expect([count(`select count(*) from public.clients where workspace_id = '${ws}'`), count(`select count(*) from public.freelance_jobs where workspace_id = '${ws}'`)]).toEqual([1, 3]);
+    const other = newUser();
+    for (const t of ['clients', 'freelance_jobs']) expect(sql({ user: other }, `select count(*) from public.${t} where workspace_id = '${ws}';`).out).toBe('0');
+  });
+
+  it('ordinary saves: moving a payment, recording one, deleting a job with its payment, deleting a client; two jobs at once is refused', () => {
+    const { user, data } = stored(withJobs(richPlan()));
+    let back = saveOk(user, unwrap(ops.editJob(data, 'job-copy', { description: 'Website copy', clientId: 'client-acme', amountCents: usd(1300), status: 'planned', expectedDate: '2026-11-20' }, clock)));
+    expect(back.records.find((r) => r.id === back.jobs![1]!.paymentRecordId)).toMatchObject({ scheduledAmountCents: usd(1300), scheduledDate: '2026-11-20', expectedAmountCents: usd(1200) });
+    back = saveOk(user, unwrap(ops.recordJobPayment(back, 'job-brochure', { amountCents: usd(300), date: TODAY }, clock)));
+    expect(back.records.find((r) => r.id === back.jobs![2]!.paymentRecordId)!.status).toBe('completed');
+    expect(save(user, { ...back, jobs: back.jobs!.slice(0, 1) }).code).toBe('PT422');
+    const copyPayment = back.jobs![1]!.paymentRecordId!;
+    back = saveOk(user, unwrap(ops.deleteJob(back, 'job-copy')));
+    expect(back.records.some((r) => r.id === copyPayment)).toBe(false);
+    back = saveOk(user, unwrap(ops.deleteClient(back, 'client-acme', clock)));
+    expect(back.clients).toBeUndefined();
+    expect(back.jobs!.every((j) => j.clientId === undefined)).toBe(true);
+    expect(back.records.find((r) => r.id === back.jobs![0]!.paymentRecordId)!.description).toBe('Logo design');
+  });
+
+  it('the database refuses malformed clients and jobs, a payment that is not one-time income or is shared, and a save that leaves them out', () => {
+    const { user, data } = stored(withJobs(withShifts(richPlan())));
+    const rows = toRows(data);
+    const replace = (patch: Record<string, unknown>) => savePlan(user, data.revision, { ...rows, ...patch } as never, { mode: 'replace' });
+    const job = (patch: Record<string, unknown>) => replace({ jobs: rows.jobs.map((j, i) => (i === 2 ? { ...j, ...patch } : j)) });
+    expect(job({ amount_cents: 0 }).code).toBe('23514');
+    expect(job({ status: 'paid' }).code).toBe('23514');
+    expect(job({ description: ' ' }).code).toBe('23514');
+    expect(job({ client_id: 'nope' }).code).toBe('PT422');
+    expect(job({ payment_record_id: 'pay@2026-10-02' }).code).toBe('PT422');
+    expect(job({ payment_record_id: rows.work_entries[0]!.cash_tips_record_id }).code).toBe('PT422');
+    expect(job({ payment_record_id: rows.jobs[0]!.payment_record_id }).code).toBe('23505');
+    expect(replace({ clients: rows.clients.map((c) => ({ ...c, name: '' })) }).code).toBe('23514');
+    for (const key of ['clients', 'jobs'] as const) {
+      const { [key]: _gone, ...without } = rows;
+      void _gone;
+      expect(savePlan(user, data.revision, without, { mode: 'replace' }).code).toBe('PT422');
+    }
     expect(load(user)).toEqual(data);
   });
 });

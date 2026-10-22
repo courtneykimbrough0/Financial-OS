@@ -13,6 +13,8 @@
  *    a schedule version; earlier occurrences keep their expectation.
  *  - Only income can be possible, and certainty changes no amount, date or
  *    recorded outcome (see `IncomeCertainty`).
+ *  - A freelance job's money is one one-time income record; finishing the work
+ *    never counts as money received (see `FreelanceJob`).
  *  - A shift never changes cash flow by itself: its cash tips are one received
  *    income record, and its wages and card tips are paid by a recorded
  *    paycheck, counted once as that paycheck (see `WorkEntry`).
@@ -21,7 +23,7 @@ import { addDays, formatShort, isValidDateStr, type DateStr } from './dates';
 import type { Cents } from './money';
 import { findOccurrence, resolveOccurrences } from './occurrences';
 import { validateRule } from './recurrence';
-import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type IncomeCertainty, type IncomeType, type LiabilityType, type OccurrenceRecord, type OneTimeKind, type RecurrenceRule, type RecurringKind, type RecurringSource, type Transfer, type TransactionKind, type WorkEntry } from './types';
+import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type IncomeCertainty, type IncomeType, type LiabilityType, type OccurrenceRecord, type OneTimeKind, type RecurrenceRule, type RecurringKind, type RecurringSource, type Transfer, type TransactionKind, type WorkEntry, type Client, type FreelanceJob, type JobStatus, certaintyOf } from './types';
 
 export type Result = { ok: true; data: AppData } | { ok: false; error: string };
 
@@ -409,6 +411,8 @@ export function deleteOneTime(data: AppData, id: string): Result {
   if (!record || record.sourceId !== null) return fail('Only one-time items can be deleted.');
   const shift = shiftWithTips(data, id);
   if (shift) return fail(shiftOwnsTips(shift));
+  const job = (data.jobs ?? []).find((j) => j.paymentRecordId === id);
+  if (job) return fail(`This is the payment for ${job.description}. Change or delete the job instead.`);
   return ok({ ...data, records: data.records.filter((r) => r.id !== id) });
 }
 
@@ -1017,4 +1021,224 @@ function unlinkShifts(data: AppData, occurrenceId: string, clock: Clock): AppDat
       return { ...rest, updatedAt: clock.now };
     }),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Freelance clients and jobs (E3; see `FreelanceJob`)
+// ---------------------------------------------------------------------------
+
+export const MAX_CLIENTS = 200;
+export const MAX_CLIENT_NAME = 60;
+export const MAX_JOBS = 5000;
+const JOB_STATUSES: JobStatus[] = ['planned', 'done'];
+
+function validateClientName(data: AppData, name: string, exceptId?: string): string | null {
+  const trimmed = name.trim();
+  if (trimmed === '') return 'Enter a name.';
+  if (trimmed.length > MAX_CLIENT_NAME) return `Keep the name under ${MAX_CLIENT_NAME} characters.`;
+  if ((data.clients ?? []).some((c) => c.id !== exceptId && c.name.toLowerCase() === trimmed.toLowerCase())) return 'You already have a client with that name.';
+  return null;
+}
+
+/** How a job's payment is labeled wherever money is shown: "Logo design · Acme". */
+function jobLabel(data: AppData, description: string, clientId: string | undefined): string {
+  const client = clientId ? (data.clients ?? []).find((c) => c.id === clientId) : undefined;
+  return (client ? `${description.trim()} · ${client.name}` : description.trim()).slice(0, 80);
+}
+
+/** Keeps each job's payment label in step with its description and client (a label, never an amount or date). */
+function relabelPayments(data: AppData, jobIds: Set<string>): AppData {
+  const labels = new Map<string, string>();
+  for (const j of data.jobs ?? []) if (jobIds.has(j.id) && j.paymentRecordId) labels.set(j.paymentRecordId, jobLabel(data, j.description, j.clientId));
+  if (labels.size === 0) return data;
+  return { ...data, records: data.records.map((r) => (labels.has(r.id) && r.description !== labels.get(r.id) ? { ...r, description: labels.get(r.id)! } : r)) };
+}
+
+export function addClient(data: AppData, name: string, clock: Clock, id = newId('client')): Result {
+  const err = validateClientName(data, name);
+  if (err) return fail(err);
+  if ((data.clients ?? []).length >= MAX_CLIENTS) return fail(`You can have up to ${MAX_CLIENTS} clients.`);
+  const client: Client = { id, name: name.trim(), createdAt: clock.now, updatedAt: clock.now };
+  return ok({ ...data, clients: [...(data.clients ?? []), client] });
+}
+
+export function renameClient(data: AppData, id: string, name: string, clock: Clock): Result {
+  if (!(data.clients ?? []).some((c) => c.id === id)) return fail('That client no longer exists.');
+  const err = validateClientName(data, name, id);
+  if (err) return fail(err);
+  const next = { ...data, clients: data.clients!.map((c) => (c.id === id ? { ...c, name: name.trim(), updatedAt: clock.now } : c)) };
+  return ok(relabelPayments(next, new Set((next.jobs ?? []).filter((j) => j.clientId === id).map((j) => j.id))));
+}
+
+/** Removes a client. Its jobs stay, without a client; nothing financial changes. */
+export function deleteClient(data: AppData, id: string, clock: Clock): Result {
+  if (!(data.clients ?? []).some((c) => c.id === id)) return fail('That client no longer exists.');
+  const affected = new Set((data.jobs ?? []).filter((j) => j.clientId === id).map((j) => j.id));
+  const clients = data.clients!.filter((c) => c.id !== id);
+  const jobs = (data.jobs ?? []).map((j) => {
+    if (j.clientId !== id) return j;
+    const { clientId: _c, ...rest } = j;
+    void _c;
+    return { ...rest, updatedAt: clock.now };
+  });
+  const { clients: _old, ...rest } = data;
+  void _old;
+  const next: AppData = { ...rest, ...(clients.length ? { clients } : {}), ...(data.jobs ? { jobs } : {}) };
+  return ok(relabelPayments(next, affected));
+}
+
+export interface JobInput {
+  description: string;
+  clientId?: string | null;
+  amountCents: Cents;
+  status: JobStatus;
+  /** When payment is expected. Null: none (the job is pending and not counted). Omitted when editing: unchanged. */
+  expectedDate?: DateStr | null;
+  /** The payment's certainty while it has a date. Omitted: expected for a new job, unchanged when editing. */
+  certainty?: IncomeCertainty;
+}
+
+function validateJob(data: AppData, input: JobInput): string | null {
+  return (
+    validateDescription(input.description) ??
+    validateAmount(input.amountCents) ??
+    (!JOB_STATUSES.includes(input.status) ? 'Choose planned or done.' : null) ??
+    (input.clientId && !(data.clients ?? []).some((c) => c.id === input.clientId) ? 'That client no longer exists.' : null) ??
+    (input.expectedDate && !isValidDateStr(input.expectedDate) ? 'Enter a valid date.' : null) ??
+    (input.certainty !== undefined && input.certainty !== 'expected' && input.certainty !== 'possible' ? 'Choose expected or possible.' : null)
+  );
+}
+
+/** A job's payment record, if it has one. */
+export function jobPayment(data: AppData, job: FreelanceJob): OccurrenceRecord | undefined {
+  return job.paymentRecordId ? data.records.find((r) => r.id === job.paymentRecordId) : undefined;
+}
+
+const withoutPayment = (data: AppData, id: string): AppData => ({ ...data, records: data.records.filter((r) => r.id !== id) });
+
+/**
+ * Adds a freelance job. With an expected payment date its payment is one
+ * one-time income record on that date, expected or possible; without one the
+ * job is pending and not counted.
+ */
+export function addJob(data: AppData, input: JobInput, clock: Clock, id = newId('job')): Result {
+  const err = validateJob(data, input);
+  if (err) return fail(err);
+  if ((data.jobs ?? []).length >= MAX_JOBS) return fail(`You can have up to ${MAX_JOBS} jobs.`);
+  const clientId = input.clientId ?? undefined;
+  let next = data;
+  let paymentRecordId: string | undefined;
+  if (input.expectedDate) {
+    paymentRecordId = newId('pay');
+    const step = addOneTime(next, { kind: 'income', description: jobLabel(data, input.description, clientId), amountCents: input.amountCents, date: input.expectedDate, certainty: input.certainty }, clock, paymentRecordId);
+    if (!step.ok) return step;
+    next = step.data;
+  }
+  const job: FreelanceJob = {
+    id,
+    ...(clientId ? { clientId } : {}),
+    description: input.description.trim(),
+    amountCents: input.amountCents,
+    status: input.status,
+    ...(paymentRecordId ? { paymentRecordId } : {}),
+    createdAt: clock.now,
+    updatedAt: clock.now,
+  };
+  return ok({ ...next, jobs: [...(next.jobs ?? []), job] });
+}
+
+/**
+ * Changes a job. While it isn't paid, its amount and expected payment date
+ * move its payment record (whose original expectation is kept), a new date
+ * gives it one, and removing the date makes it pending again. A paid job's
+ * amount and date are its recorded payment's; correct that instead.
+ */
+export function editJob(data: AppData, id: string, input: JobInput, clock: Clock): Result {
+  const job = (data.jobs ?? []).find((j) => j.id === id);
+  if (!job) return fail('That job no longer exists.');
+  const err = validateJob(data, input);
+  if (err) return fail(err);
+  const record = jobPayment(data, job);
+  const clientId = input.clientId === undefined ? job.clientId : (input.clientId ?? undefined);
+  let next = data;
+  let paymentRecordId = record?.id;
+  const changesMoney = input.amountCents !== job.amountCents || (input.expectedDate !== undefined && input.expectedDate !== (record?.scheduledDate ?? null));
+  if (record && record.status === 'completed') {
+    if (changesMoney) return fail('This job is paid. Correct its recorded payment instead.');
+    if (input.status !== 'done') return fail('A paid job is done.');
+  } else if (record && record.status === 'canceled') {
+    if (changesMoney) return fail("This job's payment was skipped. Undo the skip first.");
+  } else {
+    const date = input.expectedDate === undefined ? (record?.scheduledDate ?? null) : input.expectedDate;
+    if (record && date === null) {
+      next = withoutPayment(next, record.id);
+      paymentRecordId = undefined;
+    } else if (!record && date) {
+      paymentRecordId = newId('pay');
+      const step = addOneTime(next, { kind: 'income', description: jobLabel(next, input.description, clientId), amountCents: input.amountCents, date, certainty: input.certainty }, clock, paymentRecordId);
+      if (!step.ok) return step;
+      next = step.data;
+    } else if (record && date) {
+      if (record.scheduledDate !== date || record.scheduledAmountCents !== input.amountCents) {
+        const step = rescheduleOccurrence(next, record.id, { date, amountCents: input.amountCents }, clock);
+        if (!step.ok) return step;
+        next = step.data;
+      }
+      if (input.certainty !== undefined && certaintyOf(record) !== input.certainty) {
+        const step = setIncomeCertainty(next, record.id, input.certainty, clock);
+        if (!step.ok) return step;
+        next = step.data;
+      }
+    }
+  }
+  const { clientId: _c, paymentRecordId: _p, ...rest } = job;
+  void _c;
+  void _p;
+  const updated: FreelanceJob = {
+    ...rest,
+    ...(clientId ? { clientId } : {}),
+    description: input.description.trim(),
+    amountCents: input.amountCents,
+    status: input.status,
+    ...(paymentRecordId ? { paymentRecordId } : {}),
+    updatedAt: clock.now,
+  };
+  return ok(relabelPayments({ ...next, jobs: (next.jobs ?? []).map((j) => (j.id === id ? updated : j)) }, new Set([id])));
+}
+
+/**
+ * Records a job's payment: its payment record is recorded at the actual date
+ * and amount (one is made, expected at the job's amount on that date, when the
+ * job had no date). The job is then paid, and its work done.
+ */
+export function recordJobPayment(data: AppData, id: string, actual: ActualInput, clock: Clock): Result {
+  const job = (data.jobs ?? []).find((j) => j.id === id);
+  if (!job) return fail('That job no longer exists.');
+  const record = jobPayment(data, job);
+  if (record?.status === 'completed') return fail('This job is already paid.');
+  if (record?.status === 'canceled') return fail("This job's payment was skipped. Undo the skip first.");
+  let next = data;
+  const recordId = record?.id ?? newId('pay');
+  if (!record) {
+    const added = addOneTime(next, { kind: 'income', description: jobLabel(data, job.description, job.clientId), amountCents: job.amountCents, date: actual.date }, clock, recordId);
+    if (!added.ok) return added;
+    next = added.data;
+  }
+  const recorded = recordActual(next, recordId, actual, clock);
+  if (!recorded.ok) return recorded;
+  next = recorded.data;
+  return ok({ ...next, jobs: (next.jobs ?? []).map((j) => (j.id === id ? { ...j, status: 'done' as const, paymentRecordId: recordId, updatedAt: clock.now } : j)) });
+}
+
+/** Removes a job and its payment record. A paid job is kept: its payment is history. */
+export function deleteJob(data: AppData, id: string): Result {
+  const job = (data.jobs ?? []).find((j) => j.id === id);
+  if (!job) return fail('That job no longer exists.');
+  const record = jobPayment(data, job);
+  if (record?.status === 'completed') return fail('This job has a recorded payment. Undo the payment first, then delete the job.');
+  const next = record ? withoutPayment(data, record.id) : data;
+  const jobs = (next.jobs ?? []).filter((j) => j.id !== id);
+  const { jobs: _j, ...rest } = next;
+  void _j;
+  return ok(jobs.length ? { ...rest, jobs } : rest);
 }

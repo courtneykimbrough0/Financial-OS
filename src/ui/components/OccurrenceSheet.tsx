@@ -121,6 +121,7 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
   // Cash tips logged with a shift change only through that shift.
   const tipsShift = (data.workEntries ?? []).find((e) => e.cashTipsRecordId === o.id);
   const tipsJob = tipsShift ? data.sources.find((s) => s.id === tipsShift.sourceId)?.description : undefined;
+  const paidJob = (data.jobs ?? []).find((j) => j.paymentRecordId === o.id);
 
   return (
     <Modal title={title} onClose={onClose}>
@@ -150,6 +151,7 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
         </p>
       )}
       <Comparison o={o} possible={possible} />
+      {paidJob && <p className="hint">The payment for your {paidJob.description} job. To change the job, open it in Plan › Income.</p>}
       {tipsShift && (
         <p className="hint">
           Cash tips from your {formatMedium(tipsShift.date)} shift{tipsJob ? ` for ${tipsJob}` : ''}. To change them, open the shift from {tipsJob ?? 'its income'} in Plan.
@@ -203,7 +205,7 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
           {o.sourceId !== null && possible && (
             <p className="hint">Marking {itemName} as expected counts its payments from today on. Earlier dates that weren't recorded are marked skipped, and each can be undone.</p>
           )}
-          {o.sourceId === null && !tipsShift && (
+          {o.sourceId === null && !tipsShift && !paidJob && (
             <button type="button" className="button danger-link" onClick={() => open('delete')}>
               Delete {o.description}
             </button>
