@@ -135,6 +135,7 @@ export function allPlans(): [string, AppData][] {
     ['empty plan in setup', ops.emptyData()],
     ['legacy document', legacyPlan()],
     ["sample data (as if it were the person's own)", sampleAsOwn],
+    ['every kind of income (E1–E5)', incomePlan()],
   ];
 }
 
@@ -169,4 +170,18 @@ export function withSessions(plan: AppData): AppData {
   d = unwrap(ops.logSession(d, { sourceId: 'gig', date: '2026-10-08', minutes: 180, earningsCents: usd(95), platform: 'DoorDash' }, clock, 'session-1'));
   d = unwrap(ops.recordActual(d, 'gig@2026-10-12', { amountCents: usd(290), date: '2026-10-12' }, clock));
   return unwrap(ops.logSession(d, { sourceId: 'gig', date: '2026-10-14', earningsCents: usd(70), cashTipsCents: usd(12), platform: 'Uber' }, clock, 'session-2'));
+}
+
+/**
+ * Every kind of income at once (E6), on the rich plan: possible income (a
+ * recurring item and a one-time), tipped shifts paid by a recorded paycheck,
+ * freelance jobs (paid, planned and possible, pending) and gig sessions (one
+ * paid by a recorded payout, one waiting, with cash received).
+ */
+export function incomePlan(): AppData {
+  let d = withSessions(withJobs(withShifts(richPlan())));
+  d = unwrap(ops.addSource(d, { kind: 'income', description: 'Tutoring', amountCents: usd(120), startDate: '2026-10-20', rule: { type: 'biweekly' }, certainty: 'possible' }, clock, 'tutor'));
+  d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Maybe a bonus', amountCents: usd(250), date: '2026-10-30', certainty: 'possible' }, clock, 'bonus'));
+  // The side job's Oct 17 paycheck arrives a day early and pays both shifts; its amount differs from the expected $150.
+  return unwrap(ops.recordActual(d, 'side@2026-10-17', { amountCents: usd(212.4), date: '2026-10-16' }, clock));
 }

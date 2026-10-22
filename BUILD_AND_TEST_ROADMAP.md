@@ -52,7 +52,7 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | Audit recommendations (not yet approved) | docs/REDUCTION-AUDIT.md §3 and decisions §7 |
 | Deferred features | PRODUCT_EXPERIENCE.md §10; Step 8's deferred imports; Step 9 |
 
-### Current state (verified October 22, 2026; `main` at `d8910c6`)
+### Current state (verified October 22, 2026; `main` at `a50ac4d`)
 
 `main` is the default and integration branch (AGENTS.md section H). CI (`.github/workflows/ci.yml`, five jobs) passed on all merge commits below.
 
@@ -83,8 +83,8 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | E2, hourly and tipped income | **Complete**, merged as `e2fbfc1` | Phase E |
 | E3, freelance income | **Complete**, merged as `6d88365` | Phase E |
 | E4, gig work and payouts | **Complete**, merged as `d8910c6` | Phase E |
-| E5, earnings history and views | **Complete** (in review) | Phase E |
-| E6, integration across storage providers | **Planned**; separately authorized | Phase E |
+| E5, earnings history and views | **Complete**, merged as `a50ac4d` | Phase E |
+| E6, income integration and verification | **Complete** (in review) | Phase E |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
 | AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
 | AC6 payoff support, recurring planned transfers | **Deferred** (need specifications or decisions) | Phase AC, conflicts |
@@ -394,11 +394,33 @@ Reminders (§6.7) stay deferred. Each checkpoint stops for review before the nex
   - **Found while checking `main`:** CI on E3's merge (`6d88365`) failed one unit test, `h4-simplification › redirects still work: #/dashboard opens Forecast` (expected the address `#/forecast`, got `#/dashboard`), while the same tree passed on its pull request and locally (15 of 15 runs of that file). The test read the address the moment the Forecast heading appeared; the router rewrites it in an effect and again on `hashchange`, which jsdom delivers as a later task. The test now waits for the address to settle; no product code changed. This matches the intermittent unit failure seen once in D5.
   - Tests: `gig` (11, domain), `gig-persistence` (5: device, backup, migrate validation, Firebase refusal, Supabase mapping and migration checks), `gig-e4` (2, interface), three PostgreSQL tests in `integrity.db.test.ts`; E2's earnings tests now include `earningsCents: 0`.
 
-- **E5. Earnings history and views (complete, October 2026; in review).**
+- **E5. Earnings history and views (complete, October 2026; merged as `a50ac4d`).**
   - **Domain:** `earnings-history.ts`, read-only aggregation over data E2–E4 already keep; nothing new is stored and the forecast is unchanged. For a month: work dated in it (shifts and sessions together and per income item: hours, wages, cash tips or cash received, card tips, platform earnings, earned, effective hourly, all from `summarize`); as of today, what is not received yet (`earnedNotPaid` with `waitingByPlatform`, `doneNotPaid`) and planned jobs; jobs paid in the month; and the month's recorded income that pays for work (paychecks and payouts of tracked income, cash tips and session cash, job payments), taken from the same recorded entries as Activity's summary (`recordedEntries`), so it is listed, never added again. Fixed income is never listed as earnings. `hasEarningsData` is true with any shift, session or job. `possibleEntries` lists possible income in a range, never counted.
   - **Interface (Activity, no new tab):** after the month summary, an Earnings card appears only with earnings data: earned from work, hours, effective hourly, jobs paid, not received yet and received for work, with a line that earnings count only when received. Details opens a read-only sheet: work per income item, not received yet (by platform; done and planned jobs) and the month's received list. A Possible list (E1 income not received this month, opening its sheet to resolve it) appears when there is some. Without earnings data or possible income, Activity is unchanged.
   - **Not built:** reconciliation of earned versus paid per paycheck, per-week totals, reports beyond Activity, platform integrations, partial payments, reminders.
   - Tests: `earnings-history` (11, domain: earned versus received, effective hourly, tips, jobs and payment states, waiting for payout, corrected and undone payments, several incomes, empty and partial history, no double counting, possible income), `earnings-e5` (4, interface: hidden without data, figures, read-only details and month browsing with nothing saved, possible income).
+
+- **E6. Income integration and verification (complete, October 2026; in review).** Verification of E1–E5 together, with corrections only for confirmed defects; no new income features.
+  - **Fixture:** `incomePlan()` (`src/state/supabase/__tests__/fixtures.ts`): the rich plan with possible income (a recurring item and a one-time), tipped shifts paid by an early, different-amount paycheck, freelance jobs (paid, planned and possible, pending) and gig sessions (paid and waiting, with cash). It joins `allPlans()`, so every storage test that runs over the shared plans now runs it too.
+  - **Integration matrix** (✓ verified by an automated test; "CI" runs only in CI, which has the Supabase CLI):
+
+    | Behavior | Device and backup | Supabase rows / fake API | PostgreSQL (constraints, RLS, ordinary saves) | Supabase local stack (API) | Firebase (legacy) |
+    | --- | --- | --- | --- | --- | --- |
+    | Expected and possible income | ✓ `certainty-persistence`, `income-integration` | ✓ `rows`, `income-integration` | ✓ `integrity` E1, `equivalence` | ✓ CI `adapter.supabase` | refused ✓ |
+    | Hourly and tipped income, shifts, cash and card tips | ✓ `shift-persistence`, `income-integration` | ✓ | ✓ `integrity` E2, `equivalence` | ✓ CI | refused ✓ |
+    | Freelance clients, jobs and payments | ✓ `freelance-persistence`, `income-integration` | ✓ | ✓ `integrity` E3, `equivalence` | ✓ CI | refused ✓ |
+    | Gig sessions, platform earnings and payouts | ✓ `gig-persistence`, `income-integration` | ✓ | ✓ `integrity` E4, `equivalence` | ✓ CI | refused ✓ (message now names gig) |
+    | Earnings history and recorded Activity | ✓ `income-integration` (identical after every storage) | ✓ | ✓ `equivalence` (five days), `integrity` E6 | ✓ CI | — |
+    | Corrections, undo, recorded vs expected date and amount | ✓ domain tests per checkpoint | — | ✓ `integrity` E6: fifteen ordinary saves (correct, undo and re-record a paycheck; edit and delete shifts; link, edit and unpay sessions; undo and re-record a job payment; date a pending job; delete a job and a client; mark possible income expected), each read back exactly with identical figures and every link intact | ✓ CI (undo a payout in an ordinary save) | — |
+    | Several incomes together; totals, timing gaps, cash flow | ✓ `income-integration` (each dollar once; removing all work changes no counted figure) | ✓ | ✓ `equivalence` | ✓ CI | — |
+    | Damaged or unsupported records on restore or load | ✓ `income-integration` (broken links and impossible work dropped, every money record kept, figures unchanged) and per-checkpoint `migrate` tests | ✓ `checkForMigration` | ✓ constraint tests per checkpoint | — | — |
+    | Row-level security and account deletion | — | — | ✓ `security`, `account` include `work_entries`, `clients`, `freelance_jobs` | ✓ CI browser test (another account reads nothing) | — |
+
+  - **Defects found and corrected:**
+    1. `redefineSource` (editing an item that hasn't started and has nothing recorded) skipped the rule that logged work keeps its income's type. A tipped job with a shift logged before its first paycheck could be changed to Fixed or Gig: the save succeeded, the next device load silently dropped the shift, and Supabase refused every later save. It now refuses with the same message as `setIncomeDetails` (one shared check, `loggedWorkKeepsType`).
+    2. The legacy Firebase refusal (`INCOME_DETAIL_NOT_STORED`) predated E4 and didn't mention gig income or sessions; it now does. Behavior was already correct.
+  - **Not changed (limitations):** correcting a paycheck or payout to an earlier date keeps the shifts or sessions it already paid, even those worked after the new date (display only; no amount changes). The Supabase browser test covers income through the API and the cross-account check, not by driving the income screens (the screens are storage-independent and covered on device storage). Hosted Supabase was not tested.
+  - Tests: `income-integration` (13), one PostgreSQL lifecycle test in `integrity.db.test.ts`, the income plan in `rows` and `equivalence` (which now also compares Activity, earnings and income-table row counts), and one local-stack case in `adapter.supabase.test.ts` (CI).
 
 #### AC. Accounts (where money is received, held and spent)
 

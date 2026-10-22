@@ -257,6 +257,7 @@ export function redefineSource(data: AppData, id: string, input: Omit<SourceInpu
     validateDescription(input.description) ??
     validateLiabilityType(kind, input.liabilityType) ??
     validateIncomeDetails(kind, input) ??
+    loggedWorkKeepsType(data, id, input.incomeType) ??
     validateAmount(input.amountCents) ??
     (!isValidDateStr(input.startDate) ? 'Enter a valid date.' : null) ??
     (input.startDate < clock.today ? 'The next expected date must be today or later.' : null) ??
@@ -827,14 +828,18 @@ const MAX_SHIFT_MINUTES = 24 * 60;
  */
 export function setIncomeDetails(data: AppData, id: string, details: { incomeType: IncomeType | null; hourlyWageCents: Cents | null }, clock: Clock): Result {
   return withSource(data, id, (s) => {
-    const err = validateIncomeDetails(s.kind, details);
+    const err = validateIncomeDetails(s.kind, details) ?? loggedWorkKeepsType(data, id, details.incomeType);
     if (err) return err;
-    const logged = (data.workEntries ?? []).find((e) => e.sourceId === id);
-    if (logged && workKindFor(details.incomeType ?? undefined) !== logged.kind) {
-      return logged.kind === 'session' ? 'This income has logged sessions, so it stays gig income.' : 'This income has logged shifts, so it stays hourly or tipped.';
-    }
     return { ...applyIncomeDetails(s, details), updatedAt: clock.now };
   });
+}
+
+/** An income with logged shifts stays hourly or tipped, and one with sessions stays gig: other types would orphan them. */
+function loggedWorkKeepsType(data: AppData, id: string, incomeType: IncomeType | null | undefined): string | null {
+  if (incomeType === undefined) return null;
+  const logged = (data.workEntries ?? []).find((e) => e.sourceId === id);
+  if (!logged || workKindFor(incomeType ?? undefined) === logged.kind) return null;
+  return logged.kind === 'session' ? 'This income has logged sessions, so it stays gig income.' : 'This income has logged shifts, so it stays hourly or tipped.';
 }
 
 export interface ShiftInput {
