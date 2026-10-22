@@ -2918,3 +2918,80 @@ button.callout.gap-line:focus-visible {
   gap: 4px var(--space-2);
   margin: 2px 0 0;
 }
+
+/* ---------- Desktop (D6, 1024px and wider) ----------
+   The same tab bar becomes a left rail under the top bar (the top pills hide),
+   content stays one readable column centered in the space beside the rail, and
+   sheets open as a panel from the right. Tablets keep the top pills and centered
+   dialogs; phones keep the bottom bar and bottom sheets. */
+@media (min-width: 1024px) {
+  :root {
+    --rail-width: 224px;
+    --topbar-height: 69px;
+  }
+  .top-nav {
+    display: none;
+  }
+  .bottom-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    top: 0;
+    right: auto;
+    width: var(--rail-width);
+    padding: calc(var(--topbar-height) + var(--space-4)) var(--space-3) var(--space-4);
+    border-top: none;
+    border-right: 1px solid var(--color-border);
+    z-index: 9;
+  }
+  .bottom-nav a {
+    flex-direction: row;
+    gap: var(--space-3);
+    min-height: var(--tap);
+    padding: 10px 14px;
+    border-radius: var(--radius-pill);
+    font-size: var(--text-body);
+  }
+  .bottom-nav a:hover {
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+  .bottom-nav a[aria-current='page'] {
+    background: var(--color-surface-raised);
+  }
+  .bottom-nav a[aria-current='page']::before {
+    display: none;
+  }
+  .bottom-nav .nav-icon {
+    width: 20px;
+    height: 20px;
+  }
+  /* The column keeps its reading width and centers in the space beside the rail. */
+  .app.with-nav main {
+    margin-left: calc(var(--rail-width) + max(0px, (100% - var(--rail-width) - 760px) / 2));
+    margin-right: auto;
+  }
+
+  /* Sheets: a full-height panel from the right, same content, focus trap and Escape. */
+  .modal-backdrop {
+    align-items: stretch;
+    justify-content: flex-end;
+  }
+  .modal {
+    max-width: 480px;
+    max-height: none;
+    border-radius: 24px 0 0 24px;
+    padding-bottom: var(--space-6);
+  }
+}
+@media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+  .modal {
+    animation: panel-in 160ms ease-out;
+  }
+}
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}

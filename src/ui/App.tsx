@@ -51,7 +51,7 @@ export function App() {
   const showNav = route !== 'onboarding';
 
   return (
-    <div className="app">
+    <div className={showNav ? 'app with-nav' : 'app'}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -75,6 +75,17 @@ export function App() {
           </a>
         )}
       </header>
+      {/* The tab bar: fixed at the bottom on phones, the left rail from 1024px. It comes before the content so focus order matches the rail. */}
+      {showNav && (
+        <nav className="bottom-nav" aria-label="Main">
+          {NAV.map((n) => (
+            <a key={n.route} href={`#/${n.route}`} aria-current={n.current(route) ? 'page' : undefined}>
+              <Icon icon={n.icon} size={24} className="nav-icon" />
+              {n.label}
+            </a>
+          ))}
+        </nav>
+      )}
       <main id="main" className={showNav ? 'with-nav' : ''}>
         <SaveStatusBar />
         {slot && <slot.Guard />}
@@ -89,16 +100,6 @@ export function App() {
         <RecoveredChangesNotice />
         <DeviceDataOffer />
       </main>
-      {showNav && (
-        <nav className="bottom-nav" aria-label="Main">
-          {NAV.map((n) => (
-            <a key={n.route} href={`#/${n.route}`} aria-current={n.current(route) ? 'page' : undefined}>
-              <Icon icon={n.icon} size={24} className="nav-icon" />
-              {n.label}
-            </a>
-          ))}
-        </nav>
-      )}
     </div>
   );
 }
