@@ -18,7 +18,7 @@ import * as ops from '../../../domain/operations';
 import type { AppData } from '../../../domain/types';
 import { SupabaseStorageAdapter } from '../adapter';
 import { canonicalize, toRows } from '../rows';
-import { clock, incomePlan, richPlan, smallPlan, TODAY } from './fixtures';
+import { clock, incomePlan, richPlan, smallPlan, TODAY, withAccounts } from './fixtures';
 import { confirmedAccount, deleteTestAccounts } from './local-auth';
 
 const URL = process.env.SUPABASE_TEST_URL!;
@@ -133,8 +133,8 @@ describe('through real Supabase Auth and API', () => {
     }
   });
 
-  it('every kind of income (E6) comes back exactly, with identical forecasts, Activity and earnings; an ordinary save keeps it', async () => {
-    const plan = incomePlan();
+  it('every kind of income (E6) and accounts, transfers and Strategic Reserves (F1) come back exactly, with identical forecasts, Activity and earnings; an ordinary save keeps them', async () => {
+    const plan = withAccounts(incomePlan());
     const { sb } = await withPlan(plan);
     const back = await adapterFor(sb).load();
     expect(back).toEqual({ ...canonicalize(plan), revision: 1 });
@@ -148,7 +148,7 @@ describe('through real Supabase Auth and API', () => {
     expect(await adapterFor(sb).save(edited, 1)).toEqual({ ok: true, revision: 2 });
     const again = await adapterFor(sb).load();
     expect(again).toEqual({ ...canonicalize(edited), revision: 2 });
-    expect([again.workEntries!.length, again.jobs!.length, again.clients!.length]).toEqual([plan.workEntries!.length, plan.jobs!.length, plan.clients!.length]);
+    expect([again.workEntries!.length, again.jobs!.length, again.clients!.length, again.accounts!.length, again.transfers!.length]).toEqual([plan.workEntries!.length, plan.jobs!.length, plan.clients!.length, plan.accounts!.length, plan.transfers!.length]);
   });
 
   it("two people: neither can read, write or reach the other's plan", async () => {

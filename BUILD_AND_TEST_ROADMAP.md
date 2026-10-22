@@ -86,8 +86,9 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | E5, earnings history and views | **Complete**, merged as `a50ac4d` | Phase E |
 | E6, income integration and verification | **Complete**, merged as `70f4248`; **Phase E is complete** | Phase E |
 | F0, production readiness and infrastructure plan | **Complete** (documentation; revised for no users; in review) | Phase F |
+| F1, AC-S: accounts, transfers and Strategic Reserves in Supabase | **Complete** (in review) | Phase F |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
-| AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
+| AC-S, accounts, transfers and releases in Supabase | **Complete** as F1 (in review) | Phases AC, F |
 | AC6 payoff support, recurring planned transfers | **Deferred** (need specifications or decisions) | Phase AC, conflicts |
 | Step 9 virtual allocations; Phase F (hosted Supabase, Firebase cutover, offline-sync removal, Vercel) | **Deferred** (paused by the product experience decision) | Phase F, Step 10 |
 | Steps 3 and 5 (review list, review rhythm) | **Superseded** by Home (H2) | Status |
@@ -451,7 +452,7 @@ Specification: PRODUCT_EXPERIENCE.md section 11. Each phase is separately author
 - **AC5. Account balances (partly complete, October 2026).**
   - Done: optional opening balances, recorded and projected balances per account (`balances.ts`), and the shortfall a planned transfer would cause in its source account. Reserve items move no balance.
   - Not built: account-level availability ("enough in Bills for rent"), balance-based forecasts or alerts, and the "cash available now" starting amount for the running total (decision Q6).
-- **AC-S. Accounts in Supabase.** Complexity: **medium**.
+- **AC-S. Accounts in Supabase (complete as F1, October 2026; in review).** Complexity: **medium**.
   - `accounts` and `transfers` tables with workspace ownership and row-level security; nullable `account_id` on sources and one-time records; a `release` flag on one-time records; opening balances.
   - `load_plan` / `save_plan` carrying them; remove the adapter's refusal.
   - Tests: `test:db`, `test:supabase`, `e2e:supabase`.
@@ -462,7 +463,7 @@ Specification: PRODUCT_EXPERIENCE.md section 11. Each phase is separately author
 1. ~~Six classifications vs five kinds~~ and 2. ~~Savings as money out vs the transfer rule~~: resolved by AC4.
 3. **"Account" means two things in the interface.** It names the sign-in account ("Your Financial OS account", "Delete account") and money accounts. They never appear together today, since money accounts are hidden when signed in, but the Supabase cutover will put both on one screen. Needs a wording decision (for example "Sign-in" for the former).
 4. **Liabilities are defined with a payoff amount and date, but liability items store only payments.** Needed before AC6.
-5. **Storage.** Accounts, transfers and reserve releases work with device storage and in backups. Firebase (legacy, rules can't change) leaves accounts and transfers out and keeps releases; Supabase refuses all three until AC-S, and its development build doesn't offer accounts or "Use reserves". Signed-in users don't see accounts.
+5. **Storage.** Accounts, transfers and reserve releases work with device storage and in backups. Firebase (legacy, rules can't change) leaves accounts and transfers out and keeps releases; Supabase stores all three since F1, and its build offers accounts and "Use reserves". Signed-in Firebase users don't see accounts.
 6. **Planned transfers with minimal effort.** Each planned transfer is entered once today. A repeating plan ("each payday, move $X to Reserves") needs rules for how it's generated, edited and recorded; not built until those are decided.
 7. **Opening balance on the same day.** An opening balance is the balance at the end of its day, so a transfer recorded on that same day is treated as already included. Clear in the form's wording; revisit if it confuses people.
 
@@ -532,7 +533,15 @@ Supabase's built-in email sender allows only a few messages an hour: a custom SM
 
 *Engineering choices (no separate authorization):* build-mode and environment names, `vercel.json` and headers, consolidating migrations before the first hosted project, applying migrations by CLI or SQL editor, test order, and how Firebase code is removed.
 
-**Recommended next checkpoint: F1 (AC-S).**
+**Recommended next checkpoint after F0: F1 (AC-S).**
+
+**F1. AC-S: accounts, transfers and Strategic Reserves in Supabase (complete, October 2026; in review).**
+- **Schema** (migration `20261022000005_accounts_and_transfers.sql`): `accounts` (name, type, optional opening balance as amount and date together) and `transfers` (two different accounts, amount, date, expected or recorded, a recorded time exactly when recorded), both owned by a workspace with row-level security, read-only grants and no direct writes; `account_id` on items and records and `release` on records, with checks: an assignment suits the item's kind, a recurring occurrence carries an account only once recorded, a release only on a one-time Strategic Reserves record. Account references are checked at commit, so a save replaces accounts and the items naming them in any order.
+- **Functions:** `load_plan` and `save_plan` carry the new tables and columns; a save must include `accounts` and `transfers`; references must point into the plan and assignments must suit their kind; an ordinary save removes at most one account and one transfer, as for every other collection. Nothing else changed.
+- **App:** `rows.ts` maps them both ways and `checkForMigration` names what the database would refuse; the adapter's refusal (`hasAccountData`) is gone; the Supabase build offers the Accounts section and "Use reserves". No compatibility code: nothing existed to preserve.
+- **Hosted tooling:** `verify.sql` covers all eleven tables (27 checks); the hosted-test guide applies every migration in order.
+- **Not changed:** device storage, backups and Firebase (which still leaves accounts out). The "Account" wording conflict (sign-in versus money accounts, now both in the Supabase build's Settings) is decision 5, for F2.
+- Tests: `accounts-persistence` (Supabase round trip with balances and timeline; what the database would refuse), `integrity.db` (round trip, thirteen ordinary saves of every account and transfer operation with identical balances and figures, removal limits, constraints, another person can't read them), `security.db` and `account.db` (row-level security and account deletion cover both tables), `rows` and `equivalence.db` (an "everything" plan with every kind of income, accounts and transfers), `money-accounts` (the Supabase build offers accounts and "Use reserves"); `adapter.supabase` and the cross-account browser check run in CI.
 
 Fields ignored by R1–R2 can be dropped from the schema at the cutover.
 

@@ -7,7 +7,7 @@ import type { AppData } from '../../domain/types';
 import { createBackup, readBackup } from '../backup';
 import { CloudAdapter } from '../cloud';
 import { LocalStorageAdapter, migrate, STORAGE_KEY } from '../storage';
-import { checkForMigration, hasAccountData, toRows } from '../supabase/rows';
+import { canonicalize, checkForMigration, toRows } from '../supabase/rows';
 import { SupabaseStorageAdapter } from '../supabase/adapter';
 import { FakeSupabase } from '../supabase/__tests__/fake-supabase';
 import { FakeServer } from './fake-server';
@@ -156,21 +156,47 @@ describe("storage that can't keep accounts yet", () => {
     expect(stored.records.find((r) => r.id === 'use')!.release).toBe(true);
   });
 
-  it('Supabase: a plan with accounts, transfers or releases is refused, never saved without them', async () => {
+  it('Supabase (F1): accounts, balances, transfers, assignments and releases are saved and read back exactly', async () => {
+    // A recorded paycheck carries the account its item had when it was recorded.
+    const d = unwrap(ops.recordActual(plan(), 'pay@2026-10-15', { amountCents: usd(1800), date: TODAY }, clock));
+    expect(d.records.find((r) => r.id === 'pay@2026-10-15')).toMatchObject({ accountId: 'acct-income' });
+    expect(checkForMigration(d).filter((i) => i.level === 'error')).toEqual([]);
+    const rows = toRows(d);
+    expect(rows.accounts.map((a) => [a.id, a.type, a.opening_amount_cents, a.opening_date])).toEqual([
+      ['acct-income', 'income', usd(250), '2026-10-10'],
+      ['acct-reserves', 'distribution', null, null],
+      ['acct-bills', 'payment', usd(-40), '2026-10-10'],
+      ['acct-everyday', 'payment', null, null],
+    ]);
+    expect(rows.transfers.map((t) => [t.id, t.from_account_id, t.to_account_id, t.status, t.recorded_at !== null])).toEqual([
+      ['xfer-rent', 'acct-income', 'acct-bills', 'recorded', true],
+      ['xfer-save', 'acct-income', 'acct-reserves', 'expected', false],
+    ]);
+    expect(rows.records.find((r) => r.id === 'use')).toMatchObject({ release: true, account_id: null });
     const fake = new FakeSupabase();
     const adapter = new SupabaseStorageAdapter(fake, () => 'save-1');
     await adapter.load();
-    expect(await adapter.save(plan(), 0)).toEqual({ ok: false, reason: 'error', message: "This plan has accounts, transfers or reserve releases, which can't be saved to this storage yet. Nothing was saved." });
-    expect(fake.calls.filter((c) => c.fn === 'save_plan')).toHaveLength(0);
-    expect(hasAccountData(plan())).toBe(true);
-    expect(checkForMigration(plan()).filter((i) => i.level === 'error').map((i) => i.message)).toEqual(["Accounts, account assignments, transfers and reserve releases can't be stored in Supabase yet."]);
-    // A plan without accounts saves as before.
-    const { accounts: _a, transfers: _t, ...withoutList } = plan();
-    const plain: AppData = { ...withoutList, sources: withoutList.sources.map(({ accountId: _x, ...s }) => s), records: withoutList.records.filter((r) => !r.release).map(({ accountId: _x, ...r }) => r) };
-    expect(hasAccountData(plain)).toBe(false);
-    expect(toRows(plain).sources).toHaveLength(3);
-    // Each one alone is refused.
-    expect(hasAccountData({ ...plain, transfers: plan().transfers })).toBe(true);
-    expect(hasAccountData({ ...plain, records: plan().records.filter((r) => r.release).map(({ accountId: _x, ...r }) => r) })).toBe(true);
+    expect(await adapter.save(d, 0)).toEqual({ ok: true, revision: 1 });
+    const loaded = await new SupabaseStorageAdapter(fake, () => 'save-2').load();
+    expect(loaded).toEqual({ ...canonicalize(d), revision: 1 });
+    for (const id of ['acct-income', 'acct-bills', 'acct-reserves']) expect(accountBalance(loaded, id, '2026-10-31', TODAY)).toEqual(accountBalance(d, id, '2026-10-31', TODAY));
+    expect(dailyTimeline(buildForecast(loaded, TODAY), TODAY, '2026-11-30')).toEqual(dailyTimeline(buildForecast(d, TODAY), TODAY, '2026-11-30'));
+  });
+
+  it('Supabase (F1): checkForMigration names what the database would refuse', () => {
+    const d = plan();
+    const broken: AppData = {
+      ...d,
+      sources: d.sources.map((s) => (s.id === 'rent' ? { ...s, accountId: 'acct-income' } : s.id === 'pay' ? { ...s, accountId: 'gone' } : s)),
+      records: d.records.map((r) => (r.id === 'repair' ? { ...r, release: true as const } : r)),
+      transfers: [...d.transfers!, { ...d.transfers![0]!, id: 'loop', toAccountId: 'acct-income' }, { ...d.transfers![1]!, id: 'unrecorded', status: 'recorded' as const, recordedAt: null }],
+    };
+    expect(checkForMigration(broken).filter((i) => i.level === 'error').map((i) => i.message)).toEqual([
+      'Item 1 (pay): its account no longer exists.',
+      "Item 2 (rent): its account isn't the type that suits it.",
+      'Record 1 (repair): only a one-time Strategic Reserves item can be a release.',
+      'Transfer 3 (loop): it moves money from an account to the same account.',
+      "Transfer 4 (unrecorded): the recorded time doesn't match its status.",
+    ]);
   });
 });

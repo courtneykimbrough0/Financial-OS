@@ -51,7 +51,7 @@ It also has a subscription and a Strategic Reserve item.
 | Plan · Expenses | `#/plan/expenses`. Three tabs: **Bills**, **Subscriptions**, and **Varied** (one-time spending). |
 | Plan · Liabilities | `#/plan/liabilities`. Recurring payments on a **card**, **loan**, or **line of credit**. Choosing one of the three is required. Each payment counts once, as money out. |
 | Plan · Reserves | `#/plan/reserves`. **Strategic Reserves**: recurring and one-time amounts set aside, and one-time uses of reserves. They lower available cash flow and are never counted as spending. |
-| Settings | The gear in the top bar. Account (signed-in email, sign out, delete account), **Accounts** (where money is received, held and spent: add with a name and a type; open one to rename it, give it an optional balance, see its transfers or delete it; **Move money** records or plans a transfer between two accounts; device storage only for now), backups (download, restore), and sample data. An item's form offers an optional account that suits it once one exists, and its row shows it. |
+| Settings | The gear in the top bar. Account (signed-in email, sign out, delete account), **Accounts** (where money is received, held and spent: add with a name and a type; open one to rename it, give it an optional balance, see its transfers or delete it; **Move money** records or plans a transfer between two accounts; device storage and Supabase, not Firebase accounts), backups (download, restore), and sample data. An item's form offers an optional account that suits it once one exists, and its row shows it. |
 
 Tap any transaction to mark it received/paid, change its date or amount, cancel it, undo, or fix a recorded actual. For a recurring item, “Change just this one” moves only that occurrence; “Change this and later ones” opens the item’s screen to change its schedule from a date on.
 
@@ -111,7 +111,7 @@ Every dashboard element (calendar, KPIs, summaries, timeline, cycles) reads from
 - **Estimate dismissal** (`estimateDismissal`, optional, on a recurring item): the latest estimate suggestion the person dismissed (the estimate, the amount suggested, the latest payment's date), so it doesn't return right away.
 - **OccurrenceRecord kinds**: a one-time record is `income`, `varied` or `reserve`; a one-time `reserve` with `release: true` takes money out of reserves.
 - **Account** (`accounts`, optional): where money is received, held and spent: an id, the person's name for it, a type (`income`, `distribution` or `payment`) and an optional opening balance (`opening`: amount and date). Recurring and one-time items may carry an `accountId` whose type suits them (income → income; bills, subscriptions, liability payments and varied spending → payment; Strategic Reserves → distribution). The forecast never reads accounts.
-- **Transfer** (`transfers`, optional): money moved between two different accounts of the person's: amount, date, and `expected` or `recorded`. Never income or spending; it changes balances only (`src/domain/balances.ts`). Kept on the device and in backups; left out of Firebase account saves and refused by the Supabase development build for now (see PRODUCT_EXPERIENCE.md section 11).
+- **Transfer** (`transfers`, optional): money moved between two different accounts of the person's: amount, date, and `expected` or `recorded`. Never income or spending; it changes balances only (`src/domain/balances.ts`). Kept on the device, in backups and in Supabase; left out of Firebase account saves (see PRODUCT_EXPERIENCE.md section 11).
 
 ### Persistence
 

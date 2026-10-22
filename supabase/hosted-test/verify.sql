@@ -11,7 +11,8 @@ with expected_functions(name, definer) as (
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.proname in (select name from expected_functions)
 ), tables(name) as (
-  values ('workspaces'), ('sources'), ('schedule_versions'), ('source_pauses'), ('occurrence_records'), ('save_receipts')
+  values ('workspaces'), ('sources'), ('schedule_versions'), ('source_pauses'), ('occurrence_records'), ('save_receipts'),
+         ('work_entries'), ('clients'), ('freelance_jobs'), ('accounts'), ('transfers')
 )
 select 'function ' || e.name as check,
        case when f.name is null then 'MISSING'

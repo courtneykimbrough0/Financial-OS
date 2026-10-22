@@ -2,13 +2,14 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { clockAt, source, unwrap, usd } from '../../../domain/__tests__/helpers';
 import { activityView, recordedEntries } from '../../../domain/activity';
+import { accountBalance } from '../../../domain/balances';
 import { earningsHistory } from '../../../domain/earnings-history';
 import { buildForecast, explainTimingGaps } from '../../../domain/forecast';
 import { variance } from '../../../domain/occurrences';
 import * as ops from '../../../domain/operations';
 import type { AppData } from '../../../domain/types';
 import { canonicalize, toRows } from '../rows';
-import { incomePlan, richPlan, TODAY, withJobs, withSessions, withShifts } from './fixtures';
+import { incomePlan, richPlan, TODAY, withAccounts, withJobs, withSessions, withShifts } from './fixtures';
 import { count, load, newUser, save, saveOk, savePlan, sql, workspaceOf } from './pg';
 
 const clock = clockAt(TODAY);
@@ -571,3 +572,100 @@ describe('every kind of income through ordinary saves (E6)', () => {
     expect(current.jobs!.every((j) => j.clientId === undefined)).toBe(true);
   });
 });
+
+describe('accounts, transfers and Strategic Reserves (F1)', () => {
+  const balances = (d: AppData) => (d.accounts ?? []).map((a) => [a.id, accountBalance(d, a.id, '2026-11-30', TODAY)]);
+  const counted = (d: AppData) => buildForecast(d, TODAY).entries.filter((e) => e.counts).map((e) => [e.occurrence.id, e.date, e.signedCents]);
+
+  it('stores accounts, opening balances, assignments, releases and transfers, and reads them back exactly', () => {
+    const plan = withAccounts(richPlan());
+    const { data } = stored(plan);
+    expect(data).toEqual({ ...canonicalize(plan), revision: 1 });
+    expect(data.records.find((r) => r.id === 'pay@2026-10-23')).toMatchObject({ status: 'completed', accountId: 'acct-income' });
+    expect(data.records.find((r) => r.id === 'release-car')).toMatchObject({ kind: 'reserve', release: true });
+    expect(balances(data)).toEqual(balances(plan));
+    expect(counted(data)).toEqual(counted(plan));
+  });
+
+  it('ordinary saves: every account and transfer operation is saved and read back exactly, with the same balances and figures', () => {
+    const { user, data } = stored(withAccounts(richPlan()));
+    const steps: [string, (d: AppData) => ops.Result][] = [
+      ['rename an account', (d) => ops.renameAccount(d, 'acct-bills', 'Bills and rent', clock)],
+      ['change an opening balance', (d) => ops.setOpeningBalance(d, 'acct-bills', { amountCents: usd(12), date: '2026-10-02' }, clock)],
+      ['remove an opening balance', (d) => ops.setOpeningBalance(d, 'acct-income', null, clock)],
+      ['record the expected transfer', (d) => ops.recordTransfer(d, 'xfer-save', { amountCents: usd(55), date: TODAY }, clock)],
+      ['plan another transfer', (d) => ops.addTransfer(d, { fromAccountId: 'acct-income', toAccountId: 'acct-everyday', amountCents: usd(80), date: '2026-10-30' }, 'expected', clock, 'xfer-spend')],
+      ['change it', (d) => ops.updateTransfer(d, 'xfer-spend', { fromAccountId: 'acct-income', toAccountId: 'acct-everyday', amountCents: usd(90), date: '2026-10-31' }, clock)],
+      ['delete a transfer', (d) => ops.deleteTransfer(d, 'xfer-rent')],
+      ['move an item to another account', (d) => ops.assignAccount(d, 'rent', 'acct-everyday', clock)],
+      ['unassign an item', (d) => ops.assignAccount(d, 'save', null, clock)],
+      ['delete the recorded transfer to reserves', (d) => ops.deleteTransfer(d, 'xfer-save')],
+      ['delete an account nothing uses', (d) => ops.deleteAccount(d, 'acct-reserves', clock)],
+      ['undo the recorded paycheck', (d) => ops.restoreOccurrence(d, 'pay@2026-10-23', clock)],
+      ['delete the release', (d) => ops.deleteOneTime(d, 'release-car')],
+    ];
+    let current = data;
+    for (const [name, step] of steps) {
+      const next = unwrap(step(current));
+      const back = saveOk(user, next);
+      expect([name, back]).toEqual([name, { ...canonicalize(next), revision: back.revision }]);
+      expect([name, balances(back)]).toEqual([name, balances(next)]);
+      expect([name, counted(back)]).toEqual([name, counted(next)]);
+      current = back;
+    }
+    expect(current.accounts!.map((a) => a.id)).toEqual(['acct-income', 'acct-bills', 'acct-everyday']);
+    expect(current.transfers!.map((t) => [t.id, t.status, t.amountCents])).toEqual([['xfer-spend', 'expected', usd(90)]]);
+  });
+
+  it('an ordinary save removes at most one account and one transfer; a replace can remove them all', () => {
+    const { user, data } = stored(withAccounts(richPlan()));
+    const twoAccounts: AppData = { ...data, accounts: data.accounts!.filter((a) => a.id !== 'acct-everyday' && a.id !== 'acct-reserves'), transfers: data.transfers!.filter((t) => t.toAccountId !== 'acct-reserves'), sources: data.sources.map(({ accountId, ...s }) => (accountId === 'acct-reserves' ? s : { ...s, accountId })) as AppData['sources'] };
+    expect(save(user, twoAccounts).code).toBe('PT422');
+    expect(save(user, { ...data, transfers: [] }).code).toBe('PT422');
+    const { accounts: _a, transfers: _t, ...none } = data;
+    const bare: AppData = { ...none, sources: data.sources.map(({ accountId: _x, ...s }) => s), records: data.records.filter((r) => !r.release).map(({ accountId: _x, ...r }) => r) };
+    expect(save(user, bare, { mode: 'replace' }).ok).toBe(true);
+    expect(load(user).accounts).toBeUndefined();
+  });
+
+  it('the database refuses an account of the wrong type, a missing account, a transfer within one account, and misplaced releases or balances', () => {
+    const { user, data } = stored(withAccounts(richPlan()));
+    const rows = toRows(data);
+    const replace = (patch: Record<string, unknown>) => savePlan(user, data.revision, { ...rows, ...patch } as never, { mode: 'replace' });
+    const source = (id: string, patch: Record<string, unknown>) => replace({ sources: rows.sources.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
+    const record = (id: string, patch: Record<string, unknown>) => replace({ records: rows.records.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
+    const transfer = (patch: Record<string, unknown>) => replace({ transfers: rows.transfers.map((x, i) => (i === 0 ? { ...x, ...patch } : x)) });
+    const account = (patch: Record<string, unknown>, id = 'acct-income') => replace({ accounts: rows.accounts.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
+    expect(source('rent', { account_id: 'acct-income' }).code).toBe('PT422');
+    expect(source('rent', { account_id: 'gone' }).code).toBe('PT422');
+    expect(record('release-car', { account_id: 'acct-bills' }).code).toBe('PT422');
+    expect(transfer({ to_account_id: 'acct-income' }).code).toBe('23514');
+    expect(transfer({ to_account_id: 'gone' }).code).toBe('PT422');
+    expect(transfer({ recorded_at: null }).code).toBe('23514');
+    expect(transfer({ amount_cents: 0 }).code).toBe('23514');
+    const unrecorded = rows.records.find((r) => r.source_id !== null && r.status !== 'completed')!;
+    expect(record(unrecorded.id, { release: true }).code).toBe('23514');
+    expect(record(unrecorded.id, { account_id: 'acct-bills' }).code).toBe('23514');
+    expect(account({ opening_date: null }).code).toBe('23514');
+    expect(account({ type: 'savings' }, 'acct-everyday').code).toBe('23514');
+    // Changing the type of an account items use is caught first, as a mismatch.
+    expect(account({ type: 'payment' }).code).toBe('PT422');
+    expect(replace({ accounts: undefined }).code).toBe('PT422');
+    expect(load(user)).toEqual(data);
+  });
+
+  it("another person can't read accounts or transfers", () => {
+    const { user } = stored(withAccounts(richPlan()));
+    const other = newUser();
+    expect(save(other, { ...smallPlanLike(), revision: 0 }, { mode: 'replace' }).ok).toBe(true);
+    for (const t of ['accounts', 'transfers']) {
+      expect(sql({ user: other }, `select count(*) from public.${t} where workspace_id = '${workspaceOf(user)}';`).out).toBe('0');
+      expect(sql({ user }, `select count(*) from public.${t};`).out).not.toBe('0');
+    }
+  });
+});
+
+/** A small plan with no accounts, for another person. */
+function smallPlanLike(): AppData {
+  return source(ops.emptyData(), TODAY, 'income', 'Pay', 500, '2026-10-30', { type: 'monthly' }, 'pay');
+}

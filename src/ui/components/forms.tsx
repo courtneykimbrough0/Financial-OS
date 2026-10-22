@@ -490,8 +490,7 @@ export function OneTimeForm({ kind, onDone }: { kind: ops.OneTimeInput['kind']; 
   const [tags, setTags] = useState<string[]>([]);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [release, setRelease] = useState(false);
-  // The Supabase development build can't store releases yet (it refuses the save), so it doesn't offer them.
-  const canRelease = kind === 'reserve' && !useAccountSlot();
+  const canRelease = kind === 'reserve';
   const certaintyAvailable = useIncomeCertaintyAvailable() && kind === 'income';
   const [certainty, setCertainty] = useState<IncomeCertainty>('expected');
   const [error, setError] = useState<string | null>(null);

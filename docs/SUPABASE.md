@@ -17,6 +17,9 @@ The PostgreSQL storage for Financial OS, the storage adapter that uses it, and a
 | `source_pauses` | Stretches an item was turned off | (`workspace_id`, `source_id`, `from_date`) |
 | `occurrence_records` | One-time items, and recurring occurrences someone acted on | (`workspace_id`, `id`); unique (`workspace_id`, `source_id`, `expected_date`) for recurring ones |
 | `save_receipts` | Persistence only: one row per accepted save (see Retries) | (`workspace_id`, `save_id`) |
+| `work_entries`, `clients`, `freelance_jobs` | Shifts and sessions, freelance clients and jobs (Phase E) | (`workspace_id`, `id`) |
+| `accounts` | Where money is received, held and spent: name, type, optional opening balance (F1) | (`workspace_id`, `id`) |
+| `transfers` | Money moved between two of a person's accounts, expected or recorded (F1) | (`workspace_id`, `id`) |
 
 ```
 auth.users 1─1 workspaces 1─* sources 1─* schedule_versions
@@ -41,10 +44,11 @@ auth.users 1─1 workspaces 1─* sources 1─* schedule_versions
   - `income_type` is null (a fixed amount) or `'hourly'`/`'tipped'`, only on income; `hourly_wage_cents` only with a type, above $0;
   - shifts (`work_entries`, migration `20261022000002_hourly_and_tipped_income.sql`): kind `'shift'`, minutes 1–1440, every amount above $0 when present, hours or tips required, foreign keys to the item, the cash-tips record and the paycheck that paid it, one shift per tips record. Row-level security and grants follow the other tables;
   - gig work (migration `20261022000004_gig_income.sql`): `income_type` may be `'gig'`, which never has a wage; `work_entries.kind` is `'shift'` or `'session'`, with `earnings_cents` (above $0) and `platform` (1–40 characters) only on sessions, wage and card tips only on shifts; a session needs earnings or cash, a shift hours or tips. `save_plan` refuses shifts on gig income and sessions on other income;
+  - accounts and transfers (migration `20261022000005_accounts_and_transfers.sql`): an account's name is 1–60 characters, its type `income`, `distribution` or `payment`, and an opening balance is an amount (at most $100,000,000 either way) and a date together or neither; a transfer joins two different accounts, with an amount above $0, a date, and `expected` or `recorded` (a recorded time exactly when recorded). `account_id` on items and records points at an account in the same workspace and must suit the kind (income → income, Strategic Reserves → distribution, everything else → payment; checked by `save_plan`); a recurring occurrence carries one only once recorded. `release` is true only on a one-time Strategic Reserves record. Account references are checked when the transaction commits, so a save may replace accounts and the items that name them in any order;
   - freelance work (migration `20261022000003_freelance_income.sql`): `clients` (a name of 1–60 characters) and `freelance_jobs` (description, amount above $0, work `planned` or `done`, an optional client, and an optional payment record, one job per record). A job's payment must be a one-time income record that no shift uses (checked by `save_plan`).
 - **Kept, not checked:** records whose original date a later schedule no longer produces. The engine sets them aside and they count again if a schedule brings the date back. The database can't run the schedule, so it doesn't judge them.
 - **Not stored:** forecasts, timing gaps, suggestions, scenarios, sample data.
-- **Shifts in `save_plan`:** a save must include `work_entries` (a client that doesn't know them is refused rather than erasing them); shifts are written last and removed first, since they point at items and records; an ordinary save removes at most one shift. The same holds for `clients` and `jobs`: both required, written last, and at most one job and one client removed by an ordinary save.
+- **Shifts in `save_plan`:** a save must include `work_entries` (a client that doesn't know them is refused rather than erasing them); shifts are written last and removed first, since they point at items and records; an ordinary save removes at most one shift. The same holds for `clients` and `jobs`: both required, written last, and at most one job and one client removed by an ordinary save; and for `accounts` and `transfers` (F1): both required, and at most one account and one transfer removed by an ordinary save.
 
 ## Functions
 
@@ -303,7 +307,6 @@ Measured once, as a guide only (local PostgreSQL 16): a plan with 40 items and 1
 | --- | --- |
 | Virtual paycheck allocations | New tables keyed by `workspace_id`; recommendations with proposed / approved / dismissed status |
 | Optional cash-on-hand snapshot | A dated snapshot table; with none, the forecast keeps its $0 start the day before payday |
-| Accounts, transfers and reserve releases (in the app; not in the schema) | An `accounts` table (id, name, type `income` / `distribution` / `payment`, optional opening balance and date, timestamps) keyed by `workspace_id`, a nullable `account_id` on sources and on one-time records (null = unassigned) referencing it, a `transfers` table (source and a different destination account in the same workspace, positive amount, date, `expected` / `recorded`), a `release` flag on one-time reserve records, and `load_plan` / `save_plan` carrying them (roadmap AC-S). Until then the adapter refuses a plan with any of them (`hasAccountData`) instead of saving it without them, and `checkForMigration` reports it |
 | Shared households | A membership table; the read policies and the owner check in the functions change, rows don't |
 | Partial payments | Several actuals per occurrence (a child table of `occurrence_records`) with completion rules in the engine; today an occurrence has one recorded outcome |
 

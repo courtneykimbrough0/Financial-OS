@@ -17,7 +17,7 @@
  */
 import type { AppData } from '../../domain/types';
 import type { SaveIntent, SaveResult, StorageAdapter } from '../storage';
-import { ACCOUNTS_NOT_STORED, fromRows, hasAccountData, toRows, type LoadedPlan, type PlanRows } from './rows';
+import { fromRows, toRows, type LoadedPlan, type PlanRows } from './rows';
 
 /** The part of a supabase-js client the adapter uses (`client.rpc`). */
 export interface RpcClient {
@@ -105,8 +105,6 @@ export class SupabaseStorageAdapter implements StorageAdapter {
   }
 
   async save(data: AppData, baseRevision: number, intent: SaveIntent = 'update'): Promise<SaveResult> {
-    // The database has no place for accounts yet: refuse rather than drop them.
-    if (hasAccountData(data)) return { ok: false, reason: 'error', message: ACCOUNTS_NOT_STORED };
     const plan = toRows(data);
     const key = `${intent}|${baseRevision}|${JSON.stringify(plan)}`;
     // The same logical save again (Try again after no reply): same id, so it can't apply twice.

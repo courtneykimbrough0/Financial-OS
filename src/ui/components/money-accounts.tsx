@@ -2,9 +2,8 @@
  * Accounts: where money is received, held and spent. Optional and secondary:
  * a short list in Settings, an account choice on an item's form, the account
  * on an item's row, and money moved between accounts. Nothing here changes
- * cash flow or the running total. Hidden where the storage can't keep
- * accounts yet (signed in with Firebase, or the Supabase development build);
- * see ACCOUNTS_IN_SIGNED_IN_SAVES.
+ * cash flow or the running total. Hidden only where the storage can't keep
+ * accounts (signed in with Firebase; see ACCOUNTS_IN_SIGNED_IN_SAVES).
  */
 import { useId, useState, type FormEvent } from 'react';
 import { ArrowRight, ChevronRight, Plus, Wallet } from 'lucide-react';
@@ -26,11 +25,11 @@ const TYPE_HINT: Record<AccountType, string> = {
   payment: 'Pays bills, subscriptions, liabilities and everyday spending.',
 };
 
-/** Whether accounts can be kept by the storage in use. */
+/** Whether accounts can be kept by the storage in use: device storage and Supabase can, a Firebase account can't. */
 export function useAccountsAvailable(): boolean {
   const account = useAccount();
   const slot = useAccountSlot();
-  return !slot && (!account || ACCOUNTS_IN_SIGNED_IN_SAVES);
+  return !!slot || !account || ACCOUNTS_IN_SIGNED_IN_SAVES;
 }
 
 const nameOf = (data: AppData, id: string) => (data.accounts ?? []).find((a) => a.id === id)?.name ?? 'Account';

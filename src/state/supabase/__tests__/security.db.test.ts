@@ -15,7 +15,7 @@ function twoUsers() {
   return { a, b, wsA: workspaceOf(a), wsB: workspaceOf(b) };
 }
 
-const TABLES = ['workspaces', 'sources', 'schedule_versions', 'source_pauses', 'occurrence_records', 'work_entries', 'clients', 'freelance_jobs'];
+const TABLES = ['workspaces', 'sources', 'schedule_versions', 'source_pauses', 'occurrence_records', 'work_entries', 'clients', 'freelance_jobs', 'accounts', 'transfers'];
 
 describe('each person reaches only their own plan', () => {
   it("1. A reads A's plan", () => {
@@ -128,6 +128,6 @@ describe('each person reaches only their own plan', () => {
 
   it('row-level security is on for every table', () => {
     const r = sql('owner', `select relname, relrowsecurity from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r' order by relname;`);
-    expect(r.out.split('\n')).toEqual(['clients|t', 'freelance_jobs|t', 'occurrence_records|t', 'save_receipts|t', 'schedule_versions|t', 'source_pauses|t', 'sources|t', 'work_entries|t', 'workspaces|t']);
+    expect(r.out.split('\n')).toEqual(['accounts|t', 'clients|t', 'freelance_jobs|t', 'occurrence_records|t', 'save_receipts|t', 'schedule_versions|t', 'source_pauses|t', 'sources|t', 'transfers|t', 'work_entries|t', 'workspaces|t']);
   });
 });

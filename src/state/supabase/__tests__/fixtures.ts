@@ -136,6 +136,7 @@ export function allPlans(): [string, AppData][] {
     ['legacy document', legacyPlan()],
     ["sample data (as if it were the person's own)", sampleAsOwn],
     ['every kind of income (E1–E5)', incomePlan()],
+    ['everything: income, accounts, transfers and Strategic Reserves (F1)', withAccounts(incomePlan())],
   ];
 }
 
@@ -184,4 +185,26 @@ export function incomePlan(): AppData {
   d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Maybe a bonus', amountCents: usd(250), date: '2026-10-30', certainty: 'possible' }, clock, 'bonus'));
   // The side job's Oct 17 paycheck arrives a day early and pays both shifts; its amount differs from the expected $150.
   return unwrap(ops.recordActual(d, 'side@2026-10-17', { amountCents: usd(212.4), date: '2026-10-16' }, clock));
+}
+
+/**
+ * `plan` with accounts (F1): one of each type and a second payment account,
+ * opening balances (one negative), the paycheck, rent and reserves assigned,
+ * a recorded paycheck that keeps its account, a one-time release from
+ * Strategic Reserves, and transfers both recorded and expected.
+ */
+export function withAccounts(plan: AppData): AppData {
+  let d = unwrap(ops.addAccount(plan, { name: 'Paycheck account', type: 'income' }, clock, 'acct-income'));
+  d = unwrap(ops.addAccount(d, { name: 'Reserves', type: 'distribution' }, clock, 'acct-reserves'));
+  d = unwrap(ops.addAccount(d, { name: 'Bills', type: 'payment' }, clock, 'acct-bills'));
+  d = unwrap(ops.addAccount(d, { name: 'Everyday', type: 'payment' }, clock, 'acct-everyday'));
+  d = unwrap(ops.assignAccount(d, 'pay', 'acct-income', clock));
+  d = unwrap(ops.assignAccount(d, 'rent', 'acct-bills', clock));
+  d = unwrap(ops.assignAccount(d, 'save', 'acct-reserves', clock));
+  d = unwrap(ops.setOpeningBalance(d, 'acct-income', { amountCents: usd(420), date: '2026-10-01' }, clock));
+  d = unwrap(ops.setOpeningBalance(d, 'acct-bills', { amountCents: usd(-35.5), date: '2026-10-01' }, clock));
+  d = unwrap(ops.recordActual(d, 'pay@2026-10-23', { amountCents: usd(1000), date: TODAY }, clock));
+  d = unwrap(ops.addOneTime(d, { kind: 'reserve', description: 'Use reserves for the car', amountCents: usd(200), date: '2026-10-28', release: true }, clock, 'release-car'));
+  d = unwrap(ops.addTransfer(d, { fromAccountId: 'acct-income', toAccountId: 'acct-bills', amountCents: usd(1500), date: TODAY }, 'recorded', clock, 'xfer-rent'));
+  return unwrap(ops.addTransfer(d, { fromAccountId: 'acct-income', toAccountId: 'acct-reserves', amountCents: usd(50), date: '2026-10-23' }, 'expected', clock, 'xfer-save'));
 }

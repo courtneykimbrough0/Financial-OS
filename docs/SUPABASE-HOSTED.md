@@ -65,15 +65,12 @@ Do these in order; each step says where in the Supabase dashboard (supabase.com/
    - Project Settings → API Keys: the **publishable** key (`sb_publishable_…`), or the legacy `anon` key.
 
    Never copy the `service_role` or secret key anywhere.
-3. **Apply the three migrations, in this order** (SQL Editor → New query → paste one whole file → Run; one file at a time):
-   1. `supabase/migrations/20261016000001_financial_schema.sql`
-   2. `supabase/migrations/20261016000002_access_and_persistence.sql`
-   3. `supabase/migrations/20261018000001_account_deletion.sql`
+3. **Apply every migration in `supabase/migrations`, in file-name order** (SQL Editor → New query → paste one whole file → Run; one file at a time). There are nine today, from `20261016000001_financial_schema.sql` to `20261022000005_accounts_and_transfers.sql`.
 
    If you use the Supabase CLI instead: `supabase link --project-ref <ref>` then `supabase db push`. Before anything else, make sure the dashboard shows the right project name. If any file fails, stop: don't run the next one.
-4. **Check them.** Run `supabase/hosted-test/verify.sql` in the SQL Editor. It is read-only. All 17 rows must read `ok`; if any doesn't, stop. The checks cover:
+4. **Check them.** Run `supabase/hosted-test/verify.sql` in the SQL Editor. It is read-only. All 27 rows must read `ok`; if any doesn't, stop. The checks cover:
    - the four functions: fixed search paths, the right security setting, not callable signed out;
-   - row-level security on all six tables;
+   - row-level security on all eleven tables;
    - no direct writes;
    - save receipts hidden.
 5. **Mark it as the test project.** Open `supabase/hosted-test/marker.sql`, replace `YOUR_PROJECT_REF` with the ref from step 2, and run it. Only in this project.
