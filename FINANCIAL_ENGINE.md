@@ -52,6 +52,7 @@ Every counted entry lands in exactly one part, by kind (`totals`):
 Shifts are earnings, never money received, and the forecast never reads them, an income's type or its wage.
 - Cash tips enter cash flow once, as their own received one-time income record on the shift's date.
 - Wages and card tips enter cash flow once, as the recorded paycheck that pays them (its actual amount); until then they are "earned, not paid yet", outside every total.
+- A recorded paycheck pays only work done on or before the day it arrived (`canHavePaid`): correcting it to an earlier date, or moving a shift past it, unpays that work. Links never change an amount (E6).
 - Wages for a shift: minutes × wage ÷ 60, rounded to the nearest cent once per shift. Earnings: wages + cash tips + card tips. Effective hourly: earnings ÷ hours over shifts with hours.
 
 ## Gig sessions and payouts (`earnings.ts`, `operations.ts`, E4)

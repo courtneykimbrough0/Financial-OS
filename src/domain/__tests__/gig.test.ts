@@ -119,17 +119,21 @@ describe('payouts: expected versus actual, linked to the sessions they cover', (
     expect(work(d, 's4').paidByOccurrenceId).toBe('dash@2026-10-19');
   });
 
-  it('correcting a payout keeps its sessions paid; undoing it makes them wait again; a session can be moved to another payout', () => {
+  it('correcting a payout keeps its sessions paid; undoing it makes them wait again; a session can be moved to another payout that came after it', () => {
     let d = unwrap(ops.recordActual(worked(), 'dash@2026-10-19', { amountCents: usd(287.5), date: '2026-10-19' }, clock));
     d = unwrap(ops.correctActual(d, 'dash@2026-10-19', { amountCents: usd(290), date: '2026-10-19' }, clock));
     expect(work(d, 's2').paidByOccurrenceId).toBe('dash@2026-10-19');
     expect(d.records.find((r) => r.id === 'dash@2026-10-19')!.actualAmountCents).toBe(usd(290));
-    d = unwrap(ops.setShiftPaid(d, 's1', 'dash@2026-10-12', clock));
-    expect(work(d, 's1').paidByOccurrenceId).toBe('dash@2026-10-12');
+    // Moved by hand: not to a payout that arrived before the session was worked (E6), and not to another income's.
+    expectError(ops.setShiftPaid(d, 's1', 'dash@2026-10-12', clock), /arrived before this work was done/);
     expectError(ops.setShiftPaid(d, 's3', 'dash@2026-10-19', clock), /from this income/);
+    d = unwrap(ops.setShiftPaid(d, 's1', null, clock));
+    expect(work(d, 's1')).not.toHaveProperty('paidByOccurrenceId');
+    d = unwrap(ops.setShiftPaid(d, 's1', 'dash@2026-10-19', clock));
+    expect(work(d, 's1').paidByOccurrenceId).toBe('dash@2026-10-19');
     d = unwrap(ops.restoreOccurrence(d, 'dash@2026-10-19', clock));
-    expect(d.workEntries!.map((e) => e.paidByOccurrenceId)).toEqual(['dash@2026-10-12', undefined, undefined, undefined]);
-    expect(earnedNotPaid(d, 'dash').cents).toBe(usd(200));
+    expect(d.workEntries!.map((e) => e.paidByOccurrenceId)).toEqual([undefined, undefined, undefined, undefined]);
+    expect(earnedNotPaid(d, 'dash').cents).toBe(usd(90 + 120 + 80));
   });
 
   it("a possible payout (E1) doesn't count until marked expected or received; its cash already counted", () => {

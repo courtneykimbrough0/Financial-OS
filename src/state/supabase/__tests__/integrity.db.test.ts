@@ -514,6 +514,10 @@ describe('every kind of income through ordinary saves (E6)', () => {
   }
 
   it('each correction, undo, edit and delete is saved, read back exactly, and changes no figure on the way', () => {
+    // Checked after every step: no shift or session stays paid by a paycheck that arrived before it was worked.
+    const noLateLinks = (d: AppData) => {
+      for (const e of d.workEntries ?? []) if (e.paidByOccurrenceId) expect(e.date <= d.records.find((r) => r.id === e.paidByOccurrenceId)!.actualDate!).toBe(true);
+    };
     const { user, data } = stored(incomePlan());
     // The fixture as stored: shifts paid by the early side paycheck, one session paid and one waiting.
     expect(data.workEntries!.map((e) => [e.id, e.paidByOccurrenceId ?? null])).toEqual([
@@ -525,11 +529,13 @@ describe('every kind of income through ordinary saves (E6)', () => {
     const payment = (d: AppData, job: string) => d.jobs!.find((j) => j.id === job)!.paymentRecordId!;
     const steps: [string, (d: AppData) => ops.Result][] = [
       ['correct the paycheck', (d) => ops.correctActual(d, 'side@2026-10-17', { amountCents: usd(220), date: '2026-10-16' }, clock)],
+      ['correct it to before the second shift', (d) => ops.correctActual(d, 'side@2026-10-17', { amountCents: usd(205), date: '2026-10-14' }, clock)],
       ['undo the paycheck', (d) => ops.restoreOccurrence(d, 'side@2026-10-17', clock)],
       ['record it again', (d) => ops.recordActual(d, 'side@2026-10-17', { amountCents: usd(212.4), date: '2026-10-16' }, clock)],
       ['correct a shift’s cash tips', (d) => ops.editShift(d, 'shift-1', { date: '2026-10-14', minutes: 330, wageCents: 1600, cashTipsCents: usd(50), cardTipsCents: usd(31) }, clock)],
       ['delete a shift', (d) => ops.deleteShift(d, 'shift-2')],
-      ['link a waiting session to a payout by hand', (d) => ops.setShiftPaid(d, 'session-2', 'gig@2026-10-12', clock)],
+      ['mark a paid session not paid', (d) => ops.setShiftPaid(d, 'session-1', null, clock)],
+      ['pay it by hand with the payout', (d) => ops.setShiftPaid(d, 'session-1', 'gig@2026-10-12', clock)],
       ['change a session’s platform and cash', (d) => ops.editSession(d, 'session-2', { date: '2026-10-14', earningsCents: usd(70), cashTipsCents: usd(14), platform: 'Lyft' }, clock)],
       ['undo the payout', (d) => ops.restoreOccurrence(d, 'gig@2026-10-12', clock)],
       ['undo a job payment', (d) => ops.restoreOccurrence(d, payment(d, 'job-logo'), clock)],
@@ -547,6 +553,8 @@ describe('every kind of income through ordinary saves (E6)', () => {
       expect([name, back]).toEqual([name, { ...canonicalize(next), revision: back.revision }]);
       expect([name, outcomes(back)]).toEqual([name, outcomes(next)]);
       linksHold(back);
+      noLateLinks(back);
+      if (name === 'correct it to before the second shift') expect(back.workEntries!.filter((e) => e.sourceId === 'side').map((e) => [e.id, e.paidByOccurrenceId ?? null])).toEqual([['shift-1', 'side@2026-10-17'], ['shift-2', null]]);
       current = back;
     }
     // Where it ended: one shift (its new cash tips received), the paycheck paying it; both sessions waiting; Logo paid at $800.

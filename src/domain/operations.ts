@@ -23,7 +23,7 @@ import { addDays, formatShort, isValidDateStr, type DateStr } from './dates';
 import type { Cents } from './money';
 import { findOccurrence, resolveOccurrences } from './occurrences';
 import { validateRule } from './recurrence';
-import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type IncomeCertainty, type IncomeType, type LiabilityType, type OccurrenceRecord, type OneTimeKind, type RecurrenceRule, type RecurringKind, type RecurringSource, type Transfer, type TransactionKind, type WorkEntry, workKindFor, type Client, type FreelanceJob, type JobStatus, certaintyOf } from './types';
+import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type IncomeCertainty, type IncomeType, type LiabilityType, type OccurrenceRecord, type OneTimeKind, type RecurrenceRule, type RecurringKind, type RecurringSource, type Transfer, type TransactionKind, type WorkEntry, workKindFor, canHavePaid, type Client, type FreelanceJob, type JobStatus, certaintyOf } from './types';
 
 export type Result = { ok: true; data: AppData } | { ok: false; error: string };
 
@@ -477,9 +477,11 @@ export function recordActual(data: AppData, id: string, actual: ActualInput, clo
 export function correctActual(data: AppData, id: string, actual: ActualInput, clock: Clock): Result {
   const err = validateActual(actual, clock);
   if (err) return fail(err);
-  return withOccurrence(data, id, clock, (r) =>
+  const result = withOccurrence(data, id, clock, (r) =>
     r.status !== 'completed' ? 'Only recorded items can be corrected.' : { ...r, actualAmountCents: actual.amountCents, actualDate: actual.date },
   );
+  // Moved earlier, a paycheck or payout no longer pays work done after it arrived.
+  return result.ok ? ok(unlinkShifts(result.data, id, clock, (e, paycheck) => !canHavePaid(paycheck, e))) : result;
 }
 
 /** Updates the latest expectation of an outstanding occurrence. The original prediction is kept. */
@@ -997,7 +999,7 @@ export function editShift(data: AppData, id: string, input: Omit<ShiftInput, 'so
     date: input.date,
     ...fields,
     ...(cashTipsRecordId ? { cashTipsRecordId } : {}),
-    ...(shift.paidByOccurrenceId ? { paidByOccurrenceId: shift.paidByOccurrenceId } : {}),
+    ...(stillPaid(next, shift, input.date) ? { paidByOccurrenceId: shift.paidByOccurrenceId } : {}),
     createdAt: shift.createdAt,
     updatedAt: clock.now,
   };
@@ -1042,6 +1044,7 @@ export function setShiftPaid(data: AppData, id: string, occurrenceId: string | n
   if (occurrenceId !== null) {
     const paycheck = data.records.find((r) => r.id === occurrenceId);
     if (!paycheck || paycheck.sourceId !== shift.sourceId || paycheck.status !== 'completed') return fail('Choose a paycheck from this income that has been recorded.');
+    if (!canHavePaid(paycheck, shift)) return fail('That paycheck arrived before this work was done, so it could not have paid it.');
   }
   const { paidByOccurrenceId: _p, ...rest } = shift;
   void _p;
@@ -1066,12 +1069,21 @@ function linkShiftsToPaycheck(data: AppData, occurrenceId: string, clock: Clock)
   };
 }
 
-function unlinkShifts(data: AppData, occurrenceId: string, clock: Clock): AppData {
-  if (!data.workEntries?.some((e) => e.paidByOccurrenceId === occurrenceId)) return data;
+/** Whether `shift`, moved to `date`, is still paid by the paycheck that paid it. */
+function stillPaid(data: AppData, shift: WorkEntry, date: DateStr): boolean {
+  const paycheck = shift.paidByOccurrenceId ? data.records.find((r) => r.id === shift.paidByOccurrenceId) : undefined;
+  return paycheck !== undefined && canHavePaid(paycheck, { sourceId: shift.sourceId, date });
+}
+
+/** Unpays the shifts or sessions `occurrenceId` paid: all of them, or only those `when` picks. */
+function unlinkShifts(data: AppData, occurrenceId: string, clock: Clock, when: (e: WorkEntry, paycheck: OccurrenceRecord) => boolean = () => true): AppData {
+  const paycheck = data.records.find((r) => r.id === occurrenceId);
+  const unpay = (e: WorkEntry) => e.paidByOccurrenceId === occurrenceId && (paycheck === undefined || when(e, paycheck));
+  if (!data.workEntries?.some(unpay)) return data;
   return {
     ...data,
     workEntries: data.workEntries.map((e) => {
-      if (e.paidByOccurrenceId !== occurrenceId) return e;
+      if (!unpay(e)) return e;
       const { paidByOccurrenceId: _p, ...rest } = e;
       void _p;
       return { ...rest, updatedAt: clock.now };

@@ -160,3 +160,70 @@ describe('editing an income that hasn’t started yet keeps its logged work (E6 
     expect(unwrap(redefine(d, 'gig')).workEntries).toHaveLength(1);
   });
 });
+
+describe('a paycheck or payout pays only work done before it arrived (E6 fix)', () => {
+  // incomePlan: the side job's Oct 17 paycheck, recorded Oct 16, pays shift-1 (Oct 14) and shift-2 (Oct 15);
+  // the Oct 12 payout pays session-1 (Oct 8); session-2 (Oct 14) waits.
+  const paidBy = (d: AppData) => Object.fromEntries(d.workEntries!.map((e) => [e.id, e.paidByOccurrenceId ?? null]));
+  const counted = (x: AppData) => buildForecast(x, TODAY).entries.filter((e) => e.counts).map((e) => [e.occurrence.id, e.date, e.signedCents]);
+  /** The same correction made with no work logged: what cash flow must be either way. */
+  const moneyOnly = (d: AppData, id: string, actual: { amountCents: number; date: string }) => counted(unwrap(ops.correctActual({ ...d, workEntries: [] }, id, actual, clock)));
+
+  it('corrected to an earlier date, it no longer pays work done after that date; the payment itself and every figure stay as corrected', () => {
+    const d = incomePlan();
+    const fixed = unwrap(ops.correctActual(d, 'side@2026-10-17', { amountCents: usd(205), date: '2026-10-14' }, clock));
+    expect(paidBy(fixed)).toEqual({ 'shift-1': 'side@2026-10-17', 'shift-2': null, 'session-1': 'gig@2026-10-12', 'session-2': null });
+    expect(fixed.records.find((r) => r.id === 'side@2026-10-17')).toMatchObject({ status: 'completed', actualDate: '2026-10-14', actualAmountCents: usd(205) });
+    expect(fixed.records.filter((r) => r.id !== 'side@2026-10-17')).toEqual(d.records.filter((r) => r.id !== 'side@2026-10-17'));
+    expect(counted(fixed)).toEqual(moneyOnly(d, 'side@2026-10-17', { amountCents: usd(205), date: '2026-10-14' }));
+    // A payout moved to before its session was worked lets the session wait again.
+    const payout = unwrap(ops.correctActual(d, 'gig@2026-10-12', { amountCents: usd(290), date: '2026-10-07' }, clock));
+    expect(paidBy(payout)['session-1']).toBeNull();
+    expect(counted(payout)).toEqual(moneyOnly(d, 'gig@2026-10-12', { amountCents: usd(290), date: '2026-10-07' }));
+  });
+
+  it('a correction that keeps the work before the payment, or moves it later, keeps every link; undo still unpays all', () => {
+    const d = incomePlan();
+    for (const date of ['2026-10-15', '2026-10-16']) {
+      expect(paidBy(unwrap(ops.correctActual(d, 'side@2026-10-17', { amountCents: usd(212.4), date }, clock)))).toEqual(paidBy(d));
+    }
+    const moved = unwrap(ops.correctActual(d, 'side@2026-10-17', { amountCents: usd(212.4), date: '2026-10-14' }, clock));
+    const undone = unwrap(ops.restoreOccurrence(moved, 'side@2026-10-17', clock));
+    expect(paidBy(undone)).toEqual({ 'shift-1': null, 'shift-2': null, 'session-1': 'gig@2026-10-12', 'session-2': null });
+  });
+
+  it('moving a paid shift past its paycheck unpays it, and a paycheck that came first can’t be chosen by hand', () => {
+    const d = incomePlan();
+    const later = unwrap(ops.editShift(d, 'shift-2', { date: '2026-10-16', minutes: 240, wageCents: 1600 }, clock));
+    expect(paidBy(later)['shift-2']).toBe('side@2026-10-17');
+    // On payday it can still be paid by it; the day after, it can't.
+    const after = unwrap(ops.editShift(d, 'shift-1', { date: '2026-10-17', minutes: 330, wageCents: 1600, cashTipsCents: usd(42.5), cardTipsCents: usd(31) }, { today: '2026-10-17', now: '2026-10-17T12:00:00.000Z' }));
+    expect(paidBy(after)['shift-1']).toBeNull();
+    expect(paidBy(after)['shift-2']).toBe('side@2026-10-17');
+    const unpaid = unwrap(ops.correctActual(d, 'side@2026-10-17', { amountCents: usd(212.4), date: '2026-10-14' }, clock));
+    expect(ops.setShiftPaid(unpaid, 'shift-2', 'side@2026-10-17', clock)).toEqual({ ok: false, error: 'That paycheck arrived before this work was done, so it could not have paid it.' });
+    expect(ops.setShiftPaid(unpaid, 'session-2', 'gig@2026-10-12', clock).ok).toBe(false);
+  });
+
+  it('stored links to a paycheck that arrived before the work are dropped on load; valid ones stay', () => {
+    const d = incomePlan();
+    const raw = JSON.parse(JSON.stringify(d));
+    raw.records.find((r: { id: string }) => r.id === 'side@2026-10-17').actualDate = '2026-10-14'; // as data saved before this fix could hold it
+    const read = migrate(raw);
+    expect(paidBy(read)).toEqual({ 'shift-1': 'side@2026-10-17', 'shift-2': null, 'session-1': 'gig@2026-10-12', 'session-2': null });
+    expect(read.records).toEqual(raw.records);
+  });
+
+  it('earnings history shows the unpaid work as not received yet, and receipts unchanged', () => {
+    const d = incomePlan();
+    const fixed = unwrap(ops.correctActual(d, 'side@2026-10-17', { amountCents: usd(205), date: '2026-10-14' }, clock));
+    const history = (x: AppData) => {
+      const f = buildForecast(x, TODAY, { through: OCT[1] });
+      return earningsHistory(x, recordedEntries(f, ...OCT), ...OCT, TODAY);
+    };
+    // shift-2: 4 h × $16 = $64 in wages, now waiting for a paycheck.
+    expect(history(fixed).notReceived.map((n) => [n.source.id, n.cents])).toEqual([['side', usd(64)], ['gig', usd(70)]]);
+    expect(history(fixed).received.map((r) => [r.entry.occurrence.id, r.entry.date, r.entry.amountCents])).toContainEqual(['side@2026-10-17', '2026-10-14', usd(205)]);
+    expect(history(fixed).work).toEqual(history(d).work);
+  });
+});
