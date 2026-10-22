@@ -76,8 +76,9 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | D1, shared visual foundation | **Complete**, merged as `27cda0b` | Phase D |
 | D2, Home | **Complete**, merged as `89f25be` | Phase D |
 | D3, Forecast | **Complete**, merged as `81bdf00` | Phase D |
-| D4, Plan and Activity | **Complete** (in review) | Phase D |
-| D5 onward: setup and sheets, then desktop | **Planned** | Phase D |
+| D4, Plan and Activity | **Complete**, merged as `e911b18` | Phase D |
+| D5, setup and sheets | **Complete** (in review) | Phase D |
+| D6, desktop | **Planned** | Phase D |
 | E, income expansion | **Planned**, needs separate approval and decision D8 | Phase E |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
 | AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
@@ -314,13 +315,20 @@ PRODUCT_EXPERIENCE.md §7: tokens and components first, then screen by screen, t
   - **Week by week** is one `ListGroup`. A week's Net shows only when more than one kind of money moved (it repeated the single amount). An open week lists only the amounts each day has (no "—" placeholders); reserves get their own labeled cell.
   - **Small phones (≤ 374 px):** calendar chips drop the "$" and tighten so amounts fit their day (each day's label still reads the full amount); the custom range's date fields stack instead of overflowing the page (a pre-existing defect).
   - Tests: `forecast-d3` (10): hand-computed summary figures that add up to the cash flow, no repeated breakdown, zero rows hidden, the running-total-starts line, red lowest point and gap that opens its explanation, red weeks and days below $0, one list group with Net only when it adds something, no dashes in open weeks, chip markup and narrow rule, recorded vs expected chips, custom range layout. Updated: two `visibility` tests and the smoke test read the breakdown from the summary card.
-- **D4. Plan and Activity (complete, October 2026; in review).** On the D1 foundation and the D2/D3 patterns; no domain, classification or stored-data change. Setup, sheets and desktop are unchanged.
+- **D4. Plan and Activity (complete, October 2026; merged as `e911b18`).** On the D1 foundation and the D2/D3 patterns; no domain, classification or stored-data change. Setup, sheets and desktop are unchanged.
   - **Activity summary:** one card leads with recorded cash flow ("Recorded" badge), then its breakdown (Received, Paid, a row per classification, reserves) from the shared `BreakdownRows`. It replaces the three-figure strip and the separate By kind card, which repeated the same three figures; the strip also overflowed a 320 px screen. Decision S1 holds inside the card: per-classification rows show only when more than one classification has activity. Decision S2 holds: Received and Paid show even at $0.00.
   - **Activity empty states** (a month with nothing recorded, a filter with no items) are `EmptyLine`s.
   - **Plan:** each section's recurring items are rows in one `ListGroup` (was one card per item). Rows keep their schedule, next date or "Overdue since" in amber, tags, account and estimate suggestion; an item that is off stays in the list with its "Off" badge and a secondary-color name.
   - **Small phones (≤ 374 px):** Activity and Plan rows hide the decorative avatar as Home's do, so names no longer break mid-word; Plan's four section pills share the width so all four fit without scrolling (DESIGN.md's rule, which failed at 320 px); a section's Add buttons go under its heading instead of stacking at the right.
   - Tests: `plan-activity-d4` (7): hand-computed recorded figures that add up to the cash flow, no repeated summary, empty month line, recorded badges in one list group, Plan rows in one list group with overdue in amber, an Off item still listed and opening, the small-phone rules. Updated: the Activity by-kind test and the S1/S2 tests read the one summary; the D2 small-phone CSS test allows the shared selector; the smoke test finds Plan rows by `.source-list`.
-- **Next (proposed):** D5, setup and sheets: the three setup steps and the bottom sheets (item, occurrence, day, gaps, "See what happens if…") on the same foundation, one primary action per sheet, and the same 320 px checks; then desktop (≥ 1024 px left rail, side-panel sheets).
+- **D5. Setup and sheets (complete, October 2026; in review).** On the D1 foundation and the D2–D4 patterns; no domain, classification, stored-data, account or navigation change. The rolling four-week first look, sample data, restore, every financial action, confirmations and scenario comparison are unchanged.
+  - **Setup:** an empty step is one `EmptyLine` with its primary Add (was an empty card with an icon and a heading); the one-time lists' empty notes are `EmptyLine`s; "Tap an item to change or remove it." shows only once there is something to tap. The review's breakdown no longer repeats the range and cash flow the four-week banner above it already shows. Its actions are stacked with the primary first ("Looks right", then "Change something"), so neither label wraps. Setup rows hide the decorative avatar below 375 px, as the other screens do.
+  - **Payment sheet:** an overdue payment says "Its date has passed. Record it, or move it to a new date." (the date was shown three times). The status badge sits with the kind ("Bill · Recurring", "Overdue") under the amount, and the expected/actual rows wrap on a narrow sheet; at 320 px the recorded-payment sheet was 13 px wider than the screen.
+  - **Item sheet:** Edit is the primary action; Turn off/on and Delete stay.
+  - **Timing gaps:** each expected payment is one tappable row (date, name, amount, chevron) that opens "See what happens if…", with one hint above the gaps instead of a link under every line; the group labels are sentence case.
+  - **"See what happens if…":** with no changes yet, Add a change is the primary action; Done is a quiet close (the sheet's X does the same). Apply change and its confirmation are unchanged.
+  - Tests: `setup-sheets-d5` (8): empty step line and primary Add, the tap hint after the first item, sample and restore present, review breakdown once with the primary action first and "Change something" going back, setup small-phone rule, overdue wording and status placement with every action present, recorded rows wrapping, item sheet actions, gap rows opening the scenario with one hint, scenario empty-state actions. Updated: a setup test reads the breakdown without the range, the D4 small-phone test allows setup rows, the smoke test reads the range and cash flow from the banner.
+- **Next (proposed):** D6, desktop (≥ 1024 px): the tabs as a left rail and sheets as side panels (§7.6), with the phone layouts unchanged.
 
 #### E. Income expansion (possible new functionality; separate approval)
 

@@ -1515,8 +1515,9 @@ li.negative .tl-tally {
 }
 .details > div {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: 2px var(--space-3);
   padding: 10px 0;
   font-size: 0.9rem;
 }
@@ -1527,7 +1528,7 @@ li.negative .tl-tally {
   color: var(--color-text-secondary);
 }
 .details dd {
-  margin: 0;
+  margin: 0 0 0 auto;
   text-align: right;
   font-weight: 600;
 }
@@ -2451,7 +2452,8 @@ li.negative .tl-tally {
 @media (max-width: 374px) {
   .home .entry > .avatar,
   .activity .entry > .avatar,
-  .plan .entry > .avatar {
+  .plan .entry > .avatar,
+  .onboarding .entry > .avatar {
     display: none;
   }
   /* Plan's four section pills share the width, so all four fit without scrolling. */
@@ -2530,10 +2532,8 @@ button.callout.gap-line:focus-visible {
 }
 .gap-step {
   margin: var(--space-3) 0 0;
-  font-size: var(--text-caption);
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: var(--text-small);
+  font-weight: 600;
   color: var(--color-text-secondary);
 }
 .gap-entries {
@@ -2573,17 +2573,31 @@ button.callout.gap-line:focus-visible {
 
 /* ---------- What if ---------- */
 
+/* An expected payment in a gap is one tappable row (D5): date, name, amount, chevron. */
 .gap-entries li:has(.gap-whatif) {
-  flex-wrap: wrap;
+  padding: 0;
 }
-/* On its own line under the item, so a long label never squeezes the name. */
-.gap-entries .button.gap-whatif {
-  flex-basis: calc(100% - 4.5em - var(--space-3));
-  margin-left: calc(4.5em + var(--space-3));
-  justify-content: flex-start;
+.gap-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
   min-height: var(--tap);
-  padding-left: 0;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
   text-align: left;
+  cursor: pointer;
+}
+.gap-entry:hover .gap-entry-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.gap-entry .chevron {
+  flex-shrink: 0;
+  color: var(--color-text-secondary);
 }
 .whatif-headline {
   margin: 0;
@@ -2879,4 +2893,28 @@ button.callout.gap-line:focus-visible {
   .custom-range {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Payment sheet header (D5): the status badge moves under the amount on a narrow sheet. */
+.occ-summary {
+  flex-wrap: wrap;
+}
+.occ-summary-main {
+  min-width: 0;
+}
+/* Setup review: the primary action first, each on its own line, so neither label wraps. */
+.form-actions.review-actions {
+  flex-direction: column;
+}
+.form-actions.review-actions .button {
+  flex: none;
+  width: 100%;
+}
+/* The status sits with the kind, under the amount, so the header never runs wider than the sheet. */
+.occ-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--space-2);
+  margin: 2px 0 0;
 }

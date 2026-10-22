@@ -298,7 +298,7 @@ export function ScenarioSheet({ onClose, onApplied, occurrenceId, through }: { o
                   )}
                 </ul>
               )}
-              <button type="button" className="button secondary" ref={addRef} onClick={() => setPicking(true)}>
+              <button type="button" className={`button ${count === 0 ? 'primary' : 'secondary'}`} ref={addRef} onClick={() => setPicking(true)}>
                 <Icon icon={Plus} size={16} /> Add a change
               </button>
             </section>
@@ -353,11 +353,12 @@ export function ScenarioSheet({ onClose, onApplied, occurrenceId, through }: { o
           </>
         )}
 
-        <div className="form-actions">
-          <button type="button" className="button secondary" onClick={onClose}>
+        {/* Closing is a quiet action; the sheet's own primary action is adding or applying a change. */}
+        <p className="center">
+          <button type="button" className="button link" onClick={onClose}>
             Done
           </button>
-        </div>
+        </p>
       </div>
     </Modal>
   );

@@ -118,17 +118,19 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
         <KindAvatar kind={o.kind} />
         <div className="occ-summary-main">
           <FlowAmount kind={o.kind} cents={o.status === 'completed' ? o.actualAmountCents! : o.scheduledAmountCents} strike={o.status === 'canceled'} release={o.release} />
-          <p className="muted">
-            {KIND_LABEL[o.kind]} · {o.sourceId ? 'Recurring' : 'One-time'}
+          <p className="occ-meta">
+            <span className="muted">
+              {KIND_LABEL[o.kind]} · {o.sourceId ? 'Recurring' : 'One-time'}
+            </span>
+            <StatusBadge status={o.displayStatus} kind={o.kind} />
           </p>
         </div>
-        <StatusBadge status={o.displayStatus} kind={o.kind} />
       </div>
       <p className="occ-date">{formatLong(o.status === 'completed' ? o.actualDate! : o.scheduledDate)}</p>
       {o.displayStatus === 'overdue' && (
         <p className="callout callout-warn">
           <Icon icon={AlertCircle} size={16} /> 
-          Due {formatMedium(o.scheduledDate)}. Record it, or move it to a new date.
+          Its date has passed. Record it, or move it to a new date.
         </p>
       )}
       <Comparison o={o} />

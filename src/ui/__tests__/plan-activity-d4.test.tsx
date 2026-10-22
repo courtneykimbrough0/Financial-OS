@@ -130,7 +130,7 @@ describe('D4 small phones', () => {
   };
 
   it('Activity and Plan rows give the avatar up for the item name, as Home does', () => {
-    expect(narrow()).toMatch(/\.home \.entry > \.avatar,\s*\.activity \.entry > \.avatar,\s*\.plan \.entry > \.avatar \{\s*display: none;/);
+    expect(narrow()).toMatch(/\.home \.entry > \.avatar,\s*\.activity \.entry > \.avatar,\s*\.plan \.entry > \.avatar[,\s][^{]*\{\s*display: none;/);
   });
 
   it("Plan's four section pills share the width, and Add buttons go under their heading", () => {

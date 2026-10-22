@@ -567,7 +567,7 @@ Add ─────────────────────────�
    - payments due before the first income, if any;
    - "Looks right" (primary) and "Change something".
 
-   **As built (Implemented, C5):** the three steps are in place. The first look covers a rolling next four weeks from today (the cash-flow banner on each step, and the review's lowest running total and breakdown), with any timing gap and payments due before the first income; nothing in it depends on a pay period. The payment kind picker offers Bill, Subscription and Loan or card payment.
+   **As built (Implemented, C5):** the three steps are in place. The first look covers a rolling next four weeks from today (the cash-flow banner on each step, and the review's lowest running total and breakdown), with any timing gap and payments due before the first income; nothing in it depends on a pay period. The payment kind picker offers Bill, Subscription and Loan or card payment. **Visual refinement (Implemented, D5):** empty steps are one line with their Add, the review lists the breakdown once under the four-week banner, and "Looks right" leads the review's actions.
 
 ---
 
