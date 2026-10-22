@@ -13,7 +13,7 @@
  */
 import { isValidDateStr, type DateStr } from '../../domain/dates';
 import { validateRule } from '../../domain/recurrence';
-import { ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OccurrenceRecord, type RecurrenceRule, type RecurringKind, type Client, type FreelanceJob, type IncomeType, type JobStatus, type RecurringSource, type ScheduleVersion, type StoredStatus, type TransactionKind, type WorkEntry } from '../../domain/types';
+import { ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OccurrenceRecord, type RecurrenceRule, type RecurringKind, type Client, type FreelanceJob, type IncomeType, type JobStatus, type RecurringSource, workKindFor, type ScheduleVersion, type StoredStatus, type TransactionKind, type WorkEntry } from '../../domain/types';
 
 export interface SourceRow {
   id: string;
@@ -80,12 +80,14 @@ export interface WorkEntryRow {
   id: string;
   position: number;
   source_id: string;
-  kind: 'shift';
+  kind: WorkEntry['kind'];
   work_date: DateStr;
   minutes: number | null;
   wage_cents: number | null;
   cash_tips_cents: number | null;
   card_tips_cents: number | null;
+  earnings_cents: number | null;
+  platform: string | null;
   cash_tips_record_id: string | null;
   paid_by_occurrence_id: string | null;
   created_at: string;
@@ -218,6 +220,8 @@ export function toRows(data: AppData): PlanRows {
     wage_cents: e.wageCents ?? null,
     cash_tips_cents: e.cashTipsCents ?? null,
     card_tips_cents: e.cardTipsCents ?? null,
+    earnings_cents: e.earningsCents ?? null,
+    platform: e.platform ?? null,
     cash_tips_record_id: e.cashTipsRecordId ?? null,
     paid_by_occurrence_id: e.paidByOccurrenceId ?? null,
     created_at: e.createdAt,
@@ -306,13 +310,14 @@ export function fromRows(plan: LoadedPlan): AppData {
   const workEntries: WorkEntry[] = [...(plan.work_entries ?? [])]
     .sort((a, b) => a.position - b.position)
     .map((e) => {
-      const fields = { minutes: num(e.minutes), wageCents: num(e.wage_cents), cashTipsCents: num(e.cash_tips_cents), cardTipsCents: num(e.card_tips_cents) };
+      const fields = { minutes: num(e.minutes), wageCents: num(e.wage_cents), cashTipsCents: num(e.cash_tips_cents), cardTipsCents: num(e.card_tips_cents), earningsCents: num(e.earnings_cents ?? null) };
       return {
         id: e.id,
         sourceId: e.source_id,
         kind: e.kind,
         date: e.work_date,
         ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)),
+        ...(e.platform ? { platform: e.platform } : {}),
         ...(e.cash_tips_record_id ? { cashTipsRecordId: e.cash_tips_record_id } : {}),
         ...(e.paid_by_occurrence_id ? { paidByOccurrenceId: e.paid_by_occurrence_id } : {}),
         createdAt: e.created_at,
@@ -424,8 +429,8 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
     if (s.versions.some((v, j) => j > 0 && v.startDate < s.versions[j - 1]!.startDate)) normalized(`${where}: schedules will be stored in start-date order.`);
     if (s.pausedRanges.some((p) => !(isValidDateStr(p.from) && isValidDateStr(p.until) && p.until > p.from))) error(`${where}: a turned-off stretch has invalid dates.`);
     if (s.certainty !== undefined && (s.certainty !== 'possible' || s.kind !== 'income')) error(`${where}: only income can be possible.`);
-    if ((s.incomeType !== undefined || s.hourlyWageCents !== undefined) && (s.kind !== 'income' || !s.incomeType || (s.hourlyWageCents !== undefined && !isCents(s.hourlyWageCents)))) {
-      error(`${where}: only income can be hourly or tipped, and a wage needs a type and an amount above $0.`);
+    if ((s.incomeType !== undefined || s.hourlyWageCents !== undefined) && (s.kind !== 'income' || !s.incomeType || (s.hourlyWageCents !== undefined && (!isCents(s.hourlyWageCents) || s.incomeType === 'gig')))) {
+      error(`${where}: only income can be hourly, tipped or gig, and a wage needs hourly or tipped and an amount above $0.`);
     }
     if (s.pausedRanges.some((p, j) => j > 0 && p.from < s.pausedRanges[j - 1]!.from)) normalized(`${where}: turned-off stretches will be stored in date order.`);
   });
@@ -460,11 +465,14 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
     if (shiftIds.has(e.id)) error(`${where}: the id is used twice.`);
     shiftIds.add(e.id);
     const item = data.sources.find((s) => s.id === e.sourceId);
-    if (!item || item.kind !== 'income' || !item.incomeType) error(`${where}: its income no longer exists or isn't hourly or tipped.`);
+    if (!item || item.kind !== 'income' || !item.incomeType) error(`${where}: its income no longer exists or isn't hourly, tipped or gig.`);
+    else if (workKindFor(item.incomeType) !== e.kind) error(`${where}: a ${e.kind} doesn't belong to ${item.incomeType} income.`);
+    if (e.kind === 'session' ? e.wageCents !== undefined || e.cardTipsCents !== undefined : e.earningsCents !== undefined || e.platform !== undefined) error(`${where}: it has fields of the other kind of work.`);
+    if (e.platform !== undefined && (e.platform.trim() === '' || e.platform.length > 40)) error(`${where}: the platform is empty or longer than 40 characters.`);
     if (!isValidDateStr(e.date)) error(`${where}: the date isn't valid.`);
     if (e.minutes !== undefined && !(Number.isSafeInteger(e.minutes) && e.minutes > 0 && e.minutes <= 1440)) error(`${where}: hours must be between 0 and 24.`);
-    if ([e.wageCents, e.cashTipsCents, e.cardTipsCents].some((c) => c !== undefined && !isCents(c))) error(`${where}: an amount must be above $0 and at most $100,000,000.`);
-    if (e.minutes === undefined && e.cashTipsCents === undefined && e.cardTipsCents === undefined) error(`${where}: it has no hours or tips.`);
+    if ([e.wageCents, e.cashTipsCents, e.cardTipsCents, e.earningsCents].some((c) => c !== undefined && !isCents(c))) error(`${where}: an amount must be above $0 and at most $100,000,000.`);
+    if (e.minutes === undefined && e.cashTipsCents === undefined && e.cardTipsCents === undefined && e.earningsCents === undefined) error(`${where}: it has no hours, tips or earnings.`);
     if (e.cashTipsRecordId !== undefined && (e.cashTipsCents === undefined || !recordById.has(e.cashTipsRecordId))) error(`${where}: its cash tips record is missing.`);
     if (e.paidByOccurrenceId !== undefined && !recordById.has(e.paidByOccurrenceId)) error(`${where}: the paycheck that paid it is missing.`);
     if (!isTimestamp(e.createdAt) || !isTimestamp(e.updatedAt)) error(`${where}: a created or updated time isn't a valid time.`);

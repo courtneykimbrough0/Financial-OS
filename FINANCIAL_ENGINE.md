@@ -54,6 +54,14 @@ Shifts are earnings, never money received, and the forecast never reads them, an
 - Wages and card tips enter cash flow once, as the recorded paycheck that pays them (its actual amount); until then they are "earned, not paid yet", outside every total.
 - Wages for a shift: minutes × wage ÷ 60, rounded to the nearest cent once per shift. Earnings: wages + cash tips + card tips. Effective hourly: earnings ÷ hours over shifts with hours.
 
+## Gig sessions and payouts (`earnings.ts`, `operations.ts`, E4)
+
+Sessions are shift-like work entries (`kind: 'session'`) on gig income. They are earnings, never money received; the forecast never reads them.
+- Cash received immediately enters cash flow once, as its own received one-time income record on the session date.
+- Platform earnings are "waiting for payout" (`earnedNotPaid`, by platform with `waitingByPlatform`), outside every total.
+- A payout is the gig income's ordinary occurrence: expected on its schedule (or possible), and counted once when recorded, at its actual date and amount. Recording it links the unpaid sessions dated before it; undoing it unlinks them. Linking changes no figure.
+- With no sessions at all, the expected payout alone is the baseline.
+
 ## Freelance jobs (`earnings.ts`, `operations.ts`, E3)
 
 A job is work; its money is one one-time income record, the only part the forecast reads.
@@ -157,6 +165,7 @@ Files are in `src/domain/__tests__/`. "EV" is `engine-validation.test.ts`; "SC" 
 | Adaptive estimates (steady, rising, falling, variable, seasonal; unusual payments; too little history; rate and schedule changes; approve, dismiss, repeat; income not estimated; exact cents) | `estimates` (all); `state/estimate-persistence` |
 | Scenarios (one-time, several together, recurring, variable income, anchors, before payday, no stored changes, reconciliation, invalid input) | `scenarios` (all) |
 | Freelance jobs: planned, done, paid, overdue, possible and pending payments; only dated expected payments count; recorded once at the actual date and amount with the original kept; corrections move the record; clients relabel; delete and skip rules; forecast reads only payment records | `freelance` (all); `state/freelance-persistence`; `integrity.db` › freelance income; `ui/freelance-e3` |
+| Gig sessions: cash counted once on the session date, earnings waiting for payout and never counted, payouts counted once as recorded (expected vs actual date and amount), linking, correcting and undoing payouts, several platforms and incomes, validation | `gig` (all); `state/gig-persistence`; `integrity.db` › gig work and payouts; `ui/gig-e4` |
 | Shifts: wages and tips calculations, cash tips counted once on the shift date, wages and card tips never counted until the paycheck (counted once, as recorded), corrections replace the tips record, paycheck links and undo, validation, forecast never reads shifts | `shifts` (all); `state/shift-persistence`; `integrity.db` › hourly and tipped income; `ui/shifts-e2` |
 | Income certainty: possible income listed, never counted or starting the running total; received counts once; marking expected or possible changes nothing else; existing data unchanged; several sources need no primary | `income-certainty` (all); `state/certainty-persistence`; `integrity.db` › income certainty; `ui/income-certainty-e1` |
 | Rescheduling and canceling | `forecast` › overdue, rescheduled, and canceled occurrences; spec › H, I; SC › a moved occurrence |

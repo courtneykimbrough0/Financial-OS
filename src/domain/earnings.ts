@@ -10,6 +10,8 @@
  *   paycheck has covered. Cash tips are never in it: they were money in on the
  *   shift's date, as their own received income record.
  * - Effective hourly: earnings ÷ hours, over shifts that have hours.
+ * - Gig sessions (E4) the same way: cash received immediately is its own
+ *   received record; platform earnings wait for the payout that covers them.
  *
  * Freelance jobs (E3) are read the same way: done but unpaid work is earned,
  * not received; only a job's payment record is ever counted.
@@ -21,11 +23,14 @@ import { isUncountedPossible, type AppData, type FreelanceJob, type JobStatus, t
 
 export interface ShiftEarnings {
   wagesCents: Cents;
+  /** Shifts: cash tips. Sessions: cash received immediately. */
   cashTipsCents: Cents;
   cardTipsCents: Cents;
-  /** Wages + cash tips + card tips. */
+  /** Sessions: platform earnings. */
+  earningsCents: Cents;
+  /** Everything earned: wages + cash + card tips + platform earnings. */
   totalCents: Cents;
-  /** Wages + card tips: what the paycheck pays. */
+  /** What a later paycheck or payout pays: wages + card tips + platform earnings (never the cash, already received). */
   payrollCents: Cents;
 }
 
@@ -38,7 +43,8 @@ export function shiftEarnings(e: WorkEntry): ShiftEarnings {
   const wagesCents = shiftWagesCents(e);
   const cashTipsCents = e.cashTipsCents ?? 0;
   const cardTipsCents = e.cardTipsCents ?? 0;
-  return { wagesCents, cashTipsCents, cardTipsCents, totalCents: wagesCents + cashTipsCents + cardTipsCents, payrollCents: wagesCents + cardTipsCents };
+  const earningsCents = e.earningsCents ?? 0;
+  return { wagesCents, cashTipsCents, cardTipsCents, earningsCents, totalCents: wagesCents + cashTipsCents + cardTipsCents + earningsCents, payrollCents: wagesCents + cardTipsCents + earningsCents };
 }
 
 export interface EarningsSummary {
@@ -47,6 +53,7 @@ export interface EarningsSummary {
   wagesCents: Cents;
   cashTipsCents: Cents;
   cardTipsCents: Cents;
+  earningsCents: Cents;
   totalCents: Cents;
   /** Earnings per hour over the shifts that have hours; null when none do. */
   effectiveHourlyCents: Cents | null;
@@ -56,12 +63,13 @@ export interface EarningsSummary {
 export function summarize(entries: WorkEntry[]): EarningsSummary {
   let minutes = 0;
   let withHoursCents = 0;
-  const sum = { wagesCents: 0, cashTipsCents: 0, cardTipsCents: 0, totalCents: 0 };
+  const sum = { wagesCents: 0, cashTipsCents: 0, cardTipsCents: 0, earningsCents: 0, totalCents: 0 };
   for (const e of entries) {
     const s = shiftEarnings(e);
     sum.wagesCents += s.wagesCents;
     sum.cashTipsCents += s.cashTipsCents;
     sum.cardTipsCents += s.cardTipsCents;
+    sum.earningsCents += s.earningsCents;
     sum.totalCents += s.totalCents;
     if (e.minutes) {
       minutes += e.minutes;
@@ -83,10 +91,21 @@ export function shiftsInRange(data: AppData, start: DateStr, end: DateStr, sourc
   return (data.workEntries ?? []).filter((e) => e.date >= start && e.date <= end && (sourceId === undefined || e.sourceId === sourceId));
 }
 
-/** Wages and card tips no recorded paycheck has covered yet, for one item. Outside cash flow until that paycheck is recorded. */
+/**
+ * What no recorded paycheck or payout has covered yet, for one item: wages and
+ * card tips of shifts, or platform earnings of sessions ("waiting for
+ * payout"). Outside cash flow until that paycheck or payout is recorded.
+ */
 export function earnedNotPaid(data: AppData, sourceId: string): { cents: Cents; shifts: WorkEntry[] } {
   const shifts = shiftsFor(data, sourceId).filter((e) => e.paidByOccurrenceId === undefined);
   return { cents: shifts.reduce((n, e) => n + shiftEarnings(e).payrollCents, 0), shifts };
+}
+
+/** Platform earnings waiting for a payout, by platform (unnamed last), for one gig income. */
+export function waitingByPlatform(data: AppData, sourceId: string): { platform: string | null; cents: Cents }[] {
+  const totals = new Map<string | null, Cents>();
+  for (const e of earnedNotPaid(data, sourceId).shifts) if (e.earningsCents) totals.set(e.platform ?? null, (totals.get(e.platform ?? null) ?? 0) + e.earningsCents);
+  return [...totals].map(([platform, cents]) => ({ platform, cents })).sort((a, b) => (a.platform === null ? 1 : b.platform === null ? -1 : a.platform.localeCompare(b.platform)));
 }
 
 /** "6.5 h", "45 min". */

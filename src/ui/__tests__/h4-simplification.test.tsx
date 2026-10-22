@@ -73,7 +73,9 @@ describe('router: contextual forecast navigation', () => {
   it('redirects still work: #/dashboard opens Forecast', async () => {
     await open('#/dashboard');
     await screen.findByRole('heading', { level: 1, name: /Your cash flow/ });
-    expect(window.location.hash).toBe('#/forecast');
+    // The address is rewritten by the router's effect or its hashchange handler, either of which can land just
+    // after the heading appears (jsdom delivers hash changes as later tasks), so wait for it to settle.
+    await waitFor(() => expect(window.location.hash).toBe('#/forecast'));
   });
 });
 

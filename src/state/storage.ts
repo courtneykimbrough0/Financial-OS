@@ -5,8 +5,8 @@
  * document; `migrate` is where future schema upgrades go.
  */
 import { isValidDateStr } from '../domain/dates';
-import { emptyData, MAX_ACCOUNT_NAME, MAX_ACCOUNTS, MAX_BALANCE_CENTS, MAX_CLIENT_NAME, MAX_CLIENTS, MAX_JOBS, MAX_SHIFTS } from '../domain/operations';
-import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type TransactionKind, type Transfer, type WorkEntry, type Client, type FreelanceJob } from '../domain/types';
+import { emptyData, MAX_ACCOUNT_NAME, MAX_ACCOUNTS, MAX_BALANCE_CENTS, MAX_CLIENT_NAME, MAX_CLIENTS, MAX_JOBS, MAX_PLATFORM_NAME, MAX_SHIFTS } from '../domain/operations';
+import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, workKindFor, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type TransactionKind, type Transfer, type WorkEntry, type Client, type FreelanceJob } from '../domain/types';
 
 export type SaveResult =
   | { ok: true; revision: number }
@@ -156,22 +156,24 @@ function readTransfers(t: unknown, accounts: Account[]): Transfer[] {
 
 const isCents = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) > 0 && (x as number) <= 100_000_000_00;
 
-/** An income's type and wage, kept only on income and only when well formed (a wage needs a type). */
+/** An income's type and wage, kept only on income and only when well formed (a wage needs hourly or tipped). */
 function readIncomeDetails(kind: TransactionKind, incomeType: unknown, wage: unknown): Pick<RecurringSource, 'incomeType' | 'hourlyWageCents'> {
   if (kind !== 'income' || !INCOME_TYPES.includes(incomeType as never)) return {};
-  return { incomeType: incomeType as RecurringSource['incomeType'], ...(isCents(wage) ? { hourlyWageCents: wage } : {}) };
+  return { incomeType: incomeType as RecurringSource['incomeType'], ...(isCents(wage) && incomeType !== 'gig' ? { hourlyWageCents: wage } : {}) };
 }
 
 /**
- * Saved shifts. A shift is kept only for an hourly or tipped income that
- * exists, with a valid date and well-formed amounts (each optional, never $0).
+ * Saved shifts and gig sessions. A shift is kept only for an hourly or tipped
+ * income, and a session only for a gig income, that exists, with a valid date
+ * and well-formed amounts (each optional, never $0; a session has no wage or
+ * card tips, a shift no platform earnings).
  * Its links are kept only when they still point at what they mean: its cash
  * tips' received income record, and a recorded paycheck of the same income.
  * A dropped link never moves money: the records are what count.
  */
 function readWorkEntries(w: unknown, sources: RecurringSource[], records: OccurrenceRecord[]): WorkEntry[] {
   if (!Array.isArray(w)) return [];
-  const shiftSources = new Set(sources.filter((s) => s.kind === 'income' && s.incomeType).map((s) => s.id));
+  const kinds = new Map(sources.filter((s) => s.kind === 'income' && s.incomeType).map((s) => [s.id, workKindFor(s.incomeType)]));
   const byId = new Map(records.map((r) => [r.id, r]));
   const out: WorkEntry[] = [];
   const ids = new Set<string>();
@@ -182,10 +184,13 @@ function readWorkEntries(w: unknown, sources: RecurringSource[], records: Occurr
     const optional = (n: unknown, ok: (n: unknown) => boolean) => n === undefined || ok(n);
     const valid =
       typeof v.id === 'string' && v.id !== '' && !ids.has(v.id) &&
-      v.kind === 'shift' && typeof v.sourceId === 'string' && shiftSources.has(v.sourceId) && isValidDateStr(v.date) &&
+      (v.kind === 'shift' || v.kind === 'session') && typeof v.sourceId === 'string' && kinds.get(v.sourceId) === v.kind && isValidDateStr(v.date) &&
       optional(v.minutes, (n) => Number.isSafeInteger(n) && (n as number) > 0 && (n as number) <= 1440) &&
-      optional(v.wageCents, isCents) && optional(v.cashTipsCents, isCents) && optional(v.cardTipsCents, isCents) &&
-      (v.minutes !== undefined || v.cashTipsCents !== undefined || v.cardTipsCents !== undefined);
+      optional(v.wageCents, isCents) && optional(v.cashTipsCents, isCents) && optional(v.cardTipsCents, isCents) && optional(v.earningsCents, isCents) &&
+      optional(v.platform, (p) => typeof p === 'string' && p.trim() !== '' && p.trim().length <= MAX_PLATFORM_NAME) &&
+      (v.kind === 'session'
+        ? v.wageCents === undefined && v.cardTipsCents === undefined && (v.earningsCents !== undefined || v.cashTipsCents !== undefined)
+        : v.earningsCents === undefined && v.platform === undefined && (v.minutes !== undefined || v.cashTipsCents !== undefined || v.cardTipsCents !== undefined));
     if (!valid) continue;
     ids.add(v.id!);
     const tips = v.cashTipsRecordId !== undefined ? byId.get(v.cashTipsRecordId) : undefined;
@@ -197,12 +202,14 @@ function readWorkEntries(w: unknown, sources: RecurringSource[], records: Occurr
     out.push({
       id: v.id!,
       sourceId: v.sourceId!,
-      kind: 'shift',
+      kind: v.kind!,
       date: v.date!,
       ...(v.minutes !== undefined ? { minutes: v.minutes } : {}),
       ...(v.wageCents !== undefined ? { wageCents: v.wageCents } : {}),
       ...(v.cashTipsCents !== undefined ? { cashTipsCents: v.cashTipsCents } : {}),
       ...(v.cardTipsCents !== undefined ? { cardTipsCents: v.cardTipsCents } : {}),
+      ...(v.earningsCents !== undefined ? { earningsCents: v.earningsCents } : {}),
+      ...(v.platform !== undefined ? { platform: v.platform.trim() } : {}),
       ...(keepTips ? { cashTipsRecordId: tips.id } : {}),
       ...(keepPaid ? { paidByOccurrenceId: paid.id } : {}),
       createdAt: now,

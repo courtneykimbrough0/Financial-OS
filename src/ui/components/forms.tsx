@@ -36,7 +36,7 @@ export function useIncomeDetailAvailable(): boolean {
 
 type PayKind = IncomeType | 'fixed';
 
-/** How an income is paid: a fixed amount, hourly, or tipped (hourly plus tips). Changes nothing in the forecast. */
+/** How an income is paid: a fixed amount, hourly, tipped (hourly plus tips) or gig payouts. Changes nothing in the forecast. */
 function PayKindPicker({ value, onChange }: { value: PayKind; onChange: (k: PayKind) => void }) {
   const id = useId();
   return (
@@ -48,6 +48,7 @@ function PayKindPicker({ value, onChange }: { value: PayKind; onChange: (k: PayK
             ['fixed', 'Fixed amount'],
             ['hourly', 'Hourly'],
             ['tipped', 'Tipped'],
+            ['gig', 'Gig payouts'],
           ] as const
         ).map(([v, label]) => (
           <label key={v} className={`choice-pill${value === v ? ' selected' : ''}`}>
@@ -56,7 +57,8 @@ function PayKindPicker({ value, onChange }: { value: PayKind; onChange: (k: PayK
           </label>
         ))}
       </div>
-      {value !== 'fixed' && <p className="hint">You can log shifts and tips on its sheet. Your expected paychecks stay as you enter them here.</p>}
+      {value === 'gig' && <p className="hint">Enter your usual payout and how often it comes. You can log sessions on its sheet; your expected payouts stay as you enter them here.</p>}
+      {value !== 'fixed' && value !== 'gig' && <p className="hint">You can log shifts and tips on its sheet. Your expected paychecks stay as you enter them here.</p>}
     </fieldset>
   );
 }
@@ -371,7 +373,7 @@ export function SourceForm({
     if (cents === null || cents <= 0) errs.amount = 'Enter an amount greater than $0, like 1250 or 1250.50.';
     if (!startDate) errs.startDate = 'Choose a date.';
     const wageCents = hourlyWage.trim() === '' ? null : parseMoney(hourlyWage);
-    if (detailAvailable && payKind !== 'fixed' && hourlyWage.trim() !== '' && (wageCents === null || wageCents <= 0)) errs.hourlyWage = 'Enter an hourly wage greater than $0, like 15.25.';
+    if (detailAvailable && payKind !== 'fixed' && payKind !== 'gig' && hourlyWage.trim() !== '' && (wageCents === null || wageCents <= 0)) errs.hourlyWage = 'Enter an hourly wage greater than $0, like 15.25.';
     setFieldErrors(errs);
     if (Object.keys(errs).length) return;
     const r = stateToRule(rule);
@@ -380,7 +382,7 @@ export function SourceForm({
     // The account choice is optional and changes nothing in the forecast; it's applied with the rest in one step.
     const withAccount = (step: ops.Result, id: string, clock: ops.Clock): ops.Result => (step.ok ? ops.assignAccount(step.data, id, accountId, clock) : step);
     // Only sent where the storage keeps it; otherwise the item keeps what it has.
-    const details = detailAvailable ? { incomeType: payKind === 'fixed' ? null : payKind, hourlyWageCents: payKind === 'fixed' ? null : wageCents } : {};
+    const details = detailAvailable ? { incomeType: payKind === 'fixed' ? null : payKind, hourlyWageCents: payKind === 'fixed' || payKind === 'gig' ? null : wageCents } : {};
     const withDetails = (step: ops.Result, id: string, clock: ops.Clock): ops.Result => {
       if (!step.ok || !detailAvailable) return step;
       const s = step.data.sources.find((x) => x.id === id);
@@ -455,7 +457,7 @@ export function SourceForm({
         </>
       )}
       {detailAvailable && <PayKindPicker value={payKind} onChange={setPayKind} />}
-      {detailAvailable && payKind !== 'fixed' && (
+      {detailAvailable && payKind !== 'fixed' && payKind !== 'gig' && (
         <Field label="Usual hourly wage (optional)" error={fieldErrors.hourlyWage} hint="Fills in each shift you log.">
           {(p) => <MoneyInput {...p} value={hourlyWage} onChange={setHourlyWage} />}
         </Field>
