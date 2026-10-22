@@ -21,7 +21,7 @@ const PAID_SHOWN = 10;
 
 const ALL = '';
 
-function paymentText(v: JobView): { text: string; overdue?: boolean } {
+export function paymentText(v: JobView): { text: string; overdue?: boolean } {
   switch (v.payment) {
     case 'pending':
       return { text: 'No payment date · not counted' };

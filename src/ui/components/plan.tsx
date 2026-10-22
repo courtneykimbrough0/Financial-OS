@@ -23,7 +23,7 @@ export function CashFlowBanner({ plan }: { plan: PeriodPlan | null }) {
   );
 }
 
-function Row({ label, value, tone, level = 0, strong = false }: { label: string; value: string; tone?: 'in' | 'out' | 'reserve' | 'neg'; level?: 0 | 1; strong?: boolean }) {
+export function BreakdownRow({ label, value, tone, level = 0, strong = false }: { label: string; value: string; tone?: 'in' | 'out' | 'reserve' | 'neg'; level?: 0 | 1; strong?: boolean }) {
   return (
     <div className={`breakdown-row${level ? ' sub' : ''}${strong ? ' strong' : ''}`}>
       <dt>{label}</dt>
@@ -53,13 +53,13 @@ export function BreakdownRows({ plan, recorded = false, total = true, hideZero =
   const reserveLabel = (positive: boolean) => recorded ? (positive ? 'Saved in reserves' : 'Used from reserves') : positive ? 'Set aside in reserves' : 'Used from reserves';
   return (
     <dl className="breakdown">
-      {(!hideZero || plan.incomeCents !== 0) && <Row label={incomeLabel} value={formatSignedMoney(plan.incomeCents)} tone="in" />}
-      {(!hideZero || plan.outflowCents !== 0) && <Row label={spendingLabel} value={plan.outflowCents ? `−${formatMoney(plan.outflowCents)}` : formatMoney(0)} tone="out" />}
+      {(!hideZero || plan.incomeCents !== 0) && <BreakdownRow label={incomeLabel} value={formatSignedMoney(plan.incomeCents)} tone="in" />}
+      {(!hideZero || plan.outflowCents !== 0) && <BreakdownRow label={spendingLabel} value={plan.outflowCents ? `−${formatMoney(plan.outflowCents)}` : formatMoney(0)} tone="out" />}
       {rows.map(([kind, label]) => (
-        <Row key={kind} label={label} value={formatMoney(plan.byKind[kind])} level={1} />
+        <BreakdownRow key={kind} label={label} value={formatMoney(plan.byKind[kind])} level={1} />
       ))}
-      {plan.reservesCents !== 0 && <Row label={reserveLabel(plan.reservesCents > 0)} value={formatSignedMoney(-plan.reservesCents)} tone="reserve" />}
-      {total && <Row label="Cash flow" value={formatSignedMoney(plan.cashFlowCents)} tone={plan.cashFlowCents < 0 ? 'neg' : undefined} strong />}
+      {plan.reservesCents !== 0 && <BreakdownRow label={reserveLabel(plan.reservesCents > 0)} value={formatSignedMoney(-plan.reservesCents)} tone="reserve" />}
+      {total && <BreakdownRow label="Cash flow" value={formatSignedMoney(plan.cashFlowCents)} tone={plan.cashFlowCents < 0 ? 'neg' : undefined} strong />}
     </dl>
   );
 }

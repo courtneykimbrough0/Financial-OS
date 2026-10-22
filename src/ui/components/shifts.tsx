@@ -16,7 +16,7 @@ import { workKindFor, type RecurringSource, type WorkEntry } from '../../domain/
 import { useStore } from '../../state/store';
 import { Field, FormError, Icon, Modal, MoneyInput, SectionLabel, useToast } from './common';
 
-/** How many shifts the sheet lists; the rest wait for the Earnings views (E5). */
+/** How many shifts the sheet lists; Activity › Earnings totals them by month (E5). */
 const SHOWN = 8;
 
 /** "6.5", "6:30" or "" → minutes; null for empty; NaN for anything else. */
