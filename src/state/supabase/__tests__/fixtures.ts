@@ -159,3 +159,14 @@ export function withJobs(plan: AppData): AppData {
   d = unwrap(ops.addJob(d, { description: 'Website copy', clientId: 'client-acme', amountCents: usd(1200), status: 'planned', expectedDate: '2026-11-15', certainty: 'possible' }, clock, 'job-copy'));
   return unwrap(ops.addJob(d, { description: 'Brochure', amountCents: usd(300), status: 'done' }, clock, 'job-brochure'));
 }
+
+/**
+ * `plan` with gig work (E4): gig payouts every Monday from Oct 5, a session
+ * paid by the Oct 12 payout, and one waiting for payout with cash received.
+ */
+export function withSessions(plan: AppData): AppData {
+  let d = unwrap(ops.addSource(plan, { kind: 'income', description: 'Delivery payouts', amountCents: usd(300), startDate: '2026-10-05', rule: { type: 'weekly' }, incomeType: 'gig' }, clockAt('2026-10-01'), 'gig'));
+  d = unwrap(ops.logSession(d, { sourceId: 'gig', date: '2026-10-08', minutes: 180, earningsCents: usd(95), platform: 'DoorDash' }, clock, 'session-1'));
+  d = unwrap(ops.recordActual(d, 'gig@2026-10-12', { amountCents: usd(290), date: '2026-10-12' }, clock));
+  return unwrap(ops.logSession(d, { sourceId: 'gig', date: '2026-10-14', earningsCents: usd(70), cashTipsCents: usd(12), platform: 'Uber' }, clock, 'session-2'));
+}

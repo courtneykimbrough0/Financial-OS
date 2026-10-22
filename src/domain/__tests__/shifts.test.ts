@@ -39,7 +39,7 @@ describe('earnings calculations', () => {
     expect(shiftWagesCents({ minutes: 390, wageCents: 1525 })).toBe(9913);
     expect(shiftWagesCents({ minutes: 390 })).toBe(0);
     expect(shiftWagesCents({ wageCents: 1525 })).toBe(0);
-    expect(shiftEarnings(workOf(worked(), 's1'))).toEqual({ wagesCents: 9913, cashTipsCents: 4000, cardTipsCents: 5500, totalCents: 19413, payrollCents: 15413 });
+    expect(shiftEarnings(workOf(worked(), 's1'))).toEqual({ wagesCents: 9913, cashTipsCents: 4000, cardTipsCents: 5500, earningsCents: 0, totalCents: 19413, payrollCents: 15413 });
   });
 
   it('totals count each shift once, and effective hourly uses only shifts with hours', () => {
@@ -47,8 +47,8 @@ describe('earnings calculations', () => {
     d = unwrap(ops.logShift(d, { sourceId: 'job', date: '2026-10-18', cashTipsCents: usd(10) }, clock, 's4'));
     const all = summarize(shiftsFor(d, 'job'));
     // Wages: 99.13 + 76.25 + 61.00. Cash: 40 + 22 + 10. Card: 55 + 30.
-    expect(all).toEqual({ shifts: 4, minutes: 930, wagesCents: 23638, cashTipsCents: 7200, cardTipsCents: 8500, totalCents: 39338, effectiveHourlyCents: Math.round((38338 * 60) / 930) });
-    expect(summarize([])).toEqual({ shifts: 0, minutes: 0, wagesCents: 0, cashTipsCents: 0, cardTipsCents: 0, totalCents: 0, effectiveHourlyCents: null });
+    expect(all).toEqual({ shifts: 4, minutes: 930, wagesCents: 23638, cashTipsCents: 7200, cardTipsCents: 8500, earningsCents: 0, totalCents: 39338, effectiveHourlyCents: Math.round((38338 * 60) / 930) });
+    expect(summarize([])).toEqual({ shifts: 0, minutes: 0, wagesCents: 0, cashTipsCents: 0, cardTipsCents: 0, earningsCents: 0, totalCents: 0, effectiveHourlyCents: null });
     expect(shiftsFor(d, 'job').map((e) => e.id)).toEqual(['s4', 's3', 's2', 's1']);
     expect([formatHours(390), formatHours(45), formatHours(60)]).toEqual(['6.5 h', '45 min', '1 h']);
   });

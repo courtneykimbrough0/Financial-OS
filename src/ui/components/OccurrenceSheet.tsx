@@ -154,7 +154,9 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
       {paidJob && <p className="hint">The payment for your {paidJob.description} job. To change the job, open it in Plan › Income.</p>}
       {tipsShift && (
         <p className="hint">
-          Cash tips from your {formatMedium(tipsShift.date)} shift{tipsJob ? ` for ${tipsJob}` : ''}. To change them, open the shift from {tipsJob ?? 'its income'} in Plan.
+          {tipsShift.kind === 'session'
+            ? `Cash from your ${formatMedium(tipsShift.date)} session${tipsJob ? ` for ${tipsJob}` : ''}. To change it, open the session from ${tipsJob ?? 'its income'} in Plan.`
+            : `Cash tips from your ${formatMedium(tipsShift.date)} shift${tipsJob ? ` for ${tipsJob}` : ''}. To change them, open the shift from ${tipsJob ?? 'its income'} in Plan.`}
         </p>
       )}
 

@@ -133,8 +133,8 @@ describe('Supabase keeps shift tracking', () => {
       workEntries: [{ ...bad.workEntries![1]!, minutes: 2000, sourceId: 'nope' }],
     };
     expect(checkForMigration(broken).filter((i) => i.level === 'error').map((i) => i.message)).toEqual([
-      'Item 2 (rent): only income can be hourly or tipped, and a wage needs a type and an amount above $0.',
-      "Shift 1 (s2): its income no longer exists or isn't hourly or tipped.",
+      'Item 2 (rent): only income can be hourly, tipped or gig, and a wage needs hourly or tipped and an amount above $0.',
+      "Shift 1 (s2): its income no longer exists or isn't hourly, tipped or gig.",
       'Shift 1 (s2): hours must be between 0 and 24.',
     ]);
   });

@@ -6,7 +6,7 @@ import { variance } from '../../../domain/occurrences';
 import * as ops from '../../../domain/operations';
 import type { AppData } from '../../../domain/types';
 import { toRows } from '../rows';
-import { richPlan, TODAY, withJobs, withShifts } from './fixtures';
+import { richPlan, TODAY, withJobs, withSessions, withShifts } from './fixtures';
 import { count, load, newUser, save, saveOk, savePlan, sql, workspaceOf } from './pg';
 
 const clock = clockAt(TODAY);
@@ -444,6 +444,43 @@ describe('freelance income (E3)', () => {
       void _gone;
       expect(savePlan(user, data.revision, without, { mode: 'replace' }).code).toBe('PT422');
     }
+    expect(load(user)).toEqual(data);
+  });
+});
+
+describe('gig work and payouts (E4)', () => {
+  const counted = (d: AppData) => buildForecast(d, TODAY).entries.filter((e) => e.counts).map((e) => [e.occurrence.id, e.date, e.signedCents]);
+
+  it('stores gig income and sessions, reads them back exactly, and the forecast is unchanged by the round trip', () => {
+    const plan = withSessions(withShifts(richPlan()));
+    const { data } = stored(plan);
+    expect(data.sources.find((s) => s.id === 'gig')).toMatchObject({ incomeType: 'gig' });
+    expect(data.workEntries).toEqual(plan.workEntries!.map((e) => ({ ...e, createdAt: expect.any(String), updatedAt: expect.any(String) })));
+    expect(data.workEntries!.find((e) => e.id === 'session-1')).toMatchObject({ kind: 'session', earningsCents: usd(95), platform: 'DoorDash', paidByOccurrenceId: 'gig@2026-10-12' });
+    expect(counted(data)).toEqual(counted(plan));
+  });
+
+  it('ordinary saves: correcting a session replaces its cash record; undoing the payout unpays the session', () => {
+    const { user, data } = stored(withSessions(richPlan()));
+    let back = saveOk(user, unwrap(ops.editSession(data, 'session-2', { date: '2026-10-14', earningsCents: usd(70), cashTipsCents: usd(15), platform: 'Uber' }, clock)));
+    expect(back.records.find((r) => r.id === back.workEntries![1]!.cashTipsRecordId)).toMatchObject({ description: 'Cash · Uber', actualAmountCents: usd(15) });
+    back = saveOk(user, unwrap(ops.restoreOccurrence(back, 'gig@2026-10-12', clock)));
+    expect(back.workEntries![0]).not.toHaveProperty('paidByOccurrenceId');
+  });
+
+  it('the database refuses a session with shift fields, a shift with session fields, and work on the wrong kind of income', () => {
+    const { user, data } = stored(withSessions(withShifts(richPlan())));
+    const rows = toRows(data);
+    const replace = (patch: Record<string, unknown>) => savePlan(user, data.revision, { ...rows, ...patch } as never, { mode: 'replace' });
+    const entry = (id: string, patch: Record<string, unknown>) => replace({ work_entries: rows.work_entries.map((e) => (e.id === id ? { ...e, ...patch } : e)) });
+    expect(entry('session-1', { wage_cents: 1500 }).code).toBe('23514');
+    expect(entry('session-1', { earnings_cents: null, cash_tips_cents: null }).code).toBe('23514');
+    expect(entry('session-1', { platform: ' ' }).code).toBe('23514');
+    expect(entry('shift-2', { earnings_cents: 500 }).code).toBe('23514');
+    expect(entry('shift-2', { kind: 'job' }).code).toBe('23514');
+    expect(entry('session-1', { source_id: 'side', kind: 'session' }).code).toBe('PT422');
+    expect(replace({ sources: rows.sources.map((s) => (s.id === 'gig' ? { ...s, hourly_wage_cents: 1500 } : s)) }).code).toBe('23514');
+    expect(replace({ sources: rows.sources.map((s) => (s.id === 'gig' ? { ...s, income_type: 'tipped' } : s)) }).code).toBe('PT422');
     expect(load(user)).toEqual(data);
   });
 });

@@ -288,7 +288,7 @@ Visibility follows the data, through rules computed from forecast output. CSS ne
 | Gig | Baseline expected payouts, or nothing | Sessions: earnings, cash received, platform payouts |
 | One-time / irregular | Amount and date (exists today) | Mark as expected or possible |
 
-**Implemented today:** recurring income (fixed amounts on a schedule), one-time income, and recorded actuals with amounts and dates that can differ from the expected ones. The main paycheck concept was removed in Phase R1. Expected and possible income since E1; hourly and tipped income with shifts since E2; freelance clients and jobs since E3. Gig detail is Missing.
+**Implemented today:** recurring income (fixed amounts on a schedule), one-time income, and recorded actuals with amounts and dates that can differ from the expected ones. The main paycheck concept was removed in Phase R1. Expected and possible income since E1; hourly and tipped income with shifts since E2; freelance clients and jobs since E3; gig income with sessions and payouts since E4.
 
 ### 6.3 Expected, possible, received (Implemented in E1)
 
@@ -367,6 +367,14 @@ The data model gains an optional `certainty: 'expected' | 'possible'` on income 
   - Recording a payout links the sessions it covers. Their earnings are never counted again.
 - The baseline option needs no session tracking at all: a recurring expected payout ("about $400 every Monday").
 
+**As built (E4):**
+- "Gig payouts" is a pay kind on a recurring income (no wage). Its payout schedule is the income's ordinary expected (or possible) schedule.
+- Sessions are logged from that income's sheet ("Log a session"): date, optional platform, optional hours, earnings and cash received. Earnings or cash is required.
+- Cash received is one received one-time income record on the session date ("Cash · {platform}"), changed only through the session.
+- Earnings show as "Waiting for payout", split by platform when there are more than one. They never enter cash flow.
+- Recording a payout links the unpaid sessions dated before it; undoing the payout unlinks them. A session can also be marked paid or not paid by hand.
+- Payout schedules stay per income: several platforms can share one gig income or have one each.
+
 ### 6.7 Reminders (Deferred; optional when built)
 
 - **In-app first.** A week-view attention item the morning after a scheduled shift: "Log last night's shift?" [Log] [Skip]. A Monday item for weekly entry. "Did Acme pay?" on a job's expected payment date. "Payout arrived?" on a gig payout date.
@@ -382,7 +390,7 @@ The existing engine is extended, not rebuilt.
 - It is never an eligible forecast start (section 8).
 - **As built (E1):** also never carried forward and never overdue; only received possible income counts. `setIncomeCertainty` changes the mark and nothing else.
 
-**2. Income type.** An optional `incomeType` on income sources, for labels and for which optional tools appear. It has no effect on the math. **As built (E2):** `'hourly' | 'tipped'` (absent is a fixed amount), with an optional `hourlyWageCents`.
+**2. Income type.** An optional `incomeType` on income sources, for labels and for which optional tools appear. It has no effect on the math. **As built (E2):** `'hourly' | 'tipped'` (absent is a fixed amount), with an optional `hourlyWageCents`. **E4** adds `'gig'` (never a wage).
 
 **3. Work entries.** A new collection: `workEntries: WorkEntry[]` on `AppData`.
 
@@ -399,6 +407,7 @@ WorkEntry {
 - Work entries never enter `buildForecast` directly. Only their linked income records do, so the no-double-counting rule is structural.
 - Pure operations in `operations.ts`: `logWork`, `editWork`, `linkPayout`, `recordJobPayment`, each correctable by ordinary editing (no undo history).
 - **As built (E3), jobs:** a separate `jobs` collection (`FreelanceJob`) and `clients`, not `workEntries` rows: a job belongs to no income item. No `paid` status is stored (paid is its payment record being recorded); the money link is `paymentRecordId`.
+- **As built (E4), sessions:** `kind: 'session'` rows in the same `workEntries` collection, on `incomeType: 'gig'` income only, with `earningsCents` and `platform`; `cashTipsCents` is the cash received. Operations: `logSession`, `editSession` (the shift operations underneath); payouts link and unlink exactly as paychecks do. Jobs stay separate (decision recorded after E3).
 - **As built (E2), shifts only:** `kind: 'shift'`; no stored status (paid is `paidByOccurrenceId`); the tips link is `cashTipsRecordId`; hours are `minutes`. Operations: `logShift`, `editShift`, `deleteShift`, `setShiftPaid`, `setIncomeDetails`; `recordActual` pays shifts and `restoreOccurrence` unpays them.
 
 **4. Aggregation.** The Activity view's pure helpers in `src/domain/`, plus `earnings.ts` for hours, tips, effective hourly, and earned versus paid. **As built (E2):** `earnings.ts` has per-shift earnings, totals, effective hourly and earned not paid; reports wait for E5.
@@ -413,6 +422,8 @@ WorkEntry {
 **The constraint.** Firestore rules can't be deployed while Firebase is legacy (AGENTS.md section C1). A signed-in Firebase account would have saves with new top-level fields (such as `workEntries`) refused. New fields inside items (such as `certainty`) would be accepted, since items aren't checked field by field, but an older copy of the app would ignore them: it would count possible income.
 
 **So:** ship new income fields behind a flag, as `ACCOUNTS_IN_SIGNED_IN_SAVES` does for accounts today: available with device storage and Supabase, hidden for Firebase accounts. Alternatively, schedule income expansion after the Supabase cutover (decision D8).
+
+**As built (E4):** the same flag covers gig income and sessions. Supabase: `'gig'` income type, `kind` (`shift`/`session`), `earnings_cents` and `platform` on `work_entries`, with a per-kind field check (migration `20261022000004_gig_income.sql`).
 
 **As built (E3):** the same flag covers clients and jobs. Supabase: `clients` and `freelance_jobs` tables (migration `20261022000003_freelance_income.sql`).
 

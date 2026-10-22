@@ -23,7 +23,7 @@ import { addDays, formatShort, isValidDateStr, type DateStr } from './dates';
 import type { Cents } from './money';
 import { findOccurrence, resolveOccurrences } from './occurrences';
 import { validateRule } from './recurrence';
-import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type IncomeCertainty, type IncomeType, type LiabilityType, type OccurrenceRecord, type OneTimeKind, type RecurrenceRule, type RecurringKind, type RecurringSource, type Transfer, type TransactionKind, type WorkEntry, type Client, type FreelanceJob, type JobStatus, certaintyOf } from './types';
+import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type IncomeCertainty, type IncomeType, type LiabilityType, type OccurrenceRecord, type OneTimeKind, type RecurrenceRule, type RecurringKind, type RecurringSource, type Transfer, type TransactionKind, type WorkEntry, workKindFor, type Client, type FreelanceJob, type JobStatus, certaintyOf } from './types';
 
 export type Result = { ok: true; data: AppData } | { ok: false; error: string };
 
@@ -114,20 +114,20 @@ type IncomeDetails = Pick<SourceInput, 'incomeType' | 'hourlyWageCents'>;
 
 function validateIncomeDetails(kind: TransactionKind, details: IncomeDetails): string | null {
   if (details.incomeType === undefined && details.hourlyWageCents === undefined) return null;
-  if (kind !== 'income' && (details.incomeType || details.hourlyWageCents)) return 'Only income can be hourly or tipped.';
-  if (details.incomeType && !INCOME_TYPES.includes(details.incomeType)) return 'Choose fixed, hourly or tipped.';
+  if (kind !== 'income' && (details.incomeType || details.hourlyWageCents)) return 'Only income can be hourly, tipped or gig.';
+  if (details.incomeType && !INCOME_TYPES.includes(details.incomeType)) return 'Choose fixed, hourly, tipped or gig.';
   if (details.hourlyWageCents !== undefined && details.hourlyWageCents !== null) return validateAmount(details.hourlyWageCents, 'Hourly wage');
   return null;
 }
 
-/** `item` with income details applied; omitted ones are kept. A fixed income keeps no wage. */
+/** `item` with income details applied; omitted ones are kept. Only hourly and tipped income keep a wage. */
 function applyIncomeDetails(item: RecurringSource, details: IncomeDetails): RecurringSource {
   if (details.incomeType === undefined && details.hourlyWageCents === undefined) return item;
   const { incomeType: oldType, hourlyWageCents: oldWage, ...rest } = item;
   const type = details.incomeType === undefined ? oldType : (details.incomeType ?? undefined);
   const wage = details.hourlyWageCents === undefined ? oldWage : (details.hourlyWageCents ?? undefined);
   if (item.kind !== 'income' || !type) return rest;
-  return { ...rest, incomeType: type, ...(wage ? { hourlyWageCents: wage } : {}) };
+  return { ...rest, incomeType: type, ...(wage && type !== 'gig' ? { hourlyWageCents: wage } : {}) };
 }
 
 /** The stored form of a certainty choice: only possible income carries the field. */
@@ -820,51 +820,76 @@ export const MAX_SHIFTS = 5000;
 const MAX_SHIFT_MINUTES = 24 * 60;
 
 /**
- * Makes an income fixed, hourly or tipped, with its usual hourly wage. Changes
- * nothing financial. An income with logged shifts stays hourly or tipped, so
- * its shifts are never orphaned.
+ * Makes an income fixed, hourly, tipped or gig, with its usual hourly wage
+ * (hourly and tipped only). Changes nothing financial. An income with logged
+ * work keeps a type that logs the same kind (shifts or sessions), so its work
+ * is never orphaned.
  */
 export function setIncomeDetails(data: AppData, id: string, details: { incomeType: IncomeType | null; hourlyWageCents: Cents | null }, clock: Clock): Result {
   return withSource(data, id, (s) => {
     const err = validateIncomeDetails(s.kind, details);
     if (err) return err;
-    if (!details.incomeType && (data.workEntries ?? []).some((e) => e.sourceId === id)) return 'This income has logged shifts, so it stays hourly or tipped.';
+    const logged = (data.workEntries ?? []).find((e) => e.sourceId === id);
+    if (logged && workKindFor(details.incomeType ?? undefined) !== logged.kind) {
+      return logged.kind === 'session' ? 'This income has logged sessions, so it stays gig income.' : 'This income has logged shifts, so it stays hourly or tipped.';
+    }
     return { ...applyIncomeDetails(s, details), updatedAt: clock.now };
   });
 }
 
 export interface ShiftInput {
-  /** The hourly or tipped income item. */
+  /** The hourly or tipped income item (a shift), or a gig income item (a session). */
   sourceId: string;
   date: DateStr;
   /** Each optional: null or 0 means none. */
   minutes?: number | null;
+  /** Shifts only. */
   wageCents?: Cents | null;
+  /** Shifts: cash tips. Sessions: cash received immediately. */
   cashTipsCents?: Cents | null;
+  /** Shifts only. */
   cardTipsCents?: Cents | null;
+  /** Sessions only: earnings on the platform, waiting for a payout. */
+  earningsCents?: Cents | null;
+  /** Sessions only: the platform's name. */
+  platform?: string | null;
 }
+
+/** A gig session: the same as a shift's input, with platform earnings instead of wages and card tips. */
+export type SessionInput = Omit<ShiftInput, 'wageCents' | 'cardTipsCents'>;
+
+export const MAX_PLATFORM_NAME = 40;
 
 /** The shift whose cash tips are this record, if any. */
 function shiftWithTips(data: AppData, recordId: string): WorkEntry | undefined {
   return (data.workEntries ?? []).find((e) => e.cashTipsRecordId === recordId);
 }
 
-const shiftOwnsTips = (shift: WorkEntry) => `These are the cash tips from your ${formatShort(shift.date)} shift. Change or delete the shift instead.`;
+const shiftOwnsTips = (shift: WorkEntry) =>
+  shift.kind === 'session'
+    ? `This is the cash from your ${formatShort(shift.date)} session. Change or delete the session instead.`
+    : `These are the cash tips from your ${formatShort(shift.date)} shift. Change or delete the shift instead.`;
 
 const present = (n: number | null | undefined) => (n === null || n === undefined || n === 0 ? undefined : n);
 
 function validateShift(data: AppData, input: ShiftInput, clock: Clock): string | null {
   const source = data.sources.find((s) => s.id === input.sourceId);
   if (!source) return 'That income no longer exists.';
-  if (source.kind !== 'income' || !source.incomeType) return 'Shifts can be logged for hourly or tipped income.';
+  const kind = source.kind === 'income' ? workKindFor(source.incomeType) : null;
+  if (!kind) return 'Shifts can be logged for hourly or tipped income, and sessions for gig income.';
+  const session = kind === 'session';
+  if (session && (present(input.wageCents) !== undefined || present(input.cardTipsCents) !== undefined)) return 'A gig session has earnings and cash, not a wage or card tips.';
+  if (!session && (present(input.earningsCents) !== undefined || (input.platform ?? '').trim() !== '')) return 'A shift has a wage and tips, not platform earnings.';
   if (!isValidDateStr(input.date)) return 'Enter a valid date.';
-  if (input.date > clock.today) return 'Log a shift once it has been worked.';
+  if (input.date > clock.today) return session ? 'Log a session once it has been worked.' : 'Log a shift once it has been worked.';
+  if ((input.platform ?? '').trim().length > MAX_PLATFORM_NAME) return `Keep the platform under ${MAX_PLATFORM_NAME} characters.`;
   const minutes = present(input.minutes);
   if (minutes !== undefined && (!Number.isSafeInteger(minutes) || minutes < 0 || minutes > MAX_SHIFT_MINUTES)) return 'Hours must be between 0 and 24.';
   for (const [value, label] of [
     [input.wageCents, 'Hourly wage'],
     [input.cashTipsCents, 'Cash tips'],
     [input.cardTipsCents, 'Card tips'],
+    [input.earningsCents, 'Earnings'],
   ] as const) {
     const v = present(value);
     if (v !== undefined) {
@@ -872,15 +897,17 @@ function validateShift(data: AppData, input: ShiftInput, clock: Clock): string |
       if (amountErr) return amountErr;
     }
   }
-  if (minutes === undefined && present(input.cashTipsCents) === undefined && present(input.cardTipsCents) === undefined) return 'Enter the hours worked or the tips.';
+  if (session) {
+    if (present(input.earningsCents) === undefined && present(input.cashTipsCents) === undefined) return 'Enter the earnings or the cash received.';
+  } else if (minutes === undefined && present(input.cashTipsCents) === undefined && present(input.cardTipsCents) === undefined) return 'Enter the hours worked or the tips.';
   return null;
 }
 
 /** The received income record for a shift's cash tips: money in on the shift's date, counted once. */
-function addCashTips(data: AppData, shiftSourceId: string, cents: Cents, date: DateStr, clock: Clock): { data: AppData; recordId: string } | string {
+function addCashTips(data: AppData, shiftSourceId: string, cents: Cents, date: DateStr, clock: Clock, platform?: string): { data: AppData; recordId: string } | string {
   const source = data.sources.find((s) => s.id === shiftSourceId)!;
   const recordId = newId('tips');
-  const description = `Cash tips · ${source.description}`.slice(0, 80);
+  const description = (source.incomeType === 'gig' ? `Cash · ${platform ?? source.description}` : `Cash tips · ${source.description}`).slice(0, 80);
   let step = addOneTime(data, { kind: 'income', description, amountCents: cents, date }, clock, recordId);
   if (step.ok) step = recordActual(step.data, recordId, { amountCents: cents, date }, clock);
   if (step.ok && source.accountId) step = assignAccount(step.data, recordId, source.accountId, clock);
@@ -889,18 +916,26 @@ function addCashTips(data: AppData, shiftSourceId: string, cents: Cents, date: D
 
 const withoutRecord = (data: AppData, id: string | undefined): AppData => (id ? { ...data, records: data.records.filter((r) => r.id !== id) } : data);
 
-function shiftFields(input: ShiftInput): Pick<WorkEntry, 'minutes' | 'wageCents' | 'cashTipsCents' | 'cardTipsCents'> {
-  const out: Pick<WorkEntry, 'minutes' | 'wageCents' | 'cashTipsCents' | 'cardTipsCents'> = {};
+type WorkFields = Pick<WorkEntry, 'minutes' | 'wageCents' | 'cashTipsCents' | 'cardTipsCents' | 'earningsCents' | 'platform'>;
+
+function shiftFields(input: ShiftInput): WorkFields {
+  const out: WorkFields = {};
   const minutes = present(input.minutes);
   const wage = present(input.wageCents);
   const cash = present(input.cashTipsCents);
   const card = present(input.cardTipsCents);
+  const earnings = present(input.earningsCents);
+  const platform = (input.platform ?? '').trim();
   if (minutes !== undefined) out.minutes = minutes;
   if (wage !== undefined) out.wageCents = wage;
   if (cash !== undefined) out.cashTipsCents = cash;
   if (card !== undefined) out.cardTipsCents = card;
+  if (earnings !== undefined) out.earningsCents = earnings;
+  if (platform) out.platform = platform;
   return out;
 }
+
+const kindOf = (data: AppData, sourceId: string): WorkEntry['kind'] => workKindFor(data.sources.find((s) => s.id === sourceId)?.incomeType) ?? 'shift';
 
 /**
  * Logs a shift for an hourly or tipped income, worked today or earlier. Its
@@ -916,12 +951,12 @@ export function logShift(data: AppData, input: ShiftInput, clock: Clock, id = ne
   let next = data;
   let cashTipsRecordId: string | undefined;
   if (fields.cashTipsCents) {
-    const tips = addCashTips(next, input.sourceId, fields.cashTipsCents, input.date, clock);
+    const tips = addCashTips(next, input.sourceId, fields.cashTipsCents, input.date, clock, fields.platform);
     if (typeof tips === 'string') return fail(tips);
     next = tips.data;
     cashTipsRecordId = tips.recordId;
   }
-  const shift: WorkEntry = { id, sourceId: input.sourceId, kind: 'shift', date: input.date, ...fields, ...(cashTipsRecordId ? { cashTipsRecordId } : {}), createdAt: clock.now, updatedAt: clock.now };
+  const shift: WorkEntry = { id, sourceId: input.sourceId, kind: kindOf(data, input.sourceId), date: input.date, ...fields, ...(cashTipsRecordId ? { cashTipsRecordId } : {}), createdAt: clock.now, updatedAt: clock.now };
   return ok({ ...next, workEntries: [...(next.workEntries ?? []), shift] });
 }
 
@@ -940,11 +975,11 @@ export function editShift(data: AppData, id: string, input: Omit<ShiftInput, 'so
   const fields = shiftFields(full);
   let next = data;
   let cashTipsRecordId = shift.cashTipsRecordId;
-  if (fields.cashTipsCents !== shift.cashTipsCents || input.date !== shift.date) {
+  if (fields.cashTipsCents !== shift.cashTipsCents || input.date !== shift.date || fields.platform !== shift.platform) {
     next = withoutRecord(next, shift.cashTipsRecordId);
     cashTipsRecordId = undefined;
     if (fields.cashTipsCents) {
-      const tips = addCashTips(next, shift.sourceId, fields.cashTipsCents, input.date, clock);
+      const tips = addCashTips(next, shift.sourceId, fields.cashTipsCents, input.date, clock, fields.platform);
       if (typeof tips === 'string') return fail(tips);
       next = tips.data;
       cashTipsRecordId = tips.recordId;
@@ -953,7 +988,7 @@ export function editShift(data: AppData, id: string, input: Omit<ShiftInput, 'so
   const updated: WorkEntry = {
     id,
     sourceId: shift.sourceId,
-    kind: 'shift',
+    kind: shift.kind,
     date: input.date,
     ...fields,
     ...(cashTipsRecordId ? { cashTipsRecordId } : {}),
@@ -964,7 +999,23 @@ export function editShift(data: AppData, id: string, input: Omit<ShiftInput, 'so
   return ok({ ...next, workEntries: (next.workEntries ?? []).map((e) => (e.id === id ? updated : e)) });
 }
 
-/** Removes a shift and its cash tips record. A paycheck that paid it is unchanged. */
+/**
+ * Logs a gig session for a gig income, worked today or earlier. Its cash
+ * received immediately becomes one received income record on that date; its
+ * platform earnings wait for the payout that covers them (recording an
+ * occurrence of the gig income, as for a paycheck). Expected payouts don't
+ * change.
+ */
+export function logSession(data: AppData, input: SessionInput, clock: Clock, id = newId('session')): Result {
+  return logShift(data, input, clock, id);
+}
+
+/** Corrects a session (see `editShift`): the cash record follows a changed amount, date or platform. */
+export function editSession(data: AppData, id: string, input: Omit<SessionInput, 'sourceId'>, clock: Clock): Result {
+  return editShift(data, id, input, clock);
+}
+
+/** Removes a shift or session and its cash record. A paycheck or payout that paid it is unchanged. */
 export function deleteShift(data: AppData, id: string): Result {
   const shift = (data.workEntries ?? []).find((e) => e.id === id);
   if (!shift) return fail('That shift no longer exists.');
@@ -994,9 +1045,9 @@ export function setShiftPaid(data: AppData, id: string, occurrenceId: string | n
 }
 
 /**
- * When a paycheck is recorded, the shifts of its income worked before the day
- * it arrived and not yet paid are paid by it. Each can be corrected with
- * `setShiftPaid`.
+ * When a paycheck or payout is recorded, the shifts or sessions of its income
+ * worked before the day it arrived and not yet paid are paid by it. Each can
+ * be corrected with `setShiftPaid`.
  */
 function linkShiftsToPaycheck(data: AppData, occurrenceId: string, clock: Clock): AppData {
   const paycheck = data.records.find((r) => r.id === occurrenceId);

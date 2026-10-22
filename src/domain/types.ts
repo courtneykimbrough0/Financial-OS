@@ -189,42 +189,59 @@ export interface RecurringSource {
 
 /**
  * How an income is earned. Absent means a fixed amount on a schedule (a
- * salary, benefits). Hourly and tipped income can track shifts (`WorkEntry`).
- * Only labels and optional tools depend on it: the forecast counts an income
- * by its schedule, its recorded payments and its certainty, whatever its type.
+ * salary, benefits). Hourly and tipped income can track shifts; gig income
+ * (expected platform payouts) can track sessions (`WorkEntry`). Only labels
+ * and optional tools depend on it: the forecast counts an income by its
+ * schedule, its recorded payments and its certainty, whatever its type.
  */
-export type IncomeType = 'hourly' | 'tipped';
-export const INCOME_TYPES: IncomeType[] = ['hourly', 'tipped'];
-export const INCOME_TYPE_LABEL: Record<IncomeType, string> = { hourly: 'Hourly', tipped: 'Tipped' };
+export type IncomeType = 'hourly' | 'tipped' | 'gig';
+export const INCOME_TYPES: IncomeType[] = ['hourly', 'tipped', 'gig'];
+export const INCOME_TYPE_LABEL: Record<IncomeType, string> = { hourly: 'Hourly', tipped: 'Tipped', gig: 'Gig' };
+
+/** The kind of work an income of this type logs: shifts for hourly and tipped, sessions for gig. */
+export function workKindFor(type: IncomeType | undefined): WorkEntry['kind'] | null {
+  return type === 'gig' ? 'session' : type ? 'shift' : null;
+}
 
 /**
- * A shift worked for an hourly or tipped income: what was earned, never by
- * itself money received. Shifts never enter the forecast:
+ * Work logged for an income: a shift (hourly or tipped income, E2) or a gig
+ * session (gig income, E4). What was earned, never by itself money received.
+ * Work entries never enter the forecast:
  *
  * - Cash tips are money in on the shift's date: logging them creates one
  *   received one-time income record (`cashTipsRecordId`), and that record is
  *   what counts, once.
+ *   A session's cash received immediately works the same way.
  * - Wages and card tips are paid through payroll, so they are "earned, not
  *   paid yet" until the paycheck that covers them is recorded
- *   (`paidByOccurrenceId`). The paycheck is the one income event: its recorded
- *   amount already includes them, so they are never counted again.
+ *   (`paidByOccurrenceId`). A session's platform earnings likewise wait for
+ *   the payout that covers them. The paycheck or payout is the one income
+ *   event: its recorded amount already includes them, so they are never
+ *   counted again.
  *
+ * A shift has no platform earnings; a session has no wage or card tips.
  * Every amount is optional (absent, never $0). Hours are kept in minutes.
  */
 export interface WorkEntry {
   id: string;
-  /** The hourly or tipped income item this shift was for. */
+  /** The income item: hourly or tipped for a shift, gig for a session. */
   sourceId: string;
-  kind: 'shift';
+  kind: 'shift' | 'session';
   date: DateStr;
   minutes?: number;
-  /** Hourly wage for this shift (defaults from the item). */
+  /** Shifts: hourly wage for this shift (defaults from the item). */
   wageCents?: Cents;
+  /** Shifts: cash tips. Sessions: cash received immediately. Money in on the date. */
   cashTipsCents?: Cents;
+  /** Shifts: card tips, paid with the paycheck. */
   cardTipsCents?: Cents;
-  /** The received one-time income record for the cash tips. Present exactly when there are cash tips. */
+  /** Sessions: earnings on the platform, waiting for a payout. */
+  earningsCents?: Cents;
+  /** Sessions: the platform, as the person names it (optional). */
+  platform?: string;
+  /** The received one-time income record for the cash. Present exactly when there is cash. */
   cashTipsRecordId?: string;
-  /** The recorded paycheck (occurrence id) that paid this shift's wages and card tips. Absent while earned, not paid yet. */
+  /** The recorded paycheck or payout (occurrence id) that paid what was earned. Absent while earned, not paid yet. */
   paidByOccurrenceId?: string;
   createdAt: string;
   updatedAt: string;
