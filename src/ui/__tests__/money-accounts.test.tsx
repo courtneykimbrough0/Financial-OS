@@ -280,7 +280,7 @@ describe('regressions', () => {
     await waitFor(() => expect(stored().transfers![0]).toMatchObject({ fromAccountId: 'a', toAccountId: 'b', amountCents: 5000 }));
   });
 
-  it("the Supabase development build, which can't store releases yet, doesn't offer \"Use reserves\"", async () => {
+  it('the Supabase build keeps accounts and releases (F1), so it offers "Use reserves" and the Accounts section', async () => {
     const slot: AccountSlot = { Card: () => null, Line: () => null, Guard: () => null, dataNote: '' };
     await new LocalStorageAdapter().save(plan(), 0);
     window.location.hash = '#/plan/reserves';
@@ -296,8 +296,10 @@ describe('regressions', () => {
     );
     await user.click(await screen.findByRole('button', { name: 'Add one-time' }));
     const sheet = screen.getByRole('dialog', { name: 'Add one-time reserve' });
-    expect(within(sheet).queryByRole('radio', { name: 'Use reserves' })).toBeNull();
-    expect(within(sheet).getByRole('button', { name: 'Add one-time reserve' })).toBeInTheDocument();
+    expect(within(sheet).getByRole('radio', { name: 'Use reserves' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    window.location.hash = '#/settings';
+    expect(await screen.findByRole('heading', { name: 'Accounts' })).toBeInTheDocument();
   });
 
   it('a release shows as money coming back on its item sheet', async () => {

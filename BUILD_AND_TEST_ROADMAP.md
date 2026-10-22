@@ -52,7 +52,7 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | Audit recommendations (not yet approved) | docs/REDUCTION-AUDIT.md §3 and decisions §7 |
 | Deferred features | PRODUCT_EXPERIENCE.md §10; Step 8's deferred imports; Step 9 |
 
-### Current state (verified October 22, 2026; `main` at `a50ac4d`)
+### Current state (verified October 22, 2026; `main` at `70f4248`)
 
 `main` is the default and integration branch (AGENTS.md section H). CI (`.github/workflows/ci.yml`, five jobs) passed on all merge commits below.
 
@@ -84,9 +84,11 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | E3, freelance income | **Complete**, merged as `6d88365` | Phase E |
 | E4, gig work and payouts | **Complete**, merged as `d8910c6` | Phase E |
 | E5, earnings history and views | **Complete**, merged as `a50ac4d` | Phase E |
-| E6, income integration and verification | **Complete** (in review) | Phase E |
+| E6, income integration and verification | **Complete**, merged as `70f4248`; **Phase E is complete** | Phase E |
+| F0, production readiness and infrastructure plan | **Complete** (documentation; revised for no users; in review) | Phase F |
+| F1, AC-S: accounts, transfers and Strategic Reserves in Supabase | **Complete** (in review) | Phase F |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
-| AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
+| AC-S, accounts, transfers and releases in Supabase | **Complete** as F1 (in review) | Phases AC, F |
 | AC6 payoff support, recurring planned transfers | **Deferred** (need specifications or decisions) | Phase AC, conflicts |
 | Step 9 virtual allocations; Phase F (hosted Supabase, Firebase cutover, offline-sync removal, Vercel) | **Deferred** (paused by the product experience decision) | Phase F, Step 10 |
 | Steps 3 and 5 (review list, review rhythm) | **Superseded** by Home (H2) | Status |
@@ -340,7 +342,7 @@ PRODUCT_EXPERIENCE.md §7: tokens and components first, then screen by screen, t
   - Tests: `desktop-d6` (6): one tab bar with the same routes, before the content; rail navigation marks the current route; the rail, hidden pills and centered column rules; no rail in setup; the panel rules with reduced motion; dialog semantics, focus and Escape. Browser checks in the D6 screenshot script (rail geometry, panel geometry, focus trap, scroll lock, panel scrolling, no horizontal overflow at 900, 1024, 1280 and 1440 px).
 - **Phase D is complete** (D1–D6, merged as `27cda0b`, `89f25be`, `81bdf00`, `e911b18`, `ab843ce` and `d5e8b61`; CI passed on each merge commit). D6's merge commit first failed one job before any test ran (the runner's port 54324 was already in use when the local Supabase stack started); the one re-run passed all five jobs. Decision D8 is settled as a feature flag (Phase E below).
 
-#### E. Income expansion (each checkpoint separately authorized)
+#### E. Income expansion (complete, October 2026; each checkpoint was separately authorized)
 
 PRODUCT_EXPERIENCE.md §6. Planned October 22, 2026. The financial rules every checkpoint keeps:
 1. Income counts in cash flow when it's received, or when its receipt is expected on a date; never because it was earned.
@@ -400,7 +402,7 @@ Reminders (§6.7) stay deferred. Each checkpoint stops for review before the nex
   - **Not built:** reconciliation of earned versus paid per paycheck, per-week totals, reports beyond Activity, platform integrations, partial payments, reminders.
   - Tests: `earnings-history` (11, domain: earned versus received, effective hourly, tips, jobs and payment states, waiting for payout, corrected and undone payments, several incomes, empty and partial history, no double counting, possible income), `earnings-e5` (4, interface: hidden without data, figures, read-only details and month browsing with nothing saved, possible income).
 
-- **E6. Income integration and verification (complete, October 2026; in review).** Verification of E1–E5 together, with corrections only for confirmed defects; no new income features.
+- **E6. Income integration and verification (complete, October 2026; merged as `70f4248`). Phase E is complete.** Verification of E1–E5 together, with corrections only for confirmed defects; no new income features.
   - **Fixture:** `incomePlan()` (`src/state/supabase/__tests__/fixtures.ts`): the rich plan with possible income (a recurring item and a one-time), tipped shifts paid by an early, different-amount paycheck, freelance jobs (paid, planned and possible, pending) and gig sessions (paid and waiting, with cash). It joins `allPlans()`, so every storage test that runs over the shared plans now runs it too.
   - **Integration matrix** (✓ verified by an automated test; "CI" runs only in CI, which has the Supabase CLI):
 
@@ -450,7 +452,7 @@ Specification: PRODUCT_EXPERIENCE.md section 11. Each phase is separately author
 - **AC5. Account balances (partly complete, October 2026).**
   - Done: optional opening balances, recorded and projected balances per account (`balances.ts`), and the shortfall a planned transfer would cause in its source account. Reserve items move no balance.
   - Not built: account-level availability ("enough in Bills for rent"), balance-based forecasts or alerts, and the "cash available now" starting amount for the running total (decision Q6).
-- **AC-S. Accounts in Supabase.** Complexity: **medium**.
+- **AC-S. Accounts in Supabase (complete as F1, October 2026; in review).** Complexity: **medium**.
   - `accounts` and `transfers` tables with workspace ownership and row-level security; nullable `account_id` on sources and one-time records; a `release` flag on one-time records; opening balances.
   - `load_plan` / `save_plan` carrying them; remove the adapter's refusal.
   - Tests: `test:db`, `test:supabase`, `e2e:supabase`.
@@ -461,17 +463,85 @@ Specification: PRODUCT_EXPERIENCE.md section 11. Each phase is separately author
 1. ~~Six classifications vs five kinds~~ and 2. ~~Savings as money out vs the transfer rule~~: resolved by AC4.
 3. **"Account" means two things in the interface.** It names the sign-in account ("Your Financial OS account", "Delete account") and money accounts. They never appear together today, since money accounts are hidden when signed in, but the Supabase cutover will put both on one screen. Needs a wording decision (for example "Sign-in" for the former).
 4. **Liabilities are defined with a payoff amount and date, but liability items store only payments.** Needed before AC6.
-5. **Storage.** Accounts, transfers and reserve releases work with device storage and in backups. Firebase (legacy, rules can't change) leaves accounts and transfers out and keeps releases; Supabase refuses all three until AC-S, and its development build doesn't offer accounts or "Use reserves". Signed-in users don't see accounts.
+5. **Storage.** Accounts, transfers and reserve releases work with device storage and in backups. Firebase (legacy, rules can't change) leaves accounts and transfers out and keeps releases; Supabase stores all three since F1, and its build offers accounts and "Use reserves". Signed-in Firebase users don't see accounts.
 6. **Planned transfers with minimal effort.** Each planned transfer is entered once today. A repeating plan ("each payday, move $X to Reserves") needs rules for how it's generated, edited and recorded; not built until those are decided.
 7. **Opening balance on the same day.** An opening balance is the balance at the end of its day, so a transfer recorded on that same day is treated as already included. Clear in the form's wording; revisit if it confuses people.
 
-#### F. Infrastructure resumption
+#### F. Infrastructure resumption (planned in F0, revised October 22, 2026)
 
-Unchanged and paused:
-1. the hosted Supabase test project ([docs/SUPABASE-HOSTED.md](docs/SUPABASE-HOSTED.md));
-2. the data move and the Firebase cutover;
-3. removing offline sync;
-4. Vercel.
+Phase F carries out Step 10 (10b–10e) on the architecture decided in AGENTS.md section C1: Supabase for data and sign-in, Vercel for hosting, online-first, Firebase and Cloud Run retired. Each checkpoint is separately authorized. No hosted deployment and no spending happen until separately authorized.
+
+**Product-owner clarification (October 22, 2026): Financial OS has no real users and no production financial data.** Every existing record, in Firebase, Supabase or on a device, is development or sample data. So, for the rest of the roadmap:
+- No historical data migrations, data-preservation layers or backward-compatibility mechanisms for development records. Existing Firebase and Supabase test data may be discarded or reset.
+- The simplest correct production-ready schema and architecture come first. Schema migrations stay, for reproducible deployment.
+- One production stack: no parallel Firebase and Supabase period for a user transition that doesn't exist.
+- Security, row-level security, ownership checks, financial correctness and automated tests are kept in full.
+
+**F0. Production readiness and infrastructure plan (complete, October 2026; documentation only).**
+
+*Verified current architecture (repository, `main` at `70f4248`):*
+- **Hosting today:** a static Vite PWA served on Cloud Run by `server.mjs` (`Dockerfile`; deployed by hand or by AI Studio, region us-east5; no deployment in CI). The server adds caching rules, two security headers (`nosniff`, `strict-origin-when-cross-origin`; no content security policy) and forwards Firebase's sign-in pages (`/__/auth/*`) through the app's own address. Data: device storage, or with accounts on, Google sign-in (Firebase Auth) and one Firestore document per person, with an offline device copy (`cloud.ts`).
+- **Firebase accounts can't hold** possible income, income detail or accounts and transfers (three flags in `src/state/features.ts`). Everything built in Phase E and AC1–AC5 works only with device storage today.
+- **Supabase:** eight migrations, nine tables with row-level security and no direct writes, four functions with fixed search paths; an online-first adapter; email-and-password accounts (confirmation, recovery, sessions, sign-out, account deletion). Tested on PostgreSQL 16 (`test:db`) and in CI on a local stack (`test:supabase`, `e2e:supabase`). Compiled only into the `supabase-dev` and `supabase-hosted-test` builds: **no production build uses it yet**.
+- **Gaps:** accounts, transfers, opening balances and reserve releases aren't stored in Supabase (AC-S, refused by the adapter); the hosted-test guide lists three of the eight migrations and `verify.sql` skips the three income tables; production sign-in is Google, the Supabase build email and password.
+
+*Checkpoints (in order; each its own pull request and authorization):*
+
+| Checkpoint | Scope | Depends on | Needs the product owner |
+| --- | --- | --- | --- |
+| **F1. AC-S: accounts, transfers and Strategic Reserves in Supabase** | `accounts` and `transfers` tables (ownership, row-level security), `account_id` on items and records, opening balances, the `release` flag; `load_plan` / `save_plan`; the adapter's refusal removed; accounts and "Use reserves" offered in the Supabase build; `verify.sql` and the hosted-test guide brought up to every migration and table | — (repository only) | Authorization only |
+| **F2. Production Supabase build** | A production build that uses Supabase, configured by environment (URL and publishable key, never a service key), with Firebase left out; anonymous identities off; the "Account" wording settled; `vercel.json` (app routes to `index.html`, today's caching and security headers, plus a content security policy). Optional, since no hosted database exists yet: consolidate the migrations into one baseline | F1 | Sign-in methods (decision 4), wording (decision 5) |
+| **F3. Hosted test project** | A Free Supabase project and SMTP sender created by the product owner; migrations applied; `verify.sql`; the hosted suites run unchanged | F1 (F2 for browser suites) | Creates the project and sender; no payment |
+| **F4. Vercel preview** | The F2 build on Vercel against the test project; installability; real iPhone and Android: sign up, confirm, reopen, change, see it saved; offline shows unsaved | F2, F3 | Creates the Vercel project |
+| **F5. Production launch** | A production Supabase project (migrations verified; confirmation on, anonymous off, redirect URLs, rate limits, SMTP) and the production Vercel deployment; launched empty | F4 | Plans and spending (decisions 1–2), domain (3), region (6), launch date |
+| **F6. Retire legacy** | Directly after F5 is verified, with no parallel period: remove `cloud.ts` (offline sync, 10c), `firebase.ts`, Firestore rules, emulator tests and CI job, `server.mjs`, `Dockerfile`, the three Firebase flags and Firebase-only docs and wording; the product owner deletes the Firebase project and Cloud Run services | F5 | Deleting the Firebase project and Cloud Run services; CI goes from five checks to four |
+
+AC5 (remaining) and AC6 stay outside Phase F.
+
+*Security and data-integrity risks to manage:*
+- Row-level security or grants missing on a new table (F1 updates `verify.sql`; hosted runs execute it).
+- A privileged key in a build: only the publishable key is ever used; the code refuses a secret or service-role key, and none is needed (account deletion runs in the database).
+- Auth settings differing between local and hosted (confirmation, anonymous sign-ins off, redirect allowlist, rate limits, SMTP): checked in F3 and again in F5.
+- No content security policy today (added in F2).
+- Backups: the Free plan has no usable backups; production uses Pro daily backups once real data exists.
+- Data integrity is tested in depth (revision checks, save receipts, removal limits, equivalence, ordinary-save lifecycles).
+
+*Operating costs (USD per month; verify on the providers' pricing pages before deciding):*
+
+| Stage | Supabase | Vercel | Email (SMTP) | Total |
+| --- | --- | --- | --- | --- |
+| F3–F4 testing | Free: $0 (500 MB database, 50,000 monthly active users; pauses when idle; no usable backups) | Hobby: $0 (non-commercial use) | Provider free tier: $0 (assumption) | **$0** |
+| Production, small | Pro: $25, including $10 of compute (one Micro instance); daily backups kept 7 days | Pro: $20 per deploying seat for commercial use; Hobby $0 if non-commercial | $0–$20 (assumption) | **about $45–$65** (or $25–$45 on Vercel Hobby) |
+| Optional | Point-in-time recovery: from $100 (not needed at launch) | — | — | — |
+
+Supabase's built-in email sender allows only a few messages an hour: a custom SMTP provider is needed from F3. Cloud Run and Firestore cost stops at F6.
+
+*Launch and rollback:*
+- Production launches empty; no data moves from Firebase, Supabase test projects or devices. Testers start fresh (a backup file still restores if someone wants one, through the existing Restore; nothing is built for it).
+- Rollback before real data exists: redeploy the previous Vercel build; if the schema is wrong, reset the production project and apply the corrected migrations.
+- Once real people use it: forward-only migrations, Vercel's previous deployments, and Pro daily backups.
+
+*Decisions for the product owner (everything else is an engineering choice made within the checkpoint):*
+1. Supabase plan for production and when spending starts (Free pauses and has no backups; Pro $25).
+2. Vercel plan (Hobby only if non-commercial; Pro $20 per seat otherwise).
+3. Domain: the Vercel default address or a custom domain (recommended before inviting testers, so the app's address never changes).
+4. Sign-in methods at launch: email and password (built and tested), or Google sign-in as well (new work).
+5. "Account" wording: sign-in account versus money accounts (AC conflict 3).
+6. Supabase region (fixed for the life of a project).
+7. SMTP provider and sending address.
+8. When to delete the Firebase project and Cloud Run services (recommended: as part of F6, right after F5 is verified).
+
+*Engineering choices (no separate authorization):* build-mode and environment names, `vercel.json` and headers, consolidating migrations before the first hosted project, applying migrations by CLI or SQL editor, test order, and how Firebase code is removed.
+
+**Recommended next checkpoint after F0: F1 (AC-S).**
+
+**F1. AC-S: accounts, transfers and Strategic Reserves in Supabase (complete, October 2026; in review).**
+- **Schema** (migration `20261022000005_accounts_and_transfers.sql`): `accounts` (name, type, optional opening balance as amount and date together) and `transfers` (two different accounts, amount, date, expected or recorded, a recorded time exactly when recorded), both owned by a workspace with row-level security, read-only grants and no direct writes; `account_id` on items and records and `release` on records, with checks: an assignment suits the item's kind, a recurring occurrence carries an account only once recorded, a release only on a one-time Strategic Reserves record. Account references are checked at commit, so a save replaces accounts and the items naming them in any order.
+- **Functions:** `load_plan` and `save_plan` carry the new tables and columns; a save must include `accounts` and `transfers`; references must point into the plan and assignments must suit their kind; an ordinary save removes at most one account and one transfer, as for every other collection. Nothing else changed.
+- **App:** `rows.ts` maps them both ways and `checkForMigration` names what the database would refuse; the adapter's refusal (`hasAccountData`) is gone; the Supabase build offers the Accounts section and "Use reserves". No compatibility code: nothing existed to preserve.
+- **Hosted tooling:** `verify.sql` covers all eleven tables (27 checks); the hosted-test guide applies every migration in order.
+- **Not changed:** device storage, backups and Firebase (which still leaves accounts out). The "Account" wording conflict (sign-in versus money accounts, now both in the Supabase build's Settings) is decision 5, for F2.
+- Tests: `accounts-persistence` (Supabase round trip with balances and timeline; what the database would refuse), `integrity.db` (round trip, thirteen ordinary saves of every account and transfer operation with identical balances and figures, removal limits, constraints, another person can't read them), `security.db` and `account.db` (row-level security and account deletion cover both tables), `rows` and `equivalence.db` (an "everything" plan with every kind of income, accounts and transfers), `money-accounts` (the Supabase build offers accounts and "Use reserves"); `adapter.supabase` and the cross-account browser check run in CI.
 
 Fields ignored by R1–R2 can be dropped from the schema at the cutover.
 

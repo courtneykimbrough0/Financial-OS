@@ -7,13 +7,14 @@
  * Every financially meaningful field round-trips exactly: identities,
  * original predictions, current expectations, actuals, schedules, pauses,
  * estimate dismissals, income certainty, income type and wage, shifts,
- * freelance clients and jobs, and onboarding. Three things come back in canonical form (see `canonicalize`):
+ * freelance clients and jobs, accounts and transfers, item and record
+ * accounts, opening balances, reserve releases, and onboarding. Three things come back in canonical form (see `canonicalize`):
  * timestamps as ISO-8601 UTC with milliseconds, schedule versions in start
  * order, and pauses in date order. Sample data is never stored.
  */
 import { isValidDateStr, type DateStr } from '../../domain/dates';
 import { validateRule } from '../../domain/recurrence';
-import { ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OccurrenceRecord, type RecurrenceRule, type RecurringKind, type Client, type FreelanceJob, type IncomeType, type JobStatus, type RecurringSource, workKindFor, type ScheduleVersion, type StoredStatus, type TransactionKind, type WorkEntry } from '../../domain/types';
+import { ACCOUNT_TYPES, accountTypeFor, ONE_TIME_KINDS, RECURRING_KINDS, type Account, type AccountType, type AppData, type OccurrenceRecord, type RecurrenceRule, type RecurringKind, type Client, type FreelanceJob, type IncomeType, type JobStatus, type RecurringSource, workKindFor, type ScheduleVersion, type StoredStatus, type TransactionKind, type Transfer, type TransferStatus, type WorkEntry } from '../../domain/types';
 
 export interface SourceRow {
   id: string;
@@ -32,6 +33,7 @@ export interface SourceRow {
   certainty: 'possible' | null;
   income_type: IncomeType | null;
   hourly_wage_cents: number | null;
+  account_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -72,6 +74,9 @@ export interface RecordRow {
   cancel_note: string | null;
   /** 'possible' on possible one-time income; null otherwise. */
   certainty: 'possible' | null;
+  account_id: string | null;
+  /** True only on a one-time Strategic Reserves record that returns money to cash flow. */
+  release: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -114,6 +119,30 @@ export interface JobRow {
   updated_at: string;
 }
 
+export interface AccountRow {
+  id: string;
+  position: number;
+  name: string;
+  type: AccountType;
+  opening_amount_cents: number | null;
+  opening_date: DateStr | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TransferRow {
+  id: string;
+  position: number;
+  from_account_id: string;
+  to_account_id: string;
+  amount_cents: number;
+  transfer_date: DateStr;
+  status: TransferStatus;
+  recorded_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** The body of a save_plan request. */
 export interface PlanRows {
   onboarding_complete: boolean;
@@ -124,6 +153,8 @@ export interface PlanRows {
   work_entries: WorkEntryRow[];
   clients: ClientRow[];
   jobs: JobRow[];
+  accounts: AccountRow[];
+  transfers: TransferRow[];
 }
 
 /** What load_plan returns. */
@@ -147,23 +178,6 @@ function ruleFrom(v: VersionRow): RecurrenceRule {
   return { type: v.rule_type };
 }
 
-/**
- * True when the plan has accounts, item assignments, transfers or reserve
- * releases. The database has no place for them yet (roadmap, accounts phase
- * AC-S), so the adapter refuses such a save rather than silently dropping
- * them.
- */
-export function hasAccountData(data: AppData): boolean {
-  return (
-    (data.accounts?.length ?? 0) > 0 ||
-    (data.transfers?.length ?? 0) > 0 ||
-    data.sources.some((s) => s.accountId !== undefined) ||
-    data.records.some((r) => r.accountId !== undefined || r.release !== undefined)
-  );
-}
-
-export const ACCOUNTS_NOT_STORED = "This plan has accounts, transfers or reserve releases, which can't be saved to this storage yet. Nothing was saved.";
-
 /** The plan as the rows save_plan expects. Doesn't validate; see `checkForMigration`. */
 export function toRows(data: AppData): PlanRows {
   const sources: SourceRow[] = data.sources.map((s, i) => ({
@@ -182,6 +196,7 @@ export function toRows(data: AppData): PlanRows {
     certainty: s.certainty ?? null,
     income_type: s.incomeType ?? null,
     hourly_wage_cents: s.hourlyWageCents ?? null,
+    account_id: s.accountId ?? null,
     created_at: s.createdAt,
     updated_at: s.updatedAt,
   }));
@@ -207,6 +222,8 @@ export function toRows(data: AppData): PlanRows {
     canceled_at: r.canceledAt,
     cancel_note: r.cancelNote,
     certainty: r.certainty ?? null,
+    account_id: r.accountId ?? null,
+    release: r.release === true,
     created_at: r.createdAt,
     updated_at: r.updatedAt,
   }));
@@ -246,6 +263,28 @@ export function toRows(data: AppData): PlanRows {
       created_at: j.createdAt,
       updated_at: j.updatedAt,
     })),
+    accounts: (data.accounts ?? []).map((a, i) => ({
+      id: a.id,
+      position: i,
+      name: a.name,
+      type: a.type,
+      opening_amount_cents: a.opening?.amountCents ?? null,
+      opening_date: a.opening?.date ?? null,
+      created_at: a.createdAt,
+      updated_at: a.updatedAt,
+    })),
+    transfers: (data.transfers ?? []).map((t, i) => ({
+      id: t.id,
+      position: i,
+      from_account_id: t.fromAccountId,
+      to_account_id: t.toAccountId,
+      amount_cents: t.amountCents,
+      transfer_date: t.date,
+      status: t.status,
+      recorded_at: t.recordedAt,
+      created_at: t.createdAt,
+      updated_at: t.updatedAt,
+    })),
   };
 }
 
@@ -281,6 +320,7 @@ export function fromRows(plan: LoadedPlan): AppData {
       ...(s.certainty === 'possible' ? { certainty: 'possible' as const } : {}),
       ...(s.income_type ? { incomeType: s.income_type } : {}),
       ...(s.hourly_wage_cents !== null && s.hourly_wage_cents !== undefined ? { hourlyWageCents: Number(s.hourly_wage_cents) } : {}),
+      ...(s.account_id ? { accountId: s.account_id } : {}),
       createdAt: s.created_at,
       updatedAt: s.updated_at,
     }));
@@ -303,6 +343,8 @@ export function fromRows(plan: LoadedPlan): AppData {
       completedAt: r.completed_at,
       canceledAt: r.canceled_at,
       cancelNote: r.cancel_note,
+      ...(r.account_id ? { accountId: r.account_id } : {}),
+      ...(r.release ? { release: true as const } : {}),
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
@@ -337,12 +379,37 @@ export function fromRows(plan: LoadedPlan): AppData {
       createdAt: j.created_at,
       updatedAt: j.updated_at,
     }));
+  const accounts: Account[] = [...(plan.accounts ?? [])]
+    .sort((a, b) => a.position - b.position)
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      type: a.type,
+      ...(a.opening_date !== null ? { opening: { amountCents: Number(a.opening_amount_cents), date: a.opening_date } } : {}),
+      createdAt: a.created_at,
+      updatedAt: a.updated_at,
+    }));
+  const transfers: Transfer[] = [...(plan.transfers ?? [])]
+    .sort((a, b) => a.position - b.position)
+    .map((t) => ({
+      id: t.id,
+      fromAccountId: t.from_account_id,
+      toAccountId: t.to_account_id,
+      amountCents: Number(t.amount_cents),
+      date: t.transfer_date,
+      status: t.status,
+      recordedAt: t.recorded_at,
+      createdAt: t.created_at,
+      updatedAt: t.updated_at,
+    }));
   return {
     schemaVersion: 2,
     revision: Number(plan.revision),
     onboardingComplete: plan.onboarding_complete,
     sources,
     records,
+    ...(accounts.length ? { accounts } : {}),
+    ...(transfers.length ? { transfers } : {}),
     ...(workEntries.length ? { workEntries } : {}),
     ...(clients.length ? { clients } : {}),
     ...(jobs.length ? { jobs } : {}),
@@ -376,6 +443,10 @@ export function canonicalize(data: AppData): AppData {
     ...(data.workEntries ? { workEntries: data.workEntries.map((e) => ({ ...e, createdAt: canonicalTimestamp(e.createdAt), updatedAt: canonicalTimestamp(e.updatedAt) })) } : {}),
     ...(data.clients ? { clients: data.clients.map((c) => ({ ...c, createdAt: canonicalTimestamp(c.createdAt), updatedAt: canonicalTimestamp(c.updatedAt) })) } : {}),
     ...(data.jobs ? { jobs: data.jobs.map((j) => ({ ...j, createdAt: canonicalTimestamp(j.createdAt), updatedAt: canonicalTimestamp(j.updatedAt) })) } : {}),
+    ...(data.accounts ? { accounts: data.accounts.map((a) => ({ ...a, createdAt: canonicalTimestamp(a.createdAt), updatedAt: canonicalTimestamp(a.updatedAt) })) } : {}),
+    ...(data.transfers
+      ? { transfers: data.transfers.map((t) => ({ ...t, recordedAt: ts(t.recordedAt), createdAt: canonicalTimestamp(t.createdAt), updatedAt: canonicalTimestamp(t.updatedAt) })) }
+      : {}),
   };
 }
 
@@ -400,6 +471,27 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
   const error = (message: string) => issues.push({ level: 'error', message });
   const normalized = (message: string) => issues.push({ level: 'normalized', message });
   const text = (s: string) => s.trim() !== '' && s.length <= 200;
+
+  const accountIds = new Set<string>();
+  const accountById = new Map((data.accounts ?? []).map((a) => [a.id, a]));
+  (data.accounts ?? []).forEach((a, i) => {
+    const where = `Account ${i + 1} (${a.id})`;
+    if (accountIds.has(a.id)) error(`${where}: the id is used twice.`);
+    accountIds.add(a.id);
+    if (a.id.length === 0 || a.id.length > 200) error(`${where}: the id can't be used (empty or too long).`);
+    if (a.name.trim() === '' || a.name.length > 60) error(`${where}: the name is empty or longer than 60 characters.`);
+    if (!ACCOUNT_TYPES.includes(a.type)) error(`${where}: unknown account type.`);
+    if (a.opening !== undefined && !(Number.isSafeInteger(a.opening.amountCents) && Math.abs(a.opening.amountCents) <= MAX_CENTS && isValidDateStr(a.opening.date))) error(`${where}: the opening balance isn't a valid amount and date.`);
+    if (!isTimestamp(a.createdAt) || !isTimestamp(a.updatedAt)) error(`${where}: a created or updated time isn't a valid time.`);
+  });
+  if (accountIds.size > 50) error('More than 50 accounts.');
+  /** An item or record may name only an account that exists and suits its kind. */
+  const checkAccount = (where: string, kind: TransactionKind, accountId: string | undefined) => {
+    if (accountId === undefined) return;
+    const account = accountById.get(accountId);
+    if (!account) error(`${where}: its account no longer exists.`);
+    else if (account.type !== accountTypeFor(kind)) error(`${where}: its account isn't the type that suits it.`);
+  };
 
   const sourceIds = new Set<string>();
   const versionIds = new Set<string>();
@@ -433,6 +525,7 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
       error(`${where}: only income can be hourly, tipped or gig, and a wage needs hourly or tipped and an amount above $0.`);
     }
     if (s.pausedRanges.some((p, j) => j > 0 && p.from < s.pausedRanges[j - 1]!.from)) normalized(`${where}: turned-off stretches will be stored in date order.`);
+    checkAccount(where, s.kind, s.accountId);
   });
   const recordIds = new Set<string>();
   data.records.forEach((r, i) => {
@@ -456,6 +549,23 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
     if ((r.status === 'canceled') !== (r.canceledAt !== null)) error(`${where}: the cancel time doesn't match its status.`);
     if (r.cancelNote !== null && (r.status !== 'canceled' || r.cancelNote.length > 500)) error(`${where}: a cancel note on something not canceled, or longer than 500 characters.`);
     if (![r.createdAt, r.updatedAt].every(isTimestamp) || ![r.completedAt, r.canceledAt].every((t) => t === null || isTimestamp(t))) error(`${where}: a time isn't a valid time.`);
+    checkAccount(where, r.kind, r.accountId);
+    if (r.accountId !== undefined && r.sourceId !== null && !completed) error(`${where}: a recurring occurrence follows its item's account until it's recorded.`);
+    if (r.release !== undefined && (r.release !== true || r.sourceId !== null || r.kind !== 'reserve')) error(`${where}: only a one-time Strategic Reserves item can be a release.`);
+  });
+
+  const transferIds = new Set<string>();
+  (data.transfers ?? []).forEach((t, i) => {
+    const where = `Transfer ${i + 1} (${t.id})`;
+    if (transferIds.has(t.id)) error(`${where}: the id is used twice.`);
+    transferIds.add(t.id);
+    if (!accountById.has(t.fromAccountId) || !accountById.has(t.toAccountId)) error(`${where}: one of its accounts no longer exists.`);
+    if (t.fromAccountId === t.toAccountId) error(`${where}: it moves money from an account to the same account.`);
+    if (!isCents(t.amountCents)) error(`${where}: the amount must be above $0 and at most $100,000,000.`);
+    if (!isValidDateStr(t.date)) error(`${where}: the date isn't valid.`);
+    if (t.status !== 'expected' && t.status !== 'recorded') error(`${where}: unknown status.`);
+    if ((t.status === 'recorded') !== (t.recordedAt !== null)) error(`${where}: the recorded time doesn't match its status.`);
+    if (![t.createdAt, t.updatedAt].every(isTimestamp) || !(t.recordedAt === null || isTimestamp(t.recordedAt))) error(`${where}: a time isn't a valid time.`);
   });
 
   const recordById = new Map(data.records.map((r) => [r.id, r]));
@@ -512,9 +622,10 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
     ...(data.workEntries ?? []).flatMap((e) => [e.createdAt, e.updatedAt]),
     ...(data.clients ?? []).flatMap((c) => [c.createdAt, c.updatedAt]),
     ...(data.jobs ?? []).flatMap((j) => [j.createdAt, j.updatedAt]),
+    ...(data.accounts ?? []).flatMap((a) => [a.createdAt, a.updatedAt]),
+    ...(data.transfers ?? []).flatMap((t) => [t.createdAt, t.updatedAt, t.recordedAt]),
   ];
   if (all.some((t) => t !== null && isTimestamp(t) && canonicalTimestamp(t) !== t)) normalized('Some times will be stored as ISO-8601 UTC with milliseconds.');
   if (data.isSample) error('Sample data is never stored in an account.');
-  if (hasAccountData(data)) error("Accounts, account assignments, transfers and reserve releases can't be stored in Supabase yet.");
   return issues;
 }
