@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { devConfigProblem, SupabaseDevelopment } from '../dev';
+import { devConfigProblem, SupabaseStorage } from '../dev';
 
 const jwt = (role: string) => `x.${btoa(JSON.stringify({ role })).replace(/=+$/, '')}.y`;
 
@@ -26,7 +26,7 @@ describe('development Supabase configuration', () => {
       vi.stubEnv('VITE_SUPABASE_URL', url);
       vi.stubEnv('VITE_SUPABASE_ANON_KEY', key);
       const app = vi.fn(() => <p>app</p>);
-      const { unmount } = render(<SupabaseDevelopment>{app}</SupabaseDevelopment>);
+      const { unmount } = render(<SupabaseStorage>{app}</SupabaseStorage>);
       expect(screen.getByRole('alert')).toHaveTextContent(/^Development storage couldn't start\./);
       expect(app).not.toHaveBeenCalled();
       unmount();

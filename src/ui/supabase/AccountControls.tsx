@@ -183,7 +183,7 @@ export function AccountCard() {
   return (
     <>
       <section className="card settings-card" aria-labelledby="settings-account">
-        <h2 id="settings-account">Account</h2>
+        <h2 id="settings-account">Sign-in &amp; Security</h2>
         {account.user.anonymous ? <KeepThisPlan /> : (
           <p>
             Signed in as <strong>{account.user.email}</strong>

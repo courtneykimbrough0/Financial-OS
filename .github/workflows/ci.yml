@@ -44,6 +44,8 @@ jobs:
       - run: npm install --no-save playwright@1.56.1
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
+      # The production Supabase build (F2) served with vercel.json's rewrites and headers.
+      - run: npm run e2e:production
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

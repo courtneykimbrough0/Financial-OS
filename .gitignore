@@ -11,6 +11,7 @@ e2e-screenshots
 dist-e2e
 dist-e2e-*
 dist-hosted-test
+dist-supabase
 bun.lock
 firebase-debug.log
 firestore-debug.log
