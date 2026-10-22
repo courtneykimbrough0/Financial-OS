@@ -8,7 +8,7 @@ How to run Financial OS's Supabase tests, and the Supabase build of the app, aga
 
 The default app is unaffected; it never includes any Supabase code (see [SUPABASE.md](SUPABASE.md)).
 
-No hosted project has been set up or tested yet. The steps below are for the product owner. Claude Code doesn't create projects, apply SQL to them, or handle their keys, and never needs the database password or a service-role key.
+No hosted project has been set up or tested yet. The steps below are for the product owner. Claude Code handles no keys and never needs the database password or a service-role key; it works in a hosted project only through the Supabase connector, for a project you name (step 3).
 
 ## How a hosted project is selected
 
@@ -65,9 +65,11 @@ Do these in order; each step says where in the Supabase dashboard (supabase.com/
    - Project Settings → API Keys: the **publishable** key (`sb_publishable_…`), or the legacy `anon` key.
 
    Never copy the `service_role` or secret key anywhere.
-3. **Apply every migration in `supabase/migrations`, in file-name order** (SQL Editor → New query → paste one whole file → Run; one file at a time). There are nine today, from `20261016000001_financial_schema.sql` to `20261022000005_accounts_and_transfers.sql`.
+3. **Apply the migrations in `supabase/migrations`, in file-name order.** Today that is one file, `20261022100000_baseline.sql` (SQL Editor → New query → paste the whole file → Run). It needs an empty `public` schema.
 
    If you use the Supabase CLI instead: `supabase link --project-ref <ref>` then `supabase db push`. Before anything else, make sure the dashboard shows the right project name. If any file fails, stop: don't run the next one.
+
+   With your authorization for a named project, Claude Code can apply the migrations, run `verify.sql` and read the security advisors through the Supabase connector instead. The connector never shows the database password or a secret key. The dashboard steps (5 to 12) stay yours.
 4. **Check them.** Run `supabase/hosted-test/verify.sql` in the SQL Editor. It is read-only. All 27 rows must read `ok`; if any doesn't, stop. The checks cover:
    - the four functions: fixed search paths, the right security setting, not callable signed out;
    - row-level security on all eleven tables;
@@ -95,7 +97,7 @@ Do these in order; each step says where in the Supabase dashboard (supabase.com/
 11. **Authentication → Rate Limits:** a full automated run makes about 160 accounts. Raise sign-ups and sign-ins, and token verifications, enough for that, on this project only.
 12. **Approve the project in the repository:** add the ref to `supabase/hosted-test/projects.json` as `"projects": [{ "ref": "<ref>", "purpose": "Financial OS hosted tests" }]`, in a commit you review.
 
-Account deletion needs nothing more: `delete_account()` (migration 3) runs in the database and requires a password sign-in within the last 5 minutes. No service-role key is used anywhere.
+Account deletion needs nothing more: `delete_account()` runs in the database and requires a password sign-in within the last 5 minutes. No service-role key is used anywhere.
 
 ## Keys and settings
 
