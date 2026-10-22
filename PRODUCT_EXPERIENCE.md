@@ -226,6 +226,12 @@ An **Earnings** section appears only when earnings data exists:
 
 **Earned is never added to cash flow.** Money counts when it arrives.
 
+**As built (E5):**
+- An Earnings card after the month summary, only when there are shifts, sessions or jobs: Earned from work, Hours, Effective hourly, Jobs paid, Not received yet, Received for work.
+- Details opens a read-only sheet: work in the month per income (shifts or sessions, hours, wages, cash tips or cash received, card tips, platform earnings, earned, effective hourly); not received yet as of today (earned, not paid yet; waiting for payout, by platform; jobs done, not paid yet; planned jobs); and the month's received paychecks, payouts, cash and job payments.
+- Received for work is the same recorded income the summary counts, listed again, never added again. Fixed income is never earnings.
+- A Possible list shows possible income in the month not received (section 6.3), apart from every total.
+
 ### 4.3 Empty states
 
 | Situation | Shown |
@@ -301,7 +307,7 @@ Visibility follows the data, through rules computed from forecast output. CSS ne
 
 The data model gains an optional `certainty: 'expected' | 'possible'` on income sources and one-time income records, defaulting to `expected`. Existing data keeps meaning exactly what it means now.
 
-**As built (E1):** stored only as `certainty: 'possible'` (absent means expected). A recurring occurrence follows its item. Possible income appears on Home in a "Possible" list for the viewed week, in the Forecast and on Plan with a dashed "Possible" badge and a muted amount; its sheet offers Record received and Mark as expected (with its current date; Change date or amount sets another). A recurring item marked expected counts from today; its earlier unrecorded dates are skipped, each restorable, so they never become overdue income. Received possible income counts once, as recorded. Not built yet: the "Possible" group in Activity's income list (E5) and possible income as hypothetical income in scenarios; scenarios offer only counted items.
+**As built (E1):** stored only as `certainty: 'possible'` (absent means expected). A recurring occurrence follows its item. Possible income appears on Home in a "Possible" list for the viewed week, in the Forecast and on Plan with a dashed "Possible" badge and a muted amount; its sheet offers Record received and Mark as expected (with its current date; Change date or amount sets another). A recurring item marked expected counts from today; its earlier unrecorded dates are skipped, each restorable, so they never become overdue income. Received possible income counts once, as recorded. Activity lists possible income in its month under "Possible" since E5. Not built yet: possible income as hypothetical income in scenarios; scenarios offer only counted items.
 
 ### 6.4 Tipped workers
 
@@ -335,7 +341,7 @@ The data model gains an optional `certainty: 'expected' | 'possible'` on income 
 - Cash tips are one received income record on the shift's date ("Cash tips · Server"), which changes only through the shift; correcting the tips replaces it.
 - Recording a paycheck pays the income's unpaid shifts worked before the day it arrived ("Paid in the Oct 30 paycheck"); undoing it unpays them; a shift can be marked not paid, or paid by a recorded paycheck, by hand.
 - Option A only: the expected paycheck stays as entered. Option B (a suggestion from shifts) is deferred: wages are before taxes and deductions, so a suggestion needs its own design.
-- Not built yet: Quick add from Home, the weekly sheet, per-week totals on screen, and the Earnings report (E5).
+- Not built yet: Quick add from Home, the weekly sheet, per-week totals on screen, and earned-versus-paid reconciliation per paycheck. Monthly earnings are in Activity since E5.
 
 ### 6.5 Freelancers
 
@@ -410,7 +416,7 @@ WorkEntry {
 - **As built (E4), sessions:** `kind: 'session'` rows in the same `workEntries` collection, on `incomeType: 'gig'` income only, with `earningsCents` and `platform`; `cashTipsCents` is the cash received. Operations: `logSession`, `editSession` (the shift operations underneath); payouts link and unlink exactly as paychecks do. Jobs stay separate (decision recorded after E3).
 - **As built (E2), shifts only:** `kind: 'shift'`; no stored status (paid is `paidByOccurrenceId`); the tips link is `cashTipsRecordId`; hours are `minutes`. Operations: `logShift`, `editShift`, `deleteShift`, `setShiftPaid`, `setIncomeDetails`; `recordActual` pays shifts and `restoreOccurrence` unpays them.
 
-**4. Aggregation.** The Activity view's pure helpers in `src/domain/`, plus `earnings.ts` for hours, tips, effective hourly, and earned versus paid. **As built (E2):** `earnings.ts` has per-shift earnings, totals, effective hourly and earned not paid; reports wait for E5.
+**4. Aggregation.** The Activity view's pure helpers in `src/domain/`, plus `earnings.ts` for hours, tips, effective hourly, and earned versus paid. **As built (E2):** `earnings.ts` has per-shift earnings, totals, effective hourly and earned not paid; **As built (E5):** `earnings-history.ts` gathers them per month for Activity, beside the recorded income that pays for the work.
 
 ### 6.9 Persistence and database changes (Proposed; certainty implemented in E1)
 
