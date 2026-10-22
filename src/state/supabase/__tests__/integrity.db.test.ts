@@ -6,7 +6,7 @@ import { variance } from '../../../domain/occurrences';
 import * as ops from '../../../domain/operations';
 import type { AppData } from '../../../domain/types';
 import { toRows } from '../rows';
-import { richPlan, TODAY } from './fixtures';
+import { richPlan, TODAY, withShifts } from './fixtures';
 import { count, load, newUser, save, saveOk, savePlan, sql, workspaceOf } from './pg';
 
 const clock = clockAt(TODAY);
@@ -339,5 +339,57 @@ describe('income certainty (E1)', () => {
     expect(replace({ records: rows.records.map((r) => (r.id === 'one-ref' ? { ...r, certainty: 'maybe' as never } : r)) }).code).toBe('23514');
     expect(replace({ sources: rows.sources.map((s) => (s.id === 'pay' ? { ...s, certainty: 'expected' as never } : s)) }).code).toBe('23514');
     expect(load(user)).toEqual(back);
+  });
+});
+
+describe('hourly and tipped income (E2)', () => {
+  const counted = (d: AppData) => buildForecast(d, TODAY).entries.filter((e) => e.counts).map((e) => [e.occurrence.id, e.date, e.signedCents]);
+
+  it('stores income type, wage and shifts, reads them back exactly, and the forecast is unchanged by the round trip', () => {
+    const plan = withShifts(richPlan());
+    const { user, data } = stored(plan);
+    expect(data.sources.find((s) => s.id === 'side')).toMatchObject({ incomeType: 'tipped', hourlyWageCents: 1600 });
+    expect(data.workEntries).toEqual(plan.workEntries!.map((e) => ({ ...e, createdAt: expect.any(String), updatedAt: expect.any(String) })));
+    const tipsId = data.workEntries![0]!.cashTipsRecordId!;
+    expect(data.records.find((r) => r.id === tipsId)).toMatchObject({ status: 'completed', actualAmountCents: usd(42.5), actualDate: '2026-10-14' });
+    expect(counted(data)).toEqual(counted(plan));
+    expect(count(`select count(*) from public.work_entries where workspace_id = '${workspaceOf(user)}'`)).toBe(2);
+    // Another person can't read them.
+    const other = newUser();
+    expect(sql({ user: other }, `select count(*) from public.work_entries where workspace_id = '${workspaceOf(user)}';`).out).toBe('0');
+  });
+
+  it('ordinary saves: correcting cash tips replaces their record, recording a paycheck pays shifts, deleting one shift is allowed, two at once is not', () => {
+    const { user, data } = stored(withShifts(richPlan()));
+    const oldTips = data.workEntries![0]!.cashTipsRecordId!;
+    let back = saveOk(user, unwrap(ops.editShift(data, 'shift-1', { date: '2026-10-14', minutes: 330, wageCents: 1600, cashTipsCents: usd(50), cardTipsCents: usd(31) }, clock)));
+    expect(back.records.some((r) => r.id === oldTips)).toBe(false);
+    expect(back.records.find((r) => r.id === back.workEntries![0]!.cashTipsRecordId)!.actualAmountCents).toBe(usd(50));
+    back = saveOk(user, unwrap(ops.recordActual(back, 'side@2026-10-17', { amountCents: usd(140), date: '2026-10-16' }, clock)));
+    expect(back.workEntries!.map((e) => e.paidByOccurrenceId)).toEqual(['side@2026-10-17', 'side@2026-10-17']);
+    const both = { ...back, workEntries: [] };
+    expect(save(user, both).code).toBe('PT422');
+    back = saveOk(user, unwrap(ops.deleteShift(back, 'shift-2')));
+    expect(back.workEntries!.map((e) => e.id)).toEqual(['shift-1']);
+  });
+
+  it('the database refuses malformed shifts and income details, and a save that leaves shifts out', () => {
+    const { user, data } = stored(withShifts(richPlan()));
+    const rows = toRows(data);
+    const replace = (patch: Record<string, unknown>) => savePlan(user, data.revision, { ...rows, ...patch } as never, { mode: 'replace' });
+    const shift = (patch: Record<string, unknown>) => replace({ work_entries: rows.work_entries.map((e, i) => (i === 1 ? { ...e, ...patch } : e)) });
+    expect(shift({ minutes: 1441 }).code).toBe('23514');
+    expect(shift({ cash_tips_cents: 0 }).code).toBe('23514');
+    expect(shift({ minutes: null }).code).toBe('23514');
+    expect(shift({ kind: 'job' }).code).toBe('23514');
+    expect(shift({ source_id: 'nope' }).code).toBe('PT422');
+    expect(shift({ paid_by_occurrence_id: 'nope' }).code).toBe('PT422');
+    expect(shift({ cash_tips_record_id: rows.work_entries[0]!.cash_tips_record_id }).code).toBe('23514');
+    expect(replace({ sources: rows.sources.map((s) => (s.id === 'rent' ? { ...s, income_type: 'hourly' } : s)) }).code).toBe('23514');
+    expect(replace({ sources: rows.sources.map((s) => (s.id === 'pay' ? { ...s, hourly_wage_cents: 1500 } : s)) }).code).toBe('23514');
+    const { work_entries: _w, ...withoutShifts } = rows;
+    void _w;
+    expect(savePlan(user, data.revision, withoutShifts, { mode: 'replace' }).code).toBe('PT422');
+    expect(load(user)).toEqual(data);
   });
 });

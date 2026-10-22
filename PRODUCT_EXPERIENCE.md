@@ -288,7 +288,7 @@ Visibility follows the data, through rules computed from forecast output. CSS ne
 | Gig | Baseline expected payouts, or nothing | Sessions: earnings, cash received, platform payouts |
 | One-time / irregular | Amount and date (exists today) | Mark as expected or possible |
 
-**Implemented today:** recurring income (fixed amounts on a schedule), one-time income, and recorded actuals with amounts and dates that can differ from the expected ones. The main paycheck concept was removed in Phase R1. Everything else in this table is Missing.
+**Implemented today:** recurring income (fixed amounts on a schedule), one-time income, and recorded actuals with amounts and dates that can differ from the expected ones. The main paycheck concept was removed in Phase R1. Expected and possible income since E1; hourly and tipped income with shifts since E2. Freelance and gig detail are Missing.
 
 ### 6.3 Expected, possible, received (Implemented in E1)
 
@@ -329,6 +329,14 @@ The data model gains an optional `certainty: 'expected' | 'possible'` on income 
 
 **Weekly workflow (optional).** Log the week's shifts in one sheet: a row per day, blank rows ignored.
 
+**As built (E2):**
+- Tracking is turned on by choosing Hourly or Tipped under "How is it paid?" on the income's form, with an optional usual hourly wage.
+- A shift is logged from the income's sheet in Plan (Shifts › Log a shift), worked today or earlier. Hours take "6.5" or "6:30"; every field but the date is optional, and a shift needs hours or tips.
+- Cash tips are one received income record on the shift's date ("Cash tips · Server"), which changes only through the shift; correcting the tips replaces it.
+- Recording a paycheck pays the income's unpaid shifts worked before the day it arrived ("Paid in the Oct 30 paycheck"); undoing it unpays them; a shift can be marked not paid, or paid by a recorded paycheck, by hand.
+- Option A only: the expected paycheck stays as entered. Option B (a suggestion from shifts) is deferred: wages are before taxes and deductions, so a suggestion needs its own design.
+- Not built yet: Quick add from Home, the weekly sheet, per-week totals on screen, and the Earnings report (E5).
+
 ### 6.5 Freelancers
 
 - **Clients** are optional names grouping jobs. A client can be an income source with no schedule.
@@ -367,7 +375,7 @@ The existing engine is extended, not rebuilt.
 - It is never an eligible forecast start (section 8).
 - **As built (E1):** also never carried forward and never overdue; only received possible income counts. `setIncomeCertainty` changes the mark and nothing else.
 
-**2. Income type.** An optional `incomeType` on income sources, for labels and for which optional tools appear. It has no effect on the math.
+**2. Income type.** An optional `incomeType` on income sources, for labels and for which optional tools appear. It has no effect on the math. **As built (E2):** `'hourly' | 'tipped'` (absent is a fixed amount), with an optional `hourlyWageCents`.
 
 **3. Work entries.** A new collection: `workEntries: WorkEntry[]` on `AppData`.
 
@@ -383,8 +391,9 @@ WorkEntry {
 
 - Work entries never enter `buildForecast` directly. Only their linked income records do, so the no-double-counting rule is structural.
 - Pure operations in `operations.ts`: `logWork`, `editWork`, `linkPayout`, `recordJobPayment`, each correctable by ordinary editing (no undo history).
+- **As built (E2), shifts only:** `kind: 'shift'`; no stored status (paid is `paidByOccurrenceId`); the tips link is `cashTipsRecordId`; hours are `minutes`. Operations: `logShift`, `editShift`, `deleteShift`, `setShiftPaid`, `setIncomeDetails`; `recordActual` pays shifts and `restoreOccurrence` unpays them.
 
-**4. Aggregation.** The Activity view's pure helpers in `src/domain/`, plus `earnings.ts` for hours, tips, effective hourly, and earned versus paid.
+**4. Aggregation.** The Activity view's pure helpers in `src/domain/`, plus `earnings.ts` for hours, tips, effective hourly, and earned versus paid. **As built (E2):** `earnings.ts` has per-shift earnings, totals, effective hourly and earned not paid; reports wait for E5.
 
 ### 6.9 Persistence and database changes (Proposed; certainty implemented in E1)
 
@@ -396,6 +405,8 @@ WorkEntry {
 **The constraint.** Firestore rules can't be deployed while Firebase is legacy (AGENTS.md section C1). A signed-in Firebase account would have saves with new top-level fields (such as `workEntries`) refused. New fields inside items (such as `certainty`) would be accepted, since items aren't checked field by field, but an older copy of the app would ignore them: it would count possible income.
 
 **So:** ship new income fields behind a flag, as `ACCOUNTS_IN_SIGNED_IN_SAVES` does for accounts today: available with device storage and Supabase, hidden for Firebase accounts. Alternatively, schedule income expansion after the Supabase cutover (decision D8).
+
+**As built (E2):** `INCOME_DETAIL_IN_SIGNED_IN_SAVES = false` for income type, wage and shifts, refused the same way. Supabase: `income_type` and `hourly_wage_cents` on `sources`, and a `work_entries` table (migration `20261022000002_hourly_and_tipped_income.sql`). No amount is stored as $0: an amount that isn't there is null.
 
 **As built (E1):** `INCOME_CERTAINTY_IN_SIGNED_IN_SAVES = false`. Unlike accounts, the mark can't simply be left out of a Firebase save (that would turn possible income into counted income), so a plan with possible income is refused there and nothing is saved. Supabase stores it in a `certainty` column (migration `20261022000001_income_certainty.sql`) with checks; `load_plan` and `save_plan` carry it.
 

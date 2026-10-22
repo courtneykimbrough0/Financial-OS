@@ -137,3 +137,13 @@ export function allPlans(): [string, AppData][] {
     ["sample data (as if it were the person's own)", sampleAsOwn],
   ];
 }
+
+/**
+ * `plan` with shift tracking (E2): the side job is tipped at $16/h, with a
+ * shift that had cash and card tips and one with hours only.
+ */
+export function withShifts(plan: AppData): AppData {
+  let d = unwrap(ops.setIncomeDetails(plan, 'side', { incomeType: 'tipped', hourlyWageCents: 1600 }, clock));
+  d = unwrap(ops.logShift(d, { sourceId: 'side', date: '2026-10-14', minutes: 330, wageCents: 1600, cashTipsCents: usd(42.5), cardTipsCents: usd(31) }, clock, 'shift-1'));
+  return unwrap(ops.logShift(d, { sourceId: 'side', date: '2026-10-15', minutes: 240, wageCents: 1600 }, clock, 'shift-2'));
+}

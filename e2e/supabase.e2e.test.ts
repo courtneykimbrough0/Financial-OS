@@ -287,7 +287,7 @@ describe('the development copy on local Supabase', () => {
     const asB = asUser(sb.access_token);
     const wsA = (await asUser(sa.access_token).from('workspaces').select('id')).data![0]!.id;
     expect((await asB.from('workspaces').select('id').eq('id', wsA)).data).toEqual([]);
-    for (const t of ['sources', 'schedule_versions', 'source_pauses', 'occurrence_records']) expect([t, (await asB.from(t).select('*').eq('workspace_id', wsA)).data]).toEqual([t, []]);
+    for (const t of ['sources', 'schedule_versions', 'source_pauses', 'occurrence_records', 'work_entries']) expect([t, (await asB.from(t).select('*').eq('workspace_id', wsA)).data]).toEqual([t, []]);
     expect((await asB.from('sources').update({ description: 'x' }).eq('workspace_id', wsA)).error?.code).toBe('42501');
     expect((await asB.from('sources').insert({ workspace_id: wsA, id: 'x', position: 0, kind: 'bill', description: 'x', active: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })).error?.code).toBe('42501');
     // And signed-out callers reach nothing.

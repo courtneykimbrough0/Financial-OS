@@ -6,7 +6,7 @@ import { formatMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { periodPlan } from '../../domain/plan';
 import { describeRule } from '../../domain/recurrence';
-import { liabilityPrefix, type AppData, type OccurrenceRecord, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
+import { incomeTypePrefix, liabilityPrefix, type AppData, type OccurrenceRecord, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useAccount } from '../../state/account';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
@@ -111,6 +111,7 @@ function SourceRow({ s, onOpen }: { s: RecurringSource; onOpen: () => void }) {
           <span className="entry-title">{s.description}</span>
           <span className="entry-sub">
             {liabilityPrefix(s)}
+            {incomeTypePrefix(s)}
             {describeRule(v.rule, v.startDate)} · next {formatMedium(v.startDate)}
           </span>
           {s.certainty === 'possible' && <StatusBadge status="scheduled" possible />}

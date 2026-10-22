@@ -5,8 +5,8 @@
  * document; `migrate` is where future schema upgrades go.
  */
 import { isValidDateStr } from '../domain/dates';
-import { emptyData, MAX_ACCOUNT_NAME, MAX_ACCOUNTS, MAX_BALANCE_CENTS } from '../domain/operations';
-import { ACCOUNT_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type TransactionKind, type Transfer } from '../domain/types';
+import { emptyData, MAX_ACCOUNT_NAME, MAX_ACCOUNTS, MAX_BALANCE_CENTS, MAX_SHIFTS } from '../domain/operations';
+import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type EstimateDismissal, type OccurrenceRecord, type RecurringSource, type TransactionKind, type Transfer, type WorkEntry } from '../domain/types';
 
 export type SaveResult =
   | { ok: true; revision: number }
@@ -154,6 +154,64 @@ function readTransfers(t: unknown, accounts: Account[]): Transfer[] {
   return out;
 }
 
+const isCents = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) > 0 && (x as number) <= 100_000_000_00;
+
+/** An income's type and wage, kept only on income and only when well formed (a wage needs a type). */
+function readIncomeDetails(kind: TransactionKind, incomeType: unknown, wage: unknown): Pick<RecurringSource, 'incomeType' | 'hourlyWageCents'> {
+  if (kind !== 'income' || !INCOME_TYPES.includes(incomeType as never)) return {};
+  return { incomeType: incomeType as RecurringSource['incomeType'], ...(isCents(wage) ? { hourlyWageCents: wage } : {}) };
+}
+
+/**
+ * Saved shifts. A shift is kept only for an hourly or tipped income that
+ * exists, with a valid date and well-formed amounts (each optional, never $0).
+ * Its links are kept only when they still point at what they mean: its cash
+ * tips' received income record, and a recorded paycheck of the same income.
+ * A dropped link never moves money: the records are what count.
+ */
+function readWorkEntries(w: unknown, sources: RecurringSource[], records: OccurrenceRecord[]): WorkEntry[] {
+  if (!Array.isArray(w)) return [];
+  const shiftSources = new Set(sources.filter((s) => s.kind === 'income' && s.incomeType).map((s) => s.id));
+  const byId = new Map(records.map((r) => [r.id, r]));
+  const out: WorkEntry[] = [];
+  const ids = new Set<string>();
+  const tipRecords = new Set<string>();
+  for (const x of w) {
+    if (out.length >= MAX_SHIFTS || !x || typeof x !== 'object') continue;
+    const v = x as Partial<WorkEntry>;
+    const optional = (n: unknown, ok: (n: unknown) => boolean) => n === undefined || ok(n);
+    const valid =
+      typeof v.id === 'string' && v.id !== '' && !ids.has(v.id) &&
+      v.kind === 'shift' && typeof v.sourceId === 'string' && shiftSources.has(v.sourceId) && isValidDateStr(v.date) &&
+      optional(v.minutes, (n) => Number.isSafeInteger(n) && (n as number) > 0 && (n as number) <= 1440) &&
+      optional(v.wageCents, isCents) && optional(v.cashTipsCents, isCents) && optional(v.cardTipsCents, isCents) &&
+      (v.minutes !== undefined || v.cashTipsCents !== undefined || v.cardTipsCents !== undefined);
+    if (!valid) continue;
+    ids.add(v.id!);
+    const tips = v.cashTipsRecordId !== undefined ? byId.get(v.cashTipsRecordId) : undefined;
+    const keepTips = v.cashTipsCents !== undefined && tips !== undefined && tips.sourceId === null && tips.kind === 'income' && !tipRecords.has(tips.id);
+    if (keepTips) tipRecords.add(tips.id);
+    const paid = v.paidByOccurrenceId !== undefined ? byId.get(v.paidByOccurrenceId) : undefined;
+    const keepPaid = paid !== undefined && paid.sourceId === v.sourceId && paid.status === 'completed';
+    const now = typeof v.createdAt === 'string' ? v.createdAt : new Date(0).toISOString();
+    out.push({
+      id: v.id!,
+      sourceId: v.sourceId!,
+      kind: 'shift',
+      date: v.date!,
+      ...(v.minutes !== undefined ? { minutes: v.minutes } : {}),
+      ...(v.wageCents !== undefined ? { wageCents: v.wageCents } : {}),
+      ...(v.cashTipsCents !== undefined ? { cashTipsCents: v.cashTipsCents } : {}),
+      ...(v.cardTipsCents !== undefined ? { cardTipsCents: v.cardTipsCents } : {}),
+      ...(keepTips ? { cashTipsRecordId: tips.id } : {}),
+      ...(keepPaid ? { paidByOccurrenceId: paid.id } : {}),
+      createdAt: now,
+      updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : now,
+    });
+  }
+  return out;
+}
+
 /** An item's account, kept only when that account exists and suits the item's kind. */
 function keptAccount(accounts: Account[], kind: TransactionKind, accountId: unknown): { accountId?: string } {
   const account = typeof accountId === 'string' ? accounts.find((a) => a.id === accountId) : undefined;
@@ -171,13 +229,14 @@ export function migrate(raw: unknown): AppData {
   const revision = Number.isSafeInteger(doc.revision) && doc.revision! >= 0 ? doc.revision! : 0;
   const accounts = readAccounts(doc.accounts);
   const transfers = readTransfers(doc.transfers, accounts);
-  return {
+  const data: AppData = {
     schemaVersion: 2,
     revision,
     onboardingComplete: Boolean(doc.onboardingComplete),
     ...(doc.isSample ? { isSample: true } : {}),
-    sources: sources.map(({ liabilityType, mainPaycheck: _mp, estimateDismissal, accountId, certainty, ...s }: any) => ({
+    sources: sources.map(({ liabilityType, mainPaycheck: _mp, estimateDismissal, accountId, certainty, incomeType, hourlyWageCents, ...s }: any) => ({
       ...s,
+      ...readIncomeDetails(s.kind, incomeType, hourlyWageCents),
       kind: s.kind,
       // Only income can be possible; anything else, or no value, is expected (stored as no field).
       ...(s.kind === 'income' && certainty === 'possible' ? { certainty: 'possible' as const } : {}),
@@ -201,6 +260,8 @@ export function migrate(raw: unknown): AppData {
     ...(accounts.length > 0 ? { accounts } : {}),
     ...(transfers.length > 0 ? { transfers } : {}),
   };
+  const workEntries = readWorkEntries(doc.workEntries, data.sources, data.records);
+  return workEntries.length > 0 ? { ...data, workEntries } : data;
 }
 
 const CONFLICT_MESSAGE = 'Your data was changed in another window. Reload to see the latest.';

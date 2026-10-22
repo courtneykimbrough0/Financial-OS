@@ -52,7 +52,7 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | Audit recommendations (not yet approved) | docs/REDUCTION-AUDIT.md §3 and decisions §7 |
 | Deferred features | PRODUCT_EXPERIENCE.md §10; Step 8's deferred imports; Step 9 |
 
-### Current state (verified October 22, 2026; `main` at `d5e8b61`)
+### Current state (verified October 22, 2026; `main` at `b747c96`)
 
 `main` is the default and integration branch (AGENTS.md section H). CI (`.github/workflows/ci.yml`, five jobs) passed on all merge commits below.
 
@@ -79,8 +79,9 @@ The completed Supabase, account and security work (Steps 10a–10d in developmen
 | D4, Plan and Activity | **Complete**, merged as `e911b18` | Phase D |
 | D5, setup and sheets | **Complete**, merged as `ab843ce` | Phase D |
 | D6, desktop | **Complete**, merged as `d5e8b61`; Phase D is complete | Phase D |
-| E1, income foundation (income certainty) | **Complete** (in review) | Phase E |
-| E2–E6, income expansion | **Planned**; each checkpoint separately authorized | Phase E |
+| E1, income foundation (income certainty) | **Complete**, merged as `b747c96` | Phase E |
+| E2, hourly and tipped income | **Complete** (in review) | Phase E |
+| E3–E6, income expansion | **Planned**; each checkpoint separately authorized | Phase E |
 | AC5, account balances | **In part**: opening, recorded and projected balances done; availability, balance alerts, "cash available now" not built | Phase AC |
 | AC-S, accounts, transfers and releases in Supabase | **Deferred** to Phase F; Supabase refuses them today | Phase AC |
 | AC6 payoff support, recurring planned transfers | **Deferred** (need specifications or decisions) | Phase AC, conflicts |
@@ -360,11 +361,19 @@ PRODUCT_EXPERIENCE.md §6. Planned October 22, 2026. The financial rules every c
 
 Reminders (§6.7) stay deferred. Each checkpoint stops for review before the next.
 
-- **E1. Income foundation (complete, October 2026; in review).**
+- **E1. Income foundation (complete, October 2026; merged as `b747c96`).**
   - **Domain:** an optional `certainty: 'possible'` on income items and one-time income (absent means expected, so every existing record keeps its meaning). A recurring occurrence follows its item; its record never carries the mark. `buildForecast` gives possible income not yet received `counts: false`, `signedCents: 0` and `possible: true`; it is never carried forward, never overdue and never starts the running total, and with only possible income there is no running total. Received possible income is an ordinary recorded entry, counted once at its recorded date and amount. `setIncomeCertainty` marks an item or a one-time income expected or possible without changing any amount, date or recorded outcome. A possible recurring item marked expected counts from today: its earlier dates that were never recorded are skipped (noted "Possible income, not received", each restorable) instead of becoming overdue income carried into the running total. Scenarios offer only counted items and refuse a change to possible income.
   - **Persistence:** `migrate` keeps the mark only on income items and one-time income (device storage and backups). Supabase: migration `20261022000001_income_certainty.sql` adds a `certainty` column to `sources` and `occurrence_records`, with checks (only `'possible'`, only income, never on a recurring occurrence), and redefines `load_plan` and `save_plan` only to carry it; `rows.ts` maps it and `checkForMigration` names a mark the database would refuse. Firebase: the flag above; `CloudAdapter.save` refuses before writing anything. The rules would accept the field (items aren't checked field by field), but an older copy of the app would count possible income, which is why it stays off.
   - **Interface:** an Expected / Possible choice on the income and one-time income forms where the storage keeps it; a dashed "Possible" badge and a muted amount (not struck through) on rows; a "Possible" list on Home for the viewed week, apart from Coming up; on its sheet, an explanation, Record received, and Mark as expected (for a recurring item, the whole item); Mark as possible on an expected one-time income.
   - Tests: `income-certainty` (16, domain), `certainty-persistence` (9: device, backup, Firebase refusal and flag, Supabase mapping and migration checks), `income-certainty-e1` (5, interface), and three PostgreSQL tests in `integrity.db.test.ts` (round trip and an ordinary update, existing rows unmarked, the constraints).
+
+- **E2. Hourly and tipped income (complete, October 2026; in review).**
+  - **Domain:** an income can be hourly or tipped (`incomeType`), with a usual hourly wage (`hourlyWageCents`); neither is read by the forecast. Shifts are a new collection, `workEntries` (`WorkEntry`: date, optional minutes, wage, cash tips and card tips; amounts are absent, never $0). `logShift`, `editShift`, `deleteShift`, `setShiftPaid` and `setIncomeDetails` in `operations.ts`; earnings calculations in `earnings.ts` (wages to the nearest cent per shift, totals, effective hourly over shifts with hours, earned not paid).
+  - **Money received, counted once:** a shift's cash tips are one received one-time income record on the shift's date (`cashTipsRecordId`); correcting them replaces that record (a record's original amount never changes), and the record changes only through its shift. Wages and card tips are "earned, not paid yet" and never enter cash flow; recording a paycheck of that income pays the unpaid shifts worked before the day it arrived (`paidByOccurrenceId`), and undoing it unpays them. The paycheck's recorded amount is the money, so nothing is added again. Expected paychecks stay as entered: no suggestion changes them (Option B, D9, deferred).
+  - **Persistence:** `migrate` keeps shifts only for an hourly or tipped income that exists, with well-formed amounts, and keeps a link only when it still points at its tips record or a recorded paycheck of the same income (device storage and backups). Supabase: migration `20261022000002_hourly_and_tipped_income.sql` adds `income_type` and `hourly_wage_cents` to `sources` and a `work_entries` table (row-level security, foreign keys to the item, the tips record and the paycheck, checks mirroring the app); `load_plan` and `save_plan` carry them, a save must include `work_entries` (so a client that doesn't know shifts can't erase them), and an ordinary save removes at most one shift. Firebase: `INCOME_DETAIL_IN_SIGNED_IN_SAVES = false`; the choices are hidden and a plan with any of it is refused before anything is written (the rules would refuse `workEntries`, and leaving it out would lose it).
+  - **Interface:** "How is it paid?" (Fixed amount, Hourly, Tipped) and a usual hourly wage on the income form; "Tipped · " on its row; on its sheet, a Shifts section first: earned, not paid yet, the latest eight shifts (hours, cash and card tips, earned, paid or not), and Log a shift. The shift sheet: date (today or earlier), hours ("6.5" or "6:30"), wage (from the item), cash tips, card tips; Save, Delete, Mark not paid yet, or Paid in a recorded paycheck. Shift cash tips appear wherever money received is shown, but not in Plan's one-time income list; their sheet points to the shift.
+  - Not built (E5 or later): a quick add from Home, the weekly entry sheet, per-week totals on screen, and the Earnings views.
+  - Tests: `shifts` (15, domain), `shift-persistence` (8: device, backup, migrate validation, Firebase refusal and flag, Supabase mapping and migration checks), `shifts-e2` (5, interface), three PostgreSQL tests in `integrity.db.test.ts`; the row-level-security, account-deletion and Supabase browser tests now include `work_entries`.
 
 #### AC. Accounts (where money is received, held and spent)
 

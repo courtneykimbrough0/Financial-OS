@@ -118,6 +118,9 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
   // A one-time income carries its own certainty; a recurring occurrence follows its item.
   const certaintyTarget = o.sourceId ?? o.id;
   const itemName = o.sourceId ? (data.sources.find((s) => s.id === o.sourceId)?.description ?? o.description) : o.description;
+  // Cash tips logged with a shift change only through that shift.
+  const tipsShift = (data.workEntries ?? []).find((e) => e.cashTipsRecordId === o.id);
+  const tipsJob = tipsShift ? data.sources.find((s) => s.id === tipsShift.sourceId)?.description : undefined;
 
   return (
     <Modal title={title} onClose={onClose}>
@@ -147,6 +150,11 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
         </p>
       )}
       <Comparison o={o} possible={possible} />
+      {tipsShift && (
+        <p className="hint">
+          Cash tips from your {formatMedium(tipsShift.date)} shift{tipsJob ? ` for ${tipsJob}` : ''}. To change them, open the shift from {tipsJob ?? 'its income'} in Plan.
+        </p>
+      )}
 
       {mode === 'view' && (
         <div className="action-list">
@@ -172,7 +180,7 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
               </button>
             </>
           )}
-          {o.status === 'completed' && (
+          {o.status === 'completed' && !tipsShift && (
             <>
               <button type="button" className="button secondary" onClick={() => open('correct')}>
                 Edit {doneVerb(o)}
@@ -195,7 +203,7 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
           {o.sourceId !== null && possible && (
             <p className="hint">Marking {itemName} as expected counts its payments from today on. Earlier dates that weren't recorded are marked skipped, and each can be undone.</p>
           )}
-          {o.sourceId === null && (
+          {o.sourceId === null && !tipsShift && (
             <button type="button" className="button danger-link" onClick={() => open('delete')}>
               Delete {o.description}
             </button>

@@ -179,6 +179,53 @@ export interface RecurringSource {
   accountId?: string;
   /** Income only: `'possible'` when it may come but isn't dependable (see `IncomeCertainty`). Absent means expected. */
   certainty?: 'possible';
+  /** Income only: how it's earned (see `IncomeType`), for labels and the optional shift tools. Never read by the forecast. */
+  incomeType?: IncomeType;
+  /** Hourly and tipped income only: the usual hourly wage, the default for a new shift. Never read by the forecast. */
+  hourlyWageCents?: Cents;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * How an income is earned. Absent means a fixed amount on a schedule (a
+ * salary, benefits). Hourly and tipped income can track shifts (`WorkEntry`).
+ * Only labels and optional tools depend on it: the forecast counts an income
+ * by its schedule, its recorded payments and its certainty, whatever its type.
+ */
+export type IncomeType = 'hourly' | 'tipped';
+export const INCOME_TYPES: IncomeType[] = ['hourly', 'tipped'];
+export const INCOME_TYPE_LABEL: Record<IncomeType, string> = { hourly: 'Hourly', tipped: 'Tipped' };
+
+/**
+ * A shift worked for an hourly or tipped income: what was earned, never by
+ * itself money received. Shifts never enter the forecast:
+ *
+ * - Cash tips are money in on the shift's date: logging them creates one
+ *   received one-time income record (`cashTipsRecordId`), and that record is
+ *   what counts, once.
+ * - Wages and card tips are paid through payroll, so they are "earned, not
+ *   paid yet" until the paycheck that covers them is recorded
+ *   (`paidByOccurrenceId`). The paycheck is the one income event: its recorded
+ *   amount already includes them, so they are never counted again.
+ *
+ * Every amount is optional (absent, never $0). Hours are kept in minutes.
+ */
+export interface WorkEntry {
+  id: string;
+  /** The hourly or tipped income item this shift was for. */
+  sourceId: string;
+  kind: 'shift';
+  date: DateStr;
+  minutes?: number;
+  /** Hourly wage for this shift (defaults from the item). */
+  wageCents?: Cents;
+  cashTipsCents?: Cents;
+  cardTipsCents?: Cents;
+  /** The received one-time income record for the cash tips. Present exactly when there are cash tips. */
+  cashTipsRecordId?: string;
+  /** The recorded paycheck (occurrence id) that paid this shift's wages and card tips. Absent while earned, not paid yet. */
+  paidByOccurrenceId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -277,6 +324,8 @@ export interface AppData {
   accounts?: Account[];
   /** Money moved between the person's own accounts. Absent until the first one. */
   transfers?: Transfer[];
+  /** Shifts logged for hourly and tipped income. Absent until the first one. Never read by the forecast. */
+  workEntries?: WorkEntry[];
 }
 
 export const KIND_LABEL: Record<TransactionKind, string> = {
@@ -294,6 +343,11 @@ export const KIND_LABEL: Record<TransactionKind, string> = {
  */
 export function signFor(o: { kind: TransactionKind; release?: true }): 1 | -1 {
   return o.kind === 'income' || (o.kind === 'reserve' && o.release) ? 1 : -1;
+}
+
+/** "Tipped · " style prefix for an hourly or tipped income; empty otherwise. */
+export function incomeTypePrefix(source: { kind: TransactionKind; incomeType?: IncomeType }): string {
+  return source.kind === 'income' && source.incomeType ? `${INCOME_TYPE_LABEL[source.incomeType]} · ` : '';
 }
 
 /** "Loan · " style prefix for a liability's type; empty for every other kind. */
@@ -318,6 +372,11 @@ export function certaintyOf(o: { kind: TransactionKind; certainty?: 'possible' }
 /** True when any income item or one-time income is marked possible (received or not). */
 export function hasPossibleIncome(data: AppData): boolean {
   return data.sources.some((s) => s.certainty === 'possible') || data.records.some((r) => r.certainty === 'possible');
+}
+
+/** True when the plan has shift tracking: an income type, an hourly wage or a logged shift. */
+export function hasIncomeDetail(data: AppData): boolean {
+  return (data.workEntries?.length ?? 0) > 0 || data.sources.some((s) => s.incomeType !== undefined || s.hourlyWageCents !== undefined);
 }
 
 /** True for possible income that hasn't been received: listed, never counted. */

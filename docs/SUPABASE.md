@@ -37,9 +37,12 @@ auth.users 1─1 workspaces 1─* sources 1─* schedule_versions
   - a liability type only on liability payments;
   - estimate dismissals are complete or absent;
   - an item that's on has no end date;
-  - `certainty` is null (expected) or `'possible'`, only on income items and one-time income, never on a recurring occurrence, which follows its item (migration `20261022000001_income_certainty.sql`, which also redefines `load_plan` and `save_plan` to carry the column and changes nothing else in them).
+  - `certainty` is null (expected) or `'possible'`, only on income items and one-time income, never on a recurring occurrence, which follows its item (migration `20261022000001_income_certainty.sql`, which also redefines `load_plan` and `save_plan` to carry the column and changes nothing else in them);
+  - `income_type` is null (a fixed amount) or `'hourly'`/`'tipped'`, only on income; `hourly_wage_cents` only with a type, above $0;
+  - shifts (`work_entries`, migration `20261022000002_hourly_and_tipped_income.sql`): kind `'shift'`, minutes 1–1440, every amount above $0 when present, hours or tips required, foreign keys to the item, the cash-tips record and the paycheck that paid it, one shift per tips record. Row-level security and grants follow the other tables.
 - **Kept, not checked:** records whose original date a later schedule no longer produces. The engine sets them aside and they count again if a schedule brings the date back. The database can't run the schedule, so it doesn't judge them.
 - **Not stored:** forecasts, timing gaps, suggestions, scenarios, sample data.
+- **Shifts in `save_plan`:** a save must include `work_entries` (a client that doesn't know them is refused rather than erasing them); shifts are written last and removed first, since they point at items and records; an ordinary save removes at most one shift.
 
 ## Functions
 

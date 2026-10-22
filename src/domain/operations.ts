@@ -13,12 +13,15 @@
  *    a schedule version; earlier occurrences keep their expectation.
  *  - Only income can be possible, and certainty changes no amount, date or
  *    recorded outcome (see `IncomeCertainty`).
+ *  - A shift never changes cash flow by itself: its cash tips are one received
+ *    income record, and its wages and card tips are paid by a recorded
+ *    paycheck, counted once as that paycheck (see `WorkEntry`).
  */
-import { addDays, isValidDateStr, type DateStr } from './dates';
+import { addDays, formatShort, isValidDateStr, type DateStr } from './dates';
 import type { Cents } from './money';
 import { findOccurrence, resolveOccurrences } from './occurrences';
 import { validateRule } from './recurrence';
-import { ACCOUNT_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type IncomeCertainty, type LiabilityType, type OccurrenceRecord, type OneTimeKind, type RecurrenceRule, type RecurringKind, type RecurringSource, type Transfer, type TransactionKind } from './types';
+import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type IncomeCertainty, type IncomeType, type LiabilityType, type OccurrenceRecord, type OneTimeKind, type RecurrenceRule, type RecurringKind, type RecurringSource, type Transfer, type TransactionKind, type WorkEntry } from './types';
 
 export type Result = { ok: true; data: AppData } | { ok: false; error: string };
 
@@ -99,6 +102,30 @@ export interface SourceInput {
   rule: RecurrenceRule;
   /** Income only; see `IncomeCertainty`. Omitted keeps what the item has (expected for a new one). */
   certainty?: IncomeCertainty;
+  /** Income only; see `IncomeType`. Omitted keeps what the item has; null makes it a fixed income. */
+  incomeType?: IncomeType | null;
+  /** Hourly and tipped income only. Omitted keeps what the item has; null clears it. */
+  hourlyWageCents?: Cents | null;
+}
+
+type IncomeDetails = Pick<SourceInput, 'incomeType' | 'hourlyWageCents'>;
+
+function validateIncomeDetails(kind: TransactionKind, details: IncomeDetails): string | null {
+  if (details.incomeType === undefined && details.hourlyWageCents === undefined) return null;
+  if (kind !== 'income' && (details.incomeType || details.hourlyWageCents)) return 'Only income can be hourly or tipped.';
+  if (details.incomeType && !INCOME_TYPES.includes(details.incomeType)) return 'Choose fixed, hourly or tipped.';
+  if (details.hourlyWageCents !== undefined && details.hourlyWageCents !== null) return validateAmount(details.hourlyWageCents, 'Hourly wage');
+  return null;
+}
+
+/** `item` with income details applied; omitted ones are kept. A fixed income keeps no wage. */
+function applyIncomeDetails(item: RecurringSource, details: IncomeDetails): RecurringSource {
+  if (details.incomeType === undefined && details.hourlyWageCents === undefined) return item;
+  const { incomeType: oldType, hourlyWageCents: oldWage, ...rest } = item;
+  const type = details.incomeType === undefined ? oldType : (details.incomeType ?? undefined);
+  const wage = details.hourlyWageCents === undefined ? oldWage : (details.hourlyWageCents ?? undefined);
+  if (item.kind !== 'income' || !type) return rest;
+  return { ...rest, incomeType: type, ...(wage ? { hourlyWageCents: wage } : {}) };
 }
 
 /** The stored form of a certainty choice: only possible income carries the field. */
@@ -124,12 +151,13 @@ export function addSource(data: AppData, input: SourceInput, clock: Clock, id = 
     (!RECURRING_KINDS.includes(input.kind) ? 'Choose income, a bill, a subscription, a liability or a strategic reserve.' : null) ??
     validateDescription(input.description) ??
     validateLiabilityType(input.kind, input.liabilityType) ??
+    validateIncomeDetails(input.kind, input) ??
     validateAmount(input.amountCents) ??
     (!isValidDateStr(input.startDate) ? 'Enter a valid date.' : null) ??
     (input.startDate < clock.today ? 'The next expected date must be today or later.' : null) ??
     validateRule(input.rule, input.startDate);
   if (err) return fail(err);
-  const source: RecurringSource = {
+  const created: RecurringSource = {
     id,
     kind: input.kind,
     description: input.description.trim(),
@@ -143,6 +171,7 @@ export function addSource(data: AppData, input: SourceInput, clock: Clock, id = 
     createdAt: clock.now,
     updatedAt: clock.now,
   };
+  const source = applyIncomeDetails(created, input);
   return ok({ ...data, sources: [...data.sources, source] });
 }
 
@@ -225,13 +254,14 @@ export function redefineSource(data: AppData, id: string, input: Omit<SourceInpu
   const err =
     validateDescription(input.description) ??
     validateLiabilityType(kind, input.liabilityType) ??
+    validateIncomeDetails(kind, input) ??
     validateAmount(input.amountCents) ??
     (!isValidDateStr(input.startDate) ? 'Enter a valid date.' : null) ??
     (input.startDate < clock.today ? 'The next expected date must be today or later.' : null) ??
     validateRule(input.rule, input.startDate);
   if (err) return fail(err);
   return withSource(data, id, (s) => ({
-    ...applyCertainty(s, input.certainty),
+    ...applyIncomeDetails(applyCertainty(s, input.certainty), input),
     description: input.description.trim(),
     tags: normalizeTags(input.tags),
     ...(kind === 'liability' ? { liabilityType: input.liabilityType } : {}),
@@ -248,6 +278,7 @@ export function redefineSource(data: AppData, id: string, input: Omit<SourceInpu
 export function deleteSource(data: AppData, id: string): Result {
   if (!data.sources.some((s) => s.id === id)) return fail('That item no longer exists.');
   if (data.records.some((r) => r.sourceId === id)) return fail('This item has recorded history. Turn it off instead so the history is kept.');
+  if ((data.workEntries ?? []).some((e) => e.sourceId === id)) return fail('This item has logged shifts. Turn it off instead so they are kept.');
   return ok({ ...data, sources: data.sources.filter((s) => s.id !== id) });
 }
 
@@ -376,6 +407,8 @@ export function setIncomeCertainty(data: AppData, id: string, certainty: IncomeC
 export function deleteOneTime(data: AppData, id: string): Result {
   const record = data.records.find((r) => r.id === id);
   if (!record || record.sourceId !== null) return fail('Only one-time items can be deleted.');
+  const shift = shiftWithTips(data, id);
+  if (shift) return fail(shiftOwnsTips(shift));
   return ok({ ...data, records: data.records.filter((r) => r.id !== id) });
 }
 
@@ -392,6 +425,8 @@ function withOccurrence(
 ): Result {
   const occ = findOccurrence(data, id, clock.today);
   if (!occ) return fail('That item could not be found.');
+  const shift = shiftWithTips(data, id);
+  if (shift) return fail(shiftOwnsTips(shift));
   const { displayStatus: _ds, virtual, certainty: _c, ...rest } = occ;
   void _ds;
   void _c;
@@ -423,13 +458,14 @@ function validateActual(actual: ActualInput, clock: Clock): string | null {
 export function recordActual(data: AppData, id: string, actual: ActualInput, clock: Clock): Result {
   const err = validateActual(actual, clock);
   if (err) return fail(err);
-  return withOccurrence(data, id, clock, (r) => {
+  const result = withOccurrence(data, id, clock, (r) => {
     if (r.status === 'completed') return 'This item has already been recorded.';
     if (r.status === 'canceled') return 'This was skipped. Undo the skip first.';
     // A recurring occurrence keeps the account its item has now, so moving the item later never moves recorded money.
     const account = r.sourceId === null ? undefined : data.sources.find((s) => s.id === r.sourceId)?.accountId;
     return { ...r, status: 'completed', actualAmountCents: actual.amountCents, actualDate: actual.date, completedAt: clock.now, ...(account ? { accountId: account } : {}) };
   });
+  return result.ok ? ok(linkShiftsToPaycheck(result.data, id, clock)) : result;
 }
 
 /** Fixes the recorded actual amount/date of a completed occurrence. */
@@ -477,9 +513,11 @@ export function restoreOccurrence(data: AppData, id: string, clock: Clock): Resu
     return { ...base, status: 'scheduled', actualAmountCents: null, actualDate: null, completedAt: null, canceledAt: null, cancelNote: null };
   });
   if (!result.ok) return result;
-  const r = result.data.records.find((x) => x.id === id)!;
+  // A paycheck no longer recorded has paid no shift.
+  const restored = unlinkShifts(result.data, id, clock);
+  const r = restored.records.find((x) => x.id === id)!;
   const unchanged = r.sourceId !== null && r.scheduledDate === r.expectedDate && r.scheduledAmountCents === r.expectedAmountCents;
-  return unchanged ? ok({ ...result.data, records: result.data.records.filter((x) => x.id !== id) }) : result;
+  return ok(unchanged ? { ...restored, records: restored.records.filter((x) => x.id !== id) } : restored);
 }
 
 // ---------------------------------------------------------------------------
@@ -769,3 +807,214 @@ export function defaultActualDate(scheduledDate: DateStr, today: DateStr): DateS
   return scheduledDate > today ? today : scheduledDate;
 }
 
+
+// ---------------------------------------------------------------------------
+// Hourly and tipped income: shifts (E2; see `WorkEntry`)
+// ---------------------------------------------------------------------------
+
+export const MAX_SHIFTS = 5000;
+const MAX_SHIFT_MINUTES = 24 * 60;
+
+/**
+ * Makes an income fixed, hourly or tipped, with its usual hourly wage. Changes
+ * nothing financial. An income with logged shifts stays hourly or tipped, so
+ * its shifts are never orphaned.
+ */
+export function setIncomeDetails(data: AppData, id: string, details: { incomeType: IncomeType | null; hourlyWageCents: Cents | null }, clock: Clock): Result {
+  return withSource(data, id, (s) => {
+    const err = validateIncomeDetails(s.kind, details);
+    if (err) return err;
+    if (!details.incomeType && (data.workEntries ?? []).some((e) => e.sourceId === id)) return 'This income has logged shifts, so it stays hourly or tipped.';
+    return { ...applyIncomeDetails(s, details), updatedAt: clock.now };
+  });
+}
+
+export interface ShiftInput {
+  /** The hourly or tipped income item. */
+  sourceId: string;
+  date: DateStr;
+  /** Each optional: null or 0 means none. */
+  minutes?: number | null;
+  wageCents?: Cents | null;
+  cashTipsCents?: Cents | null;
+  cardTipsCents?: Cents | null;
+}
+
+/** The shift whose cash tips are this record, if any. */
+function shiftWithTips(data: AppData, recordId: string): WorkEntry | undefined {
+  return (data.workEntries ?? []).find((e) => e.cashTipsRecordId === recordId);
+}
+
+const shiftOwnsTips = (shift: WorkEntry) => `These are the cash tips from your ${formatShort(shift.date)} shift. Change or delete the shift instead.`;
+
+const present = (n: number | null | undefined) => (n === null || n === undefined || n === 0 ? undefined : n);
+
+function validateShift(data: AppData, input: ShiftInput, clock: Clock): string | null {
+  const source = data.sources.find((s) => s.id === input.sourceId);
+  if (!source) return 'That income no longer exists.';
+  if (source.kind !== 'income' || !source.incomeType) return 'Shifts can be logged for hourly or tipped income.';
+  if (!isValidDateStr(input.date)) return 'Enter a valid date.';
+  if (input.date > clock.today) return 'Log a shift once it has been worked.';
+  const minutes = present(input.minutes);
+  if (minutes !== undefined && (!Number.isSafeInteger(minutes) || minutes < 0 || minutes > MAX_SHIFT_MINUTES)) return 'Hours must be between 0 and 24.';
+  for (const [value, label] of [
+    [input.wageCents, 'Hourly wage'],
+    [input.cashTipsCents, 'Cash tips'],
+    [input.cardTipsCents, 'Card tips'],
+  ] as const) {
+    const v = present(value);
+    if (v !== undefined) {
+      const amountErr = validateAmount(v, label);
+      if (amountErr) return amountErr;
+    }
+  }
+  if (minutes === undefined && present(input.cashTipsCents) === undefined && present(input.cardTipsCents) === undefined) return 'Enter the hours worked or the tips.';
+  return null;
+}
+
+/** The received income record for a shift's cash tips: money in on the shift's date, counted once. */
+function addCashTips(data: AppData, shiftSourceId: string, cents: Cents, date: DateStr, clock: Clock): { data: AppData; recordId: string } | string {
+  const source = data.sources.find((s) => s.id === shiftSourceId)!;
+  const recordId = newId('tips');
+  const description = `Cash tips · ${source.description}`.slice(0, 80);
+  let step = addOneTime(data, { kind: 'income', description, amountCents: cents, date }, clock, recordId);
+  if (step.ok) step = recordActual(step.data, recordId, { amountCents: cents, date }, clock);
+  if (step.ok && source.accountId) step = assignAccount(step.data, recordId, source.accountId, clock);
+  return step.ok ? { data: step.data, recordId } : step.error;
+}
+
+const withoutRecord = (data: AppData, id: string | undefined): AppData => (id ? { ...data, records: data.records.filter((r) => r.id !== id) } : data);
+
+function shiftFields(input: ShiftInput): Pick<WorkEntry, 'minutes' | 'wageCents' | 'cashTipsCents' | 'cardTipsCents'> {
+  const out: Pick<WorkEntry, 'minutes' | 'wageCents' | 'cashTipsCents' | 'cardTipsCents'> = {};
+  const minutes = present(input.minutes);
+  const wage = present(input.wageCents);
+  const cash = present(input.cashTipsCents);
+  const card = present(input.cardTipsCents);
+  if (minutes !== undefined) out.minutes = minutes;
+  if (wage !== undefined) out.wageCents = wage;
+  if (cash !== undefined) out.cashTipsCents = cash;
+  if (card !== undefined) out.cardTipsCents = card;
+  return out;
+}
+
+/**
+ * Logs a shift for an hourly or tipped income, worked today or earlier. Its
+ * cash tips become one received income record on the shift's date; its wages
+ * and card tips are earned, not paid yet, until a paycheck covers them. The
+ * income's expected paychecks don't change.
+ */
+export function logShift(data: AppData, input: ShiftInput, clock: Clock, id = newId('shift')): Result {
+  const err = validateShift(data, input, clock);
+  if (err) return fail(err);
+  if ((data.workEntries ?? []).length >= MAX_SHIFTS) return fail(`You can log up to ${MAX_SHIFTS} shifts.`);
+  const fields = shiftFields(input);
+  let next = data;
+  let cashTipsRecordId: string | undefined;
+  if (fields.cashTipsCents) {
+    const tips = addCashTips(next, input.sourceId, fields.cashTipsCents, input.date, clock);
+    if (typeof tips === 'string') return fail(tips);
+    next = tips.data;
+    cashTipsRecordId = tips.recordId;
+  }
+  const shift: WorkEntry = { id, sourceId: input.sourceId, kind: 'shift', date: input.date, ...fields, ...(cashTipsRecordId ? { cashTipsRecordId } : {}), createdAt: clock.now, updatedAt: clock.now };
+  return ok({ ...next, workEntries: [...(next.workEntries ?? []), shift] });
+}
+
+/**
+ * Corrects a shift. When its cash tips or date change, their income record is
+ * replaced (a record's original amount and date never change), so the cash
+ * flow follows the correction and still counts the tips once. Whether it was
+ * paid is kept.
+ */
+export function editShift(data: AppData, id: string, input: Omit<ShiftInput, 'sourceId'>, clock: Clock): Result {
+  const shift = (data.workEntries ?? []).find((e) => e.id === id);
+  if (!shift) return fail('That shift no longer exists.');
+  const full: ShiftInput = { ...input, sourceId: shift.sourceId };
+  const err = validateShift(data, full, clock);
+  if (err) return fail(err);
+  const fields = shiftFields(full);
+  let next = data;
+  let cashTipsRecordId = shift.cashTipsRecordId;
+  if (fields.cashTipsCents !== shift.cashTipsCents || input.date !== shift.date) {
+    next = withoutRecord(next, shift.cashTipsRecordId);
+    cashTipsRecordId = undefined;
+    if (fields.cashTipsCents) {
+      const tips = addCashTips(next, shift.sourceId, fields.cashTipsCents, input.date, clock);
+      if (typeof tips === 'string') return fail(tips);
+      next = tips.data;
+      cashTipsRecordId = tips.recordId;
+    }
+  }
+  const updated: WorkEntry = {
+    id,
+    sourceId: shift.sourceId,
+    kind: 'shift',
+    date: input.date,
+    ...fields,
+    ...(cashTipsRecordId ? { cashTipsRecordId } : {}),
+    ...(shift.paidByOccurrenceId ? { paidByOccurrenceId: shift.paidByOccurrenceId } : {}),
+    createdAt: shift.createdAt,
+    updatedAt: clock.now,
+  };
+  return ok({ ...next, workEntries: (next.workEntries ?? []).map((e) => (e.id === id ? updated : e)) });
+}
+
+/** Removes a shift and its cash tips record. A paycheck that paid it is unchanged. */
+export function deleteShift(data: AppData, id: string): Result {
+  const shift = (data.workEntries ?? []).find((e) => e.id === id);
+  if (!shift) return fail('That shift no longer exists.');
+  const next = withoutRecord(data, shift.cashTipsRecordId);
+  const workEntries = (next.workEntries ?? []).filter((e) => e.id !== id);
+  const { workEntries: _w, ...rest } = next;
+  void _w;
+  return ok(workEntries.length ? { ...rest, workEntries } : rest);
+}
+
+/**
+ * Says which recorded paycheck paid a shift's wages and card tips (`null`:
+ * not paid yet). Only a recorded paycheck of the shift's own income can, so
+ * nothing is ever counted twice: the paycheck's recorded amount is the money.
+ */
+export function setShiftPaid(data: AppData, id: string, occurrenceId: string | null, clock: Clock): Result {
+  const shift = (data.workEntries ?? []).find((e) => e.id === id);
+  if (!shift) return fail('That shift no longer exists.');
+  if (occurrenceId !== null) {
+    const paycheck = data.records.find((r) => r.id === occurrenceId);
+    if (!paycheck || paycheck.sourceId !== shift.sourceId || paycheck.status !== 'completed') return fail('Choose a paycheck from this income that has been recorded.');
+  }
+  const { paidByOccurrenceId: _p, ...rest } = shift;
+  void _p;
+  const updated: WorkEntry = { ...rest, ...(occurrenceId ? { paidByOccurrenceId: occurrenceId } : {}), updatedAt: clock.now };
+  return ok({ ...data, workEntries: (data.workEntries ?? []).map((e) => (e.id === id ? updated : e)) });
+}
+
+/**
+ * When a paycheck is recorded, the shifts of its income worked before the day
+ * it arrived and not yet paid are paid by it. Each can be corrected with
+ * `setShiftPaid`.
+ */
+function linkShiftsToPaycheck(data: AppData, occurrenceId: string, clock: Clock): AppData {
+  const paycheck = data.records.find((r) => r.id === occurrenceId);
+  if (!paycheck || paycheck.sourceId === null || paycheck.kind !== 'income' || paycheck.actualDate === null || !data.workEntries?.length) return data;
+  const paidOn = paycheck.actualDate;
+  return {
+    ...data,
+    workEntries: data.workEntries.map((e) =>
+      e.sourceId === paycheck.sourceId && e.paidByOccurrenceId === undefined && e.date < paidOn ? { ...e, paidByOccurrenceId: occurrenceId, updatedAt: clock.now } : e,
+    ),
+  };
+}
+
+function unlinkShifts(data: AppData, occurrenceId: string, clock: Clock): AppData {
+  if (!data.workEntries?.some((e) => e.paidByOccurrenceId === occurrenceId)) return data;
+  return {
+    ...data,
+    workEntries: data.workEntries.map((e) => {
+      if (e.paidByOccurrenceId !== occurrenceId) return e;
+      const { paidByOccurrenceId: _p, ...rest } = e;
+      void _p;
+      return { ...rest, updatedAt: clock.now };
+    }),
+  };
+}

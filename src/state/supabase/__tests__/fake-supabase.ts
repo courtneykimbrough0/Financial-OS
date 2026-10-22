@@ -63,7 +63,7 @@ export class FakeSupabase implements RpcClient {
 
   private run(fn: string, args?: Record<string, unknown>): Reply {
     if (fn === 'create_workspace') {
-      this.workspace ??= { revision: 0, plan: { onboarding_complete: false, sources: [], versions: [], pauses: [], records: [] } };
+      this.workspace ??= { revision: 0, plan: { onboarding_complete: false, sources: [], versions: [], pauses: [], records: [], work_entries: [] } };
       return { data: 'ws-1', error: null, status: 200 };
     }
     if (fn === 'load_plan') {
