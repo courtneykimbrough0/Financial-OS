@@ -8,7 +8,7 @@ How to run Financial OS's Supabase tests, and the Supabase build of the app, aga
 
 The default app is unaffected; it never includes any Supabase code (see [SUPABASE.md](SUPABASE.md)).
 
-No hosted project has been set up or tested yet. The steps below are for the product owner. Claude Code handles no keys and never needs the database password or a service-role key; it works in a hosted project only through the Supabase connector, for a project you name (step 3).
+The hosted test project is Financial OS 2 (`aymombliohuwbokpncdn`), approved in `supabase/hosted-test/projects.json`. Its setup is in progress (roadmap F3); no hosted test has passed yet. The steps below are for the product owner. Claude Code handles no keys and never needs the database password or a service-role key; it works in a hosted project only through the Supabase connector, for a project you name (step 3).
 
 ## How a hosted project is selected
 
@@ -181,7 +181,7 @@ When testing is finished, turn the hook off and run `supabase/hosted-test/teardo
 
 ## Not done here
 
-- No hosted project has been created, migrated or tested.
+- Hosted setup of Financial OS 2 is in progress; no hosted test has passed yet.
 - No deployment.
 - No Firebase migration and no real financial data.
 - Production authentication settings are not changed.

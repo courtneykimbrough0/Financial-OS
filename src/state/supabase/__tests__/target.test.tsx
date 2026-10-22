@@ -40,8 +40,8 @@ describe('the hosted test project, in the browser build', () => {
     expect(approvedRefs({})).toEqual([]);
   });
 
-  it('the committed allowlist approves no project yet', () => {
-    expect(approvedProjects(`${process.cwd()}/supabase/hosted-test/projects.json`)).toEqual([]);
+  it('the committed allowlist approves only the hosted test project (Financial OS 2)', () => {
+    expect(approvedProjects(`${process.cwd()}/supabase/hosted-test/projects.json`)).toEqual(['aymombliohuwbokpncdn']);
   });
 });
 
