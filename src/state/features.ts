@@ -22,3 +22,16 @@ export const ACCOUNTS_IN_SIGNED_IN_SAVES = false;
  * or lost) instead of dropping it. Device storage and Supabase keep it.
  */
 export const INCOME_CERTAINTY_IN_SIGNED_IN_SAVES = false;
+
+/**
+ * Whether hourly and tipped income detail (an income's type and wage, and
+ * logged shifts; see `WorkEntry`) is available, and saved, while signed in
+ * with Firebase. Keep false (decision D8): the live `firestore.rules` refuse
+ * a document with a field they don't list, such as `workEntries`, and
+ * Firebase is legacy (AGENTS.md section C1). Leaving the detail out would
+ * silently lose it, so signed in with Firebase the choices are hidden and
+ * `CloudAdapter.save` refuses a plan that has any (nothing is saved or lost).
+ * The cash tips a shift records are ordinary income records and are kept
+ * either way. Device storage and Supabase keep all of it.
+ */
+export const INCOME_DETAIL_IN_SIGNED_IN_SAVES = false;

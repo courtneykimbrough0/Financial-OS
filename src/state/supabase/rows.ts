@@ -6,13 +6,14 @@
  *
  * Every financially meaningful field round-trips exactly: identities,
  * original predictions, current expectations, actuals, schedules, pauses,
- * estimate dismissals, income certainty and onboarding. Three things come back in canonical form (see `canonicalize`):
+ * estimate dismissals, income certainty, income type and wage, shifts and
+ * onboarding. Three things come back in canonical form (see `canonicalize`):
  * timestamps as ISO-8601 UTC with milliseconds, schedule versions in start
  * order, and pauses in date order. Sample data is never stored.
  */
 import { isValidDateStr, type DateStr } from '../../domain/dates';
 import { validateRule } from '../../domain/recurrence';
-import { ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OccurrenceRecord, type RecurrenceRule, type RecurringKind, type RecurringSource, type ScheduleVersion, type StoredStatus, type TransactionKind } from '../../domain/types';
+import { ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OccurrenceRecord, type RecurrenceRule, type RecurringKind, type IncomeType, type RecurringSource, type ScheduleVersion, type StoredStatus, type TransactionKind, type WorkEntry } from '../../domain/types';
 
 export interface SourceRow {
   id: string;
@@ -29,6 +30,8 @@ export interface SourceRow {
   dismissed_through: DateStr | null;
   /** 'possible' on possible income; null means expected (see `IncomeCertainty`). */
   certainty: 'possible' | null;
+  income_type: IncomeType | null;
+  hourly_wage_cents: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -73,6 +76,22 @@ export interface RecordRow {
   updated_at: string;
 }
 
+export interface WorkEntryRow {
+  id: string;
+  position: number;
+  source_id: string;
+  kind: 'shift';
+  work_date: DateStr;
+  minutes: number | null;
+  wage_cents: number | null;
+  cash_tips_cents: number | null;
+  card_tips_cents: number | null;
+  cash_tips_record_id: string | null;
+  paid_by_occurrence_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** The body of a save_plan request. */
 export interface PlanRows {
   onboarding_complete: boolean;
@@ -80,6 +99,7 @@ export interface PlanRows {
   versions: VersionRow[];
   pauses: PauseRow[];
   records: RecordRow[];
+  work_entries: WorkEntryRow[];
 }
 
 /** What load_plan returns. */
@@ -136,6 +156,8 @@ export function toRows(data: AppData): PlanRows {
     dismissed_proposed_cents: s.estimateDismissal?.proposedCents ?? null,
     dismissed_through: s.estimateDismissal?.through ?? null,
     certainty: s.certainty ?? null,
+    income_type: s.incomeType ?? null,
+    hourly_wage_cents: s.hourlyWageCents ?? null,
     created_at: s.createdAt,
     updated_at: s.updatedAt,
   }));
@@ -164,12 +186,28 @@ export function toRows(data: AppData): PlanRows {
     created_at: r.createdAt,
     updated_at: r.updatedAt,
   }));
+  const work_entries: WorkEntryRow[] = (data.workEntries ?? []).map((e, i) => ({
+    id: e.id,
+    position: i,
+    source_id: e.sourceId,
+    kind: e.kind,
+    work_date: e.date,
+    minutes: e.minutes ?? null,
+    wage_cents: e.wageCents ?? null,
+    cash_tips_cents: e.cashTipsCents ?? null,
+    card_tips_cents: e.cardTipsCents ?? null,
+    cash_tips_record_id: e.cashTipsRecordId ?? null,
+    paid_by_occurrence_id: e.paidByOccurrenceId ?? null,
+    created_at: e.createdAt,
+    updated_at: e.updatedAt,
+  }));
   return {
     onboarding_complete: data.onboardingComplete,
     sources,
     versions,
     pauses,
     records,
+    work_entries,
   };
 }
 
@@ -203,6 +241,8 @@ export function fromRows(plan: LoadedPlan): AppData {
         ? { estimateDismissal: { currentCents: Number(s.dismissed_current_cents), proposedCents: Number(s.dismissed_proposed_cents), through: s.dismissed_through! } }
         : {}),
       ...(s.certainty === 'possible' ? { certainty: 'possible' as const } : {}),
+      ...(s.income_type ? { incomeType: s.income_type } : {}),
+      ...(s.hourly_wage_cents !== null && s.hourly_wage_cents !== undefined ? { hourlyWageCents: Number(s.hourly_wage_cents) } : {}),
       createdAt: s.created_at,
       updatedAt: s.updated_at,
     }));
@@ -228,12 +268,30 @@ export function fromRows(plan: LoadedPlan): AppData {
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
+  const num = (n: number | null) => (n === null ? undefined : Number(n));
+  const workEntries: WorkEntry[] = [...(plan.work_entries ?? [])]
+    .sort((a, b) => a.position - b.position)
+    .map((e) => {
+      const fields = { minutes: num(e.minutes), wageCents: num(e.wage_cents), cashTipsCents: num(e.cash_tips_cents), cardTipsCents: num(e.card_tips_cents) };
+      return {
+        id: e.id,
+        sourceId: e.source_id,
+        kind: e.kind,
+        date: e.work_date,
+        ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)),
+        ...(e.cash_tips_record_id ? { cashTipsRecordId: e.cash_tips_record_id } : {}),
+        ...(e.paid_by_occurrence_id ? { paidByOccurrenceId: e.paid_by_occurrence_id } : {}),
+        createdAt: e.created_at,
+        updatedAt: e.updated_at,
+      };
+    });
   return {
     schemaVersion: 2,
     revision: Number(plan.revision),
     onboardingComplete: plan.onboarding_complete,
     sources,
     records,
+    ...(workEntries.length ? { workEntries } : {}),
   };
 }
 
@@ -261,6 +319,7 @@ export function canonicalize(data: AppData): AppData {
       updatedAt: canonicalTimestamp(s.updatedAt),
     })),
     records: data.records.map((r) => ({ ...r, completedAt: ts(r.completedAt), canceledAt: ts(r.canceledAt), createdAt: canonicalTimestamp(r.createdAt), updatedAt: canonicalTimestamp(r.updatedAt) })),
+    ...(data.workEntries ? { workEntries: data.workEntries.map((e) => ({ ...e, createdAt: canonicalTimestamp(e.createdAt), updatedAt: canonicalTimestamp(e.updatedAt) })) } : {}),
   };
 }
 
@@ -314,6 +373,9 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
     if (s.versions.some((v, j) => j > 0 && v.startDate < s.versions[j - 1]!.startDate)) normalized(`${where}: schedules will be stored in start-date order.`);
     if (s.pausedRanges.some((p) => !(isValidDateStr(p.from) && isValidDateStr(p.until) && p.until > p.from))) error(`${where}: a turned-off stretch has invalid dates.`);
     if (s.certainty !== undefined && (s.certainty !== 'possible' || s.kind !== 'income')) error(`${where}: only income can be possible.`);
+    if ((s.incomeType !== undefined || s.hourlyWageCents !== undefined) && (s.kind !== 'income' || !s.incomeType || (s.hourlyWageCents !== undefined && !isCents(s.hourlyWageCents)))) {
+      error(`${where}: only income can be hourly or tipped, and a wage needs a type and an amount above $0.`);
+    }
     if (s.pausedRanges.some((p, j) => j > 0 && p.from < s.pausedRanges[j - 1]!.from)) normalized(`${where}: turned-off stretches will be stored in date order.`);
   });
   const recordIds = new Set<string>();
@@ -340,7 +402,28 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
     if (![r.createdAt, r.updatedAt].every(isTimestamp) || ![r.completedAt, r.canceledAt].every((t) => t === null || isTimestamp(t))) error(`${where}: a time isn't a valid time.`);
   });
 
-  const all = [...data.sources.flatMap((s) => [s.createdAt, s.updatedAt]), ...data.records.flatMap((r) => [r.createdAt, r.updatedAt, r.completedAt, r.canceledAt])];
+  const recordById = new Map(data.records.map((r) => [r.id, r]));
+  const shiftIds = new Set<string>();
+  (data.workEntries ?? []).forEach((e, i) => {
+    const where = `Shift ${i + 1} (${e.id})`;
+    if (shiftIds.has(e.id)) error(`${where}: the id is used twice.`);
+    shiftIds.add(e.id);
+    const item = data.sources.find((s) => s.id === e.sourceId);
+    if (!item || item.kind !== 'income' || !item.incomeType) error(`${where}: its income no longer exists or isn't hourly or tipped.`);
+    if (!isValidDateStr(e.date)) error(`${where}: the date isn't valid.`);
+    if (e.minutes !== undefined && !(Number.isSafeInteger(e.minutes) && e.minutes > 0 && e.minutes <= 1440)) error(`${where}: hours must be between 0 and 24.`);
+    if ([e.wageCents, e.cashTipsCents, e.cardTipsCents].some((c) => c !== undefined && !isCents(c))) error(`${where}: an amount must be above $0 and at most $100,000,000.`);
+    if (e.minutes === undefined && e.cashTipsCents === undefined && e.cardTipsCents === undefined) error(`${where}: it has no hours or tips.`);
+    if (e.cashTipsRecordId !== undefined && (e.cashTipsCents === undefined || !recordById.has(e.cashTipsRecordId))) error(`${where}: its cash tips record is missing.`);
+    if (e.paidByOccurrenceId !== undefined && !recordById.has(e.paidByOccurrenceId)) error(`${where}: the paycheck that paid it is missing.`);
+    if (!isTimestamp(e.createdAt) || !isTimestamp(e.updatedAt)) error(`${where}: a created or updated time isn't a valid time.`);
+  });
+
+  const all = [
+    ...data.sources.flatMap((s) => [s.createdAt, s.updatedAt]),
+    ...data.records.flatMap((r) => [r.createdAt, r.updatedAt, r.completedAt, r.canceledAt]),
+    ...(data.workEntries ?? []).flatMap((e) => [e.createdAt, e.updatedAt]),
+  ];
   if (all.some((t) => t !== null && isTimestamp(t) && canonicalTimestamp(t) !== t)) normalized('Some times will be stored as ISO-8601 UTC with milliseconds.');
   if (data.isSample) error('Sample data is never stored in an account.');
   if (hasAccountData(data)) error("Accounts, account assignments, transfers and reserve releases can't be stored in Supabase yet.");

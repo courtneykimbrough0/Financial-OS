@@ -5,10 +5,11 @@ import { formatMoney } from '../../domain/money';
 import { deriveStatus, resolveOccurrences } from '../../domain/occurrences';
 import * as ops from '../../domain/operations';
 import { describeRule } from '../../domain/recurrence';
-import { isUncountedPossible, liabilityPrefix, ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OneTimeKind, type Occurrence, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
+import { incomeTypePrefix, isUncountedPossible, liabilityPrefix, ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OneTimeKind, type Occurrence, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { EmptyLine, FlowAmount, ListGroup, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
-import { KIND_COPY, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm } from '../components/forms';
+import { KIND_COPY, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm, useIncomeDetailAvailable } from '../components/forms';
+import { ShiftSheet, ShiftsSection } from '../components/shifts';
 import { EstimateCallout, EstimateSheet, useEstimateSuggestion } from '../components/EstimateSheet';
 import { OccurrenceSheet } from '../components/OccurrenceSheet';
 import { AccountLabel } from '../components/money-accounts';
@@ -140,6 +141,7 @@ function SourceRow({ source, onOpen }: { source: RecurringSource; onOpen: () => 
           <span className="entry-title">{source.description}</span>
           <span className="entry-sub">
             {liabilityPrefix(source)}
+            {incomeTypePrefix(source)}
             {describeRule(current.rule, current.startDate)} · <span className={status.overdue ? 'overdue-text' : undefined}>{status.text}</span>
           </span>
           <TagList tags={source.tags} />
@@ -171,14 +173,18 @@ function ItemSheet({ source, onClose, onOpenDate, onEdit }: { source: RecurringS
   const { data, today, run } = useStore();
   const toast = useToast();
   const [mode, setMode] = useState<'view' | 'turn-off' | 'turn-on' | 'delete'>('view');
+  // A shift sheet replaces this one and returns to it: 'new' to log one, or a shift's id.
+  const [shiftSheet, setShiftSheet] = useState<string | null>(null);
+  const shiftsShown = useIncomeDetailAvailable() && source.kind === 'income' && !!source.incomeType;
   const current = source.versions[source.versions.length - 1]!;
   const occurrences = useMemo(() => sourceOccurrences(data, source, today), [data, source, today]);
   const pending = source.versions.filter((v) => v.startDate > today);
   const upcomingChange = pending.length > 0 && source.versions.length > 1 ? pending[0] : null;
-  const deletable = !data.records.some((r) => r.sourceId === source.id);
+  const deletable = !data.records.some((r) => r.sourceId === source.id) && !(data.workEntries ?? []).some((e) => e.sourceId === source.id);
   const status = itemStatus(data, source, today);
   const name = source.description;
 
+  if (shiftSheet !== null) return <ShiftSheet source={source} shiftId={shiftSheet === 'new' ? null : shiftSheet} onDone={() => setShiftSheet(null)} />;
   if (mode === 'turn-off')
     return (
       <Modal title={`Turn off ${name}?`} onClose={() => setMode('view')}>
@@ -245,6 +251,7 @@ function ItemSheet({ source, onClose, onOpenDate, onEdit }: { source: RecurringS
       <div className="stack">
         <p>
           <FlowAmount kind={source.kind} cents={current.amountCents} /> · {liabilityPrefix(source)}
+          {incomeTypePrefix(source)}
           {describeRule(current.rule, current.startDate)}
         </p>
         <p className={status.overdue ? 'overdue-text' : 'muted'}>{status.text}</p>
@@ -253,6 +260,7 @@ function ItemSheet({ source, onClose, onOpenDate, onEdit }: { source: RecurringS
             Scheduled change: {formatMoney(upcomingChange.amountCents)}, {describeRule(upcomingChange.rule, upcomingChange.startDate).toLowerCase()}, starting {formatMedium(upcomingChange.startDate)}.
           </p>
         )}
+        {shiftsShown && <ShiftsSection source={source} onLog={() => setShiftSheet('new')} onOpen={setShiftSheet} />}
         {occurrences.length > 0 && (
           <section className="stack-sm" aria-labelledby="item-dates">
             <SectionLabel id="item-dates">Recent and upcoming dates</SectionLabel>
@@ -302,8 +310,10 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
   const itemSource = sheet?.kind === 'item' ? data.sources.find((s) => s.id === sheet.id) : undefined;
 
   const sources = data.sources.filter((s) => s.kind === kind).sort((a, b) => Number(b.active) - Number(a.active) || a.description.localeCompare(b.description));
+  // Cash tips logged with a shift are listed with the shift, not here (they still count wherever money received is shown).
+  const shiftTips = new Set((data.workEntries ?? []).map((e) => e.cashTipsRecordId));
   const oneTimes = data.records
-    .filter((r) => r.sourceId === null && r.kind === kind)
+    .filter((r) => r.sourceId === null && r.kind === kind && !shiftTips.has(r.id))
     .map((r) => ({ ...r, displayStatus: deriveStatus(r, today), virtual: false }))
     .sort((a, b) => (a.scheduledDate < b.scheduledDate ? 1 : -1));
   const upcomingOneTimes = oneTimes.filter((o) => o.status === 'scheduled').reverse();

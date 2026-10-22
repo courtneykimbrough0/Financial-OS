@@ -47,6 +47,13 @@ Every counted entry lands in exactly one part, by kind (`totals`):
 
 **Accounts and transfers aren't forecast inputs.** Items may carry an `accountId` (PRODUCT_EXPERIENCE.md section 11) and the plan may hold transfers, but nothing above reads either: creating, assigning or deleting accounts and adding, recording or deleting transfers changes no entry, running total or cash-flow figure (`accounts`, `reserves-transfers` tests).
 
+## Earnings from shifts (`earnings.ts`, E2)
+
+Shifts are earnings, never money received, and the forecast never reads them, an income's type or its wage.
+- Cash tips enter cash flow once, as their own received one-time income record on the shift's date.
+- Wages and card tips enter cash flow once, as the recorded paycheck that pays them (its actual amount); until then they are "earned, not paid yet", outside every total.
+- Wages for a shift: minutes × wage ÷ 60, rounded to the nearest cent once per shift. Earnings: wages + cash tips + card tips. Effective hourly: earnings ÷ hours over shifts with hours.
+
 ## Home (`home.ts`, roadmap H1 and H2)
 
 `homeView(data, today, { weekOf })` organizes what the Home screen shows, from the same forecast. `today` decides what is overdue, what needs attention and what progress compares; `weekOf` (any date in a week, default `today`) only chooses the week listed under Coming up and Happened, so browsing weeks never changes a figure. It adds no money math: every figure comes from `buildForecast` and `totals` (through `kpisOfEntries`), `transfersInRange` / `transferShortfall`, `explainTimingGaps` and `variance`. Weeks run Sunday to Saturday.
@@ -141,6 +148,7 @@ Files are in `src/domain/__tests__/`. "EV" is `engine-validation.test.ts`; "SC" 
 | Home: sections, week navigation (month and year), progress bases, attention rules | `home`; `ui/home` |
 | Adaptive estimates (steady, rising, falling, variable, seasonal; unusual payments; too little history; rate and schedule changes; approve, dismiss, repeat; income not estimated; exact cents) | `estimates` (all); `state/estimate-persistence` |
 | Scenarios (one-time, several together, recurring, variable income, anchors, before payday, no stored changes, reconciliation, invalid input) | `scenarios` (all) |
+| Shifts: wages and tips calculations, cash tips counted once on the shift date, wages and card tips never counted until the paycheck (counted once, as recorded), corrections replace the tips record, paycheck links and undo, validation, forecast never reads shifts | `shifts` (all); `state/shift-persistence`; `integrity.db` › hourly and tipped income; `ui/shifts-e2` |
 | Income certainty: possible income listed, never counted or starting the running total; received counts once; marking expected or possible changes nothing else; existing data unchanged; several sources need no primary | `income-certainty` (all); `state/certainty-persistence`; `integrity.db` › income certainty; `ui/income-certainty-e1` |
 | Rescheduling and canceling | `forecast` › overdue, rescheduled, and canceled occurrences; spec › H, I; SC › a moved occurrence |
 | Schedule changes and effective dates | `forecast` › recurring schedule changes; spec › F; SC › D1 |
