@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { approvedRefs, devConfigProblem, hostedTestConfigProblem } from '../target';
 import { approvedProjects, checkTarget } from '../../../../scripts/supabase-target.mjs';
+import { identityProblem } from '../../../../scripts/test-hosted.mjs';
 
 const REF = 'abcdefghijklmnopqrst';
 const OTHER = 'zyxwvutsrqponmlkjihg';
@@ -79,6 +80,24 @@ describe("the test runners' target", () => {
     expect(error(hostedEnv({ SUPABASE_TEST_ANON_KEY: jwt({ role: 'service_role' }) }))).toBe('SUPABASE_TEST_ANON_KEY must be the public anon or publishable key, not a service_role key.');
     expect(error(hostedEnv({ SUPABASE_TEST_ANON_KEY: jwt({ role: 'anon', ref: OTHER }) }))).toBe(`SUPABASE_TEST_ANON_KEY belongs to project ${OTHER}, not ${REF}.`);
     expect(error({ SUPABASE_TEST_TARGET: 'production' })).toBe('SUPABASE_TEST_TARGET must be "local" or "hosted"; got "production".');
+  });
+
+  it('the focused hosted verification reads no email, but keeps every other check', () => {
+    const noMail = hostedEnv({ SUPABASE_TEST_OUTBOX_SECRET: undefined });
+    expect(checkTarget(noMail, [REF], { needsMail: false })).toEqual({ ok: true, target: { kind: 'hosted', url: `https://${REF}.supabase.co`, key: 'sb_publishable_abc', mailUrl: null, ref: REF, outboxSecret: null } });
+    for (const over of [{ SUPABASE_TEST_ALLOW_DESTRUCTIVE: undefined }, { SUPABASE_TEST_ANON_KEY: 'sb_secret_abc' }, { SUPABASE_TEST_URL: `https://${OTHER}.supabase.co` }]) {
+      expect(checkTarget({ ...noMail, ...over }, [REF], { needsMail: false }).ok).toBe(false);
+    }
+    expect(checkTarget(noMail, [], { needsMail: false }).ok).toBe(false);
+  });
+
+  it('its identities are disposable @example.test addresses, two different ones, with passwords', () => {
+    const ids = { SUPABASE_TEST_IDENTITY_A: 'a@example.test', SUPABASE_TEST_IDENTITY_A_PASSWORD: 'pw-12345678', SUPABASE_TEST_IDENTITY_B: 'b@example.test', SUPABASE_TEST_IDENTITY_B_PASSWORD: 'pw-87654321' };
+    expect(identityProblem(ids)).toBeNull();
+    expect(identityProblem({ ...ids, SUPABASE_TEST_IDENTITY_A: 'someone@gmail.com' })).toBe("Set SUPABASE_TEST_IDENTITY_A to a disposable @example.test address (never a real person's).");
+    expect(identityProblem({ ...ids, SUPABASE_TEST_IDENTITY_B: 'b@example.test.evil.com' })).toBe("Set SUPABASE_TEST_IDENTITY_B to a disposable @example.test address (never a real person's).");
+    expect(identityProblem({ ...ids, SUPABASE_TEST_IDENTITY_B_PASSWORD: '' })).toBe('Set SUPABASE_TEST_IDENTITY_B_PASSWORD (8 characters or more).');
+    expect(identityProblem({ ...ids, SUPABASE_TEST_IDENTITY_B: 'A@example.test' })).toBe('The two disposable identities must be different.');
   });
 });
 
