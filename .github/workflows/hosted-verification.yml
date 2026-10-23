@@ -1,0 +1,61 @@
+# The focused hosted verification (roadmap F3) against the hosted TEST
+# project, Financial OS 2. Manual only: it signs in as two disposable
+# accounts and deletes them, so it never runs on pull requests or pushes and
+# is not one of the CI checks. Run it from Actions → "Hosted verification" →
+# Run workflow, typing the project ref to confirm.
+#
+# Every safeguard of `npm run test:hosted` still applies (allowlist, exact
+# address, destructive-test confirmation, public key only, in-database
+# marker, @example.test identities). The two secrets are the disposable
+# accounts' passwords, one each; GitHub masks them in logs, and nothing is
+# uploaded.
+name: Hosted verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_project:
+        description: 'Type the test project ref (aymombliohuwbokpncdn) to confirm: this deletes the two disposable test accounts'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hosted-verification
+  cancel-in-progress: false
+
+jobs:
+  hosted:
+    name: Focused hosted verification (Financial OS 2)
+    # Only in this repository, and only when the dispatcher typed the ref.
+    if: github.repository == 'courtneykimbrough0/Financial-OS' && inputs.confirm_project == 'aymombliohuwbokpncdn'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SUPABASE_TEST_TARGET: hosted
+      SUPABASE_TEST_PROJECT_REF: aymombliohuwbokpncdn
+      # The project's publishable key: public by design (browsers carry it); never a secret or service-role key.
+      SUPABASE_TEST_ANON_KEY: sb_publishable_0OC6k7ZbV4qdt3FOkmklQg_5bHD4P83
+      SUPABASE_TEST_ALLOW_DESTRUCTIVE: ${{ inputs.confirm_project }}
+      SUPABASE_TEST_IDENTITY_A: fos-hosted-a@example.test
+      SUPABASE_TEST_IDENTITY_B: fos-hosted-b@example.test
+      SUPABASE_TEST_IDENTITY_A_PASSWORD: ${{ secrets.SUPABASE_TEST_IDENTITY_A_PASSWORD }}
+      SUPABASE_TEST_IDENTITY_B_PASSWORD: ${{ secrets.SUPABASE_TEST_IDENTITY_B_PASSWORD }}
+    steps:
+      - name: Check both test password secrets are set (their values are never printed)
+        run: |
+          missing=0
+          if [ -z "$SUPABASE_TEST_IDENTITY_A_PASSWORD" ]; then echo "::error::The repository secret SUPABASE_TEST_IDENTITY_A_PASSWORD isn't set."; missing=1; fi
+          if [ -z "$SUPABASE_TEST_IDENTITY_B_PASSWORD" ]; then echo "::error::The repository secret SUPABASE_TEST_IDENTITY_B_PASSWORD isn't set."; missing=1; fi
+          if [ "$missing" = 1 ]; then echo "Nothing was run."; exit 1; fi
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:hosted
