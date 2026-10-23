@@ -70,18 +70,15 @@ describe('the Auth settings, as the project reports them', () => {
     expect([r.error?.code, r.data.session]).toEqual(['anonymous_provider_disabled', null]);
   });
 
-  it('a password shorter than 8 characters is refused', async () => {
-    const r = await client().auth.signUp({ email: disposable(), password: 'Short7!' });
-    expect([r.error?.code, r.data.session]).toEqual(['weak_password', null]);
-  });
-
-  it('a new sign-up gets no session, and its password signs nothing in, until the email is confirmed', async () => {
+  // Hosted Auth refuses @example.test addresses at sign-up, before it looks at the password, so a sign-up
+  // here gets no session and creates no account. That confirmation is required comes from the settings
+  // above; the minimum password length is checked on a signed-in account below.
+  it('a sign-up with a disposable address gets no session, and that address signs nothing in', async () => {
     const who = { email: disposable(), password: `pw-${randomUUID()}` };
     const up = await client().auth.signUp(who);
-    expect(up.data.session).toBeNull();
+    expect([up.error?.code, up.data.session]).toEqual(['email_address_invalid', null]);
     const r = await client().auth.signInWithPassword(who);
-    expect(r.data.session).toBeNull();
-    expect(r.error).not.toBeNull();
+    expect([r.error?.code, r.data.session]).toEqual(['invalid_credentials', null]);
   });
 });
 
@@ -159,6 +156,13 @@ describe("one person's plan (identity A)", () => {
     expect((await sb.from('workspaces').select('revision')).data).toEqual([{ revision: current.revision + 1 }]);
     const r = await sb.from('save_receipts').select('*');
     expect([r.status, r.error?.code]).toEqual([403, '42501']);
+  });
+
+  it('a new password shorter than 8 characters is refused, and the current one keeps working', async () => {
+    const { sb } = await signIn(A);
+    const r = await sb.auth.updateUser({ password: 'Short7!' });
+    expect(r.error?.code).toBe('weak_password');
+    expect((await client().auth.signInWithPassword(A)).error).toBeNull();
   });
 
   it('sessions: a refresh still reaches the plan; after signing out, its saves are refused and its refresh token stops working', async () => {

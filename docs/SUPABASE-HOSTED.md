@@ -81,7 +81,7 @@ What a hosted project adds over the local stack is its configuration: the schema
 - row-level security and ownership as the `authenticated` and `anon` roles, acting as the two disposable accounts inside a transaction that is rolled back, so nothing is left behind (no user is ever written to Supabase's managed Auth tables).
 
 **2. `npm run test:hosted`** (`src/state/supabase/__tests__/verification.hosted.test.ts`), through the project's real Auth and API:
-- Auth settings as the project reports them: email only, confirmation required, sign-ups open, anonymous and every other provider off; an anonymous sign-in and a 7-character password refused; a new sign-up gets no session until confirmed;
+- Auth settings as the project reports them: email only, confirmation required, sign-ups open, anonymous and every other provider off; an anonymous sign-in refused; a sign-up with a disposable address gets no session (hosted Auth refuses `@example.test` addresses); a new password of 7 characters refused on a signed-in account;
 - signed out: every function and table refused; a wrong password and an unknown email answered the same;
 - persistence: a plan with every kind of income, accounts, transfers and Strategic Reserves comes back exactly, with identical forecasts, Activity and earnings; an ordinary save keeps everything;
 - revision conflicts (two devices), retried saves answered once, a reused save id refused, a stale revision refused, an ordinary save can't erase the plan;
@@ -108,7 +108,7 @@ npm run test:hosted
 
 The runner refuses anything but the approved, marked test project and two disposable identities. It needs network access to `https://<ref>.supabase.co`. The suite uses a handful of sign-ins and two sign-up attempts, well within Supabase's default rate limits.
 
-**Cleanup.** The suite deletes both identities through `delete_account()`. Its sign-up attempt with a fresh `@example.test` address may leave one unconfirmed user; remove it in Authentication → Users. A new run needs the two accounts created again the same way (with the same addresses, and for GitHub Actions their passwords in the two secrets). Record the date, the project ref, the commit tested and the passed count. Note "hosted" and not local.
+**Cleanup.** The suite deletes both identities through `delete_account()`. Its sign-up attempt with a fresh `@example.test` address is refused by hosted Auth, so it leaves no user behind. A new run needs the two accounts created again the same way (with the same addresses, and for GitHub Actions their passwords in the two secrets). Record the date, the project ref, the commit tested and the passed count. Note "hosted" and not local.
 
 **Stop at once, and don't retry, if:**
 - a runner refuses: wrong ref, not allowlisted, no marker, a non-public key, or an identity that isn't `@example.test`;
