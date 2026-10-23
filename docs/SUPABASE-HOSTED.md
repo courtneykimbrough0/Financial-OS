@@ -78,7 +78,7 @@ What a hosted project adds over the local stack is its configuration: the schema
 - every table, constraint, index, policy and grant, and the four function definitions, compared with the baseline;
 - `verify.sql`: all 27 rows `ok`;
 - the security advisor: no finding beyond the expected ones (`save_receipts` has no policy by design; signed-in users may call `create_workspace`);
-- row-level security and ownership as the `authenticated` and `anon` roles, with two temporary users that are removed afterwards.
+- row-level security and ownership as the `authenticated` and `anon` roles, acting as the two disposable accounts inside a transaction that is rolled back, so nothing is left behind (no user is ever written to Supabase's managed Auth tables).
 
 **2. `npm run test:hosted`** (`src/state/supabase/__tests__/verification.hosted.test.ts`), through the project's real Auth and API:
 - Auth settings as the project reports them: email only, confirmation required, sign-ups open, anonymous and every other provider off; an anonymous sign-in and a 7-character password refused; a new sign-up gets no session until confirmed;
@@ -89,7 +89,10 @@ What a hosted project adds over the local stack is its configuration: the schema
 - cross-account isolation with raw requests (reads, direct writes, a save carrying the other workspace's ids);
 - account deletion: no way to name another account, a signed-out session refused, a fresh password sign-in deletes the account and its whole plan, an earlier token reaches nothing, the other plan untouched; finally both identities are deleted.
 
-**Disposable identities.** With confirmation on and no test outbox, the two identities are created already confirmed: two `@example.test` addresses (a reserved domain no person can own), each with a long random password generated for the run and kept only in the runner's environment. Claude Code creates them through the connector, sending only a bcrypt hash of each password, as a confirmed email-and-password user (an `auth.users` row and its `email` identity), the same thing Authentication → Users → Add user → Create new user with "Auto Confirm User" makes. Never use a personal account.
+**Disposable identities.** With confirmation on and no test outbox, the two accounts are created already confirmed, through Supabase's supported user management only: Authentication → Users → Add user → Create new user, with **Auto Confirm User** ticked (the dashboard's form of the Auth Admin API's `email_confirm: true`). Never insert rows into Supabase's managed Auth tables, and never use a personal account.
+- Addresses: two different `@example.test` addresses (a reserved domain no person can own), for example `fos-hosted-a@example.test` and `fos-hosted-b@example.test`.
+- Passwords: long random values from a password manager's generator, kept only in the runner's environment (for a Claude Code session: the environment's settings, as `SUPABASE_TEST_IDENTITY_A`, `SUPABASE_TEST_IDENTITY_A_PASSWORD`, `SUPABASE_TEST_IDENTITY_B` and `SUPABASE_TEST_IDENTITY_B_PASSWORD`). Never in chat, the repository, a browser build or a log.
+- The Admin API itself needs the project's secret key, which Financial OS never uses; the dashboard is the supported way to create them without it.
 
 **Running it:**
 
@@ -103,7 +106,7 @@ npm run test:hosted
 
 The runner refuses anything but the approved, marked test project and two disposable identities. It needs network access to `https://<ref>.supabase.co`. The suite uses a handful of sign-ins and two sign-up attempts, well within Supabase's default rate limits.
 
-**Cleanup.** The suite deletes both identities through `delete_account()`. Its sign-up attempt with a fresh `@example.test` address may leave one unconfirmed user; remove it in Authentication → Users (or through the connector). Record the date, the project ref, the commit tested and the passed count. Note "hosted" and not local.
+**Cleanup.** The suite deletes both identities through `delete_account()`. Its sign-up attempt with a fresh `@example.test` address may leave one unconfirmed user; remove it in Authentication → Users. A new run needs two new accounts, created the same way. Record the date, the project ref, the commit tested and the passed count. Note "hosted" and not local.
 
 **Stop at once, and don't retry, if:**
 - a runner refuses: wrong ref, not allowlisted, no marker, a non-public key, or an identity that isn't `@example.test`;
