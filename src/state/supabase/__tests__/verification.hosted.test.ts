@@ -161,6 +161,8 @@ describe("one person's plan (identity A)", () => {
   it('a new password shorter than 8 characters is refused, and the current one keeps working', async () => {
     const { sb } = await signIn(A);
     const r = await sb.auth.updateUser({ password: 'Short7!' });
+    // If the project accepted it, put the agreed password back before failing, so the rest of the run still works.
+    if (!r.error) await sb.auth.updateUser({ password: A.password });
     expect(r.error?.code).toBe('weak_password');
     expect((await client().auth.signInWithPassword(A)).error).toBeNull();
   });
