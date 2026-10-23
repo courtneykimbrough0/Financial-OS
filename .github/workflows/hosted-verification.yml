@@ -6,8 +6,9 @@
 #
 # Every safeguard of `npm run test:hosted` still applies (allowlist, exact
 # address, destructive-test confirmation, public key only, in-database
-# marker, @example.test identities). The one secret is the disposable
-# accounts' shared password; GitHub masks it in logs, and nothing is uploaded.
+# marker, @example.test identities). The two secrets are the disposable
+# accounts' passwords, one each; GitHub masks them in logs, and nothing is
+# uploaded.
 name: Hosted verification
 
 on:
@@ -40,15 +41,15 @@ jobs:
       SUPABASE_TEST_ALLOW_DESTRUCTIVE: ${{ inputs.confirm_project }}
       SUPABASE_TEST_IDENTITY_A: fos-hosted-a@example.test
       SUPABASE_TEST_IDENTITY_B: fos-hosted-b@example.test
-      SUPABASE_TEST_IDENTITY_A_PASSWORD: ${{ secrets.SUPABASE_HOSTED_TEST_PASSWORD }}
-      SUPABASE_TEST_IDENTITY_B_PASSWORD: ${{ secrets.SUPABASE_HOSTED_TEST_PASSWORD }}
+      SUPABASE_TEST_IDENTITY_A_PASSWORD: ${{ secrets.SUPABASE_TEST_IDENTITY_A_PASSWORD }}
+      SUPABASE_TEST_IDENTITY_B_PASSWORD: ${{ secrets.SUPABASE_TEST_IDENTITY_B_PASSWORD }}
     steps:
-      - name: Check the test password secret is set (its value is never printed)
+      - name: Check both test password secrets are set (their values are never printed)
         run: |
-          if [ -z "$SUPABASE_TEST_IDENTITY_A_PASSWORD" ]; then
-            echo "::error::The repository secret SUPABASE_HOSTED_TEST_PASSWORD isn't set, so nothing was run."
-            exit 1
-          fi
+          missing=0
+          if [ -z "$SUPABASE_TEST_IDENTITY_A_PASSWORD" ]; then echo "::error::The repository secret SUPABASE_TEST_IDENTITY_A_PASSWORD isn't set."; missing=1; fi
+          if [ -z "$SUPABASE_TEST_IDENTITY_B_PASSWORD" ]; then echo "::error::The repository secret SUPABASE_TEST_IDENTITY_B_PASSWORD isn't set."; missing=1; fi
+          if [ "$missing" = 1 ]; then echo "Nothing was run."; exit 1; fi
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
