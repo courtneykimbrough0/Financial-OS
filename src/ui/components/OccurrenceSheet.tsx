@@ -1,14 +1,13 @@
-import { AlertCircle, CircleHelp } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useRef, useState, type FormEvent } from 'react';
 import { diffDays, formatLong, formatMedium, type DateStr } from '../../domain/dates';
 import { centsToInput, formatMoney, formatSignedMoney, parseMoney } from '../../domain/money';
 import { findOccurrence } from '../../domain/occurrences';
 import * as ops from '../../domain/operations';
-import { doneVerb as kindDoneVerb, isUncountedPossible, KIND_LABEL, type Occurrence, type TransactionKind } from '../../domain/types';
+import { doneVerb as kindDoneVerb, KIND_LABEL, type Occurrence, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { navigate, type Route } from '../router';
 import { Field, FlowAmount, FormError, Icon, KindAvatar, Modal, MoneyInput, StatusBadge, useToast } from './common';
-import { useIncomeCertaintyAvailable } from './forms';
 
 /** The screen where a recurring item's schedule is edited. */
 const SOURCE_ROUTE: Record<TransactionKind, Route> = { income: 'plan/income', bill: 'plan/expenses', subscription: 'plan/expenses', liability: 'plan/liabilities', reserve: 'plan/reserves', varied: 'plan/expenses' };
@@ -25,11 +24,11 @@ function timing(expected: DateStr, actual: DateStr): string {
   return `${n} day${n === 1 ? '' : 's'} ${d > 0 ? 'late' : 'early'}`;
 }
 
-/** `possible`: possible income not yet received, whose amounts aren't called expected. */
-function Comparison({ o, possible }: { o: Occurrence; possible: boolean }) {
-  const rows: [string, string][] = [[possible ? 'Possible' : 'Expected', `${formatMoney(o.expectedAmountCents)} on ${formatMedium(o.expectedDate)}`]];
+/** The original projection, any later change to it, and what was recorded: kept side by side for comparison. */
+function Comparison({ o }: { o: Occurrence }) {
+  const rows: [string, string][] = [['Expected', `${formatMoney(o.expectedAmountCents)} on ${formatMedium(o.expectedDate)}`]];
   if (o.scheduledDate !== o.expectedDate || o.scheduledAmountCents !== o.expectedAmountCents) {
-    rows.push([possible ? 'Now possible' : 'Now expected', `${formatMoney(o.scheduledAmountCents)} on ${formatMedium(o.scheduledDate)}`]);
+    rows.push(['Now expected', `${formatMoney(o.scheduledAmountCents)} on ${formatMedium(o.scheduledDate)}`]);
   }
   if (o.status === 'completed' && o.actualAmountCents !== null && o.actualDate !== null) {
     const diff = o.actualAmountCents - o.expectedAmountCents;
@@ -58,7 +57,6 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
   const [date, setDate] = useState<DateStr>(today);
   const [note, setNote] = useState('');
   const submitting = useRef(false);
-  const certaintyAvailable = useIncomeCertaintyAvailable();
 
   const o = findOccurrence(data, occurrenceId, today);
   if (!o) {
@@ -114,10 +112,6 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
 
   const title = o.description;
   const outstanding = o.status === 'scheduled';
-  const possible = isUncountedPossible(o);
-  // A one-time income carries its own certainty; a recurring occurrence follows its item.
-  const certaintyTarget = o.sourceId ?? o.id;
-  const itemName = o.sourceId ? (data.sources.find((s) => s.id === o.sourceId)?.description ?? o.description) : o.description;
   // Cash tips logged with a shift change only through that shift.
   const tipsShift = (data.workEntries ?? []).find((e) => e.cashTipsRecordId === o.id);
   const tipsJob = tipsShift ? data.sources.find((s) => s.id === tipsShift.sourceId)?.description : undefined;
@@ -128,12 +122,12 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
       <div className="occ-summary">
         <KindAvatar kind={o.kind} />
         <div className="occ-summary-main">
-          <FlowAmount kind={o.kind} cents={o.status === 'completed' ? o.actualAmountCents! : o.scheduledAmountCents} strike={o.status === 'canceled'} release={o.release} possible={possible} />
+          <FlowAmount kind={o.kind} cents={o.status === 'completed' ? o.actualAmountCents! : o.scheduledAmountCents} strike={o.status === 'canceled'} release={o.release} />
           <p className="occ-meta">
             <span className="muted">
               {KIND_LABEL[o.kind]} · {o.sourceId ? 'Recurring' : 'One-time'}
             </span>
-            <StatusBadge status={o.displayStatus} kind={o.kind} possible={possible} />
+            <StatusBadge status={o.displayStatus} kind={o.kind} />
           </p>
         </div>
       </div>
@@ -144,13 +138,7 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
           Its date has passed. Record it, or move it to a new date.
         </p>
       )}
-      {possible && (
-        <p className="callout callout-info">
-          <Icon icon={CircleHelp} size={16} /> 
-          Possible income isn't counted in cash flow or the running total. Mark it expected to count it on its date, or record it when it arrives.
-        </p>
-      )}
-      <Comparison o={o} possible={possible} />
+      <Comparison o={o} />
       {paidJob && <p className="hint">The payment for your {paidJob.description} job. To change the job, open it in Plan › Income.</p>}
       {tipsShift && (
         <p className="hint">
@@ -167,15 +155,6 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
               <button type="button" className="button primary" onClick={() => open('record')} data-autofocus>
                 Record {doneVerb(o)}
               </button>
-              {possible && (
-                <button
-                  type="button"
-                  className="button secondary"
-                  onClick={() => apply((d, c) => ops.setIncomeCertainty(d, certaintyTarget, 'expected', c), o.sourceId ? `${itemName} is now expected and counts from today.` : `${itemName} is now expected and counts on its date.`)}
-                >
-                  {o.sourceId ? `Mark ${itemName} as expected` : 'Mark as expected'}
-                </button>
-              )}
               <button type="button" className="button secondary" onClick={() => open('reschedule')}>
                 Change date or amount
               </button>
@@ -198,14 +177,6 @@ export function OccurrenceSheet({ occurrenceId, onClose }: { occurrenceId: strin
             <button type="button" className="button secondary" onClick={() => apply((d, c) => ops.restoreOccurrence(d, o.id, c), `Restored ${o.description}.`, false)}>
               Undo skip
             </button>
-          )}
-          {o.sourceId === null && outstanding && o.kind === 'income' && !possible && certaintyAvailable && (
-            <button type="button" className="button secondary" onClick={() => apply((d, c) => ops.setIncomeCertainty(d, o.id, 'possible', c), `${o.description} is now possible and isn't counted.`)}>
-              Mark as possible
-            </button>
-          )}
-          {o.sourceId !== null && possible && (
-            <p className="hint">Marking {itemName} as expected counts its payments from today on. Earlier dates that weren't recorded are marked skipped, and each can be undone.</p>
           )}
           {o.sourceId === null && !tipsShift && !paidJob && (
             <button type="button" className="button danger-link" onClick={() => open('delete')}>

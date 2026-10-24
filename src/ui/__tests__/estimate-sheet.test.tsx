@@ -245,9 +245,10 @@ describe('what a suggestion shows', () => {
     expect(sheet.querySelector('details summary')).toHaveTextContent('1 counted of 12');
     await user.click(within(sheet).getByRole('button', { name: 'Preview your forecast' }));
     const preview = within(sheet).getByRole('region', { name: 'Forecast preview' });
-    expect(within(preview).getByRole('list', { name: 'Payments that change' })).toHaveTextContent('Nov 3, 2026 · before your next payday, outside the running total$180.00 → $240.00');
+    // No income: the running total from today is only bills, and still compares.
+    expect(within(preview).getByRole('list', { name: 'Payments that change' })).toHaveTextContent('Nov 3, 2026 · running total −$180.00 → −$240.00$180.00 → $240.00');
     expect(within(within(preview).getByRole('list', { name: 'Payments that change' })).getAllByRole('listitem')).toHaveLength(1);
-    expect(preview).toHaveTextContent("There's no upcoming payday to start a running total from.");
+    expect(preview).not.toHaveTextContent(/payday/);
     expect(preview).not.toHaveTextContent('later payments');
 
     await user.click(within(sheet).getByRole('button', { name: 'Approve…' }));
@@ -275,10 +276,10 @@ describe('previewing', () => {
       'Dec 3, 2026 · running total −$360.00 → −$430.00$180.00 → $215.00',
       'Jan 3, 2027 · running total $20.00 → −$85.00$180.00 → $215.00',
     ]);
-    expect(preview).toHaveTextContent('New timing gap: Jan 3 – 14, down to −$85.00, back to $0 or more on Jan 15.');
+    expect(preview).toHaveTextContent('New timing gap: Jan 3 – 13, down to −$85.00, back to $0 or more on Jan 15.');
     expect(preview).toHaveTextContent('Deeper timing gap: Nov 1 – 5, down to −$715.00.');
     expect(preview).toHaveTextContent('Deeper timing gap: Dec 1 – 3, down to −$430.00.');
-    expect(preview).toHaveTextContent('Compared through Jan 20, 2027; the new estimate also applies to later payments. Nothing is saved until you approve.');
+    expect(preview).toHaveTextContent('Compared through Jan 13, 2027; the new estimate also applies to later payments. Nothing is saved until you approve.');
     expect(store.data.sources).toEqual(d.sources);
     expect(store.data.records).toEqual(d.records);
     expect(JSON.stringify(await adapter.load())).toBe(saved);

@@ -16,13 +16,13 @@ import { FakeServer } from './fake-server';
 const TODAY = '2026-10-19';
 const clock = { today: TODAY, now: '2026-10-19T12:00:00.000Z' };
 
-/** A client; a paid job, one with a possible payment, and a pending one. */
+/** A client; a paid job, one with a projected payment, and a pending one. */
 function plan(): AppData {
   let d = source(ops.emptyData(), '2026-10-05', 'income', 'Paycheck', 1000, '2026-10-23', { type: 'biweekly' }, 'pay');
   d = unwrap(ops.addClient(d, 'Acme', clock, 'acme'));
   d = unwrap(ops.addJob(d, { description: 'Logo design', clientId: 'acme', amountCents: usd(800), status: 'done', expectedDate: '2026-10-28' }, clock, 'logo'));
   d = unwrap(ops.recordJobPayment(d, 'logo', { amountCents: usd(780), date: '2026-10-18' }, clock));
-  d = unwrap(ops.addJob(d, { description: 'Website copy', clientId: 'acme', amountCents: usd(1200), status: 'planned', expectedDate: '2026-11-15', certainty: 'possible' }, clock, 'copy'));
+  d = unwrap(ops.addJob(d, { description: 'Website copy', clientId: 'acme', amountCents: usd(1200), status: 'planned', expectedDate: '2026-11-15' }, clock, 'copy'));
   d = unwrap(ops.addJob(d, { description: 'Brochure', amountCents: usd(300), status: 'done' }, clock, 'brochure'));
   return unwrap(ops.completeOnboarding(d));
 }
@@ -69,10 +69,7 @@ describe('device storage and backups keep clients and jobs', () => {
 describe('signed in with Firebase (legacy): clients and jobs are refused, never dropped', () => {
   it('a plan with a job or only a client is refused before anything is written', async () => {
     const onlyClient = unwrap(ops.addClient(ops.emptyData(), 'Acme', clock, 'acme'));
-    // (A plan with possible income is refused for that first, by E1.)
-    const p = plan();
-    const expectedOnly = unwrap(ops.setIncomeCertainty(p, p.jobs![1]!.paymentRecordId!, 'expected', clock));
-    for (const d of [expectedOnly, onlyClient]) {
+    for (const d of [plan(), onlyClient]) {
       localStorage.clear();
       const server = new FakeServer();
       const adapter = new CloudAdapter(server, 'user-1', localStorage);

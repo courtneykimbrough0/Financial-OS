@@ -11,19 +11,19 @@
  *    tap, retried save) is rejected; corrections use `correctActual`.
  *  - Schedule changes apply from an effective date (today or later) by adding
  *    a schedule version; earlier occurrences keep their expectation.
- *  - Only income can be possible, and certainty changes no amount, date or
- *    recorded outcome (see `IncomeCertainty`).
+ *  - Nothing becomes an actual by itself: an occurrence is recorded only by
+ *    `recordActual` (an explicit action), never because its date passed.
  *  - A freelance job's money is one one-time income record; finishing the work
  *    never counts as money received (see `FreelanceJob`).
  *  - A shift never changes cash flow by itself: its cash tips are one received
  *    income record, and its wages and card tips are paid by a recorded
  *    paycheck, counted once as that paycheck (see `WorkEntry`).
  */
-import { addDays, formatShort, isValidDateStr, type DateStr } from './dates';
+import { formatShort, isValidDateStr, type DateStr } from './dates';
 import type { Cents } from './money';
-import { findOccurrence, resolveOccurrences } from './occurrences';
+import { findOccurrence } from './occurrences';
 import { validateRule } from './recurrence';
-import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type IncomeCertainty, type IncomeType, type LiabilityType, type OccurrenceRecord, type OneTimeKind, type RecurrenceRule, type RecurringKind, type RecurringSource, type Transfer, type TransactionKind, type WorkEntry, workKindFor, canHavePaid, type Client, type FreelanceJob, type JobStatus, certaintyOf } from './types';
+import { ACCOUNT_TYPES, INCOME_TYPES, LIABILITY_TYPES, ONE_TIME_KINDS, RECURRING_KINDS, accountTypeFor, type Account, type AccountType, type AppData, type IncomeType, type LiabilityType, type OccurrenceRecord, type OneTimeKind, type RecurrenceRule, type RecurringKind, type RecurringSource, type Transfer, type TransactionKind, type WorkEntry, workKindFor, canHavePaid, type Client, type FreelanceJob, type JobStatus } from './types';
 
 export type Result = { ok: true; data: AppData } | { ok: false; error: string };
 
@@ -102,8 +102,6 @@ export interface SourceInput {
   amountCents: Cents;
   startDate: DateStr;
   rule: RecurrenceRule;
-  /** Income only; see `IncomeCertainty`. Omitted keeps what the item has (expected for a new one). */
-  certainty?: IncomeCertainty;
   /** Income only; see `IncomeType`. Omitted keeps what the item has; null makes it a fixed income. */
   incomeType?: IncomeType | null;
   /** Hourly and tipped income only. Omitted keeps what the item has; null clears it. */
@@ -130,19 +128,6 @@ function applyIncomeDetails(item: RecurringSource, details: IncomeDetails): Recu
   return { ...rest, incomeType: type, ...(wage && type !== 'gig' ? { hourlyWageCents: wage } : {}) };
 }
 
-/** The stored form of a certainty choice: only possible income carries the field. */
-function certaintyField(kind: TransactionKind, certainty: IncomeCertainty | undefined): { certainty?: 'possible' } {
-  return kind === 'income' && certainty === 'possible' ? { certainty: 'possible' } : {};
-}
-
-/** `item` with `certainty` applied, or unchanged when it is omitted. */
-function applyCertainty<T extends { kind: TransactionKind; certainty?: 'possible' }>(item: T, certainty: IncomeCertainty | undefined): T {
-  if (certainty === undefined) return item;
-  const { certainty: _old, ...rest } = item;
-  void _old;
-  return { ...(rest as T), ...certaintyField(item.kind, certainty) };
-}
-
 function validateLiabilityType(kind: TransactionKind, type: LiabilityType | undefined): string | null {
   if (kind !== 'liability') return null;
   return type && LIABILITY_TYPES.includes(type) ? null : 'Choose whether this is a card, a loan, or a line of credit.';
@@ -165,7 +150,6 @@ export function addSource(data: AppData, input: SourceInput, clock: Clock, id = 
     description: input.description.trim(),
     tags: normalizeTags(input.tags),
     ...(input.kind === 'liability' ? { liabilityType: input.liabilityType } : {}),
-    ...certaintyField(input.kind, input.certainty),
     versions: [{ id: newId('ver'), startDate: input.startDate, amountCents: input.amountCents, rule: input.rule }],
     active: true,
     endDate: null,
@@ -264,7 +248,7 @@ export function redefineSource(data: AppData, id: string, input: Omit<SourceInpu
     validateRule(input.rule, input.startDate);
   if (err) return fail(err);
   return withSource(data, id, (s) => ({
-    ...applyIncomeDetails(applyCertainty(s, input.certainty), input),
+    ...applyIncomeDetails(s, input),
     description: input.description.trim(),
     tags: normalizeTags(input.tags),
     ...(kind === 'liability' ? { liabilityType: input.liabilityType } : {}),
@@ -332,8 +316,6 @@ export interface OneTimeInput {
   date: DateStr;
   /** Reserves only: money taken out of reserves rather than set aside. */
   release?: boolean;
-  /** Income only; see `IncomeCertainty`. Expected when omitted. */
-  certainty?: IncomeCertainty;
 }
 
 export function addOneTime(data: AppData, input: OneTimeInput, clock: Clock, id = newId('one')): Result {
@@ -351,7 +333,6 @@ export function addOneTime(data: AppData, input: OneTimeInput, clock: Clock, id 
     description: input.description.trim(),
     tags: normalizeTags(input.tags),
     ...(input.release ? { release: true as const } : {}),
-    ...certaintyField(input.kind, input.certainty),
     expectedDate: input.date,
     expectedAmountCents: input.amountCents,
     scheduledDate: input.date,
@@ -366,45 +347,6 @@ export function addOneTime(data: AppData, input: OneTimeInput, clock: Clock, id 
     updatedAt: clock.now,
   };
   return ok({ ...data, records: [...data.records, record] });
-}
-
-/** The note on a possible payment whose date passed unrecorded, skipped when its item became expected. */
-export const POSSIBLE_NOT_RECEIVED_NOTE = 'Possible income, not received';
-
-/**
- * Marks income expected or possible: a recurring income item (every
- * occurrence not yet received follows it) or a one-time income not yet
- * received. Amounts, dates and recorded outcomes don't change, and recorded
- * income keeps counting whatever its item's certainty.
- *
- * A possible recurring item marked expected counts from today. Its earlier
- * dates that were never recorded were never dependable, so they are skipped
- * (with `POSSIBLE_NOT_RECEIVED_NOTE`) instead of becoming overdue income that
- * the running total would wait for. Each can be restored and recorded if that
- * money did arrive.
- */
-export function setIncomeCertainty(data: AppData, id: string, certainty: IncomeCertainty, clock: Clock): Result {
-  if (certainty !== 'expected' && certainty !== 'possible') return fail('Choose expected or possible.');
-  const source = data.sources.find((s) => s.id === id);
-  if (source) {
-    if (source.kind !== 'income') return fail('Only income can be possible.');
-    const marked = withSource(data, id, (s) => ({ ...applyCertainty(s, certainty), updatedAt: clock.now }));
-    if (!marked.ok || certainty !== 'expected' || source.certainty !== 'possible') return marked;
-    const first = source.versions.reduce((d, v) => (v.startDate < d ? v.startDate : d), clock.today);
-    const unrecorded = resolveOccurrences(data, first, addDays(clock.today, -1), clock.today).filter((o) => o.sourceId === id && o.status === 'scheduled' && o.scheduledDate < clock.today);
-    let next = marked.data;
-    for (const o of unrecorded) {
-      const step = cancelOccurrence(next, o.id, POSSIBLE_NOT_RECEIVED_NOTE, clock);
-      if (!step.ok) return step;
-      next = step.data;
-    }
-    return ok(next);
-  }
-  const record = data.records.find((r) => r.id === id && r.sourceId === null);
-  if (!record) return fail('That item no longer exists.');
-  if (record.kind !== 'income') return fail('Only income can be possible.');
-  if (record.status !== 'scheduled') return fail('This income is already recorded.');
-  return ok({ ...data, records: data.records.map((r) => (r.id === id ? { ...applyCertainty(r, certainty), updatedAt: clock.now } : r)) });
 }
 
 export function deleteOneTime(data: AppData, id: string): Result {
@@ -432,11 +374,9 @@ function withOccurrence(
   if (!occ) return fail('That item could not be found.');
   const shift = shiftWithTips(data, id);
   if (shift) return fail(shiftOwnsTips(shift));
-  const { displayStatus: _ds, virtual, certainty: _c, ...rest } = occ;
+  const { displayStatus: _ds, virtual, ...rest } = occ;
   void _ds;
-  void _c;
-  // A recurring occurrence's certainty is its item's, never stored on the record.
-  const record: OccurrenceRecord = occ.sourceId === null ? { ...rest, ...certaintyField(occ.kind, occ.certainty) } : rest;
+  const record: OccurrenceRecord = rest;
   const next = fn(record);
   if (typeof next === 'string') return fail(next);
   const updated = { ...next, updatedAt: clock.now };
@@ -1162,8 +1102,6 @@ export interface JobInput {
   status: JobStatus;
   /** When payment is expected. Null: none (the job is pending and not counted). Omitted when editing: unchanged. */
   expectedDate?: DateStr | null;
-  /** The payment's certainty while it has a date. Omitted: expected for a new job, unchanged when editing. */
-  certainty?: IncomeCertainty;
 }
 
 function validateJob(data: AppData, input: JobInput): string | null {
@@ -1172,8 +1110,7 @@ function validateJob(data: AppData, input: JobInput): string | null {
     validateAmount(input.amountCents) ??
     (!JOB_STATUSES.includes(input.status) ? 'Choose planned or done.' : null) ??
     (input.clientId && !(data.clients ?? []).some((c) => c.id === input.clientId) ? 'That client no longer exists.' : null) ??
-    (input.expectedDate && !isValidDateStr(input.expectedDate) ? 'Enter a valid date.' : null) ??
-    (input.certainty !== undefined && input.certainty !== 'expected' && input.certainty !== 'possible' ? 'Choose expected or possible.' : null)
+    (input.expectedDate && !isValidDateStr(input.expectedDate) ? 'Enter a valid date.' : null)
   );
 }
 
@@ -1186,8 +1123,9 @@ const withoutPayment = (data: AppData, id: string): AppData => ({ ...data, recor
 
 /**
  * Adds a freelance job. With an expected payment date its payment is one
- * one-time income record on that date, expected or possible; without one the
- * job is pending and not counted.
+ * one-time income record on that date, a projection that counts like any
+ * other income until it is recorded; without one the job is pending and not
+ * counted.
  */
 export function addJob(data: AppData, input: JobInput, clock: Clock, id = newId('job')): Result {
   const err = validateJob(data, input);
@@ -1198,7 +1136,7 @@ export function addJob(data: AppData, input: JobInput, clock: Clock, id = newId(
   let paymentRecordId: string | undefined;
   if (input.expectedDate) {
     paymentRecordId = newId('pay');
-    const step = addOneTime(next, { kind: 'income', description: jobLabel(data, input.description, clientId), amountCents: input.amountCents, date: input.expectedDate, certainty: input.certainty }, clock, paymentRecordId);
+    const step = addOneTime(next, { kind: 'income', description: jobLabel(data, input.description, clientId), amountCents: input.amountCents, date: input.expectedDate }, clock, paymentRecordId);
     if (!step.ok) return step;
     next = step.data;
   }
@@ -1243,17 +1181,12 @@ export function editJob(data: AppData, id: string, input: JobInput, clock: Clock
       paymentRecordId = undefined;
     } else if (!record && date) {
       paymentRecordId = newId('pay');
-      const step = addOneTime(next, { kind: 'income', description: jobLabel(next, input.description, clientId), amountCents: input.amountCents, date, certainty: input.certainty }, clock, paymentRecordId);
+      const step = addOneTime(next, { kind: 'income', description: jobLabel(next, input.description, clientId), amountCents: input.amountCents, date }, clock, paymentRecordId);
       if (!step.ok) return step;
       next = step.data;
     } else if (record && date) {
       if (record.scheduledDate !== date || record.scheduledAmountCents !== input.amountCents) {
         const step = rescheduleOccurrence(next, record.id, { date, amountCents: input.amountCents }, clock);
-        if (!step.ok) return step;
-        next = step.data;
-      }
-      if (input.certainty !== undefined && certaintyOf(record) !== input.certainty) {
-        const step = setIncomeCertainty(next, record.id, input.certainty, clock);
         if (!step.ok) return step;
         next = step.data;
       }

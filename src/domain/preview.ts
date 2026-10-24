@@ -40,17 +40,16 @@ export interface ChangePreview {
   current: ForecastSnapshot;
   proposed: ForecastSnapshot;
   /**
-   * False when the two running totals don't share a starting point (the
-   * change moves or removes the next main payday), when a payment would move
-   * to before the next payday (where the running total doesn't reach), or
-   * when there is no forecast to compare. The comparisons below are then null or empty, and
+   * False when the two running totals don't share a starting point, or when
+   * a payment would move to before the forecast start (where the running
+   * total doesn't reach). The comparisons below are then null or empty, and
    * `limitation` says why.
    */
   comparable: boolean;
   limitation: string | null;
   /** Why the forecasts aren't compared, for wording in the interface; null when they are. */
   reason: 'no-forecast' | 'anchor-changed' | 'before-payday' | null;
-  /** True when the next main payday, and so the running total's starting point, differs. */
+  /** True when the running total's starting point differs. */
   anchorChanged: boolean;
   /** Proposed lowest running total minus the current one. */
   lowestChangeCents: Cents | null;
@@ -82,7 +81,6 @@ export function applyProposedChange(data: AppData, change: ProposedChange, clock
 }
 
 function snapshot(f: Forecast, window: { start: DateStr; end: DateStr }): ForecastSnapshot {
-  if (!f.forecastStart) return { forecastStart: null, anchor: null, tallies: [], lowest: null, gaps: [] };
   const rows = dailyTimeline(f, window.start, window.end).filter((r) => r.tallyCents !== null);
   return {
     forecastStart: f.forecastStart,
@@ -100,8 +98,8 @@ export const overlaps = (a: { start: DateStr; end: DateStr }, b: { start: DateSt
  * current forecast's 90-day warning window from its start, or longer to
  * cover `through`. Shared by every preview so they compare alike.
  */
-export function compareForecasts(before: Forecast, after: Forecast, today: DateStr, through?: DateStr) {
-  const start = before.forecastStart ?? today;
+export function compareForecasts(before: Forecast, after: Forecast, through?: DateStr) {
+  const start = before.forecastStart;
   const window = { start, end: maxDate(addDays(start, GAP_LOOKAHEAD_DAYS - 1), through ?? start) };
   return { window, current: snapshot(before, window), proposed: snapshot(after, window), anchorChanged: before.forecastStart !== after.forecastStart };
 }
@@ -132,12 +130,9 @@ export function previewChange(data: AppData, change: ProposedChange, clock: ops.
   const after = buildForecast(applied.data, clock.today, { through: options.through });
 
   // The 90-day warning window, or longer to cover a period being viewed further out.
-  const { window, current, proposed, anchorChanged } = compareForecasts(before, after, clock.today, options.through);
+  const { window, current, proposed, anchorChanged } = compareForecasts(before, after, options.through);
   const base = { change, window, current, proposed, anchorChanged };
 
-  if (!before.forecastStart || !after.forecastStart) {
-    return { ok: true, preview: { ...base, comparable: false, reason: 'no-forecast', limitation: "There is no upcoming income to start a running total from, so the two forecasts can't be compared.", lowestChangeCents: null, target: null, newGaps: [], worsenedGaps: [] } };
-  }
   if (anchorChanged) {
     return {
       ok: true,
@@ -145,7 +140,7 @@ export function previewChange(data: AppData, change: ProposedChange, clock: ops.
         ...base,
         comparable: false,
         reason: 'anchor-changed',
-        limitation: `This change moves the next payday from ${before.forecastStart} to ${after.forecastStart}, so the running totals start from different days and can't be compared directly.`,
+        limitation: `The running totals start on different days (${before.forecastStart} and ${after.forecastStart}), so they can't be compared directly.`,
         lowestChangeCents: null,
         target: null,
         newGaps: [],
@@ -158,14 +153,14 @@ export function previewChange(data: AppData, change: ProposedChange, clock: ops.
   const entryDate = entry?.date;
   const movedDate = after.entries.find((e) => e.occurrence.id === change.occurrenceId)?.date;
   if (change.kind === 'move' && entryDate && movedDate && entryDate >= before.forecastStart && movedDate < after.forecastStart) {
-    // The running total starts the day before the next payday, so anything earlier isn't in it. Showing that as a fix would mislead.
+    // The running total starts on the forecast start, so anything earlier isn't in it. Showing that as a fix would mislead.
     return {
       ok: true,
       preview: {
         ...base,
         comparable: false,
         reason: 'before-payday',
-        limitation: `The new date is before the next payday (${after.forecastStart}), when the running total starts, so the payment would simply drop out of it. The forecast can't show whether money on hand covers it.`,
+        limitation: `The new date is before ${after.forecastStart}, when the running total starts, so the payment would simply drop out of it. The forecast can't show whether money on hand covers it.`,
         lowestChangeCents: null,
         target: null,
         newGaps: [],

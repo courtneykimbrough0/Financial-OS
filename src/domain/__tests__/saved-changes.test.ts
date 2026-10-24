@@ -294,13 +294,13 @@ describe('marking a bill paid', () => {
   });
 });
 
-describe('the forecast starting point', () => {
-  it('a moved paycheck the schedule has replaced no longer sets the next payday', () => {
+describe('a moved paycheck the schedule replaced', () => {
+  it('no longer counts on its moved date, and the forecast start stays where chosen', () => {
     // The Oct 15 paycheck was moved to Oct 12; then pay changed to every 2 weeks from Tue Oct 13.
     let d = unwrap(ops.rescheduleOccurrence(baseline(), id(PAY, '2026-10-15'), { date: '2026-10-12', amountCents: usd(1800) }, clock));
     d = unwrap(ops.changeSourceSchedule(d, PAY, { startDate: '2026-10-13', amountCents: usd(1800), rule: { type: 'biweekly' } }, clock));
     const f = buildForecast(d, TODAY);
-    expect(f.forecastStart).toBe('2026-10-13');
+    expect(f.forecastStart).toBe(TODAY);
     expect(counted(f, PAY, '2026-10-31')).toEqual([
       ['2026-10-13', 1800, 'scheduled'],
       ['2026-10-27', 1800, 'scheduled'],

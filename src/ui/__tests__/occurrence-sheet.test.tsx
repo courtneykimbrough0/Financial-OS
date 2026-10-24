@@ -117,7 +117,11 @@ describe('OccurrenceSheet', () => {
     const saved = await savedWith(adapter, 1);
     expect(saved.records[0]).toMatchObject({ status: 'canceled', cancelNote: 'Unpaid leave', actualAmountCents: null });
     const f = buildForecast(saved, '2026-10-11');
-    expect(f.forecastStart).toBe('2026-10-29');
+    const skipped = f.entries.find((e) => e.occurrence.id === saved.records[0]!.id)!;
+    expect([skipped.counts, skipped.signedCents]).toEqual([false, 0]);
+    // The next one still counts, and the forecast still starts today.
+    expect(f.entries.filter((e) => e.occurrence.sourceId === saved.records[0]!.sourceId && e.counts && e.date > skipped.date)[0]!.occurrence.status).toBe('scheduled');
+    expect(f.forecastStart).toBe('2026-10-11');
   });
 });
 

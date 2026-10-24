@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { addMonthsClamped, endOfMonth, formatMonthYear, formatRange, formatShort, startOfMonth, type DateStr } from '../../domain/dates';
-import { buildForecast, type ForecastEntry } from '../../domain/forecast';
+import { buildForecast } from '../../domain/forecast';
 import { formatMoney, formatSignedMoney } from '../../domain/money';
 import type { PeriodPlan } from '../../domain/plan';
-import { activityView, possibleEntries, recordedEntries, type ActivityItem } from '../../domain/activity';
+import { activityView, recordedEntries, type ActivityItem } from '../../domain/activity';
 import { earningsHistory, hasEarningsData } from '../../domain/earnings-history';
 import { KINDS, KIND_LABEL, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
@@ -30,7 +30,6 @@ export function Activity() {
 
   const forecast = useMemo(() => buildForecast(data, today, { through: end }), [data, today, end]);
   const view = useMemo(() => activityView(forecast, start, end, kindFilter), [forecast, start, end, kindFilter]);
-  const possible = useMemo(() => possibleEntries(forecast, start, end), [forecast, start, end]);
   // Earnings appear only when shifts, sessions or jobs exist; "received" is the same recorded entries as the summary.
   const earnings = useMemo(
     () => (hasEarningsData(data) ? earningsHistory(data, recordedEntries(forecast, start, end), start, end, today) : null),
@@ -64,7 +63,6 @@ export function Activity() {
 
       {earnings && <EarningsSection history={earnings} month={formatMonthYear(start)} />}
 
-      {possible.length > 0 && <PossibleList entries={possible} onOpen={(id) => setSheet({ kind: 'occurrence', id })} />}
 
       {view.totalCount > 0 && (
         <>
@@ -168,36 +166,6 @@ function ActivityRow({ item, onOpen }: { item: ActivityItem; onOpen: (id: string
         <Icon icon={ChevronRight} size={18} className="chevron" />
       </span>
     </button>
-  );
-}
-
-/** Possible income in the month, not received: listed apart, never in a total (E1). */
-function PossibleList({ entries, onOpen }: { entries: ForecastEntry[]; onOpen: (id: string) => void }) {
-  return (
-    <section className="stack-sm" aria-labelledby="activity-possible">
-      <SectionLabel id="activity-possible">Possible</SectionLabel>
-      <p className="hint">Income that may come. Not counted until you mark it expected or record it.</p>
-      <ListGroup>
-        {entries.map((e) => (
-          <li key={e.occurrence.id}>
-            <button type="button" className="entry" onClick={() => onOpen(e.occurrence.id)}>
-              <KindAvatar kind="income" />
-              <span className="entry-main">
-                <span className="entry-title">{e.occurrence.description}</span>
-                <span className="entry-tags">
-                  <StatusBadge status={e.occurrence.displayStatus} kind="income" possible />
-                </span>
-                <span className="entry-sub">{formatShort(e.date)}</span>
-              </span>
-              <span className="entry-side">
-                <FlowAmount kind="income" cents={e.amountCents} possible />
-                <Icon icon={ChevronRight} size={18} className="chevron" />
-              </span>
-            </button>
-          </li>
-        ))}
-      </ListGroup>
-    </section>
   );
 }
 

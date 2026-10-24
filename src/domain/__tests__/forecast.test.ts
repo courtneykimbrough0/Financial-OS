@@ -48,12 +48,13 @@ function activity(f: Forecast, start: string, end: string) {
 }
 
 describe('forecast anchor and running tally', () => {
-  it('anchors at $0 the day before the next expected payday', () => {
+  it('starts at $0 on the chosen day (today by default), never moved to the next payday', () => {
     const f = buildForecast(baseline(), TODAY);
     expect(f.issue).toBeNull();
-    expect(f.anchor).toBe('2026-10-14');
-    expect(f.forecastStart).toBe('2026-10-15');
-    expect(tallyOn(f, '2026-10-14')).toBeNull();
+    expect(f.anchor).toBe('2026-10-10');
+    expect(f.forecastStart).toBe(TODAY);
+    expect(tallyOn(f, '2026-10-10')).toBeNull();
+    expect(tallyOn(f, TODAY)).toBe(0);
     expect(activity(f, '2026-10-01', '2026-11-12')).toEqual([
       ['2026-10-15', 1800, 1800],
       ['2026-10-20', -350, 1450],
@@ -64,12 +65,11 @@ describe('forecast anchor and running tally', () => {
     ]);
   });
 
-  it('starts the running total at the earliest income, not the first one entered', () => {
+  it('counts every income from the start, whichever was entered first, without moving the start', () => {
     let d = baseline();
     d = source(d, TODAY, 'income', 'Side job', 300, '2026-10-13', { type: 'monthly' }, 'income-side');
     const f = buildForecast(d, TODAY);
-    expect(f.anchor).toBe('2026-10-12');
-    expect(f.forecastStart).toBe('2026-10-13');
+    expect(f.forecastStart).toBe(TODAY);
     expect(tallyOn(f, '2026-10-13')).toBe(usd(300));
     expect(tallyOn(f, '2026-10-15')).toBe(usd(2100));
   });
@@ -123,21 +123,27 @@ describe('forecast anchor and running tally', () => {
     ]);
   });
 
-  it('explains instead of forecasting when there is no recurring income', () => {
+  it('forecasts without any recurring income: one-time income and bills alone', () => {
     let d = ops.emptyData();
     d = source(d, TODAY, 'bill', 'Rent', 1200, '2026-11-01');
     d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Gift', amountCents: usd(100), date: '2026-10-20' }, clockAt(TODAY)));
     const f = buildForecast(d, TODAY);
-    expect(f.issue).toBe('no-recurring-income');
-    expect(f.anchor).toBeNull();
-    expect(dailyTimeline(f, '2026-10-01', '2026-11-30').every((r) => r.tallyCents === null)).toBe(true);
-    // Period totals are still available; they do not depend on the anchor.
+    expect(f.issue).toBeNull();
+    expect(tallyOn(f, '2026-10-20')).toBe(usd(100));
+    expect(tallyOn(f, '2026-11-01')).toBe(usd(-1100));
     expect(periodKpis(f, '2026-10-01', '2026-11-30').outflowCents).toBe(usd(1200));
   });
 
-  it('treats a deactivated income schedule as no recurring income', () => {
+  it('a turned-off income stops counting, and the forecast goes on without it', () => {
     const d = unwrap(ops.deactivateSource(baseline(), PAY, clockAt(TODAY)));
-    expect(buildForecast(d, TODAY).issue).toBe('no-recurring-income');
+    const f = buildForecast(d, TODAY);
+    expect(f.issue).toBeNull();
+    expect(periodKpis(f, TODAY, '2026-12-31').incomeCents).toBe(0);
+    expect(tallyOn(f, '2026-10-20')).toBe(usd(-350));
+  });
+
+  it('has nothing to forecast only when nothing is planned', () => {
+    expect(buildForecast(ops.emptyData(), TODAY).issue).toBe('nothing-planned');
   });
 });
 
@@ -149,7 +155,7 @@ describe('expected vs actual outcomes', () => {
     const late = f.entries.find((e) => e.occurrence.id === id(PAY, '2026-10-15'))!;
     expect(late.occurrence.displayStatus).toBe('overdue');
     expect(late.date).toBe('2026-10-15');
-    expect(f.anchor).toBe('2026-10-14');
+    expect(late.occurrence.status).toBe('scheduled');
     expect(overdueEntries(f).map((e) => e.occurrence.id)).toEqual([id(PAY, '2026-10-15')]);
 
     // The user records what actually arrived.
@@ -187,8 +193,8 @@ describe('expected vs actual outcomes', () => {
   it('a larger, later liability payment moves and resizes only that payment', () => {
     const today = '2026-10-21';
     const d = unwrap(ops.recordActual(baseline(), id(CAR, '2026-10-20'), { amountCents: usd(375), date: '2026-10-21' }, clockAt(today)));
-    const f = buildForecast(d, today);
-    // Paycheck still outstanding/overdue keeps the anchor at Oct 14.
+    // A running total chosen to start Oct 15 includes the paycheck that day.
+    const f = buildForecast(d, today, { start: '2026-10-15' });
     expect(f.anchor).toBe('2026-10-14');
     expect(activity(f, '2026-10-15', '2026-11-20')).toEqual([
       ['2026-10-15', 1800, 1800],
@@ -253,29 +259,34 @@ describe('overdue, rescheduled, and canceled occurrences', () => {
       ['Car loan', '2026-10-20'],
       ['Phone', '2026-10-25'],
     ]);
-    expect(tallyOn(f, '2026-10-27')).toBe(usd(1390));
+    // Still projections on their own dates: a running total chosen to start Oct 15 counts all three.
+    expect(f.entries.filter((e) => e.occurrence.displayStatus === 'overdue').every((e) => e.counts && e.date === e.occurrence.scheduledDate)).toBe(true);
+    expect(tallyOn(buildForecast(baseline(), '2026-10-27', { start: '2026-10-15' }), '2026-10-27')).toBe(usd(1390));
   });
 
-  it('overdue items dated before the forecast start are carried forward, not dropped', () => {
+  it('overdue items dated before the forecast start stay on their own date, overdue and counted, outside that running total', () => {
     let d = baseline();
     d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Dentist', amountCents: usd(100), date: '2026-10-05' }, clockAt('2026-10-01'), 'one-dentist'));
     const f = buildForecast(d, TODAY);
     const dentist = f.entries.find((e) => e.occurrence.id === 'one-dentist')!;
     expect(dentist.occurrence.displayStatus).toBe('overdue');
-    expect(dentist.carriedForward).toBe(true);
-    expect(dentist.date).toBe('2026-10-15');
+    expect([dentist.date, dentist.counts]).toEqual(['2026-10-05', true]);
     expect(dentist.occurrence.scheduledDate).toBe('2026-10-05');
-    expect(tallyOn(f, '2026-10-15')).toBe(usd(1700));
+    // The running total starts today (Oct 11), after it; a start of Oct 1 includes it.
+    expect(tallyOn(f, '2026-10-15')).toBe(usd(1800));
+    expect(tallyOn(buildForecast(d, TODAY, { start: '2026-10-01' }), '2026-10-15')).toBe(usd(1700));
   });
 
-  it('upcoming items before the next payday are shown but not part of the tally', () => {
+  it('upcoming items before the next payday are part of the running total from the chosen start', () => {
     let d = baseline();
     d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Electric', amountCents: usd(90), date: '2026-10-12' }, clockAt(TODAY)));
     const f = buildForecast(d, TODAY);
     const row = dailyTimeline(f, '2026-10-12', '2026-10-12')[0]!;
     expect(row.outCents).toBe(usd(90));
-    expect(row.tallyCents).toBeNull();
-    expect(tallyOn(f, '2026-10-15')).toBe(usd(1800));
+    expect(row.tallyCents).toBe(usd(-90));
+    expect(tallyOn(f, '2026-10-15')).toBe(usd(1710));
+    // A start chosen after it leaves it out of that running total, not out of the forecast.
+    expect(tallyOn(buildForecast(d, TODAY, { start: '2026-10-15' }), '2026-10-15')).toBe(usd(1800));
   });
 
   it('rescheduling counts the occurrence once, on the new date, and keeps the original', () => {
@@ -288,7 +299,7 @@ describe('overdue, rescheduled, and canceled occurrences', () => {
     expect(matches[0]!.occurrence.displayStatus).toBe('scheduled');
     expect(matches[0]!.occurrence.expectedDate).toBe('2026-10-15');
     expect(entriesInRange(f, '2026-10-15', '2026-10-15')).toHaveLength(0);
-    expect(f.anchor).toBe('2026-10-16');
+    expect(f.forecastStart).toBe(clock.today);
   });
 
   it('rescheduling an expense to a new date and amount', () => {
@@ -458,7 +469,7 @@ describe('redefining a source with no history', () => {
       ['2026-11-03', 1900],
       ['2026-11-17', 1900],
     ]);
-    expect(f.anchor).toBe('2026-10-19');
+    expect(f.forecastStart).toBe(TODAY);
   });
 
   it('refuses once the source has history', () => {

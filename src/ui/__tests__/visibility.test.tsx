@@ -122,14 +122,15 @@ describe('Forecast: the calendar', () => {
 });
 
 describe('Forecast: week by week', () => {
-  it('a week with nothing scheduled has no expand control and no $0.00 columns', async () => {
+  it('a week with nothing scheduled has no expand control and no $0.00 money columns, only the running total carried', async () => {
     await open('#/forecast', steady());
     await screen.findByRole('heading', { level: 1, name: /Your cash flow/ });
     expect(screen.queryByRole('button', { name: /^Oct 4 – 10/ })).toBeNull();
     const quiet = screen.getByText('Oct 4 – 10').closest('.week-row')!;
-    expect(quiet).toHaveTextContent('Oct 4 – 10Nothing scheduled');
+    // The month's running total starts Oct 1 at $0, so the quiet week carries $0.00.
+    expect(quiet).toHaveTextContent('Oct 4 – 10Nothing scheduledRunning total $0.00');
     expect(quiet).not.toHaveAttribute('aria-expanded');
-    expect(quiet).not.toHaveTextContent(/\$0\.00|Running total/);
+    expect(quiet).not.toHaveTextContent(/[+−]\$0\.00/);
   });
 
   it('a week shows only the amounts that are not zero', async () => {
@@ -140,15 +141,14 @@ describe('Forecast: week by week', () => {
     expect(week).toHaveTextContent('Running total $1,800.00');
   });
 
-  it('an open week folds quiet days into text, keeps today, and says where the running total starts', async () => {
+  it('an open week folds quiet days into text and keeps today', async () => {
     const user = await open('#/forecast', steady());
     await user.click(await screen.findByRole('button', { name: /^Oct 11 – 17/ }));
     const days = document.querySelector('.week-days .timeline')!;
     expect([...days.children].map((li) => li.textContent)).toEqual([
       'Oct 11 – 12 · nothing scheduled',
-      'Tue, Oct 13Nothing scheduled',
+      'Tue, Oct 13Running total$0.00', // today: the running total from Oct 1 so far
       'Oct 14 – 15 · nothing scheduled',
-      'Your running total starts Oct 16, your next payday.',
       expect.stringMatching(/^Fri, Oct 16.*Running total\$1,800\.00$/),
       'Sat, Oct 17 · nothing scheduled',
     ]);
@@ -199,10 +199,10 @@ describe('Forecast: the summary', () => {
     expect(hero).not.toHaveTextContent(/Income|Spending/);
   });
 
-  it('with no recurring income, only the setup card shows: no $0.00 summary, calendar or breakdown', async () => {
-    const d = unwrap(ops.completeOnboarding(source(ops.emptyData(), SETUP, 'bill', 'Rent', 1200, '2026-10-20', { type: 'monthly' }, 'rent')));
+  it('with nothing planned, only the setup card shows: no $0.00 summary, calendar or breakdown', async () => {
+    const d = unwrap(ops.completeOnboarding(ops.emptyData()));
     await open('#/forecast', d);
-    expect(await screen.findByText("Add your income to see what's ahead.")).toBeInTheDocument();
+    expect(await screen.findByText("Add what you expect to come in and go out to see what's ahead.")).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Go to Income' })).toBeInTheDocument();
     expect(screen.queryByRole('table')).toBeNull();
     expect(screen.queryByRole('tablist', { name: 'Forecast view' })).toBeNull();

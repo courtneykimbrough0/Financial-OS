@@ -7,7 +7,7 @@
  *   T−12  Electric $90 expected — paid $128 on T−10 (larger and later).
  *   T−6   Phone $60 expected — not recorded, so it shows as overdue.
  *   T−3   Paycheck $1,800 expected — $1,650 arrived on T−2 (late and smaller).
- *   T+11  Next paycheck $1,800 (forecast anchor is T+10).
+ *   T+11  Next paycheck $1,800 (the running total starts today, at $0).
  *   T+12  Rent $1,200.
  *   T+15  Car loan $350 (liability).
  *   T+20  One-time car repair $700 (varied spending) — pushes the running total below $0.

@@ -40,13 +40,6 @@ export function recordedEntries(forecast: Forecast, start: DateStr, end: DateStr
   return entriesInRange(forecast, start, end).filter((e) => e.counts && e.occurrence.status === 'completed');
 }
 
-/** Possible income in [start, end] not received: listed, never counted (E1). Soonest first. */
-export function possibleEntries(forecast: Forecast, start: DateStr, end: DateStr): ForecastEntry[] {
-  return entriesInRange(forecast, start, end)
-    .filter((e) => e.possible)
-    .sort((a, b) => (a.date !== b.date ? (a.date < b.date ? -1 : 1) : a.occurrence.id < b.occurrence.id ? -1 : a.occurrence.id > b.occurrence.id ? 1 : 0));
-}
-
 export function activityView(forecast: Forecast, start: DateStr, end: DateStr, kindFilter?: TransactionKind): ActivityView {
   const recorded = recordedEntries(forecast, start, end);
 

@@ -141,10 +141,12 @@ try {
   await page.getByRole('button', { name: 'Continue' }).click();
 
   step('onboarding: step 3 of 3, the review of the next four weeks');
-  await page.getByText('Next expected payday', { exact: true }).waitFor();
+  await page.locator('.review-hero').waitFor();
   const hero = await page.locator('.review-hero').innerText();
-  assert.match(hero, /Oct 15[\s\S]*in 4 days/);
-  assert.match(hero, /Lowest running total through Nov 7: \$1,390\.00 · Oct 25/);
+  // The running total starts today at $0 (not at a payday) and never goes below it in the four weeks.
+  assert.match(hero, /Running total on Nov 7[\s\S]*\$1,990\.00[\s\S]*never below \$0/);
+  assert.match(hero, /Running total from today[\s\S]*Starts at \$0, not your bank balance\./);
+  assert.doesNotMatch(hero, /payday/i);
   // No timing gaps in this setup, so no warning appears.
   assert.equal(await page.locator('.gap-banner').count(), 0);
   const breakdown = await page.locator('section[aria-labelledby="breakdown-period"]').innerText();
@@ -193,9 +195,11 @@ try {
   const weekBreakdown = await page.locator('.hero').innerText();
   assert.match(weekBreakdown, /Liability payments\s+\$350\.00/);
   assert.doesNotMatch(weekBreakdown, /Bills/);
+  // The chosen start (Oct 18) is where the running total starts, at $0: the Oct 15 paycheck is before it.
+  assert.match(await page.locator('.hero').innerText(), /Running total from Oct 18/);
   await page.getByRole('button', { name: /^Oct 18 – 24/ }).click();
   const weekDays = await page.locator('.week-days .timeline').innerText();
-  assert.match(weekDays, /^Oct 18 – 19 · nothing scheduled\s+Tue, Oct 20[\s\S]*Running total\s+\$1,450\.00\s+Oct 21 – 24 · nothing scheduled$/);
+  assert.match(weekDays, /^Oct 18 – 19 · nothing scheduled\s+Tue, Oct 20[\s\S]*Running total\s+−\$350\.00/);
   await shot('04b-forecast-week');
 
   step('forecast: custom range validation');
@@ -204,10 +208,10 @@ try {
   await page.getByLabel('End date').fill('2026-11-01');
   await page.getByText('The end date must be on or after the start date.').waitFor();
   await page.getByLabel('End date').fill('2026-11-20');
-  // The range starts mid-forecast: the running total carries over from the anchor instead of restarting at $0.
+  // The range's start is the running total's: it starts at $0 on Nov 10, with nothing carried in from earlier.
   await page.locator('.week-row').first().click();
-  // Nov 10 – 11 fold into one line; Nov 12's paycheck adds to the $1,990.00 carried in.
-  assert.match(await page.locator('.week-days .timeline').innerText(), /^Nov 10 – 11 · nothing scheduled\s+Thu, Nov 12[\s\S]*\+\$1,800\.00[\s\S]*Running total\s+\$3,790\.00\s+Nov 13 – 14 · nothing scheduled$/);
+  // Nov 10 – 11 fold into one line; Nov 12's paycheck starts the total at $1,800.00.
+  assert.match(await page.locator('.week-days .timeline').innerText(), /^Nov 10 – 11 · nothing scheduled\s+Thu, Nov 12[\s\S]*\+\$1,800\.00[\s\S]*Running total\s+\$1,800\.00\s+Nov 13 – 14 · nothing scheduled$/);
 
   step('a day later: the paycheck is overdue');
   await page.clock.setFixedTime(new Date(2026, 9, 16, 9, 0));
@@ -248,8 +252,8 @@ try {
   await page.getByRole('tab', { name: 'Month', exact: true }).click();
   await page.getByRole('button', { name: /^Oct 11 – 17/ }).click();
   const tl = await page.locator('.week-days .timeline').innerText();
-  // Oct 15 now has nothing (the paycheck came on the 16th), so it folds; the running total's start is one line above it.
-  assert.match(tl, /^Oct 11 – 15 · nothing scheduled\s+Your running total starts Oct 16, your next payday\.\s+Fri, Oct 16[\s\S]*?\+\$1,650\.00[\s\S]*?Running total\s+\$1,650\.00\s+Sat, Oct 17 · nothing scheduled$/);
+  // Oct 15 now has nothing (the paycheck came on the 16th), so it folds. The month's running total started Oct 1.
+  assert.match(tl, /^Oct 11 – 15 · nothing scheduled\s+Fri, Oct 16[\s\S]*?\+\$1,650\.00[\s\S]*?Running total\s+\$1,650\.00\s+Sat, Oct 17 · nothing scheduled$/);
   assert.doesNotMatch(tl, /\$1,800\.00/);
   await page.getByRole('button', { name: /^Oct 25 – 31/ }).click();
   assert.match(await page.locator('.week-days .timeline').innerText(), /Thu, Oct 29[\s\S]*?\+\$1,800\.00[\s\S]*?Running total\s+\$3,040\.00/);
@@ -382,13 +386,14 @@ try {
   await page.getByRole('tab', { name: 'Custom', exact: true }).click();
   await page.getByLabel('End date').fill('2026-11-30');
   await page.locator('.callout-danger').waitFor();
-  assert.match(await page.locator('.callout-danger').innerText(), /Short \$600\.00\s+Timing gap · Nov 5 – 9/);
+  // From today's $0 start: the overdue Phone bill is dated before it, so it is listed as overdue, not in this running total.
+  assert.match(await page.locator('.callout-danger').innerText(), /Short \$540\.00\s+Timing gap · Nov 5 – 9/);
   await shot('11-sample-data');
   // The warning opens an explanation from the same forecast: what leads to the low point and what ends it.
   await page.locator('.callout-danger').click();
   const gapSheet = page.getByRole('dialog', { name: /timing gaps? ahead/ });
   const firstGap = gapSheet.getByRole('group').first();
-  assert.match(await firstGap.innerText(), /Nov 5 – 9[\s\S]*Down to −\$600\.00[\s\S]*Leading to the lowest point[\s\S]*Back to \$0 or more/i);
+  assert.match(await firstGap.innerText(), /Nov 5 – 9[\s\S]*Down to −\$540\.00[\s\S]*Leading to the lowest point[\s\S]*Back to \$0 or more/i);
   await shot('11b-gap-explanation');
   // Each gap opens and closes from the keyboard.
   await firstGap.locator('summary').focus();
@@ -492,7 +497,7 @@ try {
   await estimate.getByRole('button', { name: 'Preview your forecast' }).click();
   const estimatePreview = estimate.getByRole('region', { name: 'Forecast preview' });
   assert.match(await estimatePreview.innerText(), /Your lowest running total would drop from −\$680\.00 to −\$715\.00\./);
-  assert.match(await estimatePreview.innerText(), /New timing gap: Jan 3 – 14, down to −\$85\.00, back to \$0 or more on Jan 15\./);
+  assert.match(await estimatePreview.innerText(), /New timing gap: Jan 3 – 13, down to −\$85\.00, back to \$0 or more on Jan 15\./);
   assert.equal(await estimatePreview.getByRole('list', { name: 'Payments that change' }).getByRole('listitem').count(), 3);
   // Fits a phone screen: nothing scrolls sideways.
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
@@ -529,7 +534,8 @@ try {
 
   step('scenario: combine changes, see a hidden timing gap, edit, remove, and leave the plan untouched');
   // The plan from scenarios.test.ts: paid $1,000 every other Friday from Oct 23, rent $1,500 from Nov 1,
-  // car loan $300 on the 28th. The clock still reads Fri Oct 16.
+  // car loan $300 on the 28th. The clock still reads Fri Oct 16, where the running total starts; the
+  // comparison runs 90 days from it, to Jan 13 (six paychecks).
   const planPath = `${SHOTS}scenario-plan.json`;
   writeFileSync(planPath, JSON.stringify({
     format: 'financial-os-backup', exportedAt: '2026-10-16T09:00:00.000Z',
@@ -568,8 +574,8 @@ try {
   });
   const scenarioResult = scenario.getByRole('region', { name: 'Scenario comparison' });
   assert.match(await scenarioResult.getByRole('status').innerText(), /Your ending running total improves by \$1,100\.00, but this scenario creates a \$700\.00 timing gap on Nov 10, back to \$0 or more on Nov 20\./);
-  assert.match(await scenarioResult.getByRole('table').innerText(), /Cash flow\s+\+\$1,600\.00\s+\+\$2,700\.00[\s\S]*Lowest running total\s+−\$800\.00 on Nov 1\s+−\$1,500\.00 on Dec 1[\s\S]*Ending running total\s+\$1,600\.00\s+\$2,700\.00/);
-  assert.match(await scenarioResult.innerText(), /Includes \$2,000\.00 of hypothetical income\. Without it, cash flow would be \+\$700\.00\./);
+  assert.match(await scenarioResult.getByRole('table').innerText(), /Cash flow\s+\+\$600\.00\s+\+\$1,700\.00[\s\S]*Lowest running total\s+−\$800\.00 on Nov 1\s+−\$1,500\.00 on Dec 1[\s\S]*Ending running total\s+\$600\.00\s+\$1,700\.00/);
+  assert.match(await scenarioResult.innerText(), /Includes \$2,000\.00 of hypothetical income\. Without it, cash flow would be −\$300\.00\./);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   assert.equal(await scenario.evaluate((el) => el.scrollWidth <= el.clientWidth), true);
   await scenarioResult.getByRole('status').scrollIntoViewIfNeeded();
@@ -591,7 +597,7 @@ try {
     await f.getByLabel('First date').fill('2026-10-24');
   });
   const incomeCases = scenario.getByRole('region', { name: 'Income cases' });
-  assert.match(await incomeCases.getByRole('table').first().innerText(), /Hypothetical income\s+\$2,000\.00\s+\$2,780\.00\s+\$3,560\.00/);
+  assert.match(await incomeCases.getByRole('table').first().innerText(), /Hypothetical income\s+\$2,000\.00\s+\$2,720\.00\s+\$3,440\.00/);
   await incomeCases.scrollIntoViewIfNeeded();
   await shot('13b-scenario-income-cases');
   // Escape closes; the plan and saved data are exactly as before.
@@ -629,7 +635,8 @@ try {
   await page.getByRole('button', { name: 'Continue' }).focus();
   await page.keyboard.press('Enter');
   await page.getByRole('heading', { name: 'Check everything over' }).waitFor();
-  assert.match(await page.locator('.review-hero').innerText(), /Oct 23\s*in 7 days/);
+  // Paychecks Oct 23 and Nov 6 inside the four weeks from today, nothing out: the running total ends at $2,000.
+  assert.match(await page.locator('.review-hero').innerText(), /Running total on Nov 12\s*\$2,000\.00\s*never below \$0/);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   // Changed their mind: reload to the welcome screen and restore the backup taken before starting over.
   await page.reload();
@@ -708,7 +715,7 @@ try {
     assert.equal(saved.transfers[0].status, 'recorded');
   }
 
-  step('forecast start: income entered later but paid earlier starts the running total');
+  step('forecast start: the running total starts today, whatever order the income was entered in');
   {
     // A fresh device: the Oct 27 paycheck is entered first, the Oct 19 weekend job second.
     const fresh = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
@@ -732,9 +739,9 @@ try {
     await addItem(/^Add (a|another) payment$/, 'What is this bill?', 'Rent', 'Amount you expect to pay', '1000', 'Next due date', '2026-10-22', 'monthly');
     await p2.getByRole('button', { name: 'Continue' }).click();
     await p2.getByRole('heading', { name: 'Check everything over' }).waitFor();
-    assert.match(await p2.locator('.review-hero').innerText(), /Oct 19\s*in 8 days[\s\S]*Lowest running total through Nov 7: −\$600\.00 · Oct 22/);
+    assert.match(await p2.locator('.review-hero').innerText(), /Lowest running total through Nov 7\s*−\$600\.00\s*Oct 22/);
     await p2.getByRole('button', { name: /1 timing gap ahead/ }).waitFor();
-    assert.equal(await p2.getByText(/due before your next payday/).count(), 0);
+    assert.equal(await p2.getByText(/payday/).count(), 0);
     await p2.getByRole('button', { name: 'Looks right' }).click();
     // Setup ends on Home; the forecast has the running total.
     await p2.getByRole('heading', { name: /^Home/ }).waitFor();

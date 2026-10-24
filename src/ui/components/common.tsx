@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { AlertCircle, Ban, Banknote, Check, CircleDashed, CircleHelp, CreditCard, PiggyBank, Receipt, Repeat, ShoppingBag, Tag, X, type LucideIcon } from 'lucide-react';
+import { AlertCircle, Ban, Banknote, Check, CircleDashed, CreditCard, PiggyBank, Receipt, Repeat, ShoppingBag, Tag, X, type LucideIcon } from 'lucide-react';
 import { formatMoney } from '../../domain/money';
 import { doneVerb, KIND_LABEL, signFor, type OccurrenceStatus, type TransactionKind } from '../../domain/types';
 
@@ -169,15 +169,7 @@ const STATUS_ICON: Record<OccurrenceStatus, LucideIcon> = {
   canceled: Ban,
 };
 
-/** `possible`: possible income not yet received (see `IncomeCertainty`), which says so instead of its status. */
-export function StatusBadge({ status, kind, release, possible }: { status: OccurrenceStatus; kind?: TransactionKind; release?: true; possible?: boolean }) {
-  if (possible) {
-    return (
-      <span className="badge badge-possible">
-        <Icon icon={CircleHelp} size={13} /> Possible
-      </span>
-    );
-  }
+export function StatusBadge({ status, kind, release }: { status: OccurrenceStatus; kind?: TransactionKind; release?: true }) {
   let label = STATUS_LABEL[status];
   if (status === 'completed' && kind) label = doneVerb({ kind, release }).replace(/^./, (c) => c.toUpperCase());
   // Green means money in: only money that came in is marked done in green; everything else done is neutral.
@@ -212,12 +204,11 @@ export function TagList({ tags }: { tags: string[] }) {
 
 /** Amount with an explicit +/− sign by direction. */
 /** An item's amount, signed by its effect on available cash. Reserves have their own color: the money stays the person's. */
-/** `possible`: an amount that isn't counted yet, shown muted (not struck through: nothing was canceled). */
-export function FlowAmount({ kind, cents, strike, release, possible }: { kind: TransactionKind; cents: number; strike?: boolean; release?: true; possible?: boolean }) {
+export function FlowAmount({ kind, cents, strike, release }: { kind: TransactionKind; cents: number; strike?: boolean; release?: true }) {
   const sign = signFor({ kind, release }) === 1 ? '+' : '−';
   const text = `${sign}${formatMoney(cents)}`;
   return (
-    <span className={`amount amount-${kind === 'reserve' ? 'reserve' : kind === 'income' ? 'in' : 'out'}${strike ? ' strike' : ''}${possible ? ' possible' : ''}`}>
+    <span className={`amount amount-${kind === 'reserve' ? 'reserve' : kind === 'income' ? 'in' : 'out'}${strike ? ' strike' : ''}`}>
       {strike ? <s>{text}</s> : text}
     </span>
   );

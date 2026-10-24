@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { dayOfWeek, formatMedium, formatShort, WEEKDAYS_SHORT, type DateStr } from '../../domain/dates';
+import { dayOfWeek, formatShort, WEEKDAYS_SHORT, type DateStr } from '../../domain/dates';
 import type { ForecastEntry } from '../../domain/forecast';
 import { formatMoney } from '../../domain/money';
 import { FlowAmount, Icon, KindAvatar, KindTag, StatusBadge } from './common';
@@ -48,9 +48,7 @@ export function PeriodNav({
 export function EntryButton({ e, onOpen, extra }: { e: ForecastEntry; onOpen: (id: string) => void; extra?: ReactNode }) {
   const o = e.occurrence;
   let sub: string | null = null;
-  if (e.possible) sub = 'Not counted until expected or received';
-  else if (e.carriedForward) sub = `Overdue since ${formatMedium(o.scheduledDate)}`;
-  else if (o.status === 'completed' && (o.actualDate !== o.expectedDate || o.actualAmountCents !== o.expectedAmountCents)) {
+  if (o.status === 'completed' && (o.actualDate !== o.expectedDate || o.actualAmountCents !== o.expectedAmountCents)) {
     sub = `Expected ${formatMoney(o.expectedAmountCents)} on ${formatShort(o.expectedDate)}`;
   } else if (o.status === 'scheduled' && (o.scheduledDate !== o.expectedDate || o.scheduledAmountCents !== o.expectedAmountCents)) {
     sub = `Changed from ${formatMoney(o.expectedAmountCents)} on ${formatShort(o.expectedDate)}`;
@@ -62,13 +60,13 @@ export function EntryButton({ e, onOpen, extra }: { e: ForecastEntry; onOpen: (i
         <span className="entry-title">{o.description}</span>
         <span className="entry-tags">
           <KindTag kind={o.kind} />
-          <StatusBadge status={o.displayStatus} kind={o.kind} release={o.release} possible={e.possible} />
+          <StatusBadge status={o.displayStatus} kind={o.kind} release={o.release} />
         </span>
         {sub && <span className="entry-sub">{sub}</span>}
         {extra}
       </span>
       <span className="entry-side">
-        <FlowAmount kind={o.kind} cents={e.amountCents} strike={!e.counts && !e.possible} release={o.release} possible={e.possible} />
+        <FlowAmount kind={o.kind} cents={e.amountCents} strike={!e.counts} release={o.release} />
         <Icon icon={ChevronRight} size={18} className="chevron" />
       </span>
     </button>

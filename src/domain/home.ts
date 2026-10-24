@@ -143,12 +143,6 @@ export interface HomeView {
   comingUp: HomeItem[];
   /** Recorded in the viewed week, chronological. */
   happened: HomeItem[];
-  /**
-   * Possible income not yet received, dated in the viewed week through
-   * `week.comingUpThrough`, chronological. Listed only: never in progress,
-   * attention, coming up or any total.
-   */
-  possible: HomeOccurrence[];
   /** Timing gaps starting after both windows, within the forecast's 90-day look-ahead. */
   laterGaps: HomeGap[];
   /** How far this forecast reaches (for explaining a gap that doesn't end before it). */
@@ -247,7 +241,7 @@ export function homeView(data: AppData, today: DateStr, options: HomeOptions = {
   const recordedTransfers = allTransfers.filter((t) => t.status === 'recorded' && t.date >= weekStart && t.date <= weekEnd).map(transfer);
 
   // Timing gaps that haven't ended: imminent ones need attention, the rest are coming up or later.
-  const gapDays = forecast.forecastStart ? Math.max(GAP_LOOKAHEAD_DAYS, diffDays(forecast.forecastStart, horizon) + 1) : GAP_LOOKAHEAD_DAYS;
+  const gapDays = Math.max(GAP_LOOKAHEAD_DAYS, diffDays(forecast.forecastStart, horizon) + 1);
   const gaps = explainTimingGaps(forecast, gapDays).filter((g) => g.end >= today).map(gapItem);
   const imminent = gaps.filter((g) => g.date <= attentionThrough);
   const soon = gaps.filter((g) => g.date > attentionThrough && upcomingDate(g.date));
@@ -257,8 +251,6 @@ export function homeView(data: AppData, today: DateStr, options: HomeOptions = {
     .filter((e) => e.counts && e.occurrence.status === 'completed' && e.date >= weekStart && e.date <= weekEnd)
     .map(occurrence);
 
-  const possible = forecast.entries.filter((e) => e.possible && e.date >= weekStart && e.date <= comingUpThrough).map(occurrence);
-
   return {
     today,
     week: { start: weekStart, end: weekEnd, current, comingUpThrough },
@@ -266,7 +258,6 @@ export function homeView(data: AppData, today: DateStr, options: HomeOptions = {
     attention: [...due, ...dueTransfers, ...imminent],
     comingUp: [...upcoming, ...plannedTransfers, ...soon].sort(byDate),
     happened: [...happened, ...recordedTransfers].sort(byDate),
-    possible,
     laterGaps: later,
     horizonEnd: forecast.horizonEnd,
   };

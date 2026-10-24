@@ -43,18 +43,24 @@ describe('A. Basic projection', () => {
     return d;
   }
 
-  it('places transactions on their dates and computes daily changes and the running tally from the anchor', () => {
+  it('places transactions on their dates and computes daily changes and the running tally from the chosen start', () => {
     const f = buildForecast(data(), today);
-    expect(f.anchor).toBe('2026-11-14');
+    expect(f.anchor).toBe('2026-10-31');
     expect(activity(f, '2026-11-01', '2027-01-15')).toEqual([
-      ['2026-11-05', -100, null], // before the anchor: shown, not in the tally
+      ['2026-11-05', -100, -100], // before the first paycheck, inside the running total from today
+      ['2026-11-15', 2000, 1900],
+      ['2026-12-01', -1200, 700],
+      ['2026-12-05', -100, 600],
+      ['2026-12-15', 2000, 2600],
+      ['2027-01-01', -1200, 1400],
+      ['2027-01-05', -100, 1300],
+      ['2027-01-15', 2000, 3300],
+    ]);
+    // Chosen to start on payday instead, the Nov 5 bill is shown but outside that running total.
+    expect(activity(buildForecast(data(), today, { start: '2026-11-15' }), '2026-11-01', '2026-12-01')).toEqual([
+      ['2026-11-05', -100, null],
       ['2026-11-15', 2000, 2000],
       ['2026-12-01', -1200, 800],
-      ['2026-12-05', -100, 700],
-      ['2026-12-15', 2000, 2700],
-      ['2027-01-01', -1200, 1500],
-      ['2027-01-05', -100, 1400],
-      ['2027-01-15', 2000, 3400],
     ]);
   });
 
@@ -122,8 +128,8 @@ describe('D. Actual expense differs from expectation', () => {
     expect(overdueEntries(f).map((e) => e.occurrence.id)).toContain(occ('ins', '2026-11-10'));
 
     d = unwrap(ops.recordActual(d, occ('ins', '2026-11-10'), { amountCents: usd(240), date: '2026-11-12' }, clockAt(today)));
-    f = buildForecast(d, today);
-    // The paycheck is still unrecorded (overdue), so the anchor stays at Oct 31.
+    // The November view: a running total from Nov 1, with the paycheck still unrecorded (overdue) on its date.
+    f = buildForecast(d, today, { start: '2026-11-01' });
     expect(f.anchor).toBe('2026-10-31');
     expect(activity(f, '2026-11-01', '2026-12-10')).toEqual([
       ['2026-11-01', 2000, 2000],
@@ -323,7 +329,7 @@ describe('L. Date and recurrence boundaries', () => {
     d = source(d, today, 'income', 'Job B', 400, '2026-11-13', { type: 'weekly' }, 'b');
     d = source(d, today, 'bill', 'Car insurance', 150, '2026-11-13', { type: 'monthly' }, 'ins');
     const f = buildForecast(d, today);
-    expect(f.anchor).toBe('2026-11-12');
+    expect(f.anchor).toBe('2026-10-31');
     const row = dailyTimeline(f, '2026-11-13', '2026-11-13')[0]!;
     expect(row.entries.map((e) => e.occurrence.description)).toEqual(['Job A', 'Job B', 'Car insurance']);
     expect(row.netCents).toBe(usd(1150));

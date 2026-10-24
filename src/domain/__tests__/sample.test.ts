@@ -26,8 +26,8 @@ describe.each(TODAYS)('sample data built on %s', (today) => {
       actualAmountCents: usd(1650),
       actualDate: T(-2),
     });
-    // The next paycheck is still scheduled on its normal rhythm and anchors the forecast.
-    expect(f.forecastStart).toBe(T(11));
+    // The next paycheck is still scheduled on its normal rhythm; the forecast starts today, not at it.
+    expect(f.forecastStart).toBe(today);
     expect(findOccurrence(data, `${SAMPLE_IDS.paycheck}@${T(11)}`, today)).toMatchObject({ status: 'scheduled', scheduledAmountCents: usd(1800) });
   });
 
@@ -38,8 +38,7 @@ describe.each(TODAYS)('sample data built on %s', (today) => {
   it('has an unpaid bill that stays visible as overdue and stays in the forecast', () => {
     const overdue = overdueEntries(f);
     expect(overdue.map((e) => e.occurrence.id)).toEqual([`${SAMPLE_IDS.phone}@${T(-6)}`]);
-    expect(overdue[0]!.carriedForward).toBe(true);
-    expect(overdue[0]!.date).toBe(T(11));
+    expect([overdue[0]!.date, overdue[0]!.counts]).toEqual([T(-6), true]);
   });
 
   it('dips below $0 before a later payday, then recovers', () => {

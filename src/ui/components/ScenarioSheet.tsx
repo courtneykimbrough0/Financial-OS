@@ -494,7 +494,7 @@ function Assumptions({ r }: { r: ScenarioResult }) {
                 a.recurrence === 'one-time' ? 'One-time' : 'Recurring',
                 a.income === 'hypothetical' ? 'Hypothetical income, not in your forecast' : a.income === 'confirmed' ? 'Income you entered' : null,
                 a.recurrence === 'recurring' && a.dates.length > 0 ? `Dates in this period: ${a.dates.map(formatShort).join(', ')}` : null,
-                !a.inRunningTotal && a.dates.length > 0 ? 'Before your next payday: cash flow only' : null,
+                !a.inRunningTotal && a.dates.length > 0 ? 'Before the forecast start: cash flow only' : null,
               ]
                 .filter(Boolean)
                 .join(' · ')}
@@ -504,7 +504,7 @@ function Assumptions({ r }: { r: ScenarioResult }) {
       </ul>
       <p className="hint">
         Cash flow from {formatMedium(r.period.start)} through {formatMedium(r.period.end)}
-        {r.period.runningTotalFrom ? `; running total from ${formatMedium(r.period.runningTotalFrom)}, the day of your next payday.` : '.'}
+        {r.period.runningTotalFrom ? `; running total from ${formatMedium(r.period.runningTotalFrom)}, starting at $0.` : '.'}
       </p>
     </section>
   );

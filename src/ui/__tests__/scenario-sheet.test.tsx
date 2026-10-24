@@ -10,10 +10,11 @@ import { ToastProvider } from '../components/common';
 import { Forecast } from '../screens/Forecast';
 
 /*
- * The plan from scenarios.test.ts. Today is Fri 2026-10-16. Paid $1,000
+ * Today is Fri 2026-10-16, where the running total starts ($0). Paid $1,000
  * every other Friday from Oct 23; rent $1,500 on the 1st from Nov 1; car loan
- * $300 on the 28th from Oct 28. Through Jan 20, 2027: cash flow +$1,600,
- * lowest −$800 on Nov 1, ending $1,600, gaps Nov 1–5 (−$800) and Dec 1–3 (−$600).
+ * $300 on the 28th from Oct 28. Through Jan 13, 2027 (90 days from today):
+ * cash flow +$600 (six paychecks), lowest −$800 on Nov 1, ending $600, gaps
+ * Nov 1–5 (−$800) and Dec 1–3 (−$600).
  */
 const TODAY = '2026-10-16';
 function plan(): AppData {
@@ -132,17 +133,17 @@ describe('one change', () => {
     expect(within(c).getByRole('status')).toHaveTextContent('This scenario creates a $600.00 timing gap on Nov 10, back to $0 or more on Nov 20.');
     expect(rows(within(c).getByRole('table'))).toEqual([
       ['Measure', 'Current forecast', 'With this scenario'],
-      ['Cash flow', '+$1,600.00', '+$800.00'],
+      ['Cash flow', '+$600.00', '−$200.00'],
       ['Lowest running total', '−$800.00 on Nov 1', '−$1,400.00 on Dec 1'],
-      ['Ending running total', '$1,600.00', '$800.00'],
+      ['Ending running total', '$600.00', '−$200.00'],
       ['Timing gaps', '2', '4'],
     ]);
     expect(c).toHaveTextContent('New timing gap: Nov 10 – 19, down to −$600.00, back to $0 or more on Nov 20.');
-    expect(c).toHaveTextContent('New timing gap: Jan 1 – 14, down to −$200.00, back to $0 or more on Jan 15.');
+    expect(c).toHaveTextContent('New timing gap: Jan 1 – 13, down to −$200.00, back to $0 or more on Jan 15.');
     expect(c).toHaveTextContent('Deeper timing gap: Dec 1 – 17, down to −$1,400.00.');
     const assumes = within(c).getByRole('region', { name: 'What this assumes' });
     expect(within(assumes).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Car repair: −$800.00 once on Nov 10, 2026One-time']);
-    expect(assumes).toHaveTextContent('Cash flow from Oct 16, 2026 through Jan 20, 2027; running total from Oct 23, 2026, the day of your next payday.');
+    expect(assumes).toHaveTextContent('Cash flow from Oct 16, 2026 through Jan 13, 2027; running total from Oct 16, 2026, starting at $0.');
   });
 
   it('additional income: shown as hypothetical, apart from your own income', async () => {
@@ -152,12 +153,12 @@ describe('one change', () => {
     const c = comparison();
     expect(within(c).queryByRole('status')).toBeNull();
     expect(rows(within(c).getByRole('table')).slice(1)).toEqual([
-      ['Cash flow', '+$1,600.00', '+$2,100.00'],
+      ['Cash flow', '+$600.00', '+$1,100.00'],
       ['Lowest running total', '−$800.00 on Nov 1', '−$300.00 on Nov 1'],
-      ['Ending running total', '$1,600.00', '$2,100.00'],
+      ['Ending running total', '$600.00', '$1,100.00'],
       ['Timing gaps', '2', '2'],
     ]);
-    expect(c).toHaveTextContent('Includes $500.00 of hypothetical income. Without it, cash flow would be +$1,600.00.');
+    expect(c).toHaveTextContent('Includes $500.00 of hypothetical income. Without it, cash flow would be +$600.00.');
     expect(c).toHaveTextContent('Smaller timing gap: Nov 1 – 5, down to −$300.00.');
     expect(within(within(c).getByRole('region', { name: 'What this assumes' })).getByRole('listitem')).toHaveTextContent('Bonus: +$500.00 once on Nov 1, 2026 (hypothetical)One-time · Hypothetical income, not in your forecast');
   });
@@ -174,7 +175,7 @@ describe('one change', () => {
     const c = comparison();
     expect(within(c).getByRole('status')).toHaveTextContent('This scenario deepens a timing gap to $750.00 on Dec 1, back to $0 or more on Dec 4.');
     expect(within(within(c).getByRole('region', { name: 'What this assumes' })).getByRole('listitem')).toHaveTextContent('Car loan: $300.00 → $450.00 each time from Nov 28, 2026Recurring · Dates in this period: Nov 28, Dec 28');
-    expect(rows(within(c).getByRole('table'))[3]).toEqual(['Ending running total', '$1,600.00', '$1,300.00']);
+    expect(rows(within(c).getByRole('table'))[3]).toEqual(['Ending running total', '$600.00', '$300.00']);
   });
 
   it('reserves on a monthly schedule', async () => {
@@ -184,7 +185,7 @@ describe('one change', () => {
     expect(changes()).toEqual(['Reserves: $100.00 every month from Oct 16, 2026']);
     const c = comparison();
     expect(within(within(c).getByRole('region', { name: 'What this assumes' })).getByRole('listitem')).toHaveTextContent(
-      'Reserves: −$100.00 set aside monthly on the 16th from Oct 16, 2026Recurring · Dates in this period: Oct 16, Nov 16, Dec 16, Jan 16',
+      'Reserves: −$100.00 set aside monthly on the 16th from Oct 16, 2026Recurring · Dates in this period: Oct 16, Nov 16, Dec 16',
     );
   });
 
@@ -235,7 +236,7 @@ describe('several changes', () => {
     await user.click(within(sheet()).getByRole('button', { name: 'Remove Dentist: −$100.00 on Nov 10, 2026' }));
     expect(changes()).toEqual(['Tax refund: +$2,000.00 on Jan 10, 2027']);
     expect(within(comparison()).queryByRole('status')).toBeNull();
-    expect(rows(within(comparison()).getByRole('table'))[3]).toEqual(['Ending running total', '$1,600.00', '$3,600.00']);
+    expect(rows(within(comparison()).getByRole('table'))[3]).toEqual(['Ending running total', '$600.00', '$2,600.00']);
   });
 });
 
@@ -249,8 +250,8 @@ describe('variable income', () => {
     expect(cases).toHaveTextContent('All three are hypothetical. None is added to your forecast.');
     expect(rows(within(cases).getAllByRole('table')[0]!)).toEqual([
       ['Measure', 'Low', 'Expected', 'High'],
-      ['Hypothetical income', '$0.00', '$780.00', '$1,560.00'],
-      ['Cash flow', '+$1,600.00', '+$2,380.00', '+$3,160.00'],
+      ['Hypothetical income', '$0.00', '$720.00', '$1,440.00'],
+      ['Cash flow', '+$600.00', '+$1,320.00', '+$2,040.00'],
       ['Lowest running total', '−$800.00 on Nov 1', '−$680.00 on Nov 1', '−$560.00 on Nov 1'],
       ['Timing gaps', '2', '2', '1'],
     ]);
@@ -293,25 +294,23 @@ describe('problems and limits', () => {
     expect(within(sheet()).getByRole('form', { name: 'Unexpected expense' })).toBeInTheDocument();
   });
 
-  it("moving the next payday: running totals aren't compared, and it says why", async () => {
+  it('moving the next paycheck: the running totals still start today, so they are compared', async () => {
     const { user } = await mount();
     await open(user);
     await changePayment(user, 'Move date', { Payment: 'pay@2026-10-23', 'New date': '2026-10-26' });
     const c = comparison();
-    expect(c).toHaveTextContent("This scenario moves your next payday from Oct 23, 2026 to Oct 26, 2026, so the running totals start on different days and can't be compared directly.");
-    expect(rows(within(c).getByRole('table'))).toEqual([
-      ['Measure', 'Current forecast', 'With this scenario'],
-      ['Cash flow', '+$1,600.00', '+$1,600.00'],
-    ]);
+    expect(c).not.toHaveTextContent(/can't be compared|payday/);
+    expect(rows(within(c).getByRole('table'))[1]).toEqual(['Cash flow', '+$600.00', '+$600.00']);
+    expect(rows(within(c).getByRole('table'))[2]![0]).toBe('Lowest running total');
   });
 
-  it('an expense before the next payday is marked as cash flow only', async () => {
+  it('an expense before the next paycheck is in the running total too', async () => {
     const { user } = await mount();
     await open(user);
     await add(user, 'Unexpected expense', { Name: 'Groceries', Amount: '50', Date: '2026-10-19' });
     const c = comparison();
-    expect(c).toHaveTextContent('Groceries: −$50.00 once on Oct 19, 2026: dates before your next payday (Oct 23, 2026) count in cash flow but not in the running total, which starts that day.');
-    expect(within(within(c).getByRole('region', { name: 'What this assumes' })).getByRole('listitem')).toHaveTextContent('One-time · Before your next payday: cash flow only');
+    expect(c).not.toHaveTextContent(/cash flow only|before your next payday/);
+    expect(within(within(c).getByRole('region', { name: 'What this assumes' })).getByRole('listitem')).toHaveTextContent('Groceries: −$50.00 once on Oct 19, 2026One-time');
   });
 });
 

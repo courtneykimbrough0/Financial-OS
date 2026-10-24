@@ -62,7 +62,7 @@ describe('E3 freelance jobs on device storage', () => {
     expect(within(within(sheet).getByRole('group', { name: 'The work' })).getByRole('radio', { name: 'Done' })).toBeChecked();
     expect(within(sheet).getByText("Without a date it's pending and isn't counted.")).toBeInTheDocument();
     await user.type(within(sheet).getByLabelText('Expected payment date (optional)'), '2026-10-28');
-    expect(within(within(sheet).getByRole('group', { name: 'How sure is this income?' })).getByRole('radio', { name: 'Expected' })).toBeChecked();
+    expect(within(sheet).queryByRole('group', { name: 'How sure is this income?' })).toBeNull();
     await user.click(within(sheet).getByRole('button', { name: 'Add job' }));
     expect(await screen.findByText('Added Logo design.')).toBeInTheDocument();
 
@@ -113,16 +113,16 @@ describe('E3 freelance jobs on device storage', () => {
     expect(within(record).queryByRole('button', { name: /^Delete/ })).toBeNull();
   });
 
-  it('a possible payment says so and is not counted; several clients can be filtered; renaming a client relabels its payments', async () => {
+  it('a dated payment is shown as expected, with no certainty; several clients can be filtered; renaming a client relabels its payments', async () => {
     let d = unwrap(ops.addClient(plan(), 'Acme', clock, 'acme'));
     d = unwrap(ops.addClient(d, 'Birch', clock, 'birch'));
-    d = unwrap(ops.addJob(d, { description: 'Website copy', clientId: 'birch', amountCents: usd(1200), status: 'planned', expectedDate: '2026-11-15', certainty: 'possible' }, clock, 'copy'));
+    d = unwrap(ops.addJob(d, { description: 'Website copy', clientId: 'birch', amountCents: usd(1200), status: 'planned', expectedDate: '2026-11-15' }, clock, 'copy'));
     d = unwrap(ops.addJob(d, { description: 'Logo design', clientId: 'acme', amountCents: usd(800), status: 'done', expectedDate: '2026-10-28' }, clock, 'logo'));
     const user = await openApp('#/plan/income', d);
     const copy = within(await screen.findByRole('region', { name: 'Freelance jobs' })).getByRole('button', { name: /^Website copy/ });
     expect(copy).toHaveTextContent('Birch · Planned');
-    expect(copy).toHaveTextContent('Payment possible Nov 15 · not counted');
-    expect(within(copy).getByText('Possible')).toHaveClass('badge-possible');
+    expect(copy).toHaveTextContent('Payment expected Nov 15');
+    expect(copy).not.toHaveTextContent(/possible|not counted/i);
 
     const filter = within(jobs()).getByRole('group', { name: 'Show jobs for' });
     await user.click(within(filter).getByRole('button', { name: 'Birch' }));

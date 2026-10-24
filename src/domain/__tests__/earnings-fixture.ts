@@ -9,7 +9,7 @@ const clock = clockAt('2026-10-19');
  * - Server (tipped): paycheck $600 every 2 weeks from Oct 2, $15.25/h. Shifts Sep 28, Oct 13, Oct 14; paychecks recorded Oct 2 ($590) and Oct 16 ($780).
  * - DoorDash payouts (gig): about $400 every Monday from Oct 5. Sessions Oct 6 (DoorDash, $15 cash), Oct 15 (Uber), Oct 17 (DoorDash, no hours); the Oct 12 payout recorded at $85.
  * - Salary (fixed): $2,000 on the 1st, recorded. Never earnings.
- * - Jobs: an old one paid Sep 20; Logo paid Oct 9 ($780); Poster done, no date; Copy planned, possible, Nov 15.
+ * - Jobs: an old one paid Sep 20; Logo paid Oct 9 ($780); Poster done, no date; Copy planned, payment projected Nov 15.
  * - Rent $900 on the 25th.
  */
 export function earningsPlan(): AppData {
@@ -36,7 +36,7 @@ export function earningsPlan(): AppData {
   d = unwrap(ops.addJob(d, { description: 'Logo', amountCents: usd(800), status: 'done', expectedDate: '2026-10-10' }, clock, 'logo'));
   d = unwrap(ops.recordJobPayment(d, 'logo', { amountCents: usd(780), date: '2026-10-09' }, clock));
   d = unwrap(ops.addJob(d, { description: 'Poster', amountCents: usd(150), status: 'done' }, clock, 'poster'));
-  d = unwrap(ops.addJob(d, { description: 'Copy', amountCents: usd(1200), status: 'planned', expectedDate: '2026-11-15', certainty: 'possible' }, clock, 'copy'));
+  d = unwrap(ops.addJob(d, { description: 'Copy', amountCents: usd(1200), status: 'planned', expectedDate: '2026-11-15' }, clock, 'copy'));
   return d;
 }
 
