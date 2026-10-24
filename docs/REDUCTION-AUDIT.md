@@ -1,5 +1,7 @@
 # Product reduction audit (October 2026)
 
+> **Historical audit notice:** This audit predates the product-owner decisions in [PRODUCT_CONTRACT.md](../PRODUCT_CONTRACT.md) (October 23, 2026). Treat proposed categories, certainty mechanisms, entry flows and Varied Spending wording as historical observations or proposals where they conflict with that contract. Do not implement an old recommendation without reconciling it and receiving owner approval.
+
 > **Phase R1 complete (October 2026).** The main paycheck concept and the Paycheck view have been removed as this audit recommended (findings #3, #4; questions Q2, R3; replacements §5.4). The analysis below is preserved as a historical record; references to "main paycheck" describe the state before R1.
 
 An audit of the current app against the product philosophy in [AGENTS.md](../AGENTS.md) section A: the mission, the three objectives (Establish, Simplify, Strengthen), the information model (projections, recorded activity, the week view) and the design principles.
