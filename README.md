@@ -1,5 +1,7 @@
 # Financial OS
 
+> **Current product direction (October 23, 2026):** [PRODUCT_CONTRACT.md](PRODUCT_CONTRACT.md) is authoritative for product behavior. Financial OS is projection-first, with actuals only when recorded, five separate guided onboarding sections, Recurring Expenses aggregated in-app, and a calculated Left to Spend. Historical feature lists in this README may describe an implementation awaiting correction; they are not approval to retain conflicting behavior.
+
 A mobile-first Progressive Web App for planning cash flow. You enter the income, expenses, and liability payments you expect, and the app shows when money comes in, when it goes out, and when timing gaps are likely. When something actually happens (a late paycheck, a bigger bill), you record it. The forecast then recalculates, and the original prediction is kept for comparison.
 
 You enter everything by hand. Data is saved to the user's Financial OS account (Firebase) when accounts are turned on, or on the device otherwise. The app has no bank connections and no budgeting; an account shows a balance only from an opening balance you enter (see Settings, Accounts).
