@@ -1,5 +1,7 @@
 # Financial engine: calculation path and test matrix
 
+> **CURRENT PRODUCT SEMANTICS — October 23, 2026:** Read [PRODUCT_CONTRACT.md](PRODUCT_CONTRACT.md). All future/unrecorded occurrences remain projections; only user-recorded events are actuals. Source or cadence does not confer certainty. Preserve original projections versus recorded amount/date, and distinguish Left to Spend (calculated residual for a stated period) from one-time external expenses. Reserve allocations are not external spending, and transfers are not income. The formula/data-model implications must be audited and tested before code changes; historical descriptions below are not authorization to preserve contradictory UI semantics.
+
 How stored data becomes the forecast, and which tests prove each behavior. Written for roadmap Step 1; verify against the code before relying on it. All functions are pure and live in `src/domain/`.
 
 ## Calculation path
