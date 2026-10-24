@@ -40,7 +40,7 @@ auth.users 1─1 workspaces 1─* sources 1─* schedule_versions
   - a liability type only on liability payments;
   - estimate dismissals are complete or absent;
   - an item that's on has no end date;
-  - `certainty` is null (expected) or `'possible'`, only on income items and one-time income, never on a recurring occurrence, which follows its item;
+  - `certainty` is retired (C1 removed income certainty: every unrecorded income is a projection). The app always writes null and ignores a stored `'possible'` on load, so that income counts; the next save clears it. The column and its checks stay, unused, to avoid a migration that would replace `save_plan` and `load_plan`;
   - `income_type` is null (a fixed amount) or `'hourly'`/`'tipped'`, only on income; `hourly_wage_cents` only with a type, above $0;
   - shifts (`work_entries`): kind `'shift'`, minutes 1–1440, every amount above $0 when present, hours or tips required, foreign keys to the item, the cash-tips record and the paycheck that paid it, one shift per tips record. Row-level security and grants follow the other tables;
   - gig work: `income_type` may be `'gig'`, which never has a wage; `work_entries.kind` is `'shift'` or `'session'`, with `earnings_cents` (above $0) and `platform` (1–40 characters) only on sessions, wage and card tips only on shifts; a session needs earnings or cash, a shift hours or tips. `save_plan` refuses shifts on gig income and sessions on other income;

@@ -23,6 +23,7 @@ Financial OS forecasts future money movements, records actual outcomes only when
 - **Tests:** recurring/one-time projected income, late and different actual receipt, no certainty-based zeroing, anchors, previous regression/security suites.
 - **Exit:** relevant CI and manual live preview pass; product-owner approves income form and forecast.
 - **Do not:** remove useful optional work/earnings detail merely because it is adjacent to certainty UI.
+- **Status (October 24, 2026):** implemented for review on branch `ccr-12ec4965-c1-projection` (draft PR). Not accepted until CI passes, the owner reviews the live preview, and merge is authorized. No database migration: the retired `certainty` columns stay, always written null and ignored on load.
 
 ## C2 — Five-section guided onboarding
 
