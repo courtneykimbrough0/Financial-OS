@@ -10,14 +10,14 @@ Financial OS forecasts future money movements, records actual outcomes only when
 
 - Inspect current domain forecast/recorded/reserves/transfers, projection start, income forms and persistence.
 - Write executable-style, hand-computable acceptance examples covering: recurring income, one-time income, freelance/irregular income, projected $1,500 Friday vs recorded $1,250 Monday, recurring payments, one-time expense, Strategic Reserve allocation/release, inter-account transfer, and a stated forecast period for Left to Spend.
-- Explain how a recorded amount replaces rather than adds to the projected occurrence; compare recorded date and amount to prior plan. Explain when opening balances are unknown rather than suggesting a bank balance.
-- Identify the exact existing engine functions and any cases not yet supported. Propose default UX labels and period choice without turning examples into a second formula.
+- Explain how a recorded amount replaces rather than adds to the projected occurrence; compare recorded date and amount to prior plan. **Use the owner's confirmed formula: Left to Spend = Income − (Expenses + net Strategic Reserves), including one-time and recurring transactions within the selected period.** Distinguish the projected period result from an actual bank balance.
+- Identify the exact existing engine functions and any cases not yet supported. **The user chooses the forecast starting date**, not the next payday or first-entered income. Propose an end-date/display horizon and labels without turning examples into a second formula.
 - **Exit:** product-owner signoff on expected figures and terminology; no engine/UI changes.
 - **Do not:** invent certainty grades, estimate bank balances, or change project hosting.
 
 ## C1 — Remove income certainty gating; preserve projections and history
 
-- Inspect and correct certainty picker, domain kind/occurrence state, forecast anchor and totals, persistence mappings, DB validation and fixtures. All included projected income counts in projections irrespective of perceived reliability; recorded data alone becomes actual.
+- Inspect and correct certainty picker, domain kind/occurrence state, **user-selected forecast start (no automatic payday anchor)** and totals, persistence mappings, DB validation and fixtures. All included projected income counts in projections irrespective of perceived reliability; recorded data alone becomes actual.
 - Preserve one-time/recurring scheduling; hourly, tipped, gig and freelance amount/date modeling; historical record/schedule comparison.
 - Ensure migrations are appropriately scoped to current zero-user environment; don't leave existing `possible` data in a state silently excluded from the forecast.
 - **Tests:** recurring/one-time projected income, late and different actual receipt, no certainty-based zeroing, anchors, previous regression/security suites.
@@ -35,7 +35,7 @@ Financial OS forecasts future money movements, records actual outcomes only when
 
 ## C3 — Calculated Left to Spend and one-time expenses
 
-- First compare current available cash flow, running total, record replacements, reserve allocations and transfers to approved C0 examples. Reuse the canonical engine. Define displayed period and projection qualifier.
+- First compare current available cash flow, running total, record replacements, reserve allocations and transfers to approved C0 examples. Reuse the canonical engine. **Calculate Left to Spend as Income − (Expenses + net Strategic Reserves), including recurring and one-time transactions for the user-selected forecast period.** Show its period and projection qualifier.
 - Replace **user-facing Varied Spending as planned category** with automatically calculated Left to Spend. Retain simple one-time expense entry and accurate recorded purchases. Assess internal `varied` storage compatibility separately; no blind global renames.
 - **Tests:** projected/actual replacement, one-time entries counted once, reserve allocations not counted as spending, transfers not treated as income/outflow, date boundaries and absent opening cash.
 - **Exit:** owner verifies exact example amounts and labels in live app.
