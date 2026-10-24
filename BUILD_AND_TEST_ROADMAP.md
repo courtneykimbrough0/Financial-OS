@@ -564,6 +564,24 @@ Supabase's built-in email sender delivers only to the organization's team addres
   - Run #4 (`58c2cc5`, the test moved onto a signed-in account): 9 of 14 passed. The password-length test found a real setting gap (the project accepted a 7-character password); it also left identity A on that password, so the four later tests that sign in as A failed. The test now restores the password if the project accepts it (`56fab0c`). The product owner then set the minimum password length to 8.
 - **Accepted limitation (product-owner decision):** F3 is accepted on the combined evidence of runs #3 and #4. No single run passed all 14 tests, and the corrected password-length check has not passed against the hosted project. The suite and workflow remain for a complete run at any time (two disposable accounts recreated first). Leftover test data from run #4 (identity A and its workspace) is disposable and removed when that account is deleted in the dashboard.
 
+**F4. Vercel preview and hands-on product testing (in progress, October 2026).**
+- **Deployment:** Vercel project `financial-os-2` (free Hobby plan), linked to this repository, building `main` with `vercel.json` (`npm run build:supabase`, output `dist-supabase`). Address: `https://financial-os-2-three.vercel.app`. It talks to Financial OS 2 (the hosted test database) with only the two public settings, `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (publishable key), for production and preview builds. Served with the content security policy and security headers from `vercel.json` (checked on the first deployment). Vercel Authentication covers preview builds only, so the main address opens directly (the app's own sign-in and row-level security protect the data); the home-screen app needs that.
+- **Finding:** linking the project through Vercel's Supabase integration also added server-side credentials to the project's environment (`SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_SECRET_KEY`, `SUPABASE_JWT_SECRET`, `POSTGRES_*`). The app never uses them and the Vite build only embeds `VITE_` variables, so they are not in the browser bundle, but privileged credentials must not live in Vercel at all: the product owner removes them (or disconnects the integration from this project).
+- **Supabase settings for the preview** (Financial OS 2 → Authentication → URL Configuration): Site URL `https://financial-os-2-three.vercel.app`; redirect URL `https://financial-os-2-three.vercel.app/**`. Confirmation and recovery emails return to the app only from listed addresses.
+- **Email:** Supabase's built-in sender delivers only to the organization's team addresses, a few an hour, so preview sign-ups use the product owner's own address. A custom email provider belongs to F5.
+- **Acceptance (product-owner direction):** a hands-on walkthrough of the deployed app on a phone replaces scripted device checks. The automated coverage stays as it is: unit and financial-calculation tests, `test:db` (PostgreSQL), the local-stack Supabase suites, the browser smoke tests and `e2e:production` in CI, and the manual hosted verification workflow.
+- **Walkthrough** (note each problem as usability, financial correctness, or security):
+  1. Sign up; signing in before confirming asks for confirmation; confirm from the email; sign in.
+  2. Complete onboarding.
+  3. Add a paycheck, two bills, and an income, a payment and a distribution account; assign the paycheck and bills.
+  4. Add a Strategic Reserves item and a transfer: cash flow drops, spending doesn't.
+  5. Check the forecast's dates and running totals for the next month.
+  6. Record a bill as paid and the paycheck as received; check Activity and balances.
+  7. Refresh: everything is still there. Sign out and back in: the plan is unchanged.
+  8. Add to the home screen; open it from there; it opens signed in.
+  9. Airplane mode: a change says it isn't saved; reconnect and try again.
+  10. Optional: a second account in another browser can't see the first one's plan.
+
 Fields ignored by R1–R2 can be dropped from the schema at the cutover.
 
 ---
