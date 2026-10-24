@@ -1,5 +1,7 @@
 # Financial OS — build and test roadmap
 
+> **PRODUCT REALIGNMENT (owner decision, October 23, 2026):** [PRODUCT_CONTRACT.md](PRODUCT_CONTRACT.md) is the binding specification. Historical completed phases remain as implementation history, not as product approval. The next work is **documentation reconciliation, then owner-reviewed corrective implementation planning**, not automatic F5 launch or unrelated new features. Confirmed requirements: projections until recorded; five independent onboarding sections; Recurring Expenses aggregation in-app; separate Liabilities progress experience; calculated Left to Spend rather than user-entered Varied Spending; simple one-time income/expenses; no income certainty grading. The subsequent Claude brief and correction roadmap will be separately authorized. Keep the working Vercel preview available for live review and all financial/security regression checks.
+
 A dependency-ordered sequence of work and test gates for one evolving application. It is **not** a list of features allowed in particular release phases: alpha, beta, and release are testing phases with growing groups of people (Step 11), and evidence from them can add, simplify, change, or remove anything below.
 
 Rules for using this roadmap are in [AGENTS.md](AGENTS.md). In short: read AGENTS.md first, work on one authorized task at a time, add tests with every change, report real results, and wait for the product owner before moving on.

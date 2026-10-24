@@ -1,5 +1,7 @@
 # Interface wording inventory (October 2026)
 
+> **Historical copy inventory notice:** This is an inventory of existing/previous strings, **not approved current copy**. [PRODUCT_CONTRACT.md](../PRODUCT_CONTRACT.md) bans specified user-facing terminology and requires Left to Spend instead of presenting Varied Spending as a user-entered expense. Do not mechanically replace terms without auditing underlying semantics and preserving one-time expense recording.
+
 Every user-facing string in the default build at commit `d00a919`, for the product experience audit ([PRODUCT-AUDIT.md](PRODUCT-AUDIT.md) §4, the voice guide in [PRODUCT_EXPERIENCE.md](../PRODUCT_EXPERIENCE.md) §2). Read-only: no string was changed. Line numbers are from that commit and will drift; search for the text.
 
 - Template literals are shown with `${...}` placeholders and JSX expressions as `{...}`; strings composed from several pieces are listed once with the composed shape.

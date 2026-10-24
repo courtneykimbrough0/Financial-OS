@@ -1,5 +1,7 @@
 # Financial OS — product experience specification
 
+> **CURRENT PRODUCT DECISION — October 23, 2026:** [PRODUCT_CONTRACT.md](PRODUCT_CONTRACT.md) supersedes conflicting historic proposals and implementation descriptions in this document. Onboarding has **five separate guided sections** (Income, Bills, Subscriptions, Liabilities, Strategic Reserves). In-app Recurring Expenses may aggregate Bills, Subscriptions and liability payments; Liabilities retains a dedicated balance/progress screen. **Left to Spend is calculated**, not an entered Varied Spending item. One-time expenses are still recordable, and one-time income remains within Income. All unrecorded financial events are projections, regardless of income source. Remove certainty grading from the future implementation only after an impact audit; preserve historical actuals. This documentation notice does not claim the UI is already corrected.
+
 This document says how Financial OS should look, read and behave for the people who use it. It sits next to:
 - [AGENTS.md](AGENTS.md): the rules;
 - [FINANCIAL_ENGINE.md](FINANCIAL_ENGINE.md): the math;

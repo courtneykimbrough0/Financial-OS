@@ -1,5 +1,7 @@
 # Financial OS design system
 
+> **PRODUCT EXPERIENCE OVERRIDE (October 23, 2026):** [PRODUCT_CONTRACT.md](PRODUCT_CONTRACT.md) controls the content and structure of financial workflows. The onboarding experience has five guided sections, must support simple-first / Advanced detail, and must not force a Varied Spending entry. Recurring Expenses aggregation and a dedicated Liabilities progress experience are separate from onboarding. Any contradictory historic design examples below require review before implementation; no code changes are implied by this documentation update.
+
 Financial OS uses a dark-first, card-based visual language. It is calm and legible, with large numbers and one consistent set of controls. Every token lives at the top of `src/styles.css`, and the shared React pieces live in `src/ui/components/common.tsx`.
 
 This file describes the visual system **as built**. The redesign direction is [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) section 7, built in roadmap Phase D one checkpoint at a time. **D1 (shared foundation) is built:** the type scale, one meaning per color (money out is neutral with a "−"; indigo is the accent only), sentence-case section labels, a smaller card radius, and the `ListGroup` and `EmptyLine` components. **D2 (Home), D3 (Forecast), D4 (Plan and Activity), D5 (setup and sheets) and D6 (desktop) are built** (see the layout pattern below).
