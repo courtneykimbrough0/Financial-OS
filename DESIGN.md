@@ -1,3 +1,148 @@
+# Financial OS — central design system
+
+**Status:** Owner-directed design specification, October 24, 2026. **This is the single authoritative source for visual design and interaction presentation.** [PRODUCT_CONTRACT.md](PRODUCT_CONTRACT.md) remains authoritative for financial behavior; [docs/C0-FINANCIAL-ACCEPTANCE-EXAMPLES.md](docs/C0-FINANCIAL-ACCEPTANCE-EXAMPLES.md) defines corresponding examples while its PR is pending. This revision is **documentation only**; it does not claim the live app already reflects the design.
+
+## 1. Visual reference and limits
+
+The owner supplied five mobile screenshots of a polished budgeting application as a **design reference**. Borrow design *principles*: a high-contrast dark canvas, strong numerical hierarchy, carefully spaced content, elegant grouped transaction rows, easy-to-read calendars, prominent but calm summary cards, contextual drill-down, and coherent motion/interaction from summary to detail.
+
+**Never copy the reference application's functionality, control model, wording, brand, proprietary artwork, icons/assets or exact screens.** In particular: no mandatory bank connection, no automatic categorization or financial decision-making that displaces the user, no assumption that the app controls the user's finances, and no requirement to replicate unrelated offers or marketing features. This is a Financial OS design language, not a replica or an interface license. Reference screenshots inform visual critique; original implementation must be created for Financial OS.
+
+**Governing product-experience principle:** **User-directed planning. System-managed calculations. Connected financial information.** Automated calculations keep views consistent; only the user decides projected dates, amounts, recurrence and splits, and explicitly records actual outcomes.
+
+## 2. Single source of visual truth
+
+All new UI uses this document plus a **single centralized token/component implementation**. `src/styles.css` is the current token implementation; `src/ui/components/common.tsx` and other shared components are current building blocks. An implementation checkpoint must inventory existing tokens and reusable components, then adapt them rather than introducing independent screen-specific color systems or competing component libraries.
+
+The token values below are the **documented current starting palette**, not color samples reverse-engineered from external screenshots. Exact adjustments may be proposed in an owner-reviewed visual specimen. Changes happen through tokens and shared components; no arbitrary per-screen hard-coded values.
+
+## 3. Design principles
+
+### 3.1 Clear focus, quiet support
+
+Every screen communicates its most important answer first. Use a single clear hero number where appropriate; concise labels, readable dates, and focused primary actions. Supporting activity, breakdowns and advanced information live lower on the page or behind an intentional drill-down. Do not fill Home with every available statistic. A number without its period and projected/recorded context is incomplete.
+
+### 3.2 Connected context and progressive disclosure
+
+The user can move from summary → relevant transactions → one obligation or occurrence → edit/record/review → updated summary. The context (selected dates, item, view) remains legible and is preserved when returning. Detail surfaces use bottom sheets on phones when short, full screens for longer flows, and a dialog on desktop when appropriate.
+
+### 3.3 User control is visible
+
+Show editable projected amount/date/schedule and linked installment details. No screen implies income actually arrived until recorded. Automatic recalculation after a user decision is encouraged; autonomous changes to payment plans are not. A calculated result such as **Left to Spend** must not look like a user-entered recurring expense.
+
+### 3.4 Dense enough to be useful, never crowded
+
+Group related items on continuous surfaces with subtle dividers. Avoid a separate floating card for every row. Prioritize at-a-glance readability over decorative dashboard clutter. Hide empty data-only breakdowns; offer one useful empty-state action.
+
+### 3.5 Consistency across all time scales
+
+Week, month, custom range, calendar day and item detail reference **the same financial records and calculation engine**. Changing the visible period updates all relevant amounts, counts, status indicators and remaining totals dynamically. The **user chooses the forecast starting date**. No view silently reanchors to payday or a first-entered income source.
+
+## 4. Foundation: palette, typography, spacing and shape
+
+Use semantic tokens so visual consistency survives theme refinements. The existing dark-first starting token set is:
+
+- Canvas `--color-bg: #1c1c1e`; content surface `--color-surface: #2a2a2c`; raised surface `--color-surface-raised: #333336`; sunken `--color-surface-sunken: #232325`; hairline `--color-border: #3a3a3d`; sheet `--color-sheet: #2c2c2e`.
+- Primary text `--color-text: #f5f5f7`; secondary `--color-text-secondary: #a1a1a6`. Accent/focus `--color-accent: #8a97ff`. Income/positive `--color-in: #52cf88`; warning `--color-warn: #f5a623`; shortfall/error `--color-neg: #ff7b7b`. Cash outflows display a minus sign and neutral text, not alarming red.
+- Font is currently Inter Variable, with **tabular numerals for money**. Display amounts approximately 36px; screen heading 22px; sheet/period headings 18px; section label 15px; body 16px; supporting text 14px. Caption text around 12px only where accessible and genuinely useful; do not use tiny gray type for important financial information.
+- Space scale: **4/8/12/16/20/24/32px**. Default mobile page inset 16px. Separate large logical sections by ~24px. Each list row has enough vertical padding and label-value separation for scanning; avoid clipping on narrow screens or with large text.
+- Starting corner radii: grouped cards ~18px, sheets ~28px on phone top corners, inputs ~14px, fully rounded button/choice pills. Apply by component token, not visual one-offs.
+- Minimum touch targets 44×44px; primary actions about 48px high. Respect focus rings, text contrast, dynamic type, screen readers and reduced motion.
+
+The visual reference suggests polished restraint rather than brighter/saturated UI. Proposed token changes must be reviewed across Home, Forecast, Plan, Activity, onboarding and sheets together. Use one meaning per color with **text/icon/shape**, never color as the only status signal.
+
+## 5. Reusable component language
+
+**Hero summary:** one lead number, a small contextual label identifying time period and projection basis, optional brief explanation, and at most one primary action. Avoid stacking competing hero cards on Home. Left to Spend is computed, never editable as an expense.
+
+**Compact supporting summary:** short label, exact amount and useful trend/period context. Only show supporting totals when they help explain the hero; don't replicate the same number in several cards.
+
+**Grouped transaction list:** shared surface containing repeatable rows. Each row: a consistent type avatar, name, useful secondary schedule/date/status, a right-aligned tabular amount, and a clear navigation affordance if interactive. Use a hairline divider between rows. Reflect projected/recorded state with concise text or chip, not just color.
+
+**Recurring Expenses grouping:** summary and Upcoming/All controls may be used where they meaningfully change the presented list. Bills, Subscriptions and liability payments share the aggregate, while identities and a dedicated Liabilities view remain intact. Grouped summary and individual entry show the **same** money once.
+
+**Period selector:** always visible or easy to reach on forecasts and relevant summaries; supports user-selected starting date and dynamic period. Do not reset silently when moving between week/month/calendar/detail. Labels show the effective start and end.
+
+**Calendar:** intentionally designed monthly/weekly/date views, clear selected/today states, compact legible markers for money in, money out and recorded activity, with a short contextual day detail on selection. Avoid filling tiny cells with lengthy labels; provide accessible alternatives for screen readers. A tap on a day reveals that day's projected and recorded items without losing the selected period.
+
+**Contextual detail sheet:** selecting an obligation or occurrence reveals its amount, timing, projected/recorded state, related plan, recorded history and only the relevant user actions. Short flows remain in a bottom sheet; multi-step or long flows use a full-screen view. Preserve navigation context and focus; avoid nested modal stacks.
+
+**Status indicators:** projected (not “guaranteed”), recorded/received/paid, overdue-but-unrecorded, canceled and edited are legible in text; no subjective income-certainty badges. A past date never converts an item to an actual.
+
+**Primary actions and empty states:** one clear next action per local context; concise plain-language prompts; optional Advanced controls for uncommon needs. Avoid empty cards filled with explanation or multiple simultaneous primary buttons.
+
+**Motion:** subtle transitions when opening details, switching time periods or reflecting a completed user action. Honor reduced-motion preferences. Motion clarifies origin/destination and state, not decoration; no delayed or animated financial results that conceal updated amounts.
+
+## 6. Screen-by-screen experience contract
+
+### Home
+
+A calm hierarchy with **Left to Spend as the primary projected result for the displayed period**, clearly indicating the date range. Show an accessible way to change the period and starting date. Below, provide only immediately actionable upcoming activity and a small amount of explanatory context (for example Recurring Expenses, reserves, or timing warnings when meaningful). An item opens the same underlying occurrence/detail used everywhere. Separate projected and recorded information; never suggest an actual account balance if one has not been established.
+
+### Forecast / calendar
+
+A coherent calendar/timeline for the **user-chosen forecast start and visible end**. Week/month/custom views recalculate dates and totals from the same entries. Selecting a date opens that day's transactions; selecting a transaction opens the relevant occurrence, from which the user can record or revise it. Present timing gaps when applicable, including an expense before later projected income, without claiming a bank account shortage without a verified opening basis.
+
+### Plan / Recurring Expenses
+
+An understandable inventory of recurring Bills, Subscriptions and liability payments, with useful Upcoming and All states where appropriate. An individual item shows amount, obligation recurrence, payment dates, recorded installments, planned installments and remaining amount as applicable. One-time expenses are accessible from a simple separate entry action, **not** disguised as a “Left to Spend” category.
+
+### Liabilities
+
+Retain a dedicated route/detail focused on balances and payment progress. Show which figures are user-provided, projected or recorded; don't invent lender posting, principal reductions, amortization assumptions or promises of payoff dates. Payment split data should link to the same underlying obligation as Recurring Expenses.
+
+### Income
+
+Simple source/amount/date or repeat schedule on first view. One-time and recurring income belong here. Hourly, tipped, gig and freelance tools are optional additional inputs for producing the projection, not eligibility checks or certainty grading.
+
+### Strategic Reserves
+
+Dedicated set-aside detail including planned and recorded allocations/releases, purpose and impact on **available** cash. Never present allocations as external spending or releases as income. Keep the setup minimal.
+
+### Activity
+
+Readable recorded history with clear dates and actual amounts, alongside appropriate ways to inspect earlier plans and differences. Do not imply future scheduled entries are actual activity. User can move from a record to relevant obligation detail.
+
+### Five-section onboarding
+
+Exactly five **financial entry sections** in sequence: Income, Bills, Subscriptions, Liabilities, Strategic Reserves; Review is a final action/stage, not an additional category. Each has one short explanation, a clear Add action, previously entered items, Back/Continue/Skip and easy return. Users can get an initial forecast early. Never request a Left to Spend amount. Offer simple entry; put complex recurrence, tips, account routing or installment plans behind Advanced. The design helps people remember items **section by section** instead of overwhelming them with a single giant payments list.
+
+## 7. Split payment visual and interaction rules
+
+An obligation's amount/cycle and the chosen dates/amounts of its installments are related but separate. Provide optional **Split payments** from an obligation detail or optional advanced entry. The basic flow stays one scheduled payment.
+
+Show the base obligation, each planned installment and its date, total scheduled, total actually recorded and **remaining unrecorded amount** together when useful. Each view answers its time scale: a weekly view shows installments relevant to that week, a monthly view shows the corresponding monthly obligation and progress, and a liability view shows relevant balance/progress independently.
+
+When a payment is recorded, update linked totals and views automatically. Preserve the user's planned schedule and recorded outcomes; do not silently reschedule future installments. Catch-up amounts may be spread across chosen dates. A user can review any difference between remaining obligation and remaining planned installments. Prevent double counting between an obligation and its installments.
+
+The connected experience is vital: enter or record a payment in one location and the forecast, Recurring Expenses, obligation detail and Left to Spend **all update from the same source of truth**.
+
+## 8. Controls, accessibility and responsive design
+
+On phones, primary navigation remains stable and obvious; avoid requiring users to learn a new hierarchy for each feature. On wider screens, allow more horizontal space and side-by-side summary/details only where this genuinely aids comprehension. Do not design desktop as an enlarged phone screenshot.
+
+Keyboard and screen-reader users must be able to traverse grouped lists, change periods, operate calendars, navigate forms and close sheets without losing context. Use accessible dialog focus management, labels and announcements for important updated calculated amounts. Avoid relying on gesture-only affordances or icons without accessible labels. Test narrow viewport, high zoom, reduced motion, light/dark accessibility as supported, and long amounts/labels.
+
+Never use a tiny decorative icon to conceal a required action; contextual tooltips supplement understandable labels. Error and empty states tell the user what happened and how to proceed, without blaming them.
+
+## 9. Copy rules
+
+Use concise, everyday language: **Left to Spend, Recurring Expenses, Liabilities, Strategic Reserves, Projected, Recorded, Paid, Received**. Forecast wording explains that a future entry is planned, not certain. Do not use prohibited finance terms specified in PRODUCT_CONTRACT.md in new user-facing copy. Do not introduce robotic coaching language, probability assessments, unnecessary motivational text or fictional certainty.
+
+## 10. Implementation and visual-acceptance protocol
+
+This spec documents **design requirements only**. It is not permission to redesign every screen or introduce new features now. Follow the approved corrective checkpoints, with small reviewable PRs and a functioning Vercel preview.
+
+Before implementing a screen, document (a) current screenshot/behavior, (b) proposed layout using shared components/tokens, (c) precise owner-approved product actions, (d) financial/status states including projected, recorded, zero, empty and negative, and (e) narrow-phone and accessibility verification. Show the owner a real preview of each important screen; green CI alone is not visual acceptance. Do not treat this design document as authority to change calculation rules, data models or business semantics.
+
+**Design non-goals:** no redesign by copying another application's screens; no forced bank integration; no automated plan changes without user instruction; no replacement of working financial features merely for visual resemblance; no independent per-screen styling systems.
+
+---
+
+## Legacy design documentation (historical implementation reference only)
+
+The following content is preserved to help engineers identify current CSS, components, and historical decisions. It describes parts of the pre-realignment implementation and may conflict with the requirements above. **It is not an alternative design system.** Reconcile any conflicting examples against the authoritative sections above and PRODUCT_CONTRACT.md before implementing.
+
 # Financial OS design system
 
 > **PRODUCT EXPERIENCE OVERRIDE (October 23, 2026):** [PRODUCT_CONTRACT.md](PRODUCT_CONTRACT.md) controls the content and structure of financial workflows. The onboarding experience has five guided sections, must support simple-first / Advanced detail, and must not force a Varied Spending entry. Recurring Expenses aggregation and a dedicated Liabilities progress experience are separate from onboarding. Any contradictory historic design examples below require review before implementation; no code changes are implied by this documentation update.
