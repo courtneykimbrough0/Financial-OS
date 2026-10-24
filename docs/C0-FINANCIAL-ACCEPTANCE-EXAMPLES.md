@@ -11,7 +11,7 @@
 - **External outflows:** Bills + subscriptions + liability payments + one-time expenses. Internal transfers are not external outflows.
 - **Strategic Reserves:** Allocations subtract from *available* cash, not from external-expense totals. Releases increase available cash and do not become income.
 - **Period net available change:** Projected and recorded included income within a stated date range, less external outflows and net reserve allocations **in that range**. This is an amount changed during the period, **not automatically a balance the user can spend**.
-- **Left to Spend:** User-facing computed remaining availability. It must declare the reference period and any starting-available-money basis. The arithmetic below demonstrates a zero-start scenario for clarity, but **does not authorize hardcoding a $0 starting balance for actual users**. If the starting availability is unknown, never imply this is their bank balance. A period net change may be displayed as such until a suitable starting basis is defined and approved.
+- **Left to Spend — confirmed owner formula:** For the selected forecast period, **Income − (Expenses + Strategic Reserves allocations net of releases)**. Income and expenses include **both recurring and one-time occurrences** within that period. Recorded occurrences substitute their actual dates and amounts; unrecorded occurrences remain projections. Internal account transfers are not income or external expenses. Left to Spend is a projected period result, not an actual bank balance or a separately entered spending estimate. No additional formula choice is pending.
 - **Actual versus future together:** When a displayed range includes past recorded and future projected occurrences, totals must not silently label the whole result actual. Separate or clearly identify portions.
 - **Dates:** ISO 8601 local calendar dates, no fictional status advancement. These examples are deterministic fixture scenarios; date choices are not assertions about today's real bank activity.
 - **Money:** USD, exact cents, no rounding assumptions needed. Use the same canonical forecast calculation in all screens.
@@ -71,15 +71,15 @@ The user plans a $400 transfer from an Income account to a Payment account on No
 
 **Recorded substitution:** If one projected $200 one-time expense is recorded at $250 and all other inputs remain as projected, current remaining projection changes to **$1,050**. Do not subtract $200 and $250.
 
-**Important product decision still open:** What is the default period and starting-availability basis for **Left to Spend** on Home? Do not call +$1,100 period net change a bank balance. This fixture does not resolve the production rule.
+**Confirmed:** The **$1,100** result is Left to Spend for the example's selected November 1–30 forecast period, using income minus all expenses and planned net reserve allocations. The user controls the forecast start date; no next-payday anchor may override that choice. Do not call this result an actual bank balance.
 
 ## Scenario C0-08 — Within-period timing and shortfall
 
-Beginning available resources are explicitly $0. On November 1, $100 of recurring expenses is due. The only projected income is $500 on November 5.
+The user chooses **November 1** as the forecast starting date. For illustration, beginning available resources are explicitly $0. On November 1, $100 of recurring expenses is due. The only projected income is $500 on November 5.
 
 **Expected:** Total period net change through November 5 is +$400; **the person is $100 short before November 5** if no other available funds exist. A period end number alone must not hide the timing issue. If the application lacks verified starting money, show the timing projection's reference assumption instead of claiming an actual account shortage.
 
-**Code context:** `src/domain/forecast.ts` currently anchors the running tally to the day before the next expected recurring payday, excludes one-time income from establishing that anchor, and initializes to $0 at the anchor. Therefore its existing tally is **not a universal account-balance calculation**. Any change to anchors needs a separate explicit design and regression tests, not a cosmetic rename to Left to Spend.
+**Owner decision:** The forecast starts on **the user's chosen starting date**, not automatically on their next recurring payday or first-entered income. The current payday-based anchor in `src/domain/forecast.ts` contradicts this requirement. Timing calculations must respect the selected start and include eligible one-time and recurring occurrences. A running total with no known opening balance remains a projection from its stated basis, never a verified bank balance.
 
 ## Scenario C0-09 — Canceled, overdue and revised plans
 
@@ -97,11 +97,20 @@ The guided financial entry sequence is **Income → Bills → Subscriptions → 
 
 For a period containing both recorded income +$1,250 and a separate future income projection +$900, the combined forecast may calculate **+$2,150** of included receipts, but must not describe **all $2,150 as received**. A clear breakdown such as “Recorded $1,250; projected $900” is an example of acceptable communication; exact layout is subject to later owner review. All recorded numbers come from records; projections do not become actual by date rollover.
 
+
+## C0-12 — User-chosen forecast start is authoritative
+
+A user selects **2026-11-01** as the forecast start, enters a one-time receipt of **$900 on November 4**, and a recurring paycheck of **$1,500 on November 20**. There is a $120 bill on November 2.
+
+**Expected:** The forecast starts November 1, shows the November 2 projected bill before either projected receipt, includes the November 4 one-time income and November 20 recurring income, and never moves the chosen starting date to November 20. For November 1–30 and zero reserve allocations, **Left to Spend = $900 + $1,500 − $120 = $2,280**. This is a period projection, **not** proof the user had enough in an account to pay $120 on November 2. If the user changes the start to November 5 while keeping November 30 as end, the November 2 bill and November 4 receipt are outside this period; **period Left to Spend = $1,500**, with opening resources not inferred from earlier events. The app may show earlier events in a separate history view, but must not silently extend the chosen period.
+
+**Current divergence:** `src/domain/forecast.ts` derives `forecastStart` from `nextExpectedPayday`, filters starts to eligible recurring income, and excludes one-time income as an anchor. Correct the behavior only in the later authorized implementation phase, with timing and historical regression tests.
+
 ## Test acceptance translation for C1–C6
 
-1. **C1:** Fixture cases C0-01 through C0-03 and C0-11, plus persistence/RLS and historical comparison, must pass without an Expected/Possible gate.
+1. **C1:** Fixture cases C0-01 through C0-03, C0-11 and C0-12, plus persistence/RLS and historical comparison, must pass without an Expected/Possible gate or forced payday-based forecast start.
 2. **C2:** C0-10 must pass on a narrow phone viewport, keyboard navigation and live Vercel preview, retaining skip/review.
-3. **C3:** C0-04 through C0-09 must be covered by one canonical engine with no double counting. Verify labels and number basis in preview.
+3. **C3:** C0-04 through C0-09 and C0-12 must be covered by one canonical engine using **Income − (Expenses + net Strategic Reserves)**, counting both recurring and one-time transactions within the user-selected period, with no double counting. Verify labels and numbers in preview.
 4. **C4:** C0-04 recurring aggregation plus actual liability progress backed by verified data; no invented payoff mathematics.
 5. **C5:** Copy and default-form review across Home, Plan, Forecast, Activity, Settings and setup.
 6. **C6:** Run integrated hosted flows (save, reload, sign out/in, cross-user isolation, recordings, reserves, transfers, changing recurrence) and obtain owner acceptance.
@@ -118,14 +127,14 @@ For a period containing both recorded income +$1,250 and a separate future incom
 
 ## Decisions held for explicit review (do not silently invent answers)
 
-**D1 — Left to Spend basis:** Determine whether it means (A) net available change within the selected period, or (B) remaining projected spending capacity as of a selected date using an explicitly known starting amount and all relevant prior events. These are not equivalent. The owner's intent is “what is left after recurring expenses and reserves,” but no automatic bank-balance claim is authorized.
+**D1 — RESOLVED by owner:** Left to Spend = **Income − (Expenses + net Strategic Reserves)** for the selected forecast period. Both Income and Expenses include recurring and one-time transactions. No category entry for Left to Spend. This projected result is not an actual bank balance.
 
-**D2 — Default timeframe:** Choose the default home period and carry behavior in a separate UI acceptance review. Examples use monthly fixtures only for easy arithmetic, not as an approved monthly-only feature.
+**D2 — Display period:** The user controls forecast start. A reasonable initial end-date horizon, default Home interval and navigation are still interface decisions; the example's monthly span is for arithmetic only. No default may override the user's chosen start.
 
 **D3 — One-time expense workflow:** The user wants one-time expense entry without a sixth onboarding section; choose the simplest placement after inspecting actual Home/Plan/Activity flows. Do not treat the underlying stored `varied` identifier as a product classification decision.
 
 **D4 — Recorded comparison retention:** Verify which original projected amount/date versions survive schedule edits, skipped/canceled occurrences and record corrections; if necessary, a narrow history-design spec is required before code changes.
 
-**D5 — Timeline anchoring:** The current next-recurring-payday anchor affects timing and one-time-only projections. Do not alter it without explicit product review and fixtures proving timing semantics.
+**D5 — RESOLVED by owner:** The **user selects the forecast starting date**; the app does not force a next-payday or first-income anchor. C1/C3 must test arbitrary user-selected starts, including dates before any income, with irregular and one-time income. The selected period's end/display range and the optional opening balance basis remain implementation details to specify without overturning this rule.
 
 **Release gate:** C0 approval means acceptance of examples and terminology, not approval to implement C1–C6 automatically. Each checkpoint needs its own reviewed Claude instructions and live owner acceptance.
