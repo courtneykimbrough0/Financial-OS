@@ -2,7 +2,7 @@
 
 The PostgreSQL storage for Financial OS, the storage adapter that uses it, and a development-only way to run the app on it. **The app itself still saves on the device or to Firebase.** Only a build in the `supabase-dev` mode uses Supabase, and only a local stack (see Development). Nothing here has been applied to a hosted Supabase project; the tests run against a throwaway local PostgreSQL and a local Supabase stack.
 
-- Migrations: `supabase/migrations/` (apply in file-name order).
+- Migrations: `supabase/migrations/` (apply in file-name order). Today there is one, `20261022100000_baseline.sql` (roadmap F3), which builds the whole schema. It replaced the nine development migrations, which no hosted database ever ran; a fresh database built from it was checked identical to one built from the nine (tables, constraints, indexes, policies, function bodies and every grant, compared with `pg_dump`). Later changes are new migrations after it.
 - Mapping between the app and the tables: `src/state/supabase/rows.ts`.
 - Storage adapter: `src/state/supabase/adapter.ts` (see Adapter).
 - Tests: `src/state/supabase/__tests__/` (`rows.test.ts` and `adapter.test.ts` run in `npm test`; `*.db.test.ts` in `npm run test:db`; `*.supabase.test.ts` in `npm run test:supabase`).
@@ -35,17 +35,17 @@ auth.users 1─1 workspaces 1─* sources 1─* schedule_versions
   - recurrence-rule shapes (`validateRule`);
   - an actual exists exactly when an occurrence is completed;
   - a cancel time exists exactly when it's canceled;
-  - recurring items are income, bills, subscriptions, liabilities or reserves; one-time items are income, varied spending or reserves (migration `20261018000002`);
+  - recurring items are income, bills, subscriptions, liabilities or reserves; one-time items are income, varied spending or reserves;
   - `main_paycheck` is always `false` (column retained for schema compatibility; the concept was removed in Phase R1);
   - a liability type only on liability payments;
   - estimate dismissals are complete or absent;
   - an item that's on has no end date;
-  - `certainty` is null (expected) or `'possible'`, only on income items and one-time income, never on a recurring occurrence, which follows its item (migration `20261022000001_income_certainty.sql`, which also redefines `load_plan` and `save_plan` to carry the column and changes nothing else in them);
+  - `certainty` is null (expected) or `'possible'`, only on income items and one-time income, never on a recurring occurrence, which follows its item;
   - `income_type` is null (a fixed amount) or `'hourly'`/`'tipped'`, only on income; `hourly_wage_cents` only with a type, above $0;
-  - shifts (`work_entries`, migration `20261022000002_hourly_and_tipped_income.sql`): kind `'shift'`, minutes 1–1440, every amount above $0 when present, hours or tips required, foreign keys to the item, the cash-tips record and the paycheck that paid it, one shift per tips record. Row-level security and grants follow the other tables;
-  - gig work (migration `20261022000004_gig_income.sql`): `income_type` may be `'gig'`, which never has a wage; `work_entries.kind` is `'shift'` or `'session'`, with `earnings_cents` (above $0) and `platform` (1–40 characters) only on sessions, wage and card tips only on shifts; a session needs earnings or cash, a shift hours or tips. `save_plan` refuses shifts on gig income and sessions on other income;
-  - accounts and transfers (migration `20261022000005_accounts_and_transfers.sql`): an account's name is 1–60 characters, its type `income`, `distribution` or `payment`, and an opening balance is an amount (at most $100,000,000 either way) and a date together or neither; a transfer joins two different accounts, with an amount above $0, a date, and `expected` or `recorded` (a recorded time exactly when recorded). `account_id` on items and records points at an account in the same workspace and must suit the kind (income → income, Strategic Reserves → distribution, everything else → payment; checked by `save_plan`); a recurring occurrence carries one only once recorded. `release` is true only on a one-time Strategic Reserves record. Account references are checked when the transaction commits, so a save may replace accounts and the items that name them in any order;
-  - freelance work (migration `20261022000003_freelance_income.sql`): `clients` (a name of 1–60 characters) and `freelance_jobs` (description, amount above $0, work `planned` or `done`, an optional client, and an optional payment record, one job per record). A job's payment must be a one-time income record that no shift uses (checked by `save_plan`).
+  - shifts (`work_entries`): kind `'shift'`, minutes 1–1440, every amount above $0 when present, hours or tips required, foreign keys to the item, the cash-tips record and the paycheck that paid it, one shift per tips record. Row-level security and grants follow the other tables;
+  - gig work: `income_type` may be `'gig'`, which never has a wage; `work_entries.kind` is `'shift'` or `'session'`, with `earnings_cents` (above $0) and `platform` (1–40 characters) only on sessions, wage and card tips only on shifts; a session needs earnings or cash, a shift hours or tips. `save_plan` refuses shifts on gig income and sessions on other income;
+  - accounts and transfers: an account's name is 1–60 characters, its type `income`, `distribution` or `payment`, and an opening balance is an amount (at most $100,000,000 either way) and a date together or neither; a transfer joins two different accounts, with an amount above $0, a date, and `expected` or `recorded` (a recorded time exactly when recorded). `account_id` on items and records points at an account in the same workspace and must suit the kind (income → income, Strategic Reserves → distribution, everything else → payment; checked by `save_plan`); a recurring occurrence carries one only once recorded. `release` is true only on a one-time Strategic Reserves record. Account references are checked when the transaction commits, so a save may replace accounts and the items that name them in any order;
+  - freelance work: `clients` (a name of 1–60 characters) and `freelance_jobs` (description, amount above $0, work `planned` or `done`, an optional client, and an optional payment record, one job per record). A job's payment must be a one-time income record that no shift uses (checked by `save_plan`).
 - **Kept, not checked:** records whose original date a later schedule no longer produces. The engine sets them aside and they count again if a schedule brings the date back. The database can't run the schedule, so it doesn't judge them.
 - **Not stored:** forecasts, timing gaps, suggestions, scenarios, sample data.
 - **Shifts in `save_plan`:** a save must include `work_entries` (a client that doesn't know them is refused rather than erasing them); shifts are written last and removed first, since they point at items and records; an ordinary save removes at most one shift. The same holds for `clients` and `jobs`: both required, written last, and at most one job and one client removed by an ordinary save; and for `accounts` and `transfers` (F1): both required, and at most one account and one transfer removed by an ordinary save.
@@ -65,7 +65,7 @@ All four run with `search_path = ''`, name every object by schema, and can be ca
   6. advances the revision once and records a receipt.
 
   Any error rolls everything back. Codes `PTxxx` become HTTP status `xxx` through Supabase's API.
-- **`delete_account()`** permanently deletes the caller's own account (migration `20261018000001_account_deletion.sql`). It takes no arguments, so it can't name another account. It requires:
+- **`delete_account()`** permanently deletes the caller's own account. It takes no arguments, so it can't name another account. It requires:
   - a signed-in caller (PT401);
   - a session that still exists in Supabase Auth (PT401), so a token from a session that signed out can't use it;
   - a password sign-in within the last 5 minutes (PT403). Supabase Auth checks the password and records the time in the token's `amr` claim, and refreshing a token keeps the original time.

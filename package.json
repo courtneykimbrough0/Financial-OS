@@ -19,6 +19,7 @@
     "e2e:production": "VITE_SUPABASE_URL=https://abcdefghijklmnopqrst.supabase.co VITE_SUPABASE_ANON_KEY=sb_publishable_placeholder_for_build_checks vite build --mode supabase-production --outDir dist-e2e-production && VITE_ACCOUNTS=off vite build --outDir dist-e2e && node scripts/e2e-production.mjs dist-e2e-production dist-e2e",
     "test:db": "node scripts/test-db.mjs",
     "test:supabase": "node scripts/test-supabase.mjs",
+    "test:hosted": "node scripts/test-hosted.mjs",
     "e2e:supabase": "node scripts/e2e-supabase.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-financial-os \"vitest run --config vitest.rules.config.ts\"",
     "start": "node server.mjs"

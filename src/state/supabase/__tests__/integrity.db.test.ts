@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { clockAt, source, unwrap, usd } from '../../../domain/__tests__/helpers';
 import { activityView, recordedEntries } from '../../../domain/activity';
@@ -156,31 +155,6 @@ describe('the six classifications', () => {
     const src = (kind: string) => savePlan(user, back.revision, { ...rows, sources: rows.sources.map((s) => (s.id === 'res' ? { ...s, kind } : s)) as never }, { mode: 'replace' });
     for (const kind of ['varied', 'savings']) expect(src(kind).code).toBe('23514');
     expect(load(user)).toEqual(back);
-  });
-
-  it('the classifications migration converts existing savings and one-time bill rows', () => {
-    const { user, data } = stored();
-    let d = source(data, TODAY, 'reserve', 'Emergency fund', 100, '2026-10-24', { type: 'biweekly' }, 'res');
-    d = unwrap(ops.addOneTime(d, { kind: 'varied', description: 'Repair', amountCents: usd(80), date: '2026-11-05' }, clock, 'one-rep'));
-    saveOk(user, d);
-    const ws = workspaceOf(user);
-    // Put the database back as it was before the migration, with rows of the retired kinds. The old checks
-    // skip existing rows (not valid) because other tests' workspaces in this database already use the new kinds.
-    const restore = sql('owner', `
-      alter table public.sources drop constraint sources_kind_check;
-      alter table public.occurrence_records drop constraint occurrence_records_kind_check;
-      alter table public.occurrence_records drop constraint occurrence_records_one_time_kind;
-      update public.sources set kind = 'savings' where workspace_id = '${ws}' and id = 'res';
-      update public.occurrence_records set kind = 'bill' where workspace_id = '${ws}' and id = 'one-rep';
-      alter table public.sources add constraint sources_kind_check check (kind in ('income', 'bill', 'subscription', 'liability', 'savings')) not valid;
-      alter table public.occurrence_records add constraint occurrence_records_kind_check check (kind in ('income', 'bill', 'subscription', 'liability', 'savings')) not valid;
-      alter table public.occurrence_records add constraint occurrence_records_one_time_kind check (source_id is not null or kind in ('income', 'bill', 'savings')) not valid;`);
-    expect([restore.ok, restore.message ?? null]).toEqual([true, null]);
-    const migrated = sql('owner', readFileSync(new URL('../../../../supabase/migrations/20261018000002_financial_classifications.sql', import.meta.url), 'utf8'));
-    expect([migrated.ok, migrated.message ?? null]).toEqual([true, null]);
-    const back = load(user);
-    expect(back.sources.find((s) => s.id === 'res')!.kind).toBe('reserve');
-    expect(back.records.find((r) => r.id === 'one-rep')!.kind).toBe('varied');
   });
 });
 

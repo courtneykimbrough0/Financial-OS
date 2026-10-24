@@ -18,7 +18,9 @@
 // confirmation or recovery email: from the local stack's email-testing server,
 // or for a hosted project from its test outbox (SUPABASE_TEST_OUTBOX_SECRET,
 // supabase/hosted-test/test-outbox.sql) or a Mailpit-compatible API
-// (SUPABASE_TEST_MAIL_URL). A hosted run with neither is refused.
+// (SUPABASE_TEST_MAIL_URL). A hosted run with neither is refused, except the
+// focused hosted verification (`npm run test:hosted`), which reads no email: its
+// disposable identities are created confirmed (docs/SUPABASE-HOSTED.md).
 import { readFileSync } from 'node:fs';
 
 const LOOPBACK = ['127.0.0.1', 'localhost', '[::1]'];
@@ -49,8 +51,9 @@ export function keyRole(key) {
 /**
  * The checks that need no network: returns { ok: true, target } or { ok: false, error }.
  * `env` is process.env; `approved` is the list of approved project refs.
+ * `needsMail: false` is for the focused hosted verification, which reads no email.
  */
-export function checkTarget(env, approved) {
+export function checkTarget(env, approved, { needsMail = true } = {}) {
   const target = env.SUPABASE_TEST_TARGET ?? 'local';
   const key = env.SUPABASE_TEST_ANON_KEY ?? '';
   const { role, ref: keyRef } = keyRole(key);
@@ -82,7 +85,7 @@ export function checkTarget(env, approved) {
   const mailUrl = env.SUPABASE_TEST_MAIL_URL || null;
   if (mailUrl && !hostOf(mailUrl)) return { ok: false, error: "SUPABASE_TEST_MAIL_URL isn't a valid address." };
   const outboxSecret = env.SUPABASE_TEST_OUTBOX_SECRET || null;
-  if (!mailUrl && !outboxSecret) {
+  if (needsMail && !mailUrl && !outboxSecret) {
     return { ok: false, error: 'Email confirmation stays on, so a hosted run needs to read confirmation emails: set SUPABASE_TEST_OUTBOX_SECRET (supabase/hosted-test/test-outbox.sql) or SUPABASE_TEST_MAIL_URL.' };
   }
   return { ok: true, target: { kind: 'hosted', url, key, mailUrl, ref, outboxSecret } };
@@ -95,12 +98,12 @@ export function approvedProjects(path = new URL('../supabase/hosted-test/project
 }
 
 /** Checks the target, then that it answers (and, for a hosted project, that it is marked as that test project). */
-export async function supabaseTarget(env = process.env) {
+export async function supabaseTarget(env = process.env, { needsMail = true } = {}) {
   const fail = (message) => {
     console.error(message);
     process.exit(2);
   };
-  const checked = checkTarget(env, approvedProjects());
+  const checked = checkTarget(env, approvedProjects(), { needsMail });
   if (!checked.ok) fail(checked.error);
   const t = checked.target;
   try {

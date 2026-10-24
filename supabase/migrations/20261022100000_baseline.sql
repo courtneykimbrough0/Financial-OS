@@ -1,23 +1,49 @@
--- Financial OS: accounts, transfers and Strategic Reserves (roadmap Phase F, checkpoint F1, AC-S).
+-- Financial OS: the whole database, as one baseline (roadmap Phase F, F3).
 --
--- Accounts are where money is received, held and spent (income, distribution
--- or payment), with an optional opening balance. A transfer moves money
--- between two of a person's accounts, expected or recorded; it is never income
--- or spending. Recurring items and one-time records may name the account they
--- belong to (only an account whose type suits their kind; a recurring
--- occurrence carries one only once recorded), and a one-time Strategic
--- Reserves record may be a release, which returns money to available cash
--- flow. The forecast reads none of this except the release.
+-- Replaces the nine development migrations (20261016000001 to
+-- 20261022000005), which built the same schema step by step. No hosted
+-- database ever ran them and there is no data to carry over, so a fresh
+-- project applies this one file. The schema is identical to what the nine
+-- produced (checked by comparing database dumps; see docs/SUPABASE.md).
+-- Later changes are new migrations after this one.
 --
--- No existing row changes meaning (every new column is empty or false).
--- load_plan and save_plan are redefined only to carry the new tables and
--- columns, to require `accounts` and `transfers` in a save, to check that
--- every reference points into the plan and every assignment suits its kind,
--- and to let an ordinary save remove at most one account and one transfer.
--- Every other check is unchanged (compare with 20261022000004_gig_income.sql).
--- Account references are checked when the transaction commits, so a save can
--- replace accounts and the items that name them in any order.
+-- Tables (see docs/SUPABASE.md):
+--   workspaces          one plan per person: revision, onboarding (the review
+--                       columns are retired and stay unused)
+--   sources             recurring items (RecurringSource)
+--   schedule_versions   their dated amounts and recurrence rules
+--   source_pauses       stretches an item was turned off (pausedRanges)
+--   occurrence_records  one-time items and acted-on recurring occurrences
+--   work_entries        shifts and gig sessions (Phase E)
+--   clients, freelance_jobs   freelance work (Phase E)
+--   accounts, transfers       financial accounts and money moved between them
+--   save_receipts       persistence only: makes retried saves answerable
+--
+-- Forecasts are never stored: the TypeScript engine derives them. Money is
+-- integer cents (bigint); financial dates are `date`; audit times are
+-- timestamptz. Every child row carries workspace_id and every foreign key
+-- includes it, so no row can point into another workspace. Clients can only
+-- read their own rows (row-level security) and write only through save_plan.
 
+create table public.workspaces (
+  id uuid primary key default gen_random_uuid(),
+  -- One plan per person for now. Sharing later adds a membership table and
+  -- changes the access policies; rows don't move.
+  owner_id uuid not null unique references auth.users (id) on delete cascade,
+  revision bigint not null default 0 check (revision >= 0),
+  schema_version smallint not null default 2 check (schema_version = 2),
+  onboarding_complete boolean not null default false,
+  -- Retired (review rhythm removed in H2): always null.
+  review_cadence text check (review_cadence in ('off', 'weekly', 'payday', 'monthly')),
+  review_handled_on date,
+  review_outcome text check (review_outcome in ('completed', 'skipped')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint workspaces_review_needs_cadence check (review_cadence is not null or (review_handled_on is null and review_outcome is null)),
+  constraint workspaces_review_outcome_needs_date check (review_outcome is null or review_handled_on is not null)
+);
+
+-- Financial accounts: where money is received, held and spent.
 create table public.accounts (
   workspace_id uuid not null references public.workspaces (id) on delete cascade,
   id text not null check (length(id) between 1 and 200),
@@ -32,6 +58,201 @@ create table public.accounts (
   -- An opening balance is an amount on a date, or nothing.
   constraint accounts_opening_whole check ((opening_amount_cents is null) = (opening_date is null))
 );
+
+create table public.sources (
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  -- The app's own id. Recurring occurrence ids are derived as <id>@<date>,
+  -- so an id can't contain '@'.
+  id text not null check (length(id) between 1 and 200 and position('@' in id) = 0),
+  position integer not null check (position >= 0),
+  kind text not null check (kind in ('income', 'bill', 'subscription', 'liability', 'reserve')),
+  description text not null check (btrim(description) <> '' and length(description) <= 200),
+  tags text[] not null default '{}' check (cardinality(tags) <= 10),
+  liability_type text check (liability_type in ('card', 'loan', 'lineOfCredit')),
+  -- Retired (main paycheck removed in R1): always false.
+  main_paycheck boolean not null default false,
+  active boolean not null,
+  end_date date,
+  -- estimateDismissal: all three fields or none.
+  dismissed_current_cents bigint check (dismissed_current_cents > 0 and dismissed_current_cents <= 10000000000),
+  dismissed_proposed_cents bigint check (dismissed_proposed_cents > 0 and dismissed_proposed_cents <= 10000000000),
+  dismissed_through date,
+  -- 'possible' on possible income; null means expected.
+  certainty text,
+  income_type text,
+  hourly_wage_cents bigint,
+  -- Checked when the transaction commits, so a save can replace accounts and the items naming them in any order.
+  account_id text,
+  created_at timestamptz not null,
+  updated_at timestamptz not null,
+  primary key (workspace_id, id),
+  constraint sources_account foreign key (workspace_id, account_id) references public.accounts (workspace_id, id) deferrable initially deferred,
+  constraint sources_liability_type_only_on_liabilities check (liability_type is null or kind = 'liability'),
+  constraint sources_main_paycheck_only_on_income check (not main_paycheck or kind = 'income'),
+  constraint sources_active_has_no_end check (not (active and end_date is not null)),
+  constraint sources_dismissal_complete check (
+    (dismissed_current_cents is null) = (dismissed_proposed_cents is null)
+    and (dismissed_current_cents is null) = (dismissed_through is null)
+  ),
+  constraint sources_certainty_possible_income check (certainty is null or (certainty = 'possible' and kind = 'income')),
+  constraint sources_income_type_values check (income_type is null or (income_type in ('hourly', 'tipped', 'gig') and kind = 'income')),
+  constraint sources_hourly_wage check (hourly_wage_cents is null or (income_type is not null and income_type in ('hourly', 'tipped') and hourly_wage_cents > 0 and hourly_wage_cents <= 10000000000))
+);
+create unique index sources_one_main_paycheck on public.sources (workspace_id) where main_paycheck;
+
+create table public.schedule_versions (
+  workspace_id uuid not null,
+  source_id text not null,
+  id text not null check (length(id) between 1 and 200),
+  start_date date not null,
+  amount_cents bigint not null check (amount_cents > 0 and amount_cents <= 10000000000),
+  rule_type text not null check (rule_type in ('weekly', 'biweekly', 'monthly', 'twiceMonthly', 'custom')),
+  rule_days smallint[],
+  rule_interval integer,
+  rule_unit text check (rule_unit in ('day', 'week', 'month')),
+  primary key (workspace_id, id),
+  -- The engine treats each version as covering its start date up to the next.
+  unique (workspace_id, source_id, start_date),
+  foreign key (workspace_id, source_id) references public.sources (workspace_id, id) on delete cascade,
+  -- The same rules as validateRule.
+  constraint schedule_versions_rule_shape check (
+    case rule_type
+      when 'twiceMonthly' then rule_days is not null and cardinality(rule_days) = 2
+        and rule_days[1] between 1 and 31 and rule_days[2] between 1 and 31 and rule_days[1] <> rule_days[2]
+        and rule_interval is null and rule_unit is null
+      when 'custom' then rule_days is null and rule_interval between 1 and 365 and rule_unit is not null
+      else rule_days is null and rule_interval is null and rule_unit is null
+    end
+  )
+);
+
+create table public.source_pauses (
+  workspace_id uuid not null,
+  source_id text not null,
+  from_date date not null,
+  until_date date not null,
+  primary key (workspace_id, source_id, from_date),
+  foreign key (workspace_id, source_id) references public.sources (workspace_id, id) on delete cascade,
+  constraint source_pauses_ordered check (until_date > from_date)
+);
+
+create table public.occurrence_records (
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  id text not null check (length(id) between 1 and 300),
+  position integer not null check (position >= 0),
+  -- Null for a one-time item.
+  source_id text,
+  -- Copies taken when the record was created; a later rename of the source
+  -- doesn't change them.
+  kind text not null,
+  description text not null check (btrim(description) <> '' and length(description) <= 200),
+  tags text[] not null default '{}' check (cardinality(tags) <= 10),
+  -- The original prediction (never changed by ordinary saves; see save_plan),
+  expected_date date not null,
+  expected_amount_cents bigint not null check (expected_amount_cents > 0 and expected_amount_cents <= 10000000000),
+  -- the current expectation,
+  scheduled_date date not null,
+  scheduled_amount_cents bigint not null check (scheduled_amount_cents > 0 and scheduled_amount_cents <= 10000000000),
+  status text not null check (status in ('scheduled', 'completed', 'canceled')),
+  -- and what actually happened.
+  actual_date date,
+  actual_amount_cents bigint check (actual_amount_cents > 0 and actual_amount_cents <= 10000000000),
+  completed_at timestamptz,
+  canceled_at timestamptz,
+  cancel_note text check (length(cancel_note) <= 500),
+  -- 'possible' on possible one-time income; null otherwise.
+  certainty text,
+  account_id text,
+  -- A one-time Strategic Reserves record that returns money to available cash flow.
+  release boolean not null default false,
+  created_at timestamptz not null,
+  updated_at timestamptz not null,
+  primary key (workspace_id, id),
+  -- A source with recorded history can't be deleted (deleteSource).
+  foreign key (workspace_id, source_id) references public.sources (workspace_id, id) on delete restrict,
+  constraint records_account foreign key (workspace_id, account_id) references public.accounts (workspace_id, id) deferrable initially deferred,
+  constraint occurrence_records_kind_check check (kind in ('income', 'bill', 'subscription', 'liability', 'reserve', 'varied')),
+  -- A recurring record is the occurrence of its source on its original date.
+  constraint occurrence_records_recurring_id check (source_id is null or id = source_id || '@' || to_char(expected_date, 'YYYY-MM-DD')),
+  -- One-time items are income, varied spending or reserves; varied spending is never recurring.
+  constraint occurrence_records_one_time_kind check (case when source_id is null then kind in ('income', 'varied', 'reserve') else kind <> 'varied' end),
+  -- An actual exists exactly when the occurrence is completed.
+  constraint occurrence_records_actual_iff_completed check (
+    (status = 'completed') = (actual_date is not null)
+    and (status = 'completed') = (actual_amount_cents is not null)
+  ),
+  constraint occurrence_records_canceled_at check ((status = 'canceled') = (canceled_at is not null)),
+  constraint occurrence_records_note_only_when_canceled check (cancel_note is null or status = 'canceled'),
+  constraint occurrence_records_certainty_possible_one_time_income check (certainty is null or (certainty = 'possible' and kind = 'income' and source_id is null)),
+  -- A recurring occurrence follows its item's account until it is recorded.
+  constraint records_account_when check (account_id is null or source_id is null or status = 'completed'),
+  -- Only a one-time Strategic Reserves record can be a release.
+  constraint records_release_where check (not release or (source_id is null and kind = 'reserve'))
+);
+-- One record per occurrence of a source. Records whose original date a later
+-- schedule no longer produces are kept (the engine sets them aside).
+create unique index occurrence_records_one_per_occurrence on public.occurrence_records (workspace_id, source_id, expected_date) where source_id is not null;
+
+-- Shifts (hourly and tipped income) and sessions (gig income): earnings, never money received.
+create table public.work_entries (
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  id text not null check (length(id) between 1 and 200),
+  position integer not null check (position >= 0),
+  source_id text not null,
+  kind text not null,
+  work_date date not null,
+  minutes integer check (minutes between 1 and 1440),
+  wage_cents bigint check (wage_cents > 0 and wage_cents <= 10000000000),
+  cash_tips_cents bigint check (cash_tips_cents > 0 and cash_tips_cents <= 10000000000),
+  card_tips_cents bigint check (card_tips_cents > 0 and card_tips_cents <= 10000000000),
+  earnings_cents bigint check (earnings_cents > 0 and earnings_cents <= 10000000000),
+  platform text check (btrim(platform) <> '' and length(platform) <= 40),
+  -- The received one-time income record for the cash, and the recorded paycheck or payout that paid the rest.
+  cash_tips_record_id text,
+  paid_by_occurrence_id text,
+  created_at timestamptz not null,
+  updated_at timestamptz not null,
+  primary key (workspace_id, id),
+  foreign key (workspace_id, source_id) references public.sources (workspace_id, id) on delete restrict,
+  foreign key (workspace_id, cash_tips_record_id) references public.occurrence_records (workspace_id, id) on delete restrict,
+  foreign key (workspace_id, paid_by_occurrence_id) references public.occurrence_records (workspace_id, id) on delete restrict,
+  constraint work_entries_kind_check check (kind in ('shift', 'session')),
+  constraint work_entries_tips_record_needs_tips check (cash_tips_record_id is null or cash_tips_cents is not null),
+  constraint work_entries_fields_by_kind check (
+    case when kind = 'shift'
+      then earnings_cents is null and platform is null and (minutes is not null or cash_tips_cents is not null or card_tips_cents is not null)
+      else wage_cents is null and card_tips_cents is null and (earnings_cents is not null or cash_tips_cents is not null)
+    end)
+);
+create unique index work_entries_one_per_tips_record on public.work_entries (workspace_id, cash_tips_record_id) where cash_tips_record_id is not null;
+
+create table public.clients (
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  id text not null check (length(id) between 1 and 200),
+  position integer not null check (position >= 0),
+  name text not null check (btrim(name) <> '' and length(name) <= 60),
+  created_at timestamptz not null,
+  updated_at timestamptz not null,
+  primary key (workspace_id, id)
+);
+
+create table public.freelance_jobs (
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  id text not null check (length(id) between 1 and 200),
+  position integer not null check (position >= 0),
+  client_id text,
+  description text not null check (btrim(description) <> '' and length(description) <= 200),
+  amount_cents bigint not null check (amount_cents > 0 and amount_cents <= 10000000000),
+  status text not null check (status in ('planned', 'done')),
+  payment_record_id text,
+  created_at timestamptz not null,
+  updated_at timestamptz not null,
+  primary key (workspace_id, id),
+  foreign key (workspace_id, client_id) references public.clients (workspace_id, id) on delete restrict,
+  foreign key (workspace_id, payment_record_id) references public.occurrence_records (workspace_id, id) on delete restrict
+);
+-- One job per payment record, so a payment is never attached twice.
+create unique index freelance_jobs_one_per_payment on public.freelance_jobs (workspace_id, payment_record_id) where payment_record_id is not null;
 
 create table public.transfers (
   workspace_id uuid not null references public.workspaces (id) on delete cascade,
@@ -52,23 +273,70 @@ create table public.transfers (
   foreign key (workspace_id, to_account_id) references public.accounts (workspace_id, id) deferrable initially deferred
 );
 
-alter table public.sources
-  add column account_id text,
-  add constraint sources_account foreign key (workspace_id, account_id) references public.accounts (workspace_id, id) deferrable initially deferred;
+-- Persistence only: one row per accepted save, so a retried request (after a
+-- timeout, say) can be told definitively whether it was applied. Not
+-- financial data; never readable by clients.
+create table public.save_receipts (
+  workspace_id uuid not null references public.workspaces (id) on delete cascade,
+  save_id uuid not null,
+  mode text not null check (mode in ('update', 'replace', 'reset')),
+  base_revision bigint not null,
+  fingerprint text not null,
+  result_revision bigint not null,
+  created_at timestamptz not null default now(),
+  primary key (workspace_id, save_id)
+);
 
-alter table public.occurrence_records
-  add column account_id text,
-  add column release boolean not null default false,
-  add constraint records_account foreign key (workspace_id, account_id) references public.accounts (workspace_id, id) deferrable initially deferred,
-  -- A recurring occurrence follows its item's account until it is recorded.
-  add constraint records_account_when check (account_id is null or source_id is null or status = 'completed'),
-  -- Only a one-time Strategic Reserves record can be a release.
-  add constraint records_release_where check (not release or (source_id is null and kind = 'reserve'));
-
+-- ---------------------------------------------------------------------------
+-- Row-level security
+--
+-- Clients (role `authenticated`) may only SELECT their own workspace's rows.
+-- They can't write any table directly; every write goes through save_plan,
+-- which checks the caller owns the workspace, checks the revision, validates
+-- the plan and applies it in one transaction. `anon` (no signed-in user) gets
+-- nothing. Supabase grants table and function privileges to anon and
+-- authenticated by default, so they're revoked here explicitly.
+-- ---------------------------------------------------------------------------
+alter table public.workspaces enable row level security;
+alter table public.sources enable row level security;
+alter table public.schedule_versions enable row level security;
+alter table public.source_pauses enable row level security;
+alter table public.occurrence_records enable row level security;
+alter table public.work_entries enable row level security;
+alter table public.clients enable row level security;
+alter table public.freelance_jobs enable row level security;
 alter table public.accounts enable row level security;
 alter table public.transfers enable row level security;
-revoke all on table public.accounts, public.transfers from public, anon, authenticated;
-grant select on table public.accounts, public.transfers to authenticated;
+alter table public.save_receipts enable row level security;
+revoke all on table public.workspaces, public.sources, public.schedule_versions, public.source_pauses, public.occurrence_records, public.work_entries, public.clients, public.freelance_jobs, public.accounts, public.transfers, public.save_receipts
+  from public, anon, authenticated;
+grant select on table public.workspaces, public.sources, public.schedule_versions, public.source_pauses, public.occurrence_records, public.work_entries, public.clients, public.freelance_jobs, public.accounts, public.transfers
+  to authenticated;
+-- save_receipts: no grants and no policies, so clients can never see it.
+create policy workspaces_owner_reads on public.workspaces
+  for select to authenticated
+  using (owner_id = (select auth.uid()));
+create policy sources_owner_reads on public.sources
+  for select to authenticated
+  using (exists (select 1 from public.workspaces w where w.id = workspace_id and w.owner_id = (select auth.uid())));
+create policy schedule_versions_owner_reads on public.schedule_versions
+  for select to authenticated
+  using (exists (select 1 from public.workspaces w where w.id = workspace_id and w.owner_id = (select auth.uid())));
+create policy source_pauses_owner_reads on public.source_pauses
+  for select to authenticated
+  using (exists (select 1 from public.workspaces w where w.id = workspace_id and w.owner_id = (select auth.uid())));
+create policy occurrence_records_owner_reads on public.occurrence_records
+  for select to authenticated
+  using (exists (select 1 from public.workspaces w where w.id = workspace_id and w.owner_id = (select auth.uid())));
+create policy work_entries_owner_reads on public.work_entries
+  for select to authenticated
+  using (exists (select 1 from public.workspaces w where w.id = workspace_id and w.owner_id = (select auth.uid())));
+create policy clients_owner_reads on public.clients
+  for select to authenticated
+  using (exists (select 1 from public.workspaces w where w.id = workspace_id and w.owner_id = (select auth.uid())));
+create policy freelance_jobs_owner_reads on public.freelance_jobs
+  for select to authenticated
+  using (exists (select 1 from public.workspaces w where w.id = workspace_id and w.owner_id = (select auth.uid())));
 create policy accounts_owner_reads on public.accounts
   for select to authenticated
   using (exists (select 1 from public.workspaces w where w.id = workspace_id and w.owner_id = (select auth.uid())));
@@ -76,7 +344,38 @@ create policy transfers_owner_reads on public.transfers
   for select to authenticated
   using (exists (select 1 from public.workspaces w where w.id = workspace_id and w.owner_id = (select auth.uid())));
 
-create or replace function public.load_plan() returns jsonb
+-- ---------------------------------------------------------------------------
+-- create_workspace(): the caller's workspace, created on first use. The owner
+-- is always the signed-in caller; there is no way to name another.
+-- ---------------------------------------------------------------------------
+
+create function public.create_workspace() returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_id uuid;
+begin
+  if v_uid is null then
+    raise exception 'Sign in to save your plan.' using errcode = 'PT401';
+  end if;
+  insert into public.workspaces (owner_id) values (v_uid) on conflict (owner_id) do nothing;
+  select w.id into v_id from public.workspaces w where w.owner_id = v_uid;
+  return v_id;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- load_plan(): the caller's whole plan as one JSON value, read in a single
+-- statement (one consistent snapshot). Runs as the caller, so row-level
+-- security applies. Null when the caller has no workspace yet.
+-- Dates come back as YYYY-MM-DD and times as ISO-8601 UTC with milliseconds,
+-- whatever the session's DateStyle or time zone.
+-- ---------------------------------------------------------------------------
+
+create function public.load_plan() returns jsonb
 language sql
 stable
 security invoker
@@ -173,7 +472,37 @@ as $$
   where w.owner_id = (select auth.uid());
 $$;
 
-create or replace function public.save_plan(p_base_revision bigint, p_save_id uuid, p_mode text, p_plan jsonb) returns jsonb
+-- ---------------------------------------------------------------------------
+-- save_plan(base_revision, save_id, mode, plan): the whole plan, applied in
+-- one transaction as revision base_revision + 1.
+--
+-- mode:
+--   'update'  an ordinary change. Only changes the app's own operations can
+--             make are accepted: at most one item or one one-time entry
+--             removed per save, never an item with recorded history, never an
+--             original prediction or an existing schedule version rewritten,
+--             never back to setup. So an empty or truncated plan can't erase
+--             a populated one by accident.
+--   'replace' restore from a backup: the whole plan is replaced (destructive).
+--   'reset'   start over: the plan must be empty and back in setup.
+-- The database can't know the person confirmed a replace or reset; the app
+-- asks for confirmation and offers a backup first. What the database
+-- guarantees is that only the owner can do it, only against the revision
+-- they were shown, only with a valid plan, and only when asked for by name.
+--
+-- Retries: the response to a save can be lost (a timeout doesn't prove
+-- failure). Calling again with the same save_id and the same request returns
+-- the original result ('already_saved') without applying anything twice, even
+-- after later saves. The same save_id with different data is refused. Without
+-- a receipt (unknown id, or older than the 30-day / 100-save retention), a
+-- stale retry is a conflict and changes nothing.
+--
+-- Errors (SQLSTATE): PT401 not signed in, PT404 no workspace, PT409 the plan
+-- changed since base_revision, PT422 the request isn't valid. Any failure
+-- rolls back everything, including the receipt.
+-- ---------------------------------------------------------------------------
+
+create function public.save_plan(p_base_revision bigint, p_save_id uuid, p_mode text, p_plan jsonb) returns jsonb
 language plpgsql
 security definer
 set search_path = ''
@@ -500,3 +829,72 @@ begin
   return jsonb_build_object('status', 'saved', 'revision', v_revision, 'current_revision', v_revision);
 end;
 $$;
+
+-- ---------------------------------------------------------------------------
+-- delete_account() permanently deletes the signed-in person's account and
+-- everything in it. It takes no arguments: it can only ever delete the caller.
+-- Before deleting it requires:
+--   1. a signed-in caller (role authenticated, a user id in the token);
+--   2. a session that still exists, so a token from a session that has signed
+--      out can't be used;
+--   3. a password sign-in within the last 5 minutes. Supabase Auth checks the
+--      password and records when in the token's `amr` claim; the app asks for
+--      the password again right before calling this. A refreshed token keeps
+--      the original sign-in time, so an old session can't delete.
+--
+-- Deleting the auth.users row removes, through foreign keys with ON DELETE
+-- CASCADE: the person's identities, sessions and refresh tokens (Supabase
+-- Auth's tables), and the workspace, which removes its sources, schedule
+-- versions, pauses, occurrence records and save receipts.
+--
+-- An access token issued before the deletion still verifies until it expires
+-- (Supabase Auth tokens are self-contained), but it reaches nothing: every
+-- table's policy and every function look up the workspace by owner, and there
+-- is none; create_workspace can't make one for a user who no longer exists.
+-- ---------------------------------------------------------------------------
+create function public.delete_account() returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_user uuid := auth.uid();
+  v_claims jsonb := coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb;
+  v_session uuid;
+  v_password_at bigint;
+begin
+  if v_user is null then
+    raise exception 'Sign in to delete your account.' using errcode = 'PT401';
+  end if;
+
+  begin
+    v_session := nullif(v_claims ->> 'session_id', '')::uuid;
+  exception when invalid_text_representation then
+    v_session := null;
+  end;
+  if v_session is null or not exists (select 1 from auth.sessions s where s.id = v_session and s.user_id = v_user) then
+    raise exception 'Your session has ended. Sign in again to delete your account.' using errcode = 'PT401';
+  end if;
+
+  select max((a ->> 'timestamp')::bigint) into v_password_at
+  from jsonb_array_elements(case when jsonb_typeof(v_claims -> 'amr') = 'array' then v_claims -> 'amr' else '[]'::jsonb end) a
+  where a ->> 'method' = 'password';
+  if v_password_at is null or v_password_at < extract(epoch from now())::bigint - 300 then
+    raise exception 'Confirm your password to delete your account.' using errcode = 'PT403';
+  end if;
+
+  delete from auth.users where id = v_user;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Function privileges: signed-in callers only.
+-- ---------------------------------------------------------------------------
+revoke all on function public.create_workspace() from public, anon;
+revoke all on function public.load_plan() from public, anon;
+revoke all on function public.save_plan(bigint, uuid, text, jsonb) from public, anon;
+revoke all on function public.delete_account() from public, anon;
+grant execute on function public.create_workspace() to authenticated;
+grant execute on function public.load_plan() to authenticated;
+grant execute on function public.save_plan(bigint, uuid, text, jsonb) to authenticated;
+grant execute on function public.delete_account() to authenticated;

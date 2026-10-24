@@ -1,4 +1,9 @@
 {
   "$comment": "Hosted Supabase projects approved for Financial OS testing: disposable test infrastructure only, never production. Add a project by its 20-letter ref in a reviewed commit (see docs/SUPABASE-HOSTED.md). The browser build and the test runners refuse any project not listed here.",
-  "projects": []
+  "projects": [
+    {
+      "ref": "aymombliohuwbokpncdn",
+      "purpose": "Financial OS hosted tests (Financial OS 2, us-west-2, Free plan)"
+    }
+  ]
 }
