@@ -51,6 +51,58 @@ Use semantic tokens so visual consistency survives theme refinements. The existi
 
 The visual reference suggests polished restraint rather than brighter/saturated UI. Proposed token changes must be reviewed across Home, Forecast, Plan, Activity, onboarding and sheets together. Use one meaning per color with **text/icon/shape**, never color as the only status signal.
 
+## 4A. Mandatory layout composition and alignment quality gate
+
+**Design tokens alone do not establish a well-designed screen.** All Financial OS screens must meet measurable composition and alignment criteria before visual acceptance. The owner supplied October 24, 2026 screenshots of the live Forecast and Plan screens as **failure examples**: widely separated related controls, disconnected headings, misaligned action buttons, excessive unused space before meaningful content, and poorly balanced section composition. These layouts are **not approved baselines**.
+
+### Structural alignment
+
+- Each screen uses a coherent content grid with shared left and right edges. Headers, selector groups, primary cards, list groups, and related actions align to the same grid or a deliberately documented inset.
+- An element's location must reflect its relationship to adjacent content. Screen title, related controls, period selection, and main summary form legible groups; related objects must not look like isolated floating elements.
+- Controls of equal importance follow a consistent baseline, height, alignment and visual weight. Group actions together where space permits; use responsive wrap or deliberate stacking when necessary rather than unpredictable orphan buttons.
+- Avoid centering some headings and left-aligning associated actions without a purposeful reason. Prefer clear, consistent text and numeric alignment. Amounts align by their visual column and use tabular numerals.
+- Nested components do not stack their horizontal and vertical padding to create accidental large gutters or empty bands. Use explicit parent-owned spacing for group separation instead of independent margins on every child.
+
+### Vertical rhythm and information density
+
+- Define screen-level zones: app/navigation header, context and selection controls, primary content, supporting content, persistent navigation. Related elements should remain visually close, with major section breaks clearly larger than within-section gaps.
+- Use the established spacing scale intentionally. As an initial design guideline, **8–12px** separates tightly related labels/controls, **12–16px** separates items within one section, and **20–24px** separates major sections. Do not use arbitrary 40–100px gaps to compensate for missing grouping. These are starting guidelines, not excuses to override accessibility or text wrapping.
+- The first useful financial information or clear primary action should be visible promptly beneath the app chrome on a typical phone viewport. Do not consume the initial viewport with several disconnected navigation/control rows and decorative whitespace.
+- Reserve white/empty space to establish hierarchy, not to conceal missing layout decisions. An empty data state can be spacious, but must not displace a nearby action unnecessarily.
+- Remove unused or redundant headings, duplicated labels, and unnecessary wrappers when they harm composition. Preserve clear semantics and navigation.
+
+### Mobile action placement
+
+- Primary actions must be discoverable and clearly prioritized. If three sibling Add actions do not fit comfortably across a mobile row, organize them by task priority: one principal action with secondary options grouped in an accessible action menu or compact secondary row. Do not allow a tertiary button to float alone in an awkward position.
+- Segmented controls fit available width with predictable proportions and labels; if cramped, use a supported scroll or alternate accessible pattern rather than clipping or relying on tiny text.
+- Sticky bottom navigation and device safe areas must not overlap forms, cards or actions. A sheet or fixed action row must account for both browser chrome and safe-area insets.
+- Long descriptions and larger accessibility text must wrap without breaking the information hierarchy or overflowing screen bounds.
+
+### Specific acceptance: Forecast screen
+
+The date/context, scenario action, Month/Custom selection, displayed period heading, and forecast summary currently appear as **scattered vertical islands**. Recompose into a coherent, compact forecast header/control block. The financial summary follows naturally, and the calendar is positioned directly beneath the summary without a visually unexplained gap. Forecast period selection remains clear, and chosen forecast start is always respected.
+
+**Reject the layout** if there is still a succession of oversized gaps before the main financial summary or calendar, if buttons appear disconnected from the period they govern, or if changing period yields inconsistent spacing/label hierarchy.
+
+### Specific acceptance: Plan screen
+
+The top navigation pills, “Income” title and supporting description, and Add controls must form a structured content hierarchy. Currently, the Add recurring income, Add one-time, and Add job actions break into poorly composed rows with competing weight. Rework alignment and relative prominence using shared action-group components and responsive behavior. The transaction list should begin promptly after the entry controls; avoid excessive vertical space before the first useful item.
+
+**Reject the layout** if headings, descriptions and controls still sit on unrelated alignment axes; if a secondary action occupies a visually isolated line without justification; or if the screen makes the user scan excessive empty space to find their financial entries.
+
+### Required review artifacts and checks
+
+For each redesigned screen or significant component, the implementing agent must:
+
+1. Capture **before and after** narrow-phone viewport screenshots of the *real rendering* (not an invented mockup), including Forecast and Plan in representative populated and empty states.
+2. Inspect visual alignment, baseline consistency, horizontal gutters, button wrapping, grouping, calendar-to-summary composition, and sticky navigation overlap; explicitly report defects and remedies.
+3. Verify at least a narrow phone and a wider phone, plus desktop and increased text/zoom where applicable. No clipped labels, horizontal overflow, overlapping or unreachable interactive controls.
+4. Run functional, accessibility and financial regression checks; no interface/layout change may alter the underlying projections, recordings or user control.
+5. Present the live preview to the product owner for visual acceptance. **Passing CI or following design tokens is not sufficient to call the design complete.**
+
+**Failure rule:** A screen that meets typography and color tokens but has poor alignment, hierarchy, grouping or responsive composition **fails** the design checkpoint. Fix the composition before merging its experience-phase PR.
+
+
 ## 5. Reusable component language
 
 **Hero summary:** one lead number, a small contextual label identifying time period and projection basis, optional brief explanation, and at most one primary action. Avoid stacking competing hero cards on Home. Left to Spend is computed, never editable as an expense.
