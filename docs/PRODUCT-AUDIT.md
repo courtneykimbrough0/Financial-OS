@@ -1,5 +1,7 @@
 # Product experience audit (October 2026)
 
+> **Historical findings notice:** [PRODUCT_CONTRACT.md](../PRODUCT_CONTRACT.md) (October 23, 2026) supersedes conflicting old descriptions, recommendations and accepted assumptions. Current governing rules include projection until recorded, five guided onboarding steps, calculated Left to Spend and no income-certainty classification. Findings here still describe earlier code; review current live preview before acting.
+
 > **Phase R1 complete (October 2026).** The main paycheck concept and the Paycheck view have been removed. The forecast-start analysis in §6 below is preserved as a historical record; its fix (Phase A1) and the full removal (Phase R1) are described in [PRODUCT_EXPERIENCE.md](../PRODUCT_EXPERIENCE.md) §8 and [BUILD_AND_TEST_ROADMAP.md](../BUILD_AND_TEST_ROADMAP.md).
 
 A read-only audit of the current Financial OS app against the intended product experience. The decisions and specifications that follow from it are in [PRODUCT_EXPERIENCE.md](../PRODUCT_EXPERIENCE.md), and the order of work is in [BUILD_AND_TEST_ROADMAP.md](../BUILD_AND_TEST_ROADMAP.md), Phases A–F. No application code was changed for this audit.
