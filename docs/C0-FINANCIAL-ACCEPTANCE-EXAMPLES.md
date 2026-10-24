@@ -106,11 +106,25 @@ A user selects **2026-11-01** as the forecast start, enters a one-time receipt o
 
 **Current divergence:** `src/domain/forecast.ts` derives `forecastStart` from `nextExpectedPayday`, filters starts to eligible recurring income, and excludes one-time income as an anchor. Correct the behavior only in the later authorized implementation phase, with timing and historical regression tests.
 
+## C0-13 — Catching up on an overdue obligation
+
+A user owes **$300** in missed payments on a recurring bill. Their normal upcoming bill is **$150 on November 15**, and they plan a separate **$100 catch-up payment on November 8**.
+
+**Expected:** The user can enter the additional $100 as a **one-time expense**, while the normal recurring $150 schedule stays intact. Within November 1–30, the forecast includes **$250** in planned outflows for these two distinct payments. The remaining $200 behind is informational unless the user schedules it as another payment or already has individual overdue projected occurrences included. Nothing is marked paid until actually recorded.
+
+**Contextual explanation:** On Bills, Subscriptions or Liabilities entry/edit flows, offer an unobtrusive optional tooltip or information popup, for example: **“Behind on a payment? Add what you plan to catch up on as a one-time expense. Your regular payments stay on schedule.”** Provide a direct one-time-entry action where practicable. Do not interrupt everyone with a mandatory popup, require a new onboarding step, or use punitive language.
+
+**No-double-count rule:** If Financial OS already includes an overdue $100 recurring occurrence in the forecast, adding a second $100 one-time payment for that **same** obligation cannot silently create $200 in planned outflows. The UI should enable the user to reschedule or record the existing occurrence, or explicitly distinguish a new additional catch-up amount from that occurrence. **Do not automatically reclassify an existing recurring installment as a new expense.** Liability principal or payoff progress must not increase or decrease twice from the same payment.
+
+**Recorded variant:** If the one-time catch-up is paid as **$95 on November 9**, replace its projected $100 November 8 occurrence with a single recorded $95 November 9 expense and retain the original plan for comparison. The recurring $150 November 15 payment remains a separate projection.
+
+**Design boundary:** This is an optional contextual aid to an existing one-time-expense capability—not a new financial classification, certainty status, or full arrears-management subsystem. C2/C3 should evaluate the simplest placement; C4 must verify liability payment accounting and payoff progress.
+
 ## Test acceptance translation for C1–C6
 
 1. **C1:** Fixture cases C0-01 through C0-03, C0-11 and C0-12, plus persistence/RLS and historical comparison, must pass without an Expected/Possible gate or forced payday-based forecast start.
 2. **C2:** C0-10 must pass on a narrow phone viewport, keyboard navigation and live Vercel preview, retaining skip/review.
-3. **C3:** C0-04 through C0-09 and C0-12 must be covered by one canonical engine using **Income − (Expenses + net Strategic Reserves)**, counting both recurring and one-time transactions within the user-selected period, with no double counting. Verify labels and numbers in preview.
+3. **C3:** C0-04 through C0-09 and C0-12 through C0-13 must be covered by one canonical engine using **Income − (Expenses + net Strategic Reserves)**, counting both recurring and one-time transactions within the user-selected period, with no double counting. Verify labels and numbers in preview.
 4. **C4:** C0-04 recurring aggregation plus actual liability progress backed by verified data; no invented payoff mathematics.
 5. **C5:** Copy and default-form review across Home, Plan, Forecast, Activity, Settings and setup.
 6. **C6:** Run integrated hosted flows (save, reload, sign out/in, cross-user isolation, recordings, reserves, transfers, changing recurrence) and obtain owner acceptance.
@@ -131,7 +145,7 @@ A user selects **2026-11-01** as the forecast start, enters a one-time receipt o
 
 **D2 — Display period:** The user controls forecast start. A reasonable initial end-date horizon, default Home interval and navigation are still interface decisions; the example's monthly span is for arithmetic only. No default may override the user's chosen start.
 
-**D3 — One-time expense workflow:** The user wants one-time expense entry without a sixth onboarding section; choose the simplest placement after inspecting actual Home/Plan/Activity flows. Do not treat the underlying stored `varied` identifier as a product classification decision.
+**D3 — One-time expense workflow:** The user wants one-time expense entry without a sixth onboarding section. Add a small optional tooltip/popup explaining that catch-up payments can be entered as one-time expenses, with an easy entry path. Verify existing overdue scheduled occurrences do not get counted twice. Choose exact placement after inspecting Home/Plan/Activity. Do not treat the underlying stored `varied` identifier as a product classification decision.
 
 **D4 — Recorded comparison retention:** Verify which original projected amount/date versions survive schedule edits, skipped/canceled occurrences and record corrections; if necessary, a narrow history-design spec is required before code changes.
 
