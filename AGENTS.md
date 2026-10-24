@@ -1,5 +1,7 @@
 # AGENTS.md — shared instructions for every coding agent
 
+> **CURRENT PRODUCT AUTHORITY — October 23, 2026:** Read [PRODUCT_CONTRACT.md](PRODUCT_CONTRACT.md) before planning or changing any Financial OS feature. Its confirmed projection/actual rules, five separate onboarding sections, Recurring Expenses aggregation, Left to Spend semantics and prohibited user-facing terminology supersede conflicts anywhere below. Earlier six-classification / “Varied Spending is one-time” passages record historical implementation and **must not be used as current product requirements**. Never silently reinterpret these decisions; obtain owner approval for revised interface behavior.
+
 This is the canonical source of project rules for Financial OS. Every agent (Claude Code, Gemini / AI Studio, Codex, or any other) reads this file in full before doing any work. `CLAUDE.md`, `GEMINI.md` and `CODEX.md` only point here; when they and this file differ, this file wins.
 
 Read next: [BUILD_AND_TEST_ROADMAP.md](BUILD_AND_TEST_ROADMAP.md) (the order of work and its test gates), [PRODUCT_EXPERIENCE.md](PRODUCT_EXPERIENCE.md) (how the product should look, read and behave; the current priority), [README.md](README.md) (architecture, forecast rules, data model), [DESIGN.md](DESIGN.md) (visual system), [security_spec.md](security_spec.md) (Firestore guarantees) and [AI_STUDIO_TASKS.md](AI_STUDIO_TASKS.md) (Firebase and Cloud Run setup for the current, legacy infrastructure).
