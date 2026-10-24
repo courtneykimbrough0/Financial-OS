@@ -120,11 +120,25 @@ A user owes **$300** in missed payments on a recurring bill. Their normal upcomi
 
 **Design boundary:** This is an optional contextual aid to an existing one-time-expense capability—not a new financial classification, certainty status, or full arrears-management subsystem. C2/C3 should evaluate the simplest placement; C4 must verify liability payment accounting and payoff progress.
 
+## C0-14 — Split an overdue balance across multiple payment dates
+
+A user is **$600 behind** on a bill and plans to catch up in three separate payments: **$200 on November 6, $150 on November 20, and $250 on December 4**. Their ordinary recurring payment of **$125 on November 15 and December 15** continues unchanged.
+
+**Expected:** The three catch-up installments are distinct projected one-time expense occurrences, each on its chosen date, associated with the same obligation for explanation and review. November 1–30 shows **$350** of catch-up payments plus the **$125** November regular payment, for **$475** projected external outflows. December 1–31 shows **$250** catch-up plus the **$125** December recurring payment, for **$375** projected outflows. The complete three-payment catch-up plan totals **$600**; do not subtract the entire $600 in November or duplicate it as a separate $600 expense.
+
+**Flexible scheduling:** Users can choose any number of catch-up installments, different dates and different amounts; installments need not be equal or occur on the recurring bill's normal date. The entry experience can offer **“Split into payments”** as an optional detail alongside a simple single-payment entry, rather than requiring a new category or mandatory multi-step wizard. Show the total scheduled and any remainder not yet assigned a date. Do not invent payment dates or automatically impose a repayment schedule.
+
+**Actuals and revisions:** If the November 6 projected $200 installment is recorded as **$180 paid November 8**, use **$180 once on November 8** in the current timeline; preserve its original $200 November 6 plan. The remaining **$20** is not automatically a new expense, nor automatically added to another installment. The user can explicitly reschedule that shortfall or revise future installments. Other installments remain projections until recorded.
+
+**No double counting:** If an original overdue recurring occurrence already appears in the forecast, adding catch-up installments for the same amount cannot create duplicate projected external outflows. The experience must offer clear association to existing overdue occurrences or an explicit additional-payment path, depending on what is actually being paid. Recording an installment must not also mark a different obligation payment recorded without an explicit linked action. Transfers and Strategic Reserves retain their separate accounting semantics.
+
+**Scope boundary:** C0 specifies the expected behavior, not a fully designed arrears or financing product. Implementing an automated multi-installment plan, linking installments to existing occurrences, or tracking an unpaid balance requires explicit design and regression tests in the relevant later checkpoint. The core need is to let a user accurately place the individual projected payments where they expect them to occur, while keeping normal schedules intact.
+
 ## Test acceptance translation for C1–C6
 
 1. **C1:** Fixture cases C0-01 through C0-03, C0-11 and C0-12, plus persistence/RLS and historical comparison, must pass without an Expected/Possible gate or forced payday-based forecast start.
 2. **C2:** C0-10 must pass on a narrow phone viewport, keyboard navigation and live Vercel preview, retaining skip/review.
-3. **C3:** C0-04 through C0-09 and C0-12 through C0-13 must be covered by one canonical engine using **Income − (Expenses + net Strategic Reserves)**, counting both recurring and one-time transactions within the user-selected period, with no double counting. Verify labels and numbers in preview.
+3. **C3:** C0-04 through C0-09 and C0-12 through C0-14 must be covered by one canonical engine using **Income − (Expenses + net Strategic Reserves)**, counting both recurring and one-time transactions within the user-selected period, with no double counting. Verify labels and numbers in preview.
 4. **C4:** C0-04 recurring aggregation plus actual liability progress backed by verified data; no invented payoff mathematics.
 5. **C5:** Copy and default-form review across Home, Plan, Forecast, Activity, Settings and setup.
 6. **C6:** Run integrated hosted flows (save, reload, sign out/in, cross-user isolation, recordings, reserves, transfers, changing recurrence) and obtain owner acceptance.
@@ -145,7 +159,7 @@ A user owes **$300** in missed payments on a recurring bill. Their normal upcomi
 
 **D2 — Display period:** The user controls forecast start. A reasonable initial end-date horizon, default Home interval and navigation are still interface decisions; the example's monthly span is for arithmetic only. No default may override the user's chosen start.
 
-**D3 — One-time expense workflow:** The user wants one-time expense entry without a sixth onboarding section. Add a small optional tooltip/popup explaining that catch-up payments can be entered as one-time expenses, with an easy entry path. Verify existing overdue scheduled occurrences do not get counted twice. Choose exact placement after inspecting Home/Plan/Activity. Do not treat the underlying stored `varied` identifier as a product classification decision.
+**D3 — One-time expense workflow:** The user wants one-time expense entry without a sixth onboarding section. Add a small optional tooltip/popup explaining that catch-up payments can be entered as one-time expenses, including optional split installments across user-chosen dates, with an easy entry path. Verify existing overdue scheduled occurrences do not get counted twice. Choose exact placement after inspecting Home/Plan/Activity. Do not treat the underlying stored `varied` identifier as a product classification decision.
 
 **D4 — Recorded comparison retention:** Verify which original projected amount/date versions survive schedule edits, skipped/canceled occurrences and record corrections; if necessary, a narrow history-design spec is required before code changes.
 
