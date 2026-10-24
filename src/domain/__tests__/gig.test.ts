@@ -14,12 +14,12 @@ const SETUP = clockAt('2026-10-05');
 /**
  * Two gig incomes and rent:
  * - DoorDash payouts, about $400 every Monday from Oct 12 (the Oct 12 payout recorded at $380);
- * - Uber payouts, about $250 every Wednesday from Oct 14, possible;
+ * - Uber payouts, about $250 every Wednesday from Oct 14;
  * - rent $900 on the 25th.
  */
 function baseline(): AppData {
   let d = unwrap(ops.addSource(ops.emptyData(), { kind: 'income', description: 'DoorDash payouts', amountCents: usd(400), startDate: '2026-10-12', rule: { type: 'weekly' }, incomeType: 'gig' }, SETUP, 'dash'));
-  d = unwrap(ops.addSource(d, { kind: 'income', description: 'Uber payouts', amountCents: usd(250), startDate: '2026-10-14', rule: { type: 'weekly' }, incomeType: 'gig', certainty: 'possible' }, SETUP, 'uber'));
+  d = unwrap(ops.addSource(d, { kind: 'income', description: 'Uber payouts', amountCents: usd(250), startDate: '2026-10-14', rule: { type: 'weekly' }, incomeType: 'gig' }, SETUP, 'uber'));
   d = source(d, '2026-10-05', 'bill', 'Rent', 900, '2026-10-25', { type: 'monthly' }, 'rent');
   return unwrap(ops.recordActual(d, 'dash@2026-10-12', { amountCents: usd(380), date: '2026-10-12' }, clockAt('2026-10-12')));
 }
@@ -85,8 +85,8 @@ describe('platform earnings waiting for payout', () => {
     let d = baseline();
     d = session(d, 's2', 'dash', '2026-10-15', 4, 120, null);
     expect(buildForecast(d, TODAY).entries).toEqual(buildForecast(baseline(), TODAY).entries);
-    // October income: DoorDash $380 recorded + $400 × 2 expected (Oct 19, 26); Uber is possible, so nothing.
-    expect(periodKpis(buildForecast(d, TODAY), '2026-10-01', '2026-10-31').incomeCents).toBe(usd(380 + 800));
+    // October income: DoorDash $380 recorded + $400 × 2 projected (Oct 19, 26); Uber $250 × 3 projected (Oct 14, 21, 28).
+    expect(periodKpis(buildForecast(d, TODAY), '2026-10-01', '2026-10-31').incomeCents).toBe(usd(380 + 800 + 750));
   });
 });
 
@@ -136,10 +136,10 @@ describe('payouts: expected versus actual, linked to the sessions they cover', (
     expect(earnedNotPaid(d, 'dash').cents).toBe(usd(90 + 120 + 80));
   });
 
-  it("a possible payout (E1) doesn't count until marked expected or received; its cash already counted", () => {
+  it('a payout not yet received counts as projected; recorded, it counts once at its recorded amount and date', () => {
     let d = worked();
     const f = buildForecast(d, TODAY);
-    expect(f.entries.find((e) => e.occurrence.id === 'uber@2026-10-21')).toMatchObject({ counts: false, possible: true });
+    expect(f.entries.find((e) => e.occurrence.id === 'uber@2026-10-21')).toMatchObject({ counts: true, signedCents: usd(250), date: '2026-10-21' });
     d = unwrap(ops.recordActual(d, 'uber@2026-10-21', { amountCents: usd(55), date: '2026-10-19' }, clock));
     expect(work(d, 's3').paidByOccurrenceId).toBe('uber@2026-10-21');
     expect(buildForecast(d, TODAY).entries.filter((e) => e.occurrence.id === 'uber@2026-10-21' && e.counts).map((e) => e.signedCents)).toEqual([usd(55)]);

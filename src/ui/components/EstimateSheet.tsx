@@ -270,7 +270,7 @@ function EstimatePreviewView({ data, suggestion, today }: { data: AppData; sugge
               <span className="hint">
                 {x.inRunningTotal && x.currentTallyCents !== null && x.proposedTallyCents !== null
                   ? <> · running total <Money cents={x.currentTallyCents} /> → <Money cents={x.proposedTallyCents} /></>
-                  : ' · before your next payday, outside the running total'}
+                  : ' · before the forecast start, outside the running total'}
               </span>
             </span>
             <strong>
@@ -282,8 +282,8 @@ function EstimatePreviewView({ data, suggestion, today }: { data: AppData; sugge
       {!p.comparable && (
         <p className="callout callout-info">
           {p.reason === 'anchor-changed'
-            ? 'This moves your first payday, so cash flow is compared instead of running totals.'
-            : "There's no upcoming payday to start a running total from."}
+            ? 'The running totals start on different days, so cash flow is compared instead.'
+            : "There's no running total to compare."}
         </p>
       )}
       {p.comparable && <GapChanges newGaps={p.newGaps} worsenedGaps={p.worsenedGaps} reducedGaps={p.reducedGaps} resolvedGaps={p.resolvedGaps} proposedGaps={p.proposed.gaps} />}

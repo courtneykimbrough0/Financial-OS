@@ -238,8 +238,8 @@ describe('after the lowest point', () => {
     expect(gaps).toHaveLength(1);
     expect(summary(gaps[0]!)).toEqual({
       start: '2026-10-20',
-      end: '2027-01-12', // the last day of the 90-day lookahead
-      days: 85,
+      end: '2027-01-08', // the last day of the 90-day lookahead from the start (today, Oct 11)
+      days: 81,
       lowest: ['2026-12-20', -3300],
       before: 1000,
       out: 6300,
@@ -262,11 +262,11 @@ describe('after the lowest point', () => {
 });
 
 describe('when there is nothing to explain', () => {
-  it('is empty without a gap, and without a forecast', () => {
+  it('is empty without a gap; bills with no income at all are a gap from the first one', () => {
     const d = source(paid(), TODAY, 'bill', 'Rent', 900, '2026-10-19', { type: 'monthly' }, 'rent');
     expect(explainTimingGaps(buildForecast(d, TODAY))).toEqual([]);
     const noIncome = source(ops.emptyData(), TODAY, 'bill', 'Rent', 900, '2026-10-19');
-    expect(explainTimingGaps(buildForecast(noIncome, TODAY))).toEqual([]);
+    expect(explainTimingGaps(buildForecast(noIncome, TODAY)).map((g) => [g.start, g.recoversOn])).toEqual([['2026-10-19', null]]);
   });
 
   it('leaves out canceled payments, which never count', () => {

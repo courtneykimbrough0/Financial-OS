@@ -2,7 +2,6 @@ import { addDays, diffDays, minDate, type DateStr } from './dates';
 import type { Cents } from './money';
 import { occurrenceDates } from './recurrence';
 import {
-  isUncountedPossible,
   recurringOccurrenceId,
   type AppData,
   type Occurrence,
@@ -56,27 +55,13 @@ export function expandSource(source: RecurringSource, from: DateStr, to: DateStr
   return out;
 }
 
-/** Possible income is never overdue: it was never dependable, so nothing is owed. */
+/** An unrecorded occurrence whose date has passed is overdue: still a projection, never recorded by its date passing. */
 export function deriveStatus(record: OccurrenceRecord, today: DateStr): OccurrenceStatus {
-  if (record.status === 'scheduled' && record.scheduledDate < today && !isUncountedPossible(record)) return 'overdue';
+  if (record.status === 'scheduled' && record.scheduledDate < today) return 'overdue';
   return record.status;
 }
 
-/**
- * The record with its certainty as it applies now: a recurring occurrence
- * follows its item (stored or not), a one-time record keeps its own.
- */
-function withCertainty(record: OccurrenceRecord, sources: Map<string, RecurringSource>): OccurrenceRecord {
-  if (record.sourceId === null) return record;
-  const { certainty: _stored, ...rest } = record;
-  void _stored;
-  return sources.get(record.sourceId)?.certainty === 'possible' && record.kind === 'income' ? { ...rest, certainty: 'possible' } : rest;
-}
-
-const resolved = (record: OccurrenceRecord, sources: Map<string, RecurringSource>, today: DateStr, virtual: boolean): Occurrence => {
-  const r = withCertainty(record, sources);
-  return { ...r, displayStatus: deriveStatus(r, today), virtual };
-};
+const resolved = (record: OccurrenceRecord, today: DateStr, virtual: boolean): Occurrence => ({ ...record, displayStatus: deriveStatus(record, today), virtual });
 
 /**
  * True for a stored change to an outstanding recurring occurrence that its
@@ -108,12 +93,12 @@ export function resolveOccurrences(data: AppData, from: DateStr, to: DateStr, to
   for (const source of data.sources) {
     for (const gen of expandSource(source, from, to)) {
       if (recordIds.has(gen.id)) continue;
-      out.push(resolved(gen, sources, today, true));
+      out.push(resolved(gen, today, true));
     }
   }
   for (const record of data.records) {
     if (isSuperseded(record, sources)) continue;
-    out.push(resolved(record, sources, today, false));
+    out.push(resolved(record, today, false));
   }
   return out;
 }
@@ -124,7 +109,7 @@ export function findOccurrence(data: AppData, id: string, today: DateStr): Occur
   const record = data.records.find((r) => r.id === id);
   if (record) {
     if (isSuperseded(record, sources)) return null;
-    return resolved(record, sources, today, false);
+    return resolved(record, today, false);
   }
   const at = id.lastIndexOf('@');
   if (at < 0) return null;
@@ -132,7 +117,7 @@ export function findOccurrence(data: AppData, id: string, today: DateStr): Occur
   const date = id.slice(at + 1);
   if (!source) return null;
   const gen = expandSource(source, date, date).find((o) => o.id === id);
-  return gen ? resolved(gen, sources, today, true) : null;
+  return gen ? resolved(gen, today, true) : null;
 }
 
 /** How a recorded outcome differed from the original prediction. */

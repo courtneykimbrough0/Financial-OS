@@ -5,7 +5,7 @@ import { formatMoney } from '../../domain/money';
 import { deriveStatus, resolveOccurrences } from '../../domain/occurrences';
 import * as ops from '../../domain/operations';
 import { describeRule } from '../../domain/recurrence';
-import { incomeTypePrefix, isUncountedPossible, liabilityPrefix, ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OneTimeKind, type Occurrence, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
+import { incomeTypePrefix, liabilityPrefix, ONE_TIME_KINDS, RECURRING_KINDS, type AppData, type OneTimeKind, type Occurrence, type RecurringKind, type RecurringSource, type TransactionKind } from '../../domain/types';
 import { useStore } from '../../state/store';
 import { EmptyLine, FlowAmount, ListGroup, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
 import { KIND_COPY, nextScheduledDate, OneTimeForm, ReactivateForm, SourceForm, useIncomeDetailAvailable } from '../components/forms';
@@ -107,8 +107,8 @@ function OccurrenceRow({ o, onOpen }: { o: Occurrence; onOpen: (id: string) => v
         )}
       </span>
       <span className="entry-side">
-        <FlowAmount kind={o.kind} cents={amount} strike={o.status === 'canceled'} release={o.release} possible={isUncountedPossible(o)} />
-        <StatusBadge status={o.displayStatus} kind={o.kind} release={o.release} possible={isUncountedPossible(o)} />
+        <FlowAmount kind={o.kind} cents={amount} strike={o.status === 'canceled'} release={o.release} />
+        <StatusBadge status={o.displayStatus} kind={o.kind} release={o.release} />
       </span>
       <Icon icon={ChevronRight} size={18} className="chevron" />
     </button>
@@ -149,8 +149,7 @@ function SourceRow({ source, onOpen }: { source: RecurringSource; onOpen: () => 
           <AccountLabel accountId={source.accountId} />
         </span>
         <span className="entry-side">
-          <FlowAmount kind={source.kind} cents={current.amountCents} possible={source.certainty === 'possible'} />
-          {source.certainty === 'possible' && <StatusBadge status="scheduled" possible />}
+          <FlowAmount kind={source.kind} cents={current.amountCents} />
           {!source.active && (
             <span className="badge badge-canceled">
               <Icon icon={CircleOff} size={13} /> Off
@@ -381,7 +380,7 @@ export function SourcesScreen({ kind, embedded = false }: { kind: TransactionKin
             <>
               {upcomingOneTimes.length > 0 && (
                 <>
-                  <h3 className="subhead">{upcomingOneTimes.some(isUncountedPossible) ? 'Expected and possible' : 'Expected'}</h3>
+                  <h3 className="subhead">Expected</h3>
                   <ListGroup>
                     {upcomingOneTimes.map((o) => (
                       <li key={o.id}>

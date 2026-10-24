@@ -751,7 +751,8 @@ describe('previewing a suggestion', () => {
     if (!r.ok) throw new Error(r.error);
     const p = r.preview;
     expect(JSON.stringify(d)).toBe(before);
-    expect(p).toMatchObject({ window: { start: '2026-10-23', end: '2027-01-20' }, comparable: true, reason: null, lowestChangeCents: -3500, continuesAfter: '2027-01-20' });
+    // The window is the 90 days from the forecast start (today).
+    expect(p).toMatchObject({ window: { start: '2026-10-16', end: '2027-01-13' }, comparable: true, reason: null, lowestChangeCents: -3500, continuesAfter: '2027-01-13' });
     expect(p.payments).toEqual([
       { occurrenceId: 'elec@2026-11-03', date: '2026-11-03', currentCents: 18000, proposedCents: 21500, inRunningTotal: true, currentTallyCents: -68000, proposedTallyCents: -71500 },
       { occurrenceId: 'elec@2026-12-03', date: '2026-12-03', currentCents: 18000, proposedCents: 21500, inRunningTotal: true, currentTallyCents: -36000, proposedTallyCents: -43000 },
@@ -762,7 +763,7 @@ describe('previewing a suggestion', () => {
       { date: '2026-11-03', tallyCents: -71500 },
     ]);
     const gap = (g: { start: string; end: string; lowestCents: number }) => [g.start, g.end, g.lowestCents];
-    expect(p.newGaps.map(gap)).toEqual([['2027-01-03', '2027-01-14', -8500]]);
+    expect(p.newGaps.map(gap)).toEqual([['2027-01-03', '2027-01-13', -8500]]); // to the end of the window
     expect(p.worsenedGaps.map(gap)).toEqual([
       ['2026-11-01', '2026-11-05', -71500],
       ['2026-12-01', '2026-12-03', -43000],
@@ -789,7 +790,7 @@ describe('previewing a suggestion', () => {
     expect(r.preview.worsenedGaps).toEqual([]);
   });
 
-  it('a payment before the next payday changes cash flow, not the running total', () => {
+  it('a payment before the next payday changes cash flow and the running total from today', () => {
     let d = pay(item(60, '2026-07-25', { id: 'phone', name: 'Phone' }), 'phone', [
       ['2026-07-25', 65],
       ['2026-08-25', 65],
@@ -798,10 +799,10 @@ describe('previewing a suggestion', () => {
     d = item(1000, '2026-10-30', { id: 'pay', name: 'Paycheck', kind: 'income', rule: { type: 'biweekly' } }, d);
     const r = previewEstimate(d, suggestion(d, 'phone'), clock);
     if (!r.ok) throw new Error(r.error);
-    // Running total from Oct 30: +1,000; Nov 13 +1,000 = 2,000; Nov 25 −65 instead of −60.
+    // Running total from today: Oct 25 −60 (−65); Oct 30 +1,000; Nov 13 +1,000; Nov 25 −60 again (−65 each).
     expect(r.preview.payments.slice(0, 2)).toEqual([
-      { occurrenceId: 'phone@2026-10-25', date: '2026-10-25', currentCents: 6000, proposedCents: 6500, inRunningTotal: false, currentTallyCents: null, proposedTallyCents: null },
-      { occurrenceId: 'phone@2026-11-25', date: '2026-11-25', currentCents: 6000, proposedCents: 6500, inRunningTotal: true, currentTallyCents: 194000, proposedTallyCents: 193500 },
+      { occurrenceId: 'phone@2026-10-25', date: '2026-10-25', currentCents: 6000, proposedCents: 6500, inRunningTotal: true, currentTallyCents: -6000, proposedTallyCents: -6500 },
+      { occurrenceId: 'phone@2026-11-25', date: '2026-11-25', currentCents: 6000, proposedCents: 6500, inRunningTotal: true, currentTallyCents: 188000, proposedTallyCents: 187000 },
     ]);
   });
 
@@ -825,9 +826,9 @@ describe('previewing a suggestion', () => {
     expect(s.observations.filter((o) => o.excluded === 'other-month').length).toBe(11);
     const r = previewEstimate(d, s, clock);
     if (!r.ok) throw new Error(r.error);
-    // No income, so no running total to compare.
-    expect(r.preview).toMatchObject({ comparable: false, reason: 'no-forecast', continuesAfter: null });
-    expect(r.preview.payments.map((p) => [p.date, p.currentCents, p.proposedCents, p.inRunningTotal])).toEqual([['2026-11-03', 18000, 24000, false]]);
+    // No income: the running total from today still compares (it is only bills).
+    expect(r.preview).toMatchObject({ comparable: true, reason: null, continuesAfter: null });
+    expect(r.preview.payments.map((p) => [p.date, p.currentCents, p.proposedCents, p.inRunningTotal])).toEqual([['2026-11-03', 18000, 24000, true]]);
   });
 
   it('is refused for an out-of-date suggestion', () => {

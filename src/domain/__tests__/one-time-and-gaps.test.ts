@@ -83,12 +83,13 @@ describe('timing gaps ahead', () => {
     ]);
   });
 
-  it('is empty when the tally never goes below $0, or there is no forecast yet', () => {
+  it('is empty when the tally never goes below $0; without income, the first bill starts a gap', () => {
     let d = source(ops.emptyData(), TODAY, 'income', 'Paycheck', 1800, '2026-10-15', { type: 'biweekly' }, 'pay');
     d = source(d, TODAY, 'bill', 'Rent', 1200, '2026-11-01', { type: 'monthly' }, 'rent');
     expect(timingGapsAhead(buildForecast(d, TODAY))).toEqual([]);
     const noIncome = source(ops.emptyData(), TODAY, 'bill', 'Rent', 1200, '2026-11-01');
-    expect(timingGapsAhead(buildForecast(noIncome, TODAY))).toEqual([]);
+    // Rent on Nov 1, Dec 1 and Jan 1 inside the 90 days, with nothing coming in: one gap that only goes lower.
+    expect(timingGapsAhead(buildForecast(noIncome, TODAY)).map((g) => [g.start, g.lowestCents])).toEqual([['2026-11-01', usd(-3600)]]);
   });
 
   it('treats exactly $0 as not a gap', () => {

@@ -121,9 +121,9 @@ describe('only money received counts', () => {
 
   it('the running total is the baseline plus the cash tips from the day they were received', () => {
     const d = worked();
-    const a = dailyTimeline(buildForecast(d, TODAY), '2026-10-20', '2026-11-30');
-    const b = dailyTimeline(buildForecast(job(), TODAY), '2026-10-20', '2026-11-30');
-    // The running total starts with the overdue Oct 16 paycheck: the Oct 17 tips ($22) are inside it, the Oct 13 tips before it.
+    // A running total chosen to start Oct 16: the Oct 17 tips ($22) are inside it, the Oct 13 tips before it.
+    const a = dailyTimeline(buildForecast(d, TODAY, { start: '2026-10-16' }), '2026-10-20', '2026-11-30');
+    const b = dailyTimeline(buildForecast(job(), TODAY, { start: '2026-10-16' }), '2026-10-20', '2026-11-30');
     expect(a.map((r, i) => r.tallyCents! - b[i]!.tallyCents!)).toEqual(a.map(() => usd(22)));
   });
 });

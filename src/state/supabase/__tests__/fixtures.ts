@@ -152,13 +152,13 @@ export function withShifts(plan: AppData): AppData {
 
 /**
  * `plan` with freelance work (E3): a client, a done job paid on Oct 15, a
- * planned job with a possible payment, and a done job with no payment date.
+ * planned job with a projected payment, and a done job with no payment date.
  */
 export function withJobs(plan: AppData): AppData {
   let d = unwrap(ops.addClient(plan, 'Acme', clock, 'client-acme'));
   d = unwrap(ops.addJob(d, { description: 'Logo design', clientId: 'client-acme', amountCents: usd(800), status: 'done', expectedDate: '2026-10-20' }, clock, 'job-logo'));
   d = unwrap(ops.recordJobPayment(d, 'job-logo', { amountCents: usd(780), date: '2026-10-15' }, clock));
-  d = unwrap(ops.addJob(d, { description: 'Website copy', clientId: 'client-acme', amountCents: usd(1200), status: 'planned', expectedDate: '2026-11-15', certainty: 'possible' }, clock, 'job-copy'));
+  d = unwrap(ops.addJob(d, { description: 'Website copy', clientId: 'client-acme', amountCents: usd(1200), status: 'planned', expectedDate: '2026-11-15' }, clock, 'job-copy'));
   return unwrap(ops.addJob(d, { description: 'Brochure', amountCents: usd(300), status: 'done' }, clock, 'job-brochure'));
 }
 
@@ -174,15 +174,16 @@ export function withSessions(plan: AppData): AppData {
 }
 
 /**
- * Every kind of income at once (E6), on the rich plan: possible income (a
- * recurring item and a one-time), tipped shifts paid by a recorded paycheck,
- * freelance jobs (paid, planned and possible, pending) and gig sessions (one
- * paid by a recorded payout, one waiting, with cash received).
+ * Every kind of income at once (E6), on the rich plan: irregular projected
+ * income (a recurring item and a one-time), tipped shifts paid by a recorded
+ * paycheck, freelance jobs (paid, planned with a projected payment, pending)
+ * and gig sessions (one paid by a recorded payout, one waiting, with cash
+ * received).
  */
 export function incomePlan(): AppData {
   let d = withSessions(withJobs(withShifts(richPlan())));
-  d = unwrap(ops.addSource(d, { kind: 'income', description: 'Tutoring', amountCents: usd(120), startDate: '2026-10-20', rule: { type: 'biweekly' }, certainty: 'possible' }, clock, 'tutor'));
-  d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Maybe a bonus', amountCents: usd(250), date: '2026-10-30', certainty: 'possible' }, clock, 'bonus'));
+  d = unwrap(ops.addSource(d, { kind: 'income', description: 'Tutoring', amountCents: usd(120), startDate: '2026-10-20', rule: { type: 'biweekly' } }, clock, 'tutor'));
+  d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Maybe a bonus', amountCents: usd(250), date: '2026-10-30' }, clock, 'bonus'));
   // The side job's Oct 17 paycheck arrives a day early and pays both shifts; its amount differs from the expected $150.
   return unwrap(ops.recordActual(d, 'side@2026-10-17', { amountCents: usd(212.4), date: '2026-10-16' }, clock));
 }

@@ -9,7 +9,8 @@ import { clockAt, source, unwrap, usd } from './helpers';
 /*
  * Step 4: previewing one change before making it. Today is Sun 2026-10-11.
  * Paid $1,000 every 2 weeks from Thu Oct 15 (Oct 15, 29, Nov 12, 26, Dec 10, 24, Jan 7).
- * The comparison window is the 90 days from Oct 15: Oct 15 – Jan 12.
+ * The running total starts today; the comparison window is the 90 days from
+ * it: Oct 11 – Jan 8. Nothing happens Oct 11–14, so it is $0 until Oct 15.
  */
 const TODAY = '2026-10-11';
 const clock = clockAt(TODAY);
@@ -35,15 +36,15 @@ describe('moving a payment', () => {
   it('later, past the next paycheck: the shortfall it caused is gone, and nothing new appears', () => {
     const p = preview(withRepair(), { kind: 'move', occurrenceId: 'one-repair', date: '2026-10-30' });
     expect(p.comparable).toBe(true);
-    expect(p.window).toEqual({ start: '2026-10-15', end: '2027-01-12' });
+    expect(p.window).toEqual({ start: '2026-10-11', end: '2027-01-08' });
     expect(gapList(p.current.gaps)).toEqual([['2026-10-20', '2026-10-28', -300, '2026-10-29']]);
     expect(p.proposed.gaps).toEqual([]);
     expect(p.target).toMatchObject({ outcome: 'eliminated', recoversOn: { current: '2026-10-29', proposed: null } });
     expect(p.target!.gap.start).toBe('2026-10-20');
     expect(p.current.lowest).toEqual({ date: '2026-10-20', tallyCents: usd(-300) });
-    // Oct 15 $1,000, Oct 29 $2,000, Oct 30 $700, Nov 12 $1,700, … the lowest is now the first payday.
-    expect(p.proposed.lowest).toEqual({ date: '2026-10-30', tallyCents: usd(700) });
-    expect(p.lowestChangeCents).toBe(usd(1000));
+    // $0 Oct 11–14, then Oct 15 $1,000, Oct 29 $2,000, Oct 30 $700, … the lowest is now the $0 start.
+    expect(p.proposed.lowest).toEqual({ date: TODAY, tallyCents: 0 });
+    expect(p.lowestChangeCents).toBe(usd(300));
     expect(p.newGaps).toEqual([]);
     expect(p.worsenedGaps).toEqual([]);
   });
@@ -68,12 +69,12 @@ describe('moving a payment', () => {
     expect(p.lowestChangeCents).toBe(usd(-500));
   });
 
-  it('to before the next payday: flagged instead of shown as a fix, since the running total starts at payday', () => {
+  it('to before the next paycheck: compared, since the running total starts today, and shown as a deeper, earlier shortfall', () => {
     const p = preview(withRepair(), { kind: 'move', occurrenceId: 'one-repair', date: '2026-10-13' });
-    expect(p.comparable).toBe(false);
-    expect(p.limitation).toMatch(/before the next payday \(2026-10-15\)/);
-    expect(p.target).toBeNull();
-    expect(p.lowestChangeCents).toBeNull();
+    expect(p.comparable).toBe(true);
+    expect(gapList(p.proposed.gaps)).toEqual([['2026-10-13', '2026-10-28', -1300, '2026-10-29']]);
+    expect(p.target!.outcome).toBe('worsened');
+    expect(p.lowestChangeCents).toBe(usd(-1000));
   });
 });
 
@@ -141,21 +142,18 @@ describe('moving income', () => {
     expect(gapList(p.newGaps)).toEqual([['2026-10-30', '2026-11-01', -500, '2026-11-02']]);
   });
 
-  it("moving the next payday changes the starting point, so the totals aren't compared", () => {
+  it('moving or skipping the next paycheck keeps the starting point, so the totals are compared', () => {
     const d = source(paid(), TODAY, 'bill', 'Rent', 1200, '2026-10-20', { type: 'monthly' }, 'rent');
     for (const change of [
       { kind: 'move', occurrenceId: 'pay@2026-10-15', date: '2026-10-16' },
       { kind: 'skip', occurrenceId: 'pay@2026-10-15' },
     ] as ProposedChange[]) {
       const p = preview(d, change);
-      expect(p.anchorChanged).toBe(true);
-      expect(p.comparable).toBe(false);
-      expect(p.limitation).toMatch(/moves the next payday from 2026-10-15/);
-      expect([p.lowestChangeCents, p.target, p.newGaps, p.worsenedGaps]).toEqual([null, null, [], []]);
-      // Each side is still described on its own terms.
-      expect(p.current.forecastStart).toBe('2026-10-15');
-      expect(p.proposed.forecastStart).toBe(change.kind === 'skip' ? '2026-10-29' : '2026-10-16');
+      expect([p.anchorChanged, p.comparable, p.limitation]).toEqual([false, true, null]);
+      expect([p.current.forecastStart, p.proposed.forecastStart]).toEqual([TODAY, TODAY]);
     }
+    // Skipping it: rent on Oct 20 with nothing in before it, −$1,200, still −$200 after Oct 29, back above $0 Nov 12.
+    expect(gapList(preview(d, { kind: 'skip', occurrenceId: 'pay@2026-10-15' }).proposed.gaps)[0]).toEqual(['2026-10-20', '2026-11-11', -1200, '2026-11-12']);
   });
 });
 
@@ -198,11 +196,14 @@ describe('previews', () => {
     const d = oneTime(paid(), 'Phone', 60, '2026-10-20');
     const p = preview(d, { kind: 'amount', occurrenceId: 'one-phone', amountCents: usd(80) });
     expect([p.comparable, p.current.gaps, p.proposed.gaps, p.target, p.newGaps]).toEqual([true, [], [], null, []]);
+    // The lowest is the $0 start either way; the phone bill's day is $20 lower.
     expect([p.current.lowest, p.proposed.lowest]).toEqual([
-      { date: '2026-10-20', tallyCents: usd(940) },
-      { date: '2026-10-20', tallyCents: usd(920) },
+      { date: TODAY, tallyCents: 0 },
+      { date: TODAY, tallyCents: 0 },
     ]);
-    expect(p.lowestChangeCents).toBe(usd(-20));
+    expect(p.lowestChangeCents).toBe(0);
+    const at = (side: ChangePreview['current']) => side.tallies.find((t) => t.date === '2026-10-20')?.cents;
+    expect([at(p.current), at(p.proposed)]).toEqual([usd(940), usd(920)]);
   });
 
   it('reconcile with the forecasts they come from', () => {
@@ -250,9 +251,8 @@ describe('applying a previewed change', () => {
     });
   });
 
-  it("refuses a preview that can't be compared, and a recorded payment", () => {
+  it('refuses a recorded payment', () => {
     const d = rent();
-    expect(applyPreviewedChange(d, d, { kind: 'move', occurrenceId: 'pay@2026-10-15', date: '2026-10-16' }, clock)).toMatchObject({ ok: false, error: /can't be compared/ });
     const paidRent = unwrap(ops.recordActual(d, 'rent@2026-10-20', { amountCents: usd(1200), date: TODAY }, clock));
     expect(applyPreviewedChange(paidRent, paidRent, { kind: 'amount', occurrenceId: 'rent@2026-10-20', amountCents: usd(1) }, clock)).toMatchObject({ ok: false });
   });
@@ -266,18 +266,19 @@ describe('a shortfall beyond the 90-day warning window', () => {
   it('is compared when the preview covers the period being viewed', () => {
     const r = previewChange(taxes(), move, clock, { through: '2027-02-28' });
     if (!r.ok) throw new Error(r.error);
-    expect(r.preview.window).toEqual({ start: '2026-10-15', end: '2027-02-28' });
+    expect(r.preview.window).toEqual({ start: '2026-10-11', end: '2027-02-28' });
     expect(gapList(r.preview.current.gaps)).toEqual([['2027-02-10', '2027-02-17', -500, '2027-02-18']]);
     expect(r.preview.target).toMatchObject({ outcome: 'eliminated' });
-    expect(r.preview.proposed.lowest).toEqual({ date: '2027-02-18', tallyCents: usd(500) }); // $10,000 − $9,500
-    expect(r.preview.lowestChangeCents).toBe(usd(1000));
+    expect(r.preview.proposed.lowest).toEqual({ date: TODAY, tallyCents: 0 }); // never below the $0 start
+    expect(r.preview.proposed.tallies.find((t) => t.date === '2027-02-18')!.cents).toBe(usd(500)); // $10,000 − $9,500
+    expect(r.preview.lowestChangeCents).toBe(usd(500));
   });
 
   it('is outside the default window, which never shrinks below 90 days', () => {
     const p = preview(taxes(), move);
-    expect(p.window.end).toBe('2027-01-12');
+    expect(p.window.end).toBe('2027-01-08');
     expect(p.current.gaps).toEqual([]);
     const shorter = previewChange(taxes(), move, clock, { through: '2026-11-01' });
-    expect(shorter.ok && shorter.preview.window.end).toBe('2027-01-12');
+    expect(shorter.ok && shorter.preview.window.end).toBe('2027-01-08');
   });
 });

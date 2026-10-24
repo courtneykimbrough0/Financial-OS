@@ -6,7 +6,7 @@ import { buildForecast, explainTimingGaps } from '../../domain/forecast';
 import * as ops from '../../domain/operations';
 import type { AppData } from '../../domain/types';
 import { createBackup, readBackup } from '../backup';
-import { cloudCacheKey, CloudAdapter, INCOME_DETAIL_NOT_STORED, POSSIBLE_INCOME_NOT_STORED } from '../cloud';
+import { cloudCacheKey, CloudAdapter, INCOME_DETAIL_NOT_STORED } from '../cloud';
 import { LocalStorageAdapter, migrate } from '../storage';
 import { SupabaseStorageAdapter } from '../supabase/adapter';
 import { canonicalize, checkForMigration } from '../supabase/rows';
@@ -23,7 +23,7 @@ const DAYS = [TODAY, '2026-11-15', '2027-01-16'];
 function outcomes(d: AppData, today: string) {
   const f = buildForecast(d, today, { through: OCT[1] });
   return {
-    entries: f.entries.map((e) => [e.occurrence.id, e.date, e.signedCents, e.counts, e.possible ?? false]),
+    entries: f.entries.map((e) => [e.occurrence.id, e.date, e.signedCents, e.counts]),
     gaps: explainTimingGaps(f),
     activity: activityView(f, ...OCT).summary,
     earnings: earningsHistory(d, recordedEntries(f, ...OCT), ...OCT, today),
@@ -36,7 +36,7 @@ const same = (a: AppData, b: AppData) => {
 beforeEach(() => localStorage.clear());
 
 describe('one plan with every kind of income', () => {
-  it('counts each dollar once: earned work and possible income stay out of cash flow', () => {
+  it('counts each dollar once: earned work stays out of cash flow, and irregular income counts as projected', () => {
     const d = incomePlan();
     const f = buildForecast(d, TODAY, { through: OCT[1] });
     const activity = activityView(f, ...OCT).summary;
@@ -47,12 +47,15 @@ describe('one plan with every kind of income', () => {
     // Received for work is part of that, never more: the paycheck, payout, cash tips, session cash and job payment.
     expect(earnings.received.map((r) => r.for).sort()).toEqual(['cash-tips', 'job-payment', 'paycheck', 'payout', 'session-cash']);
     expect(earnings.receivedCents).toBe(usd(212.4 + 290 + 42.5 + 12 + 780));
-    // Unpaid earnings, done jobs and possible income are listed, not counted.
+    // Unpaid earnings and done jobs are listed, not counted.
     expect(earnings.notReceived.map((n) => [n.source.id, n.cents])).toEqual([['gig', usd(70)]]);
     expect(earnings.jobs.doneNotPaidCents).toBe(usd(300));
-    const possible = f.entries.filter((e) => e.possible);
-    expect(possible.map((e) => e.occurrence.sourceId ?? e.occurrence.id).sort()).toEqual(expect.arrayContaining(['bonus', 'tutor']));
-    expect(possible.every((e) => !e.counts && e.signedCents === 0)).toBe(true);
+    // Tutoring (every 2 weeks from Oct 20) and the one-time bonus are projections: they count on their dates.
+    const projected = f.entries.filter((e) => (e.occurrence.sourceId ?? e.occurrence.id) === 'tutor' || e.occurrence.id === 'bonus').filter((e) => e.date <= OCT[1]);
+    expect(projected.map((e) => [e.date, e.signedCents, e.counts, e.occurrence.status])).toEqual([
+      ['2026-10-20', usd(120), true, 'scheduled'],
+      ['2026-10-30', usd(250), true, 'scheduled'],
+    ]);
     // Removing every shift, session and job (keeping their money records) changes no counted figure.
     const bare: AppData = { ...d, workEntries: [], jobs: [], clients: [] };
     const counted = (x: AppData) => buildForecast(x, TODAY).entries.filter((e) => e.counts).map((e) => [e.occurrence.id, e.date, e.signedCents]);
@@ -86,11 +89,10 @@ describe('one plan with every kind of income', () => {
 describe('legacy Firebase accounts refuse income they can’t keep, before anything is written', () => {
   const base = () => unwrap(ops.addSource(ops.emptyData(), { kind: 'income', description: 'Pay', amountCents: usd(500), startDate: TODAY, rule: { type: 'weekly' } }, clock, 'pay'));
   const cases: [string, () => AppData, string][] = [
-    ['possible income', () => unwrap(ops.addOneTime(base(), { kind: 'income', description: 'Maybe', amountCents: usd(50), date: '2026-10-30', certainty: 'possible' }, clock)), POSSIBLE_INCOME_NOT_STORED],
     ['hourly income', () => unwrap(ops.setIncomeDetails(base(), 'pay', { incomeType: 'hourly', hourlyWageCents: 1500 }, clock)), INCOME_DETAIL_NOT_STORED],
     ['gig income', () => unwrap(ops.setIncomeDetails(base(), 'pay', { incomeType: 'gig', hourlyWageCents: null }, clock)), INCOME_DETAIL_NOT_STORED],
     ['a client alone', () => unwrap(ops.addClient(base(), 'Acme', clock)), INCOME_DETAIL_NOT_STORED],
-    ['every kind at once', incomePlan, POSSIBLE_INCOME_NOT_STORED],
+    ['every kind at once', incomePlan, INCOME_DETAIL_NOT_STORED],
   ];
   it.each(cases)('%s', async (_name, plan, message) => {
     const server = new FakeServer();

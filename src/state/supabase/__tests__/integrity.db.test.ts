@@ -79,8 +79,8 @@ describe('each event counts once, as itself', () => {
     back = saveOk(user, unwrap(ops.restoreOccurrence(back, 'elec@2026-10-03', clock)));
     expect(back.records).toEqual([]);
     expect(rowsFor(user, 'elec@2026-10-03')).toBe(0);
-    // Overdue and unpaid again: carried to the next payday, once, at the expected amount.
-    expect(entries(back, 'elec@2026-10-03')).toEqual([['2026-10-23', 18000, true]]);
+    // Overdue and unpaid again: a projection on its own date, once, at the expected amount.
+    expect(entries(back, 'elec@2026-10-03')).toEqual([['2026-10-03', 18000, true]]);
     back = saveOk(user, unwrap(ops.cancelOccurrence(back, 'elec@2026-12-03', '', clock)));
     back = saveOk(user, unwrap(ops.restoreOccurrence(back, 'elec@2026-12-03', clock)));
     expect(back.records).toEqual([]);
@@ -92,7 +92,7 @@ describe('each event counts once, as itself', () => {
     let back = saveOk(user, unwrap(ops.recordActual(data, 'elec@2026-10-03', { amountCents: usd(230), date: '2026-10-03' }, clock)));
     back = saveOk(user, unwrap(ops.changeSourceSchedule(back, 'elec', { startDate: '2026-10-20', amountCents: usd(200), rule: { type: 'monthly' } }, clock)));
     expect(entries(back, 'elec@2026-10-03')).toEqual([['2026-10-03', 23000, true]]);
-    // (Sep 3 is still unpaid and carried to the next payday; this looks at October onwards.)
+    // (Sep 3 is still unpaid, an overdue projection on its own date; this looks at October onwards.)
     expect(buildForecast(back, TODAY).entries.filter((e) => e.occurrence.sourceId === 'elec' && e.occurrence.expectedDate >= '2026-10-01' && e.date <= '2026-11-30').map((e) => [e.occurrence.id, e.date, e.amountCents])).toEqual([
       ['elec@2026-10-03', '2026-10-03', 23000],
       ['elec@2026-10-20', '2026-10-20', 20000],
@@ -279,26 +279,34 @@ describe('history is kept, legitimate corrections still work', () => {
   });
 });
 
-describe('income certainty (E1)', () => {
-  const marks = (d: AppData) => [...d.sources.map((s) => [s.id, s.certainty ?? null]), ...d.records.map((r) => [r.id, r.certainty ?? null])];
+describe('retired income certainty (C1)', () => {
   const counted = (d: AppData) => buildForecast(d, TODAY).entries.filter((e) => e.counts).map((e) => [e.occurrence.id, e.date, e.signedCents]);
+  const marked = (user: string) =>
+    count(`select count(*) from public.sources where workspace_id = '${workspaceOf(user)}' and certainty is not null`) +
+    count(`select count(*) from public.occurrence_records where workspace_id = '${workspaceOf(user)}' and certainty is not null`);
 
-  it('stores possible income, reads it back exactly, and an ordinary save can mark it expected', () => {
+  it('a row marked possible before C1 loads as projected income that counts, and the next save clears the mark', () => {
     const { user, data } = stored();
-    let d = unwrap(ops.addSource(data, { kind: 'income', description: 'Tips', amountCents: usd(200), startDate: '2026-10-17', rule: { type: 'weekly' }, certainty: 'possible' }, clock, 'tips'));
-    d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Invoice', amountCents: usd(500), date: '2026-10-28', certainty: 'possible' }, clock, 'one-inv'));
-    const back = saveOk(user, d);
-    expect(marks(back)).toEqual([['elec', null], ['pay', null], ['rent', null], ['tips', 'possible'], ['one-inv', 'possible']]);
+    let d = unwrap(ops.addSource(data, { kind: 'income', description: 'Tips', amountCents: usd(200), startDate: '2026-10-17', rule: { type: 'weekly' } }, clock, 'tips'));
+    d = unwrap(ops.addOneTime(d, { kind: 'income', description: 'Invoice', amountCents: usd(500), date: '2026-10-28' }, clock, 'one-inv'));
+    const saved = saveOk(user, d);
+    expect(marked(user)).toBe(0);
+    // As a pre-C1 app would have stored them.
+    const ws = workspaceOf(user);
+    expect(sql('owner', `update public.sources set certainty = 'possible' where workspace_id = '${ws}' and id = 'tips'; update public.occurrence_records set certainty = 'possible' where workspace_id = '${ws}' and id = 'one-inv';`).ok).toBe(true);
+    expect(marked(user)).toBe(2);
+
+    const back = load(user);
+    expect(JSON.stringify(back)).not.toContain('certainty');
+    expect(back).toEqual(saved);
     expect(counted(back)).toEqual(counted(d));
-    expect(counted(back).some(([id]) => id === 'one-inv' || String(id).startsWith('tips@'))).toBe(false);
-    // Marking it expected is an ordinary change.
-    const expected = saveOk(user, unwrap(ops.setIncomeCertainty(back, 'one-inv', 'expected', clock)));
-    expect(expected.records.find((r) => r.id === 'one-inv')).not.toHaveProperty('certainty');
-    expect(count(`select count(*) from public.occurrence_records where workspace_id = '${workspaceOf(user)}' and certainty is not null`)).toBe(0);
-    expect(count(`select count(*) from public.sources where workspace_id = '${workspaceOf(user)}' and certainty is not null`)).toBe(1);
+    expect(counted(back).filter(([id]) => id === 'one-inv' || String(id).startsWith('tips@')).length).toBeGreaterThan(1);
+
+    saveOk(user, unwrap(ops.updateSourceDetails(back, 'tips', { description: 'Tips', tags: ['work'] }, clock)));
+    expect(marked(user)).toBe(0);
   });
 
-  it('existing rows stay expected: a plan saved without certainty has none stored', () => {
+  it('a plan saved now stores no certainty, through every kind of change', () => {
     const { user } = stored(richPlan());
     const ws = workspaceOf(user);
     expect(count(`select count(*) from public.sources where workspace_id = '${ws}' and certainty is not null`)).toBe(0);
@@ -518,8 +526,6 @@ describe('every kind of income through ordinary saves (E6)', () => {
       ['give a pending job a payment date', (d) => ops.editJob(d, 'job-brochure', { description: 'Brochure', amountCents: usd(300), status: 'done', expectedDate: '2026-10-28' }, clock)],
       ['delete an unpaid job and its payment', (d) => ops.deleteJob(d, 'job-copy')],
       ['remove the client', (d) => ops.deleteClient(d, 'client-acme', clock)],
-      ['mark possible income expected', (d) => ops.setIncomeCertainty(d, 'tutor', 'expected', clock)],
-      ['mark a possible one-time expected', (d) => ops.setIncomeCertainty(d, 'bonus', 'expected', clock)],
     ];
     let current = data;
     for (const [name, step] of steps) {

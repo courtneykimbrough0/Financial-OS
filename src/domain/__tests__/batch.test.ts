@@ -97,7 +97,8 @@ describe('marking several done as expected', () => {
     const d = unwrap(ops.recordAsExpected(data(), [PAY, CAR, GYM, WATER], clock));
     const f = buildForecast(d, TODAY);
     for (const occ of [PAY, CAR, GYM, WATER]) expect(f.entries.filter((e) => e.occurrence.id === occ)).toHaveLength(1);
-    expect(homeView(d, TODAY).attention).toEqual([]);
+    // Nothing recorded is still due. (The running total from today's $0 dips before the next paycheck: a timing gap, not a due item.)
+    expect(homeView(d, TODAY).attention.filter((i) => i.type !== 'gap')).toEqual([]);
   });
 });
 

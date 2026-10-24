@@ -19,7 +19,7 @@
 import type { DateStr } from './dates';
 import type { Cents } from './money';
 import { deriveStatus } from './occurrences';
-import { isUncountedPossible, type AppData, type FreelanceJob, type JobStatus, type OccurrenceRecord, type WorkEntry } from './types';
+import { type AppData, type FreelanceJob, type JobStatus, type OccurrenceRecord, type WorkEntry } from './types';
 
 export interface ShiftEarnings {
   wagesCents: Cents;
@@ -116,7 +116,7 @@ export function formatHours(minutes: number): string {
 }
 
 /** Where a freelance job's payment stands. */
-export type JobPaymentState = 'pending' | 'expected' | 'possible' | 'overdue' | 'received' | 'skipped';
+export type JobPaymentState = 'pending' | 'expected' | 'overdue' | 'received' | 'skipped';
 
 export interface JobView {
   job: FreelanceJob;
@@ -132,8 +132,8 @@ export interface JobView {
 
 /**
  * A job as it stands today: its work and its payment. "pending" is a job
- * without an expected payment date, and "possible" one whose payment isn't
- * dependable; neither counts. Only "received" is money in.
+ * without an expected payment date, which doesn't count; "expected" and
+ * "overdue" are projected payments, which do. Only "received" is money in.
  */
 export function jobView(data: AppData, job: FreelanceJob, today: DateStr): JobView {
   const record = job.paymentRecordId ? data.records.find((r) => r.id === job.paymentRecordId) : undefined;
@@ -141,7 +141,6 @@ export function jobView(data: AppData, job: FreelanceJob, today: DateStr): JobVi
   if (record.status === 'completed') return { job, status: 'paid', payment: 'received', amountCents: record.actualAmountCents!, date: record.actualDate, record };
   const base = { job, status: job.status, amountCents: record.scheduledAmountCents, date: record.scheduledDate, record };
   if (record.status === 'canceled') return { ...base, payment: 'skipped' };
-  if (isUncountedPossible(record)) return { ...base, payment: 'possible' };
   return { ...base, payment: deriveStatus(record, today) === 'overdue' ? 'overdue' : 'expected' };
 }
 

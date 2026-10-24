@@ -462,7 +462,7 @@ export interface EstimatePreviewPayment {
   date: DateStr;
   currentCents: Cents;
   proposedCents: Cents;
-  /** False before the next payday, where the running total doesn't reach. */
+  /** False before the forecast start, where the running total doesn't reach. */
   inRunningTotal: boolean;
   /** Running total at the end of that day, now and with the suggestion; null outside the running total. */
   currentTallyCents: Cents | null;
@@ -474,7 +474,7 @@ export interface EstimatePreview {
   window: { start: DateStr; end: DateStr };
   current: ForecastSnapshot;
   proposed: ForecastSnapshot;
-  /** False when there's no running total to compare, or its starting payday would change. */
+  /** False when the running total's starting day would change. */
   comparable: boolean;
   reason: 'no-forecast' | 'anchor-changed' | null;
   /** Proposed lowest running total minus the current one. */
@@ -507,7 +507,7 @@ export function previewEstimate(data: AppData, suggestion: EstimateSuggestion, c
   if (!applied.ok) return applied;
   const before = buildForecast(data, clock.today, { through: options.through });
   const after = buildForecast(applied.data, clock.today, { through: options.through });
-  const { window, current, proposed, anchorChanged } = compareForecasts(before, after, clock.today, options.through);
+  const { window, current, proposed, anchorChanged } = compareForecasts(before, after, options.through);
 
   const was = new Map(before.entries.map((e) => [e.occurrence.id, e]));
   const payments: EstimatePreviewPayment[] = after.entries
@@ -515,13 +515,12 @@ export function previewEstimate(data: AppData, suggestion: EstimateSuggestion, c
     .flatMap((e) => {
       const b = was.get(e.occurrence.id);
       if (!b || b.amountCents === e.amountCents) return [];
-      const inRunningTotal = after.forecastStart !== null && e.date >= after.forecastStart;
+      const inRunningTotal = e.date >= after.forecastStart;
       return [{ occurrenceId: e.occurrence.id, date: e.date, currentCents: b.amountCents, proposedCents: e.amountCents, inRunningTotal, currentTallyCents: inRunningTotal ? tallyOn(before, e.date) : null, proposedTallyCents: inRunningTotal ? tallyOn(after, e.date) : null }];
     });
 
   const base = { window, current, proposed, payments, continuesAfter: suggestion.scope === 'from-date' ? window.end : null };
   const empty = { lowestChangeCents: null, newGaps: [], worsenedGaps: [], reducedGaps: [], resolvedGaps: [] };
-  if (!before.forecastStart || !after.forecastStart) return { ok: true, preview: { ...base, ...empty, comparable: false, reason: 'no-forecast' } };
   if (anchorChanged) return { ok: true, preview: { ...base, ...empty, comparable: false, reason: 'anchor-changed' } };
 
   return {

@@ -64,8 +64,7 @@ export function Home() {
         />
         <ComingUp view={view} onOpen={open} />
         <Happened view={view} onOpen={open} />
-        <Possible view={view} onOpen={open} />
-        {view.comingUp.length === 0 && view.happened.length === 0 && view.possible.length === 0 && <EmptyLine>Nothing scheduled or recorded this week.</EmptyLine>}
+        {view.comingUp.length === 0 && view.happened.length === 0 && <EmptyLine>Nothing scheduled or recorded this week.</EmptyLine>}
       </section>
 
       <p className="center">
@@ -342,23 +341,6 @@ function Happened({ view, onOpen }: { view: HomeView; onOpen: (i: HomeItem) => v
       <SectionLabel id="happened-heading">Happened this week</SectionLabel>
       <ListGroup>
         {view.happened.map((i) => (
-          <li key={i.id}>
-            <ItemRow item={i} onOpen={onOpen} />
-          </li>
-        ))}
-      </ListGroup>
-    </section>
-  );
-}
-
-/** Possible income dated this week: listed apart, since none of it is counted. */
-function Possible({ view, onOpen }: { view: HomeView; onOpen: (i: HomeItem) => void }) {
-  if (view.possible.length === 0) return null;
-  return (
-    <section className="stack-sm" aria-labelledby="possible-heading">
-      <SectionLabel id="possible-heading">Possible</SectionLabel>
-      <ListGroup>
-        {view.possible.map((i) => (
           <li key={i.id}>
             <ItemRow item={i} onOpen={onOpen} />
           </li>

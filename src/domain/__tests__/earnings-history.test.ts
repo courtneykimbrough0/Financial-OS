@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activityView, possibleEntries, recordedEntries } from '../activity';
+import { activityView, recordedEntries } from '../activity';
 import { earningsHistory, hasEarningsData } from '../earnings-history';
 import { buildForecast } from '../forecast';
 import * as ops from '../operations';
@@ -59,7 +59,7 @@ describe('earnings for a month', () => {
     expect(h.notReceived.map((n) => [n.source.id, n.kind, n.cents, n.platforms])).toEqual([
       ['dash', 'session', usd(100), [{ platform: 'DoorDash', cents: usd(40) }, { platform: 'Uber', cents: usd(60) }]],
     ]);
-    expect(h.jobs.planned.map((v) => [v.job.id, v.payment, v.amountCents])).toEqual([['copy', 'possible', usd(1200)]]);
+    expect(h.jobs.planned.map((v) => [v.job.id, v.payment, v.amountCents])).toEqual([['copy', 'expected', usd(1200)]]);
     expect(h.jobs.doneNotPaid.map((v) => [v.job.id, v.payment, v.amountCents])).toEqual([['poster', 'pending', usd(150)]]);
     expect(h.jobs.paid.map((v) => [v.job.id, v.date, v.amountCents])).toEqual([['logo', '2026-10-09', usd(780)]]);
     expect([h.jobs.plannedCents, h.jobs.doneNotPaidCents, h.jobs.paidCents]).toEqual([usd(1200), usd(150), usd(780)]);
@@ -148,12 +148,12 @@ describe('empty and partly filled history', () => {
   });
 });
 
-describe('possible income in Activity', () => {
-  it('lists possible income not received in the month, never counted and never recorded', () => {
+describe('projected job payments in Activity', () => {
+  it('a planned job payment counts as projected income on its date, and is never listed as recorded', () => {
     const d = plan();
     const forecast = buildForecast(d, TODAY, { through: '2026-11-30' });
-    expect(possibleEntries(forecast, '2026-11-01', '2026-11-30').map((e) => [e.occurrence.id, e.date, e.counts, e.signedCents])).toEqual([[paymentOf(d, 'copy'), '2026-11-15', false, 0]]);
-    expect(recordedEntries(forecast, '2026-11-01', '2026-11-30').some((e) => e.possible)).toBe(false);
-    expect(possibleEntries(forecast, ...OCT)).toEqual([]);
+    const payment = forecast.entries.find((e) => e.occurrence.id === paymentOf(d, 'copy'))!;
+    expect([payment.date, payment.counts, payment.signedCents, payment.occurrence.status]).toEqual(['2026-11-15', true, usd(1200), 'scheduled']);
+    expect(recordedEntries(forecast, '2026-11-01', '2026-11-30').map((e) => e.occurrence.id)).not.toContain(paymentOf(d, 'copy'));
   });
 });

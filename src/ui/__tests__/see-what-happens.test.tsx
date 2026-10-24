@@ -75,8 +75,9 @@ describe('opened on one payment', () => {
     await tryChange(user, 'Move date', '2026-10-30');
     // The same numbers previewChange gives: the two comparisons share one engine.
     const r = previewChange(store.data, { kind: 'move', occurrenceId: 'repair', date: '2026-10-30' }, { today: TODAY, now: '' });
-    expect(r.ok && [r.preview.current.lowest?.tallyCents, r.preview.proposed.lowest?.tallyCents]).toEqual([usd(-300), usd(700)]);
-    expect(rows()[2]).toEqual(['Lowest running total', '−$300.00 on Oct 20', '$700.00 on Oct 30']);
+    // Moved past the paycheck, the running total never goes below its $0 start (today).
+    expect(r.ok && [r.preview.current.lowest?.tallyCents, r.preview.proposed.lowest?.tallyCents]).toEqual([usd(-300), 0]);
+    expect(rows()[2]).toEqual(['Lowest running total', '−$300.00 on Oct 20', '$0.00 on Oct 11']);
     expect(comparison()).toHaveTextContent('The timing gap Oct 20 – 28 would be gone.');
   });
 
@@ -152,14 +153,15 @@ describe('applying one change', () => {
     expect(screen.getByText('Your forecast changed after this preview. Check the updated preview before applying.')).toBeInTheDocument();
     expect(store.data.records.find((r) => r.id === 'repair')!.scheduledDate).toBe('2026-10-20');
     expect(applied).toBe(0);
-    expect(rows()[2]).toEqual(['Lowest running total', '−$390.00 on Oct 22', '$610.00 on Oct 30']);
+    expect(rows()[2]).toEqual(['Lowest running total', '−$390.00 on Oct 22', '$0.00 on Oct 11']);
   });
 
-  it('explains instead of comparing when the next payday would move, and offers no Apply', async () => {
+  it('compares moving the next paycheck like any change, since the running total still starts today, and offers Apply', async () => {
     const { user } = await open('pay@2026-10-15');
     await tryChange(user, 'Move date', '2026-10-16');
-    expect(comparison()).toHaveTextContent("This scenario moves your next payday from Oct 15, 2026 to Oct 16, 2026, so the running totals start on different days and can't be compared directly.");
-    expect(screen.queryByRole('button', { name: 'Apply change…' })).toBeNull();
+    expect(comparison()).not.toHaveTextContent(/can't be compared|payday/);
+    expect(comparison()).toHaveTextContent('running total from Oct 11, 2026, starting at $0.');
+    expect(screen.getByRole('button', { name: 'Apply change…' })).toBeInTheDocument();
   });
 
   it('shows the rule an invalid change breaks, and offers no Apply', async () => {

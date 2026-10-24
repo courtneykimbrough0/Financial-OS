@@ -22,7 +22,7 @@ function baseline(): AppData {
 /**
  * Two clients and four jobs:
  * - logo (Acme, $800, done), payment expected Oct 28;
- * - copy (Birch, $1,200, planned), payment possible Nov 15;
+ * - copy (Birch, $1,200, planned), payment expected Nov 15 (a projection, counted);
  * - brochure (Acme, $300, done), no payment date;
  * - poster (no client, $150, done), payment expected Oct 12, so overdue.
  */
@@ -30,7 +30,7 @@ function freelance(): AppData {
   let d = unwrap(ops.addClient(baseline(), 'Acme', SETUP, 'acme'));
   d = unwrap(ops.addClient(d, 'Birch', SETUP, 'birch'));
   d = unwrap(ops.addJob(d, { description: 'Logo design', clientId: 'acme', amountCents: usd(800), status: 'done', expectedDate: '2026-10-28' }, SETUP, 'logo'));
-  d = unwrap(ops.addJob(d, { description: 'Website copy', clientId: 'birch', amountCents: usd(1200), status: 'planned', expectedDate: '2026-11-15', certainty: 'possible' }, SETUP, 'copy'));
+  d = unwrap(ops.addJob(d, { description: 'Website copy', clientId: 'birch', amountCents: usd(1200), status: 'planned', expectedDate: '2026-11-15' }, SETUP, 'copy'));
   d = unwrap(ops.addJob(d, { description: 'Brochure', clientId: 'acme', amountCents: usd(300), status: 'done' }, SETUP, 'brochure'));
   d = unwrap(ops.addJob(d, { description: 'Poster', amountCents: usd(150), status: 'done', expectedDate: '2026-10-12' }, SETUP, 'poster'));
   return d;
@@ -44,11 +44,11 @@ const state = (d: AppData, id: string, today = TODAY) => {
   return [v.status, v.payment, v.amountCents, v.date];
 };
 
-describe('planned, done, paid, overdue, possible and pending', () => {
+describe('planned, done, paid, overdue and pending', () => {
   it('each job reads as its work and its payment', () => {
     const d = freelance();
     expect(state(d, 'logo')).toEqual(['done', 'expected', usd(800), '2026-10-28']);
-    expect(state(d, 'copy')).toEqual(['planned', 'possible', usd(1200), '2026-11-15']);
+    expect(state(d, 'copy')).toEqual(['planned', 'expected', usd(1200), '2026-11-15']);
     expect(state(d, 'brochure')).toEqual(['done', 'pending', usd(300), null]);
     expect(state(d, 'poster')).toEqual(['done', 'overdue', usd(150), '2026-10-12']);
     // A job without a date has no record; the others have one each, labeled with the client.
@@ -56,19 +56,19 @@ describe('planned, done, paid, overdue, possible and pending', () => {
     expect(d.records.map((r) => r.description)).toEqual(['Logo design · Acme', 'Website copy · Birch', 'Poster']);
   });
 
-  it('only a dated, expected payment counts: never because the work is done', () => {
+  it('only a dated payment counts, as a projection: never because the work is done', () => {
     const d = freelance();
     const f = buildForecast(d, TODAY);
     expect(entries(f, d, 'logo')).toEqual([expect.objectContaining({ date: '2026-10-28', signedCents: usd(800), counts: true })]);
-    expect(entries(f, d, 'copy')).toEqual([expect.objectContaining({ date: '2026-11-15', signedCents: 0, counts: false, possible: true })]);
-    // Overdue: carried to the forecast start like any late income.
-    expect(entries(f, d, 'poster')).toEqual([expect.objectContaining({ date: '2026-10-23', signedCents: usd(150), counts: true, carriedForward: true })]);
+    expect(entries(f, d, 'copy')).toEqual([expect.objectContaining({ date: '2026-11-15', signedCents: usd(1200), counts: true })]);
+    // Overdue: still a projection on its own date, like any late income.
+    expect(entries(f, d, 'poster')).toEqual([expect.objectContaining({ date: '2026-10-12', signedCents: usd(150), counts: true })]);
     expect(overdueEntries(f).map((e) => e.occurrence.description)).toEqual(['Poster']);
     expect(homeView(d, TODAY).attention.map((i) => i.id)).toContain(job(d, 'poster').paymentRecordId);
-    // October income: the baseline plus $800 and $150; the done $300 brochure and the possible copy add nothing.
+    // October income: the baseline plus $800 and $150; the done $300 brochure (no date) adds nothing. November adds the $1,200 copy.
     const base = buildForecast(baseline(), TODAY);
     expect(periodKpis(f, '2026-10-01', '2026-10-31').incomeCents - periodKpis(base, '2026-10-01', '2026-10-31').incomeCents).toBe(usd(950));
-    expect(periodKpis(f, '2026-11-01', '2026-11-30')).toEqual(periodKpis(base, '2026-11-01', '2026-11-30'));
+    expect(periodKpis(f, '2026-11-01', '2026-11-30').incomeCents - periodKpis(base, '2026-11-01', '2026-11-30').incomeCents).toBe(usd(1200));
   });
 
   it('done but unpaid work is earned, not received, counted once per job', () => {
@@ -110,9 +110,8 @@ describe('getting paid: recorded once, at the recorded date and amount', () => {
     expect(state(d, 'poster')).toEqual(['done', 'overdue', usd(150), '2026-10-12']);
   });
 
-  it('a possible payment is marked expected with E1 and then counts on its date', () => {
-    const plan = freelance();
-    const d = unwrap(ops.setIncomeCertainty(plan, job(plan, 'copy').paymentRecordId!, 'expected', clock));
+  it('a dated payment is a projection: it counts on its date with no certainty to set', () => {
+    const d = freelance();
     expect(state(d, 'copy')).toEqual(['planned', 'expected', usd(1200), '2026-11-15']);
     expect(entries(buildForecast(d, TODAY), d, 'copy')[0]).toMatchObject({ counts: true, signedCents: usd(1200) });
   });
@@ -140,10 +139,7 @@ describe('changing jobs and clients', () => {
     expect(job(d, 'logo').paymentRecordId).toBeUndefined();
     expect(d.records.some((r) => r.id === id)).toBe(false);
     expect(state(d, 'logo')).toEqual(['done', 'pending', usd(900), null]);
-    d = unwrap(ops.editJob(d, 'brochure', { description: 'Brochure', clientId: 'acme', amountCents: usd(300), status: 'done', expectedDate: '2026-11-05', certainty: 'possible' }, clock));
-    expect(state(d, 'brochure')).toEqual(['done', 'possible', usd(300), '2026-11-05']);
-    // Certainty changes through the job too; omitted means unchanged.
-    d = unwrap(ops.editJob(d, 'brochure', { description: 'Brochure', clientId: 'acme', amountCents: usd(300), status: 'done', certainty: 'expected' }, clock));
+    d = unwrap(ops.editJob(d, 'brochure', { description: 'Brochure', clientId: 'acme', amountCents: usd(300), status: 'done', expectedDate: '2026-11-05' }, clock));
     expect(state(d, 'brochure')).toEqual(['done', 'expected', usd(300), '2026-11-05']);
   });
 

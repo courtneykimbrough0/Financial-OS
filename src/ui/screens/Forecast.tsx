@@ -91,7 +91,8 @@ export function Forecast() {
     return null;
   }, [view, focus, customStart, customEnd, customError]);
 
-  const forecast = useMemo(() => buildForecast(data, today, { through: fixedRange?.[1] }), [data, today, fixedRange]);
+  // The running total starts on the first day of the period the person chose: the month in view, or the custom start date.
+  const forecast = useMemo(() => buildForecast(data, today, { start: fixedRange?.[0], through: fixedRange?.[1] }), [data, today, fixedRange]);
   const range = fixedRange;
 
   const openOccurrence = (id: string, back: Sheet | null = null) => setSheet({ kind: 'occurrence', id, back });
@@ -109,8 +110,8 @@ export function Forecast() {
         </h1>
       </header>
 
-      {forecast.issue && <IssueCard forecast={forecast} />}
-      {forecast.issue !== 'no-recurring-income' && (
+      {forecast.issue && <IssueCard />}
+      {forecast.issue !== 'nothing-planned' && (
         <>
           <button type="button" className="button small secondary scenario-entry" onClick={() => setSheet({ kind: 'scenario' })} aria-haspopup="dialog">
             See what happens if…
@@ -186,16 +187,16 @@ export function Forecast() {
       {sheet?.kind === 'day' && (
         <DaySheet forecast={forecast} date={sheet.date} onClose={() => setSheet(null)} onOpen={(id) => openOccurrence(id, sheet)} />
       )}
-      {sheet?.kind === 'about-tally' && forecast.anchor && forecast.forecastStart && (
+      {sheet?.kind === 'about-tally' && (
         <Modal title="How cash flow and the running total work" onClose={() => setSheet(null)}>
           <div className="stack">
             <p>
               <strong>Cash flow</strong> is income minus spending and what you save in Strategic Reserves, for the period you're looking at. Reserves stay yours; they're just not available to spend.
             </p>
             <p>
-              Your <strong>running total</strong> starts at $0 the day before your next paycheck, then adds what comes in and subtracts what goes out. It shows whether your income arrives in time for your payments; your bank balance can differ.
+              Your <strong>running total</strong> starts at $0 on {formatMedium(forecast.forecastStart)}, the first day of the period you chose, then adds what comes in and subtracts what goes out. It shows whether money comes in before it goes out. The $0 is a starting point, not your bank balance.
             </p>
-            <p className="hint">Payments due before {formatMedium(forecast.forecastStart)} come from the money you have now.</p>
+            <p className="hint">Everything you haven't recorded is projected: it counts on its date until you record what actually happened.</p>
           </div>
         </Modal>
       )}
@@ -211,17 +212,13 @@ export function Forecast() {
 
 // ---------------------------------------------------------------------------
 
-function IssueCard({ forecast }: { forecast: Forecast }) {
+function IssueCard() {
   return (
     <div className="card stack">
       <p>
-        <strong>Add a recurring income to start your forecast.</strong>
+        <strong>Add your income or a payment to start your forecast.</strong>
       </p>
-      <p>
-        {forecast.issue === 'no-recurring-income'
-          ? "Add your income to see what's ahead."
-          : 'None of your recurring income has an upcoming payment. Check its next payment date.'}
-      </p>
+      <p>Add what you expect to come in and go out to see what's ahead.</p>
       <div>
         <button type="button" className="button primary" onClick={() => navigate('plan/income')}>
           Go to Income
@@ -256,7 +253,7 @@ function PeriodBody({
 
   return (
     <>
-      <CashFlowHero forecast={forecast} plan={plan} low={low} negatives={negatives} range={range} today={today} onInfo={() => onInfo('about-tally')} />
+      <CashFlowHero forecast={forecast} plan={plan} low={low} negatives={negatives} range={range} onInfo={() => onInfo('about-tally')} />
 
       <div className="calendar-card">
         <Calendar rows={rows} start={start} end={end} today={today} selected={selected} lowDate={low?.date ?? null} onSelect={onDay} />
@@ -292,8 +289,8 @@ function PeriodGapsSheet({ forecast, range, onClose }: { forecast: Forecast; ran
  * The one summary for the period in view: cash flow (income minus spending
  * and money set aside), with its breakdown beneath it instead of in a second
  * card. Then, when the running total goes below $0, the lowest point and the
- * timing gap; otherwise one line saying it stays above $0. The next expected
- * payday closes the card.
+ * timing gap; otherwise one line saying it stays above $0. The running
+ * total's starting day (the period's first) closes the card.
  */
 function CashFlowHero({
   forecast,
@@ -301,7 +298,6 @@ function CashFlowHero({
   low,
   negatives,
   range,
-  today,
   onInfo,
 }: {
   forecast: Forecast;
@@ -309,12 +305,10 @@ function CashFlowHero({
   low: LowPoint | null;
   negatives: NegativeStretch[];
   range: [DateStr, DateStr];
-  today: DateStr;
   onInfo: () => void;
 }) {
   const [showGaps, setShowGaps] = useState(false);
-  const payday = forecast.forecastStart;
-  const daysToPayday = payday ? diffDays(today, payday) : 0;
+  const start = forecast.forecastStart;
   const worst = negatives.reduce<NegativeStretch | null>((w, n) => (w === null || n.lowestCents < w.lowestCents ? n : w), null);
   const negative = plan.cashFlowCents < 0;
   return (
@@ -365,22 +359,13 @@ function CashFlowHero({
           </p>
         )}
       </div>
-      {payday && (
-        <div className="hero-footer">
-          <Icon icon={Banknote} size={22} className="hero-footer-icon" />
-          <span>
-            {daysToPayday > 1
-              ? `Next paycheck in ${daysToPayday} days`
-              : daysToPayday === 1
-                ? 'Next paycheck is tomorrow'
-                : daysToPayday === 0
-                  ? 'Next paycheck is today'
-                  : `Your ${formatShort(payday)} paycheck is overdue`}
-            <span className="muted"> · {formatShort(payday)}</span>
-            {!low && <span className="hero-footer-sub">Your running total starts then.</span>}
-          </span>
-        </div>
-      )}
+      <div className="hero-footer">
+        <Icon icon={Banknote} size={22} className="hero-footer-icon" />
+        <span>
+          Running total from {formatShort(start)}
+          <span className="hero-footer-sub">Starts at $0, not your bank balance.</span>
+        </span>
+      </div>
     </section>
   );
 }
@@ -695,7 +680,7 @@ function Timeline({
             if (!startsHere || r.date !== forecastStart) return row;
             return (
               <Fragment key={r.date}>
-                <li className="timeline-start hint">Your running total starts {formatShort(forecastStart)}, your next payday.</li>
+                <li className="timeline-start hint">Your running total starts {formatShort(forecastStart)}.</li>
                 {row}
               </Fragment>
             );

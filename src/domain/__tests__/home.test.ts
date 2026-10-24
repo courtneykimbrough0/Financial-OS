@@ -133,9 +133,9 @@ describe('timing gaps', () => {
     expect(later.laterGaps.map((g) => [g.id, g.gap.lowestCents])).toEqual([['gap@2026-10-28', usd(-400)]]);
   });
 
-  it('a gap already under way still needs attention until it ends', () => {
+  it('once their dates pass unrecorded, the paycheck and the repair need attention as overdue; the running total from today leaves them out', () => {
     const d = gapOn('2026-10-15');
-    expect(ids(homeView(d, '2026-10-16').attention)).toContain('gap@2026-10-15');
+    expect(ids(homeView(d, '2026-10-16').attention)).toEqual(['pay@2026-10-14', 'repair']);
   });
 });
 

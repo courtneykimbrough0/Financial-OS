@@ -37,9 +37,9 @@ function household(): AppData {
 }
 
 describe('running total arithmetic', () => {
-  it('applies every income and expense on its date, in cents, from the payday anchor', () => {
+  it('applies every income and expense on its date, in cents, from the chosen start', () => {
     const f = buildForecast(household(), TODAY);
-    expect(f.anchor).toBe('2026-10-14');
+    expect(f.anchor).toBe('2026-10-10');
     expect(ledger(f, '2026-10-15', '2026-11-30')).toEqual([
       ['2026-10-15', 2000.1, 2000.1],
       ['2026-10-18', -15.99, 1984.11],
@@ -80,32 +80,42 @@ describe('spending before the next payday', () => {
     return unwrap(ops.addOneTime(d, { kind: 'income', description: 'Side job', amountCents: usd(50), date: '2026-10-12' }, clock, 'one-side'));
   }
 
-  it('counts in cash flow for its period but not in the running total, which starts at payday', () => {
+  it('counts in cash flow and in the running total from the chosen start, so the shortfall before payday shows', () => {
     const f = buildForecast(early(), TODAY);
     expect(ledger(f, '2026-10-11', '2026-10-15')).toEqual([
+      ['2026-10-12', 50, 50],
+      ['2026-10-13', -90, -40],
+      ['2026-10-15', 2000.1, 1960.1],
+    ]);
+    expect(periodKpis(f, '2026-10-01', '2026-10-31')).toMatchObject({ incomeCents: usd(4050.2), outflowCents: usd(416.54) });
+    expect(timingGapsAhead(f)).toEqual([{ start: '2026-10-13', end: '2026-10-14', days: 2, lowestCents: usd(-40), lowestDate: '2026-10-13' }]);
+    // A start chosen on payday leaves them out of that running total, never out of cash flow.
+    expect(ledger(buildForecast(early(), TODAY, { start: '2026-10-15' }), '2026-10-11', '2026-10-15')).toEqual([
       ['2026-10-12', 50, null],
       ['2026-10-13', -90, null],
       ['2026-10-15', 2000.1, 2000.1],
     ]);
-    expect(periodKpis(f, '2026-10-01', '2026-10-31')).toMatchObject({ incomeCents: usd(4050.2), outflowCents: usd(416.54) });
-    expect(timingGapsAhead(f)).toEqual([]);
   });
 
-  it('once overdue and still unpaid, is carried to payday so the money still owed stays in the total', () => {
+  it('once overdue and still unpaid, stays an overdue projection on its own date, counted when the chosen start includes it', () => {
     const today = '2026-10-14';
     const f = buildForecast(early(), today);
-    // Both are past due and not yet recorded, so both move to payday.
-    const carried = f.entries.filter((e) => e.carriedForward).map((e) => [e.occurrence.id, e.date]);
-    expect(carried).toEqual([['one-side', '2026-10-15'], ['one-electric', '2026-10-15']]);
-    expect(tallyOn(f, '2026-10-15')).toBe(usd(2000.1 + 50 - 90));
+    // Past due and not recorded: still projections, never moved or recorded by the date passing.
+    expect(f.entries.filter((e) => e.occurrence.id === 'one-side' || e.occurrence.id === 'one-electric').map((e) => [e.occurrence.id, e.date, e.occurrence.displayStatus, e.counts])).toEqual([
+      ['one-side', '2026-10-12', 'overdue', true],
+      ['one-electric', '2026-10-13', 'overdue', true],
+    ]);
+    // A running total from today doesn't reach them; one from Oct 12 does.
+    expect(tallyOn(f, '2026-10-15')).toBe(usd(2000.1));
+    expect(tallyOn(buildForecast(early(), today, { start: '2026-10-12' }), '2026-10-15')).toBe(usd(2000.1 + 50 - 90));
   });
 
-  it('once paid before payday, stays out of the running total', () => {
+  it('once paid, counts at its recorded amount and date, in any running total that includes that date', () => {
     const d = unwrap(ops.recordActual(early(), 'one-electric', { amountCents: usd(92), date: '2026-10-13' }, clockAt('2026-10-13')));
-    const f = buildForecast(d, '2026-10-14');
-    // The side payment is still unrecorded, so it alone is carried to payday.
-    expect(tallyOn(f, '2026-10-15')).toBe(usd(2000.1 + 50));
-    expect(periodKpis(f, '2026-10-13', '2026-10-13').outflowCents).toBe(usd(92));
+    // From today (Oct 14), neither is in the running total; from Oct 12 the recorded $92 and the still-projected $50 are.
+    expect(tallyOn(buildForecast(d, '2026-10-14'), '2026-10-15')).toBe(usd(2000.1));
+    expect(tallyOn(buildForecast(d, '2026-10-14', { start: '2026-10-12' }), '2026-10-15')).toBe(usd(2000.1 + 50 - 92));
+    expect(periodKpis(buildForecast(d, '2026-10-14'), '2026-10-13', '2026-10-13').outflowCents).toBe(usd(92));
   });
 });
 
@@ -229,10 +239,12 @@ describe('multiple income sources and the next payday', () => {
     },
   ];
 
-  it.each(anchorCases)('anchor: $name', ({ change, today, payday }) => {
-    const f = buildForecast(change(household()), today);
+  it.each(anchorCases)('the start stays where chosen whatever happens to income: $name', ({ change, today, payday }) => {
+    // Today by default; never moved to the next payday.
+    expect(buildForecast(change(household()), today).forecastStart).toBe(today);
+    // Chosen on the payday, the running total starts with that day's own money.
+    const f = buildForecast(change(household()), today, { start: payday });
     expect(f.forecastStart).toBe(payday);
-    // The running total starts at the payday's own amount (plus anything else that day).
     const first = dailyTimeline(f, payday, payday)[0]!;
     expect(first.tallyCents).toBe(first.netCents);
   });

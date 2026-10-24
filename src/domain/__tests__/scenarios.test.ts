@@ -8,17 +8,17 @@ import type { AppData } from '../types';
 import { clockAt, source, unwrap, usd } from './helpers';
 
 /*
- * Today is Fri 2026-10-16. Paid $1,000 every other Friday from Oct 23 (the
- * running total starts Oct 22); rent $1,500 on the 1st from Nov 1; a car
- * loan payment of $300 on the 28th from Oct 28. The period runs to Jan 20,
- * 2027 (90 days from Oct 23). Running totals as the plan stands:
+ * Today is Fri 2026-10-23, when the running total starts ($0 at the end of
+ * Oct 22). Paid $1,000 every other Friday from today; rent $1,500 on the 1st
+ * from Nov 1; a car loan payment of $300 on the 28th from Oct 28. The period
+ * runs to Jan 20, 2027 (90 days from today). Running totals as the plan stands:
  *   Oct 23  1,000   Oct 28  700   Nov 1  −800   Nov 6  200   Nov 20  1,200
  *   Nov 28    900   Dec 1  −600   Dec 4   400   Dec 18 1,400 Dec 28  1,100
  *   Jan 1     600   Jan 15 1,600
  * Gaps: Nov 1–5 (down to −$800) and Dec 1–3 (−$600). Cash flow: 7 paychecks
  * (+$7,000), rent ×3 and the loan ×3 (−$5,400), +$1,600.
  */
-const TODAY = '2026-10-16';
+const TODAY = '2026-10-23';
 const clock = clockAt(TODAY);
 
 function plan(): AppData {
@@ -38,7 +38,7 @@ const gap = (g: { start: string; end: string; lowestCents: number; recoversOn: s
 describe('the baseline', () => {
   it('matches the hand-worked plan', () => {
     const r = run([{ kind: 'one-time-expense', description: 'Nothing', amountCents: 1, date: '2027-03-01' }]);
-    expect(r.period).toEqual({ start: '2026-10-16', end: '2027-01-20', runningTotalFrom: '2026-10-23' });
+    expect(r.period).toEqual({ start: '2026-10-23', end: '2027-01-20', runningTotalFrom: '2026-10-23' });
     expect(r.baseline).toMatchObject({
       forecastStart: '2026-10-23',
       anchor: '2026-10-22',
@@ -271,42 +271,43 @@ describe('variable income', () => {
 
 describe('confirmed and hypothetical income', () => {
   it('hypothetical recurring income never changes confirmed income', () => {
-    const r = run([{ kind: 'hypothetical-income', description: 'Side gig', amountCents: usd(200), schedule: { startDate: '2026-10-20', rule: { type: 'weekly' } } }]);
+    const r = run([{ kind: 'hypothetical-income', description: 'Side gig', amountCents: usd(200), schedule: { startDate: '2026-10-24', rule: { type: 'weekly' } } }]);
     expect(r.comparable).toBe(true);
-    expect(r.scenario.forecastStart).toBe('2026-10-23');
+    expect(r.scenario.forecastStart).toBe(TODAY);
     expect(r.scenario.cashFlow.confirmedIncomeCents).toBe(700000);
-    // Oct 20 is before payday: cash flow, not the running total.
-    expect(r.assumptions[0]).toMatchObject({ income: 'hypothetical', inRunningTotal: false });
+    expect(r.assumptions[0]).toMatchObject({ income: 'hypothetical', inRunningTotal: true });
   });
 
-  it("with no confirmed income, hypothetical income doesn't create a running total to compare", () => {
+  it('with no income at all, the running totals still compare from today', () => {
     let d = unwrap(ops.completeOnboarding(ops.emptyData()));
     d = source(d, TODAY, 'bill', 'Rent', 1500, '2026-11-01', { type: 'monthly' }, 'rent');
-    const r = run([{ kind: 'hypothetical-income', description: 'Side gig', amountCents: usd(400), schedule: { startDate: '2026-10-23', rule: { type: 'weekly' } } }], d);
-    expect(r).toMatchObject({ comparable: false, reason: 'no-forecast', differences: { lowestCents: null, endingCents: null }, newGaps: [] });
-    expect(r.limitations[0]).toBe("There's no upcoming income to start a running total from, so only cash flow is compared.");
+    const r = run([{ kind: 'hypothetical-income', description: 'Side gig', amountCents: usd(400), schedule: { startDate: TODAY, rule: { type: 'weekly' } } }], d);
+    expect(r).toMatchObject({ comparable: true, reason: null, limitations: [] });
+    // Rent alone: −$4,500 by Jan 20; with $400 a week (13 weeks, Oct 23 – Jan 15): +$700.
+    expect([r.baseline.endingCents, r.scenario.endingCents]).toEqual([usd(-4500), usd(700)]);
   });
 });
 
-describe('forecast anchor', () => {
-  it('moving the next payday makes the running totals not comparable', () => {
+describe('the forecast start', () => {
+  it('moving the next paycheck keeps the start, so the running totals are compared', () => {
     const r = run([{ kind: 'occurrence-date', occurrenceId: 'pay@2026-10-23', date: '2026-10-26' }]);
-    expect(r).toMatchObject({ comparable: false, reason: 'anchor-changed', differences: { incomeCents: 0, outflowCents: 0, reservesCents: 0, netCents: 0, lowestCents: null, endingCents: null } });
-    expect(r.limitations[0]).toBe("This scenario moves your next payday from Oct 23, 2026 to Oct 26, 2026, so the running totals start on different days and can't be compared directly.");
+    expect(r).toMatchObject({ comparable: true, reason: null, differences: { incomeCents: 0, outflowCents: 0, reservesCents: 0, netCents: 0, lowestCents: 0, endingCents: 0 } });
+    expect([r.baseline.forecastStart, r.scenario.forecastStart]).toEqual([TODAY, TODAY]);
   });
 
-  it("moving a payment to before the next payday isn't shown as a fix", () => {
-    const r = run([{ kind: 'occurrence-date', occurrenceId: 'loan@2026-10-28', date: '2026-10-20' }]);
-    expect(r).toMatchObject({ comparable: false, reason: 'before-payday' });
-    expect(r.limitations[0]).toBe("Car loan would move to before your next payday (Oct 23, 2026), where the running total starts, so it would drop out of it. The forecast can't show whether money on hand covers it.");
-  });
-
-  it('an expense before the next payday counts in cash flow, not the running total', () => {
-    const r = run([{ kind: 'one-time-expense', description: 'Groceries', amountCents: usd(50), date: '2026-10-19' }]);
+  it('a payment moved earlier, to today, is in the running total; here the lowest point is unchanged', () => {
+    const r = run([{ kind: 'occurrence-date', occurrenceId: 'loan@2026-10-28', date: TODAY }]);
     expect(r.comparable).toBe(true);
-    expect(r.assumptions[0]!.inRunningTotal).toBe(false);
-    expect(r.limitations).toEqual(['Groceries: −$50.00 once on Oct 19, 2026: dates before your next payday (Oct 23, 2026) count in cash flow but not in the running total, which starts that day.']);
-    expect(r.differences).toEqual({ incomeCents: 0, outflowCents: 5000, reservesCents: 0, netCents: -5000, lowestCents: 0, endingCents: 0 });
+    expect(r.assumptions[0]!.inRunningTotal).toBe(true);
+    expect(r.differences.lowestCents).toBe(0);
+  });
+
+  it('an expense before the next paycheck counts in cash flow and the running total', () => {
+    const r = run([{ kind: 'one-time-expense', description: 'Groceries', amountCents: usd(50), date: TODAY }]);
+    expect(r.comparable).toBe(true);
+    expect(r.assumptions[0]!.inRunningTotal).toBe(true);
+    expect(r.limitations).toEqual([]);
+    expect(r.differences).toEqual({ incomeCents: 0, outflowCents: 5000, reservesCents: 0, netCents: -5000, lowestCents: -5000, endingCents: -5000 });
   });
 });
 
@@ -383,7 +384,7 @@ describe('invalid assumptions', () => {
 describe('choosing and summarizing', () => {
   it('lists upcoming payments and liability dates to choose from', () => {
     const o = scenarioOptions(plan(), TODAY);
-    // Through Jan 14, 2027 (90 days from today), in forecast order.
+    // Through Jan 21, 2027 (90 days from today), in forecast order.
     expect(o.occurrences.map((x) => [x.id, x.date, x.amountCents])).toEqual([
       ['pay@2026-10-23', '2026-10-23', 100000],
       ['loan@2026-10-28', '2026-10-28', 30000],
@@ -397,6 +398,7 @@ describe('choosing and summarizing', () => {
       ['loan@2026-12-28', '2026-12-28', 30000],
       ['pay@2027-01-01', '2027-01-01', 100000],
       ['rent@2027-01-01', '2027-01-01', 150000],
+      ['pay@2027-01-15', '2027-01-15', 100000],
     ]);
     expect(o.liabilities).toEqual([{ sourceId: 'loan', description: 'Car loan', amountCents: 30000, dates: ['2026-10-28', '2026-11-28', '2026-12-28', '2027-01-28', '2027-02-28', '2027-03-28'] }]);
     // A liability with a change already set can't be changed in a scenario, so it isn't offered.

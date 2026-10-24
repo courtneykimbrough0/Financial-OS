@@ -92,11 +92,12 @@ describe('D3 summary: one card, cash flow first, its breakdown beneath', () => {
     expect(within(hero()).queryByText('Spending')).toBeNull();
   });
 
-  it('when the running total starts after the period, the payday line says so instead of an empty lowest-total row', async () => {
+  it('the closing line says where the running total starts, the period’s first day, and never names a payday', async () => {
     const d = unwrap(ops.completeOnboarding(source(ops.emptyData(), SETUP, 'income', 'Paycheck', 900, '2026-11-02', { type: 'monthly' }, 'pay')));
     await openForecast(d);
     expect(hero()).not.toHaveTextContent('Lowest running total');
-    expect(hero().querySelector('.hero-footer')).toHaveTextContent('Next paycheck in 20 days · Nov 2Your running total starts then.');
+    expect(hero().querySelector('.hero-footer')).toHaveTextContent('Running total from Oct 1Starts at $0, not your bank balance.');
+    expect(hero()).not.toHaveTextContent(/paycheck|payday/i);
   });
 });
 

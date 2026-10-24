@@ -6,7 +6,7 @@
  *
  * Every financially meaningful field round-trips exactly: identities,
  * original predictions, current expectations, actuals, schedules, pauses,
- * estimate dismissals, income certainty, income type and wage, shifts,
+ * estimate dismissals, income type and wage, shifts,
  * freelance clients and jobs, accounts and transfers, item and record
  * accounts, opening balances, reserve releases, and onboarding. Three things come back in canonical form (see `canonicalize`):
  * timestamps as ISO-8601 UTC with milliseconds, schedule versions in start
@@ -29,7 +29,11 @@ export interface SourceRow {
   dismissed_current_cents: number | null;
   dismissed_proposed_cents: number | null;
   dismissed_through: DateStr | null;
-  /** 'possible' on possible income; null means expected (see `IncomeCertainty`). */
+  /**
+   * Retired in C1 (income certainty was removed: every unrecorded income is a
+   * projection). Always written null; a stored 'possible' is ignored on load,
+   * so that income counts, and is cleared by the next save.
+   */
   certainty: 'possible' | null;
   income_type: IncomeType | null;
   hourly_wage_cents: number | null;
@@ -72,7 +76,7 @@ export interface RecordRow {
   completed_at: string | null;
   canceled_at: string | null;
   cancel_note: string | null;
-  /** 'possible' on possible one-time income; null otherwise. */
+  /** Retired in C1, as `SourceRow.certainty`: always written null, ignored on load. */
   certainty: 'possible' | null;
   account_id: string | null;
   /** True only on a one-time Strategic Reserves record that returns money to cash flow. */
@@ -193,7 +197,7 @@ export function toRows(data: AppData): PlanRows {
     dismissed_current_cents: s.estimateDismissal?.currentCents ?? null,
     dismissed_proposed_cents: s.estimateDismissal?.proposedCents ?? null,
     dismissed_through: s.estimateDismissal?.through ?? null,
-    certainty: s.certainty ?? null,
+    certainty: null,
     income_type: s.incomeType ?? null,
     hourly_wage_cents: s.hourlyWageCents ?? null,
     account_id: s.accountId ?? null,
@@ -221,7 +225,7 @@ export function toRows(data: AppData): PlanRows {
     completed_at: r.completedAt,
     canceled_at: r.canceledAt,
     cancel_note: r.cancelNote,
-    certainty: r.certainty ?? null,
+    certainty: null,
     account_id: r.accountId ?? null,
     release: r.release === true,
     created_at: r.createdAt,
@@ -317,7 +321,6 @@ export function fromRows(plan: LoadedPlan): AppData {
       ...(s.dismissed_current_cents !== null
         ? { estimateDismissal: { currentCents: Number(s.dismissed_current_cents), proposedCents: Number(s.dismissed_proposed_cents), through: s.dismissed_through! } }
         : {}),
-      ...(s.certainty === 'possible' ? { certainty: 'possible' as const } : {}),
       ...(s.income_type ? { incomeType: s.income_type } : {}),
       ...(s.hourly_wage_cents !== null && s.hourly_wage_cents !== undefined ? { hourlyWageCents: Number(s.hourly_wage_cents) } : {}),
       ...(s.account_id ? { accountId: s.account_id } : {}),
@@ -332,7 +335,6 @@ export function fromRows(plan: LoadedPlan): AppData {
       kind: r.kind,
       description: r.description,
       tags: r.tags ?? [],
-      ...(r.certainty === 'possible' ? { certainty: 'possible' as const } : {}),
       expectedDate: r.expected_date,
       expectedAmountCents: Number(r.expected_amount_cents),
       scheduledDate: r.scheduled_date,
@@ -520,7 +522,6 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
     });
     if (s.versions.some((v, j) => j > 0 && v.startDate < s.versions[j - 1]!.startDate)) normalized(`${where}: schedules will be stored in start-date order.`);
     if (s.pausedRanges.some((p) => !(isValidDateStr(p.from) && isValidDateStr(p.until) && p.until > p.from))) error(`${where}: a turned-off stretch has invalid dates.`);
-    if (s.certainty !== undefined && (s.certainty !== 'possible' || s.kind !== 'income')) error(`${where}: only income can be possible.`);
     if ((s.incomeType !== undefined || s.hourlyWageCents !== undefined) && (s.kind !== 'income' || !s.incomeType || (s.hourlyWageCents !== undefined && (!isCents(s.hourlyWageCents) || s.incomeType === 'gig')))) {
       error(`${where}: only income can be hourly, tipped or gig, and a wage needs hourly or tipped and an amount above $0.`);
     }
@@ -540,7 +541,6 @@ export function checkForMigration(data: AppData): MigrationIssue[] {
     }
     if (!text(r.description)) error(`${where}: the description is empty or longer than 200 characters.`);
     if (r.tags.length > 10) error(`${where}: more than 10 tags.`);
-    if (r.certainty !== undefined && (r.certainty !== 'possible' || r.kind !== 'income' || r.sourceId !== null)) error(`${where}: only one-time income can be marked possible; a recurring occurrence follows its item.`);
     for (const [label, d] of [['original', r.expectedDate], ['scheduled', r.scheduledDate]] as const) if (!isValidDateStr(d)) error(`${where}: the ${label} date isn't valid.`);
     if (!isCents(r.expectedAmountCents) || !isCents(r.scheduledAmountCents)) error(`${where}: an amount must be above $0 and at most $100,000,000.`);
     const completed = r.status === 'completed';

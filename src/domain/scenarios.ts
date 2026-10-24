@@ -18,10 +18,8 @@ import { expandSource, findOccurrence } from './occurrences';
 import * as ops from './operations';
 import { compareForecasts, gapChanges, SKIP_NOTE, type ProposedChange } from './preview';
 import { describeRule, startKeepsDates } from './recurrence';
-import { isUncountedPossible, signFor, type AppData, type RecurrenceRule, type TransactionKind } from './types';
+import { signFor, type AppData, type RecurrenceRule, type TransactionKind } from './types';
 
-/** Possible income isn't in any total, so a scenario that changes it would change nothing. */
-const POSSIBLE_NOT_COUNTED = (name: string) => `${name} is possible income, which isn't counted, so changing it here changes nothing. Mark it expected first.`;
 
 /** A recurring schedule for a hypothetical item. */
 export type ScenarioSchedule = { startDate: DateStr; rule: RecurrenceRule };
@@ -58,7 +56,7 @@ export interface ScenarioAssumption {
   dates: DateStr[];
   /** For income: `hypothetical` when the scenario adds it, `confirmed` when the person entered it. Null for money out. */
   income: 'hypothetical' | 'confirmed' | null;
-  /** False when any of its dates are before the next payday, where the running total doesn't reach. */
+  /** False when any of its dates are before the forecast start, where the running total doesn't reach. */
   inRunningTotal: boolean;
   /** For variable-income cases: which case this is. */
   incomeCase?: IncomeCaseName;
@@ -95,11 +93,11 @@ export interface ScenarioOutlook {
 
 export interface ScenarioResult {
   assumptions: ScenarioAssumption[];
-  /** Cash flow covers `start` (today) to `end`; the running total runs from `runningTotalFrom` (the next payday) to `end`. */
+  /** Cash flow covers `start` (today) to `end`; the running total runs from `runningTotalFrom` (the forecast start, today) to `end`. */
   period: { start: DateStr; end: DateStr; runningTotalFrom: DateStr | null };
   baseline: ScenarioOutlook;
   scenario: ScenarioOutlook;
-  /** False when the two running totals don't start from the same payday, or there is none; the running-total comparisons are then null or empty. */
+  /** False when the two running totals don't start on the same day; the running-total comparisons are then null or empty. */
   comparable: boolean;
   reason: 'no-forecast' | 'anchor-changed' | 'before-payday' | null;
   limitations: string[];
@@ -172,7 +170,6 @@ function applyChange(data: AppData, change: ScenarioChange, index: number, clock
       const o = findOccurrence(data, change.occurrenceId, clock.today);
       if (!o) return 'That item could not be found.';
       if (o.status !== 'scheduled') return `${o.description} on ${formatMedium(o.scheduledDate)} has already been recorded or skipped.`;
-      if (isUncountedPossible(o)) return POSSIBLE_NOT_COUNTED(o.description);
       const next = unwrap(ops.cancelOccurrence(data, o.id, SKIP_NOTE, clock));
       if (typeof next === 'string') return next;
       return {
@@ -185,7 +182,6 @@ function applyChange(data: AppData, change: ScenarioChange, index: number, clock
       const o = findOccurrence(data, change.occurrenceId, clock.today);
       if (!o) return 'That item could not be found.';
       if (o.status !== 'scheduled') return `${o.description} on ${formatMedium(o.scheduledDate)} has already been recorded or skipped.`;
-      if (isUncountedPossible(o)) return POSSIBLE_NOT_COUNTED(o.description);
       if (change.kind === 'occurrence-date') {
         const err = notPast(change.date);
         if (err) return err;
@@ -261,7 +257,7 @@ function cashFlow(f: Forecast, start: DateStr, end: DateStr): ScenarioCashFlow {
 }
 
 function outlook(f: Forecast, side: { lowest: LowPoint | null; gaps: GapExplanation[] }, start: DateStr, end: DateStr): ScenarioOutlook {
-  return { forecastStart: f.forecastStart, anchor: f.anchor, cashFlow: cashFlow(f, start, end), lowest: side.lowest, endingCents: f.forecastStart ? tallyOn(f, end) : null, gaps: side.gaps };
+  return { forecastStart: f.forecastStart, anchor: f.anchor, cashFlow: cashFlow(f, start, end), lowest: side.lowest, endingCents: tallyOn(f, end), gaps: side.gaps };
 }
 
 /**
@@ -287,14 +283,14 @@ export function evaluateScenario(data: AppData, changes: ScenarioChange[], clock
   }
 
   const before = buildForecast(data, clock.today, { through: options.through });
-  // Hypothetical income counts inside the running total but never moves its start earlier.
-  const after = buildForecast(copy, clock.today, { through: options.through, excludeFromStart: (id) => id.startsWith(SCENARIO_ID_PREFIX) });
-  const { window, current, proposed, anchorChanged } = compareForecasts(before, after, clock.today, options.through);
+  // Both forecasts start on the same chosen day (today), so their running totals compare directly.
+  const after = buildForecast(copy, clock.today, { through: options.through });
+  const { window, current, proposed, anchorChanged } = compareForecasts(before, after, options.through);
   const end = window.end;
   const start = before.forecastStart;
   const assumptions: ScenarioAssumption[] = pending.map((a) => {
     const dates = a.dates(end).filter((d) => d >= clock.today && d <= end);
-    return { ...a, dates, inRunningTotal: start !== null && dates.every((d) => d >= start) };
+    return { ...a, dates, inRunningTotal: dates.every((d) => d >= start) };
   });
 
   const baseline = outlook(before, current, clock.today, end);
@@ -302,7 +298,7 @@ export function evaluateScenario(data: AppData, changes: ScenarioChange[], clock
   const limitations: string[] = [];
   for (const a of assumptions) {
     if (a.dates.length === 0) limitations.push(`${a.label}: no dates fall within ${formatMedium(clock.today)} to ${formatMedium(end)}.`);
-    else if (!a.inRunningTotal && start) limitations.push(`${a.label}: dates before your next payday (${formatMedium(start)}) count in cash flow but not in the running total, which starts that day.`);
+    else if (!a.inRunningTotal) limitations.push(`${a.label}: dates before ${formatMedium(start)} count in cash flow but not in the running total, which starts that day.`);
   }
   const money = {
     incomeCents: scenario.cashFlow.confirmedIncomeCents + scenario.cashFlow.hypotheticalIncomeCents - (baseline.cashFlow.confirmedIncomeCents + baseline.cashFlow.hypotheticalIncomeCents),
@@ -316,15 +312,14 @@ export function evaluateScenario(data: AppData, changes: ScenarioChange[], clock
     result: { ...base, comparable: false, reason, limitations: [text, ...limitations], differences: { ...money, lowestCents: null, endingCents: null }, newGaps: [], worsenedGaps: [], reducedGaps: [], resolvedGaps: [], shortfallDespiteGain: false },
   });
 
-  if (!before.forecastStart || !after.forecastStart) return notCompared('no-forecast', "There's no upcoming income to start a running total from, so only cash flow is compared.");
-  if (anchorChanged) return notCompared('anchor-changed', `This scenario moves your next payday from ${formatMedium(before.forecastStart)} to ${formatMedium(after.forecastStart)}, so the running totals start on different days and can't be compared directly.`);
+  if (anchorChanged) return notCompared('anchor-changed', `The running totals start on different days (${formatMedium(before.forecastStart)} and ${formatMedium(after.forecastStart)}), so they can't be compared directly.`);
   // A transaction moved from inside the running total to before it would just drop out of it.
   const was = new Map(before.entries.map((e) => [e.occurrence.id, e.date]));
   const dropped = after.entries.find((e) => {
     const d = was.get(e.occurrence.id);
-    return d !== undefined && d >= before.forecastStart! && e.date < after.forecastStart!;
+    return d !== undefined && d >= before.forecastStart && e.date < after.forecastStart;
   });
-  if (dropped) return notCompared('before-payday', `${dropped.occurrence.description} would move to before your next payday (${formatMedium(after.forecastStart)}), where the running total starts, so it would drop out of it. The forecast can't show whether money on hand covers it.`);
+  if (dropped) return notCompared('before-payday', `${dropped.occurrence.description} would move to before ${formatMedium(after.forecastStart)}, where the running total starts, so it would drop out of it. The forecast can't show whether money on hand covers it.`);
 
   const gaps = gapChanges(current.gaps, proposed.gaps);
   const differences = {
@@ -388,9 +383,8 @@ export function evaluateIncomeCases(data: AppData, changes: ScenarioChange[], ra
 /** The plan compared with itself: no differences. Used for a $0 income case with nothing else changed. */
 function baselineOnly(data: AppData, clock: ops.Clock, options: { through?: DateStr }): ScenarioOutcome {
   const f = buildForecast(data, clock.today, { through: options.through });
-  const { window, current } = compareForecasts(f, f, clock.today, options.through);
+  const { window, current } = compareForecasts(f, f, options.through);
   const side = outlook(f, current, clock.today, window.end);
-  const comparable = f.forecastStart !== null;
   return {
     ok: true,
     result: {
@@ -398,10 +392,10 @@ function baselineOnly(data: AppData, clock: ops.Clock, options: { through?: Date
       period: { start: clock.today, end: window.end, runningTotalFrom: f.forecastStart },
       baseline: side,
       scenario: side,
-      comparable,
-      reason: comparable ? null : 'no-forecast',
-      limitations: comparable ? [] : ["There's no upcoming income to start a running total from, so only cash flow is compared."],
-      differences: { incomeCents: 0, outflowCents: 0, reservesCents: 0, netCents: 0, lowestCents: comparable ? 0 : null, endingCents: comparable ? 0 : null },
+      comparable: true,
+      reason: null,
+      limitations: [],
+      differences: { incomeCents: 0, outflowCents: 0, reservesCents: 0, netCents: 0, lowestCents: 0, endingCents: 0 },
       newGaps: [],
       worsenedGaps: [],
       reducedGaps: [],
@@ -418,7 +412,7 @@ function baselineOnly(data: AppData, clock: ops.Clock, options: { through?: Date
 
 /** What a scenario can change without the person re-entering it: upcoming payments, and liability payments with their next dates. */
 export interface ScenarioOptions {
-  /** Outstanding occurrences from today through `end` that count (not possible income), in forecast order. */
+  /** Outstanding occurrences from today through `end` that count, in forecast order. */
   occurrences: { id: string; description: string; kind: TransactionKind; date: DateStr; amountCents: Cents }[];
   /** Active liability payments with no later change set, and the dates a new amount could start from. */
   liabilities: { sourceId: string; description: string; amountCents: Cents; dates: DateStr[] }[];

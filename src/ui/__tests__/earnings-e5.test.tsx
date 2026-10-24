@@ -105,19 +105,13 @@ describe('Activity with earnings', () => {
     expect(localStorage.getItem(STORAGE_KEY)).toBe(before);
   });
 
-  it('possible income this month is listed apart from the totals, and opens its sheet to resolve it', async () => {
-    const d = unwrap(ops.addOneTime(earningsPlan(), { kind: 'income', description: 'Maybe a bonus', amountCents: usd(250), date: '2026-10-25', certainty: 'possible' }, clock, 'bonus'));
-    const user = await openApp('#/activity', unwrap(ops.completeOnboarding(d)));
+  it('projected income not yet recorded is not listed in Activity, which shows only what was recorded', async () => {
+    const d = unwrap(ops.addOneTime(earningsPlan(), { kind: 'income', description: 'Maybe a bonus', amountCents: usd(250), date: '2026-10-25' }, clock, 'bonus'));
+    await openApp('#/activity', unwrap(ops.completeOnboarding(d)));
     await screen.findByRole('heading', { level: 1, name: 'Activity' });
-    const possible = screen.getByRole('heading', { name: 'Possible' }).closest('section')!;
-    expect(within(possible).getByRole('button', { name: /^Maybe a bonus/ })).toHaveTextContent('Oct 25');
-    expect(within(possible).getByRole('button', { name: /^Maybe a bonus/ })).toHaveTextContent('$250.00');
-    expect(screen.getByRole('region', { name: 'Month summary' })).toHaveTextContent('+$4,290.00');
-    await user.click(within(possible).getByRole('button', { name: /^Maybe a bonus/ }));
-    expect(within(screen.getByRole('dialog', { name: 'Maybe a bonus' })).getByRole('button', { name: /Mark as expected/ })).toBeInTheDocument();
-    await user.keyboard('{Escape}');
-    await user.click(screen.getByRole('button', { name: 'Previous month' }));
     expect(screen.queryByRole('heading', { name: 'Possible' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Maybe a bonus/ })).toBeNull();
+    expect(screen.getByRole('region', { name: 'Month summary' })).toHaveTextContent('+$4,290.00');
   });
 
   it('a paycheck corrected to an earlier date no longer shows as paying later shifts, on the income or in Earnings', async () => {

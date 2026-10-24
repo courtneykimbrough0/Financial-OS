@@ -1,9 +1,9 @@
 /**
  * Freelance jobs and clients (E3), on Plan › Income. A job is the work; its
  * payment is one ordinary one-time income record, so it shows and counts
- * like any income: on its expected date when expected, not at all when
- * possible or without a date, and once, as recorded, when paid. Finishing the
- * work is never money received.
+ * like any income: as a projection on its expected date, not at all without
+ * a date, and once, as recorded, when paid. Finishing the work is never money
+ * received.
  */
 import { useState, type FormEvent } from 'react';
 import { ChevronRight, Plus } from 'lucide-react';
@@ -11,10 +11,9 @@ import { formatMedium, formatShort, type DateStr } from '../../domain/dates';
 import { doneNotPaid, jobView, type JobView } from '../../domain/earnings';
 import { centsToInput, formatMoney, parseMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
-import { certaintyOf, type AppData, type IncomeCertainty, type JobStatus } from '../../domain/types';
+import { type AppData, type JobStatus } from '../../domain/types';
 import { useStore } from '../../state/store';
-import { Field, FlowAmount, FormError, Icon, ListGroup, Modal, MoneyInput, SectionLabel, StatusBadge, useToast } from './common';
-import { CertaintyPicker } from './forms';
+import { Field, FlowAmount, FormError, Icon, ListGroup, Modal, MoneyInput, SectionLabel, useToast } from './common';
 
 /** How many paid jobs are listed; the rest wait for the Earnings views (E5). */
 const PAID_SHOWN = 10;
@@ -29,8 +28,6 @@ export function paymentText(v: JobView): { text: string; overdue?: boolean } {
       return { text: `Payment expected ${formatShort(v.date!)}` };
     case 'overdue':
       return { text: `Payment expected ${formatShort(v.date!)} · overdue`, overdue: true };
-    case 'possible':
-      return { text: `Payment possible ${formatShort(v.date!)} · not counted` };
     case 'received':
       return { text: `Paid ${formatShort(v.date!)}` };
     case 'skipped':
@@ -154,7 +151,6 @@ export function FreelanceSection({ adding, onAdding }: { adding: boolean; onAddi
 function JobRow({ view, data, onOpen }: { view: JobView; data: AppData; onOpen: () => void }) {
   const client = view.job.clientId ? data.clients?.find((c) => c.id === view.job.clientId)?.name : undefined;
   const payment = paymentText(view);
-  const counted = view.payment === 'expected' || view.payment === 'overdue' || view.payment === 'received';
   return (
     <button type="button" className="entry" onClick={onOpen}>
       <span className="entry-main">
@@ -163,8 +159,7 @@ function JobRow({ view, data, onOpen }: { view: JobView; data: AppData; onOpen: 
         <span className={`entry-sub${payment.overdue ? ' overdue-text' : ''}`}>{payment.text}</span>
       </span>
       <span className="entry-side">
-        <FlowAmount kind="income" cents={view.amountCents} possible={!counted && view.payment !== 'skipped'} strike={view.payment === 'skipped'} />
-        {view.payment === 'possible' && <StatusBadge status="scheduled" possible />}
+        <FlowAmount kind="income" cents={view.amountCents} strike={view.payment === 'skipped'} />
       </span>
       <Icon icon={ChevronRight} size={18} className="chevron" />
     </button>
@@ -185,7 +180,6 @@ function JobSheet({ jobId, onDone }: { jobId: string | null; onDone: () => void 
   const [amount, setAmount] = useState(view ? centsToInput(view.payment === 'received' ? job!.amountCents : view.amountCents) : '');
   const [status, setStatus] = useState<JobStatus>(job?.status ?? 'done');
   const [date, setDate] = useState<DateStr>(view?.record && view.payment !== 'received' ? view.record.scheduledDate : '');
-  const [certainty, setCertainty] = useState<IncomeCertainty>(view?.record ? certaintyOf(view.record) : 'expected');
   const [mode, setMode] = useState<'edit' | 'pay' | 'delete'>('edit');
   const [payAmount, setPayAmount] = useState(view ? centsToInput(view.amountCents) : '');
   const [payDate, setPayDate] = useState<DateStr>(today);
@@ -235,7 +229,7 @@ function JobSheet({ jobId, onDone }: { jobId: string | null; onDone: () => void 
         clientId: client,
         amountCents: moneyLocked ? job!.amountCents : cents!,
         status: paid ? 'done' : status,
-        ...(moneyLocked ? {} : { expectedDate: date || null, certainty }),
+        ...(moneyLocked ? {} : { expectedDate: date || null }),
       };
       return job ? ops.editJob(next, job.id, input, c) : ops.addJob(next, input, c);
     });
@@ -346,7 +340,6 @@ function JobSheet({ jobId, onDone }: { jobId: string | null; onDone: () => void 
             <Field label="Expected payment date (optional)" hint={date ? undefined : "Without a date it's pending and isn't counted."}>
               {(p) => <input {...p} type="date" value={date} onChange={(e) => setDate(e.target.value)} />}
             </Field>
-            {date && <CertaintyPicker value={certainty} onChange={setCertainty} />}
           </>
         )}
         <FormError message={error} />

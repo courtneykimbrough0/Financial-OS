@@ -96,12 +96,12 @@ describe('signed in with Firebase (legacy): shift tracking is refused, never dro
 
   it('with the flag on, everything is saved and read back', async () => {
     const server = new FakeServer();
-    const adapter = new CloudAdapter(server, 'user-1', localStorage, false, false, true);
+    const adapter = new CloudAdapter(server, 'user-1', localStorage, false, true);
     await adapter.load();
     const p = plan();
     expect(await adapter.save(p, 0)).toEqual({ ok: true, revision: 1 });
     localStorage.clear();
-    expect(detail(await new CloudAdapter(server, 'user-1', localStorage, false, false, true).load())).toEqual(detail(p));
+    expect(detail(await new CloudAdapter(server, 'user-1', localStorage, false, true).load())).toEqual(detail(p));
   });
 });
 

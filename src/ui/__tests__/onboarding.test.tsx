@@ -2,7 +2,6 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildForecast } from '../../domain/forecast';
-import { hasActiveIncome } from '../../domain/types';
 import { DataModeProvider } from '../../state/mode';
 import { useStore } from '../../state/store';
 import { ToastProvider } from '../components/common';
@@ -93,8 +92,8 @@ describe('the minimum useful setup', () => {
     // Subscriptions, liabilities and reserves can wait.
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.getByRole('heading', { name: 'Check everything over' })).toHaveFocus();
-    expect(screen.getByText('Next expected payday').closest('section')).toHaveTextContent('Next expected paydayOct 23in 7 days');
-    expect(screen.getByText(/Lowest running total through Nov 12:/).closest('span')).toHaveTextContent('Lowest running total through Nov 12: −$500.00 · Nov 1');
+    expect(screen.getByRole('region', { name: /running total/i })).toHaveTextContent('Lowest running total through Nov 12−$500.00Nov 1');
+    expect(screen.getByRole('region', { name: /running total/i })).toHaveTextContent('Running total from todayStarts at $0, not your bank balance.');
     expect(screen.getByRole('button', { name: /1 timing gap ahead/ })).toBeInTheDocument();
     // Kinds with nothing added collapse into one line, each name a way to add it.
     for (const label of ['Subscriptions', 'Liability payments', 'Strategic Reserves']) expect(screen.queryByRole('region', { name: label })).toBeNull();
@@ -108,7 +107,7 @@ describe('the minimum useful setup', () => {
       ['bill', 'Rent', 150000, '2026-11-01'],
     ]);
     expect(store.data.records).toEqual([]);
-    expect(buildForecast(store.data, TODAY)).toMatchObject({ anchor: '2026-10-22', forecastStart: '2026-10-23', issue: null });
+    expect(buildForecast(store.data, TODAY)).toMatchObject({ anchor: '2026-10-15', forecastStart: TODAY, issue: null });
   });
 
   it('the first screen also offers sample data and a restore, and asks for income before continuing', async () => {
@@ -167,12 +166,14 @@ describe('the review', () => {
     return user;
   }
 
-  it('says when payments fall before the running total starts', async () => {
+  it('a payment before the first paycheck is inside the running total from today, not set apart', async () => {
     await reachReview((user) => addItem(user, 'Add another payment', [['What is this bill?', 'Phone'], ['Amount you expect to pay', '60'], ['How often?', 'monthly'], ['Next due date', '2026-10-20']]));
-    expect(screen.getByRole('note')).toHaveTextContent("1 payment ($60.00) is due before your next payday. Make sure the money you have now covers it.");
+    expect(screen.queryByText(/before your next payday/)).toBeNull();
+    // −$60 on Oct 20, then the paycheck and rent: the lowest is still Nov 1, $60 lower.
+    expect(screen.getByRole('region', { name: /running total/i })).toHaveTextContent('−$560.00Nov 1');
   });
 
-  it('says nothing about that when nothing is due before payday', async () => {
+  it('says nothing about payments before payday', async () => {
     await reachReview();
     expect(screen.queryByRole('note')).toBeNull();
   });
@@ -185,7 +186,7 @@ describe('the review', () => {
     await user.clear(amount);
     await user.type(amount, '1400');
     await user.click(within(dialog).getByRole('button', { name: 'Save' }));
-    expect(screen.getByText(/Lowest running total through Nov 12:/).closest('span')).toHaveTextContent('Lowest running total through Nov 12: −$400.00 · Nov 1');
+    expect(screen.getByRole('region', { name: /running total/i })).toHaveTextContent('Lowest running total through Nov 12−$400.00Nov 1');
     expect(store.data.sources.find((s) => s.description === 'Rent')!.versions.map((v) => v.amountCents)).toEqual([140000]);
   });
 
@@ -198,14 +199,16 @@ describe('the review', () => {
     expect(screen.getByRole('heading', { name: 'What do you pay regularly?' })).toHaveFocus();
   });
 
-  it('with two incomes, the earliest one sets the payday', async () => {
+  it('with two incomes, the forecast still starts today, never at a payday', async () => {
     const user = await start();
     await addItem(user, 'Add income', paycheck);
     await addItem(user, 'Add another income', [['What is this income?', 'Side job'], ['Amount you expect to receive', '200'], ['How often?', 'weekly'], ['Next payment date', '2026-10-19']]);
-    expect(hasActiveIncome(store.data)).toBe(true);
     await user.click(screen.getByRole('button', { name: 'Continue' }));
     await user.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(screen.getByText('Next expected payday').closest('section')).toHaveTextContent('Next expected paydayOct 19in 3 days');
+    const hero = screen.getByRole('region', { name: /running total/i });
+    expect(hero).toHaveTextContent('Running total from today');
+    expect(hero).toHaveTextContent('Starts at $0, not your bank balance.');
+    expect(screen.queryByText(/payday/i)).toBeNull();
   });
 });
 

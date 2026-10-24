@@ -1,7 +1,7 @@
 import { AlertCircle, Banknote, CalendarClock, ChevronRight, Info, Plus } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { addDays, diffDays, formatMedium, formatShort, type DateStr } from '../../domain/dates';
-import { buildForecast, dailyTimeline, entriesInRange, explainTimingGaps, lowestPoint } from '../../domain/forecast';
+import { addDays, formatMedium, formatShort, type DateStr } from '../../domain/dates';
+import { buildForecast, dailyTimeline, explainTimingGaps, lowestPoint } from '../../domain/forecast';
 import { formatMoney } from '../../domain/money';
 import * as ops from '../../domain/operations';
 import { periodPlan } from '../../domain/plan';
@@ -10,7 +10,7 @@ import { incomeTypePrefix, liabilityPrefix, type AppData, type OccurrenceRecord,
 import { useAccount } from '../../state/account';
 import { useDataMode } from '../../state/mode';
 import { useStore } from '../../state/store';
-import { EmptyLine, FlowAmount, FormError, Icon, KindAvatar, Modal, SectionLabel, StatusBadge, TagList, useToast } from '../components/common';
+import { EmptyLine, FlowAmount, FormError, Icon, KindAvatar, Modal, SectionLabel, TagList, useToast } from '../components/common';
 import { KIND_COPY, OneTimeForm, SourceForm } from '../components/forms';
 import { TimingGapsBanner } from '../components/gaps';
 import { CashFlowBanner, PeriodBreakdown, TagBreakdown } from '../components/plan';
@@ -31,7 +31,7 @@ const STEPS: StepDef[] = [
     name: 'Income',
     kinds: ['income'],
     title: 'When do you get paid?',
-    body: 'Add your regular income, like a paycheck or benefits. Your forecast starts from your next payday.',
+    body: 'Add the income you expect, like a paycheck, benefits or a one-time payment. Your forecast starts today.',
   },
   {
     name: 'Payments',
@@ -58,13 +58,14 @@ const KIND_SECTION: Record<RecurringKind, { label: string; add: string; addAnoth
   reserve: { label: 'Strategic Reserves', add: 'Add a reserve', addAnother: 'Add another reserve', empty: 'No reserves added yet' },
 };
 
-/** Setup's first look: the next four weeks from today, read from the one forecast. Nothing until there's income to start it. */
+/** Setup's first look: the next four weeks from today (the running total starts today), read from the one forecast. Nothing until something is planned. */
 const FIRST_LOOK_DAYS = 28;
 function firstLook(data: AppData, today: DateStr) {
   const forecast = buildForecast(data, today);
   const end = addDays(today, FIRST_LOOK_DAYS - 1);
-  if (forecast.issue) return { forecast, end, plan: null, low: null };
-  return { forecast, end, plan: periodPlan(forecast, today, end), low: lowestPoint(dailyTimeline(forecast, today, end)) };
+  if (forecast.issue) return { forecast, end, plan: null, low: null, endTally: null };
+  const rows = dailyTimeline(forecast, today, end);
+  return { forecast, end, plan: periodPlan(forecast, today, end), low: lowestPoint(rows), endTally: rows.at(-1)?.tallyCents ?? null };
 }
 
 /** Sheet state shared by the setup steps: add a new item, or edit one already added. */
@@ -88,11 +89,10 @@ function OneTimeRow({ r, onOpen }: { r: OccurrenceRecord; onOpen: () => void }) 
         <span className="entry-main">
           <span className="entry-title">{r.description}</span>
           <span className="entry-sub">One time · {formatMedium(r.scheduledDate)}</span>
-          {r.certainty === 'possible' && <StatusBadge status="scheduled" possible />}
           <TagList tags={r.tags} />
         </span>
         <span className="entry-side">
-          <FlowAmount kind={r.kind} cents={r.scheduledAmountCents} release={r.release} possible={r.certainty === 'possible'} />
+          <FlowAmount kind={r.kind} cents={r.scheduledAmountCents} release={r.release} />
           <Icon icon={ChevronRight} size={18} className="chevron" />
         </span>
       </button>
@@ -114,11 +114,10 @@ function SourceRow({ s, onOpen }: { s: RecurringSource; onOpen: () => void }) {
             {incomeTypePrefix(s)}
             {describeRule(v.rule, v.startDate)} · next {formatMedium(v.startDate)}
           </span>
-          {s.certainty === 'possible' && <StatusBadge status="scheduled" possible />}
           <TagList tags={s.tags} />
         </span>
         <span className="entry-side">
-          <FlowAmount kind={s.kind} cents={v.amountCents} possible={s.certainty === 'possible'} />
+          <FlowAmount kind={s.kind} cents={v.amountCents} />
           <Icon icon={ChevronRight} size={18} className="chevron" />
         </span>
       </button>
@@ -328,12 +327,9 @@ function KindStep({ kind, onSheet }: { kind: RecurringKind; onSheet: (s: SetupSh
 function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; goTo: (step: number) => void; today: string }) {
   const { data } = useStore();
   const [about, setAbout] = useState(false);
-  const { forecast, end, plan, low } = firstLook(data, today);
-  const payday = forecast.forecastStart;
-  const days = payday ? diffDays(today, payday) : 0;
-  // Payments due before the running total starts: in cash flow, not in the running total.
-  const beforePayday = forecast.anchor && forecast.anchor >= today ? entriesInRange(forecast, today, forecast.anchor).filter((e) => e.counts && e.signedCents < 0) : [];
-  const beforeTotal = beforePayday.reduce((n, e) => n + e.amountCents, 0);
+  const { forecast, end, plan, low, endTally } = firstLook(data, today);
+  // Below $0 at some point: the lowest point leads. Otherwise, where the running total ends up.
+  const short = low !== null && low.tallyCents < 0;
   const groups: [string, RecurringKind[]][] = [
     ['Income', ['income']],
     ['Bills', ['bill']],
@@ -353,11 +349,11 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
 
   return (
     <div className="stack-lg">
-      {forecast.issue || !payday ? (
+      {forecast.issue || !low ? (
         <div className="callout callout-warn stack-sm" role="note">
           <p>
             <Icon icon={AlertCircle} size={16} />
-            <strong>Add your income to see what's ahead.</strong>
+            <strong>Add your income or a payment to see what's ahead.</strong>
           </p>
           <p>You can also continue and add it later.</p>
           <button type="button" className="button small secondary" onClick={() => goTo(STEP_OF.income)}>
@@ -369,39 +365,28 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
           <div className="hero-body">
             <div className="hero-top">
               <p className="hero-label" id="review-hero-label">
-                Next expected payday
+                {short ? `Lowest running total through ${formatShort(end)}` : `Running total on ${formatShort(end)}`}
               </p>
               <button type="button" className="icon-button small-icon" onClick={() => setAbout(true)} aria-label="How the running total works">
                 <Icon icon={Info} size={20} />
               </button>
             </div>
-            <p className="hero-value">
-              {formatShort(payday)}
-              <span className="hero-when">{days > 1 ? `in ${days} days` : days === 1 ? 'tomorrow' : 'today'}</span>
+            <p className={`hero-value${short ? ' negative' : ''}`}>
+              {formatMoney(short ? low.tallyCents : (endTally ?? 0))}
+              {short ? <span className="hero-when">{formatShort(low.date)}</span> : <span className="hero-when">never below $0</span>}
             </p>
           </div>
-          {low && (
-            <div className="hero-footer">
-              <Icon icon={low.tallyCents < 0 ? AlertCircle : Banknote} size={22} className={low.tallyCents < 0 ? 'flag-neg' : 'hero-footer-icon'} />
-              <span>
-                Lowest running total through {formatShort(end)}: <strong className={low.tallyCents < 0 ? 'negative-text' : ''}>{formatMoney(low.tallyCents)}</strong>
-                <span className="muted"> · {formatShort(low.date)}</span>
-              </span>
-            </div>
-          )}
+          <div className="hero-footer">
+            <Icon icon={short ? AlertCircle : Banknote} size={22} className={short ? 'flag-neg' : 'hero-footer-icon'} />
+            <span>
+              Running total from today
+              <span className="hero-footer-sub">Starts at $0, not your bank balance.</span>
+            </span>
+          </div>
         </section>
       )}
 
-      {beforePayday.length > 0 && forecast.anchor && (
-        <p className="callout callout-info" role="note">
-          <Icon icon={Info} size={16} />
-          <span>
-            {beforePayday.length === 1 ? '1 payment' : `${beforePayday.length} payments`} ({formatMoney(beforeTotal)}) {beforePayday.length === 1 ? 'is' : 'are'} due before your next payday. Make sure the money you have now covers {beforePayday.length === 1 ? 'it' : 'them'}.
-          </span>
-        </p>
-      )}
-
-      {payday && <TimingGapsBanner gaps={explainTimingGaps(forecast)} from={payday} horizonEnd={forecast.horizonEnd} />}
+      {!forecast.issue && <TimingGapsBanner gaps={explainTimingGaps(forecast)} from={forecast.forecastStart} horizonEnd={forecast.horizonEnd} />}
 
       {/* The cash-flow banner above already gives the four weeks' range and cash flow. */}
       {plan && <PeriodBreakdown plan={plan} title="Next 4 weeks" showRange={false} total={false} />}
@@ -452,13 +437,13 @@ function Review({ onSheet, goTo, today }: { onSheet: (s: SetupSheet) => void; go
         <Icon icon={CalendarClock} size={16} /> You can change any of these later.
       </p>
 
-      {about && forecast.anchor && payday && (
+      {about && (
         <Modal title="How the running total works" onClose={() => setAbout(false)}>
           <div className="stack">
             <p>
-              Your running total starts at $0 the day before your next paycheck, then adds what comes in and subtracts what goes out. It shows whether your income arrives in time for your payments; your bank balance can differ.
+              Your running total starts at $0 today, then adds what comes in and subtracts what goes out. It shows whether money comes in before it goes out. The $0 is a starting point, not your bank balance.
             </p>
-            <p>Payments due before {formatMedium(payday)} come from the money you have now.</p>
+            <p>Everything you haven't recorded is projected: it counts on its date until you record what actually happened.</p>
           </div>
         </Modal>
       )}
