@@ -8,7 +8,7 @@ How to run Financial OS's Supabase tests, and the Supabase build of the app, aga
 
 The default app is unaffected; it never includes any Supabase code (see [SUPABASE.md](SUPABASE.md)).
 
-The hosted test project is Financial OS 2 (`aymombliohuwbokpncdn`), approved in `supabase/hosted-test/projects.json`. Its database is verified (roadmap F3); the hosted Auth and API checks have not run yet. Claude Code handles no keys and never needs the database password or a service-role key; it works in a hosted project only through the Supabase connector, for a project you name (step 3).
+The hosted test project is Financial OS 2 (`aymombliohuwbokpncdn`), approved in `supabase/hosted-test/projects.json`. Its database is verified, and the focused hosted verification ran twice from GitHub Actions (runs #3 and #4; roadmap F3 has the results and the accepted limitation). Claude Code handles no keys and never needs the database password or a service-role key; it works in a hosted project only through the Supabase connector, for a project you name (step 3).
 
 F3 verifies the hosted project with a **focused hosted verification** (below): database checks through the connector, and `npm run test:hosted` through the project's real Auth and API with two disposable identities. The local and CI suites stay as they are. Running the full suites against a hosted project is optional and not part of F3 (last sections).
 
@@ -230,7 +230,7 @@ When testing is finished, if the optional outbox was installed, turn the hook of
 
 ## Not done here
 
-- Financial OS 2: database verified; the hosted Auth and API checks (`npm run test:hosted`) have not run yet.
+- Financial OS 2: database verified; hosted Auth and API checks run (runs #3 and #4); no single complete 14/14 run yet (roadmap F3).
 - No deployment.
 - No Firebase migration and no real financial data.
 - Production authentication settings are not changed.
